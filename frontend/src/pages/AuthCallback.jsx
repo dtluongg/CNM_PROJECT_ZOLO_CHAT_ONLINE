@@ -68,7 +68,7 @@ const AuthCallback = () => {
       }
 
       login(session.access_token, syncData.user);
-      navigate('/chat', { replace: true });
+      navigate('/dashboard', { replace: true });
     };
 
     handleCallback();
