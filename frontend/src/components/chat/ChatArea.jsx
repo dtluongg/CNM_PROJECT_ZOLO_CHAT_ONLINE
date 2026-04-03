@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Search, Users, Pin, MoreHorizontal, Menu, Phone, Video, MessageCircle } from 'lucide-react';
 import MessageInput from './MessageInput';
 
 const AVATAR_COLORS = [
@@ -129,7 +130,7 @@ const MessageBubble = ({ msg, isMine, showHeader }) => {
               />
             ) : msg.type === 'file' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 22 }}>📎</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.8 }}><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
                 <span style={{ fontSize: 13, textDecoration: 'underline', cursor: 'pointer' }}>
                   {msg.content}
                 </span>
@@ -151,10 +152,14 @@ const MessageBubble = ({ msg, isMine, showHeader }) => {
               boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
               flexShrink: 0,
             }}>
-              {['👍', '↩️', '⋯'].map((icon) => (
+              {[
+                { emoji: '👍', title: 'Thả cảm xúc' },
+                { svg: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>, title: 'Trả lời' },
+                { svg: <MoreHorizontal size={14} />, title: 'Thêm' },
+              ].map((btn, i) => (
                 <button
-                  key={icon}
-                  title={icon === '👍' ? 'Thả cảm xúc' : icon === '↩️' ? 'Trả lời' : 'Thêm'}
+                  key={i}
+                  title={btn.title}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -165,11 +170,14 @@ const MessageBubble = ({ msg, isMine, showHeader }) => {
                     color: 'var(--text-secondary)',
                     transition: 'background 0.1s',
                     lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
                 >
-                  {icon}
+                  {btn.emoji || btn.svg}
                 </button>
               ))}
             </div>
@@ -259,10 +267,10 @@ export default function ChatArea({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 40,
           marginBottom: 8,
+          color: 'var(--text-muted)',
         }}>
-          💬
+          <MessageCircle size={40} />
         </div>
         <p style={{ color: 'var(--text-primary)', fontSize: 20, fontWeight: 700, margin: 0 }}>
           Chào mừng đến ZoloChat
@@ -326,9 +334,9 @@ export default function ChatArea({
   const onlineStatus =
     conversation.type === 'dm'
       ? conversation.online
-        ? '🟢 Online'
-        : '⚫ Offline'
-      : `👥 ${conversation.members || ''} thành viên`;
+        ? 'Online'
+        : 'Offline'
+      : `${conversation.members || ''} thành viên`;
 
   return (
     <div style={{
@@ -362,13 +370,14 @@ export default function ChatArea({
                 border: 'none',
                 cursor: 'pointer',
                 color: 'var(--text-secondary)',
-                fontSize: 20,
                 padding: '4px 6px',
                 borderRadius: 4,
                 marginRight: 4,
+                display: 'flex',
+                alignItems: 'center',
               }}
             >
-              ☰
+              <Menu size={20} />
             </button>
           )}
 
@@ -405,13 +414,15 @@ export default function ChatArea({
         {/* Header action buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {[
-            { icon: '🔍', title: 'Tìm kiếm trong cuộc trò chuyện' },
-            { icon: '👥', title: 'Thành viên', onClick: onToggleRight, active: showRight },
-            { icon: '📌', title: 'Tin nhắn đã ghim' },
-            { icon: '⋯', title: 'Thêm tuỳ chọn' },
-          ].map((btn) => (
+            { icon: <Phone size={16} />, title: 'Gọi thoại' },
+            { icon: <Video size={16} />, title: 'Gọi video' },
+            { icon: <Search size={16} />, title: 'Tìm kiếm trong cuộc trò chuyện' },
+            { icon: <Users size={16} />, title: 'Thành viên', onClick: onToggleRight, active: showRight },
+            { icon: <Pin size={16} />, title: 'Tin nhắn đã ghim' },
+            { icon: <MoreHorizontal size={16} />, title: 'Thêm tuỳ chọn' },
+          ].map((btn, i) => (
             <button
-              key={btn.icon}
+              key={i}
               onClick={btn.onClick}
               title={btn.title}
               style={{
@@ -419,11 +430,11 @@ export default function ChatArea({
                 border: 'none',
                 cursor: 'pointer',
                 color: btn.active ? 'var(--text-primary)' : 'var(--text-muted)',
-                fontSize: 18,
                 padding: '6px 8px',
                 borderRadius: 6,
                 transition: 'background 0.12s, color 0.12s',
-                lineHeight: 1,
+                display: 'flex',
+                alignItems: 'center',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = 'var(--bg-hover)';

@@ -1,11 +1,31 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Paperclip, Smile, Mic, Send } from 'lucide-react';
 
-const EMOJIS = ['😀','😂','❤️','👍','🔥','😍','🥺','😭','✨','🎉','😊','🙏','💯','😎','🤔','😅','🥰','😢','😡','👏'];
+const EMOJIS = [
+  '😀', '😂', '😍', '🥺', '😭', '😊', '😎', '🤔',
+  '😅', '🥰', '😢', '😡', '😴', '🤗', '😏', '🙄',
+  '❤️', '🔥', '✨', '🎉', '👍', '👏', '🙏', '💯',
+  '🤣', '😘', '🥳', '😇', '🤩', '😤', '😬', '🫡',
+];
 
 export default function MessageInput({ onSend, placeholder }) {
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
-  const inputRef = useRef();
+  const [focused, setFocused] = useState(false);
+  const textareaRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    if (!showEmoji) return;
+    const handleClick = (e) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
+        setShowEmoji(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showEmoji]);
 
   const handleSend = () => {
     const trimmed = text.trim();
@@ -13,6 +33,10 @@ export default function MessageInput({ onSend, placeholder }) {
     onSend(trimmed);
     setText('');
     setShowEmoji(false);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.focus();
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -22,96 +46,239 @@ export default function MessageInput({ onSend, placeholder }) {
     }
   };
 
-  const insertEmoji = (emoji) => {
-    setText(prev => prev + emoji);
-    setShowEmoji(false);
-    inputRef.current?.focus();
+  const handleInput = (e) => {
+    setText(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px';
   };
 
+  const insertEmoji = (emoji) => {
+    const ta = textareaRef.current;
+    if (ta) {
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const newText = text.slice(0, start) + emoji + text.slice(end);
+      setText(newText);
+      setTimeout(() => {
+        ta.focus();
+        ta.setSelectionRange(start + emoji.length, start + emoji.length);
+      }, 0);
+    } else {
+      setText((prev) => prev + emoji);
+    }
+    setShowEmoji(false);
+  };
+
+  const canSend = text.trim().length > 0;
+
   return (
-    <div style={{ padding: '0 16px 16px', position: 'relative' }}>
-      {/* Emoji picker */}
+    <div style={{ padding: '0 16px 14px', flexShrink: 0, position: 'relative' }}>
+      {/* Emoji Picker */}
       {showEmoji && (
-        <div style={{
-          position: 'absolute', bottom: '100%', left: 16,
-          background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-          borderRadius: 8, padding: 8, display: 'flex', flexWrap: 'wrap',
-          gap: 4, width: 240, zIndex: 100,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-        }}>
-          {EMOJIS.map(e => (
+        <div
+          ref={emojiPickerRef}
+          style={{
+            position: 'absolute',
+            bottom: 'calc(100% - 4px)',
+            left: 16,
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            padding: 10,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(8, 1fr)',
+            gap: 3,
+            zIndex: 200,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+            width: 288,
+          }}
+        >
+          <div style={{
+            gridColumn: '1 / -1',
+            fontSize: 11,
+            fontWeight: 600,
+            color: 'var(--text-muted)',
+            marginBottom: 6,
+            paddingBottom: 6,
+            borderBottom: '1px solid var(--border)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+          }}>
+            Biểu tượng cảm xúc
+          </div>
+          {EMOJIS.map((emoji) => (
             <button
-              key={e}
-              onClick={() => insertEmoji(e)}
+              key={emoji}
+              onClick={() => insertEmoji(emoji)}
               style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontSize: 20, padding: 4, borderRadius: 4,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 20,
+                padding: '5px',
+                borderRadius: 6,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 1,
+                transition: 'background 0.1s, transform 0.1s',
               }}
-              onMouseEnter={ev => ev.target.style.background = 'var(--bg-hover)'}
-              onMouseLeave={ev => ev.target.style.background = 'none'}
-            >{e}</button>
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--bg-hover)';
+                e.currentTarget.style.transform = 'scale(1.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'none';
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              {emoji}
+            </button>
           ))}
         </div>
       )}
 
-      <div style={{
-        display: 'flex', alignItems: 'flex-end', gap: 8,
-        background: 'var(--input-bg)', borderRadius: 8,
-        padding: '8px 12px', border: '1px solid transparent',
-        transition: 'border-color 0.15s',
-      }}
-        onFocus={() => {}}
+      {/* Input container */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: 6,
+          background: 'var(--input-bg)',
+          borderRadius: 10,
+          padding: '8px 10px',
+          border: `1.5px solid ${focused ? 'var(--accent)' : 'transparent'}`,
+          transition: 'border-color 0.15s',
+        }}
       >
         {/* Attach */}
         <button
           title="Đính kèm file"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 20, padding: 2, flexShrink: 0 }}
-        >📎</button>
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--text-muted)',
+            padding: '2px 4px',
+            borderRadius: 6,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            transition: 'color 0.12s',
+            marginBottom: 3,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+        >
+          <Paperclip size={18} />
+        </button>
 
-        {/* Text input */}
+        {/* Textarea */}
         <textarea
-          ref={inputRef}
+          ref={textareaRef}
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={handleInput}
           onKeyDown={handleKeyDown}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder={placeholder || 'Nhắn tin...'}
           rows={1}
           style={{
-            flex: 1, background: 'none', border: 'none', outline: 'none',
-            color: 'var(--text-primary)', fontSize: 15, resize: 'none',
-            lineHeight: 1.5, maxHeight: 120, overflowY: 'auto',
+            flex: 1,
+            background: 'none',
+            border: 'none',
+            outline: 'none',
+            color: 'var(--text-primary)',
+            fontSize: 15,
+            resize: 'none',
+            lineHeight: 1.5,
+            maxHeight: 128,
+            overflow: 'auto',
             fontFamily: 'inherit',
-          }}
-          onInput={e => {
-            e.target.style.height = 'auto';
-            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'var(--bg-hover) transparent',
           }}
         />
 
         {/* Emoji */}
         <button
-          onClick={() => setShowEmoji(v => !v)}
-          title="Emoji"
+          onClick={() => setShowEmoji((v) => !v)}
+          title="Biểu tượng cảm xúc"
           style={{
-            background: 'none', border: 'none', cursor: 'pointer',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
             color: showEmoji ? 'var(--accent)' : 'var(--text-muted)',
-            fontSize: 20, padding: 2, flexShrink: 0,
+            padding: '2px 4px',
+            borderRadius: 6,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            transition: 'color 0.12s',
+            marginBottom: 3,
           }}
-        >😊</button>
+          onMouseEnter={(e) => {
+            if (!showEmoji) e.currentTarget.style.color = 'var(--text-primary)';
+          }}
+          onMouseLeave={(e) => {
+            if (!showEmoji) e.currentTarget.style.color = 'var(--text-muted)';
+          }}
+        >
+          <Smile size={18} />
+        </button>
 
-        {/* Send */}
-        <button
-          onClick={handleSend}
-          disabled={!text.trim()}
-          title="Gửi"
-          style={{
-            background: text.trim() ? 'var(--accent)' : 'var(--bg-hover)',
-            border: 'none', cursor: text.trim() ? 'pointer' : 'default',
-            color: text.trim() ? '#fff' : 'var(--text-muted)',
-            borderRadius: 6, padding: '6px 10px', fontSize: 16,
-            transition: 'background 0.15s, color 0.15s', flexShrink: 0,
-          }}
-        >➤</button>
+        {/* Voice (no text) or Send (has text) */}
+        {!canSend ? (
+          <button
+            title="Ghi âm"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-muted)',
+              padding: '2px 4px',
+              borderRadius: 6,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              marginBottom: 3,
+              transition: 'color 0.12s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+          >
+            <Mic size={18} />
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            title="Gửi (Enter)"
+            style={{
+              background: 'var(--accent)',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#fff',
+              borderRadius: 8,
+              padding: '7px 12px',
+              flexShrink: 0,
+              transition: 'background 0.12s, transform 0.1s',
+              marginBottom: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--accent-hover)';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--accent)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+          >
+            <Send size={15} />
+          </button>
+        )}
       </div>
     </div>
   );

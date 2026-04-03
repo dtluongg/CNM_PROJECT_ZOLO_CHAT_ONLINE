@@ -181,6 +181,13 @@ const authMe = async (req, res) => {
                 isPhoneVerified: user.isPhoneVerified,
                 authProvider: user.authProvider,
                 createdAt: user.createdAt,
+                bio: user.bio,
+                status: user.status,
+                statusText: user.statusText,
+                banner: user.banner || null,
+                usernameColor: user.usernameColor,
+                themeName: user.themeName,
+                themeColors: user.themeColors || null,
             },
         });
 
@@ -331,11 +338,14 @@ const verifyPhoneOtp = async (req, res) => {
 };
 
 // ════════════════════════════════════════════════════════════════
-//  CẬP NHẬT PROFILE (avatar, displayName)
+//  CẬP NHẬT PROFILE (avatar, displayName, and extended settings)
 // ════════════════════════════════════════════════════════════════
 const updateProfile = async (req, res) => {
     try {
-        const { avatar, displayName } = req.body;
+        const {
+            avatar, displayName,
+            bio, status, statusText, banner, usernameColor, themeName, themeColors,
+        } = req.body;
         const userId = req.user._id;
 
         const updates = {};
@@ -349,6 +359,13 @@ const updateProfile = async (req, res) => {
             }
             updates.avatar = avatar;
         }
+        if (bio !== undefined) updates.bio = bio;
+        if (status !== undefined) updates.status = status;
+        if (statusText !== undefined) updates.statusText = statusText;
+        if (banner !== undefined) updates.banner = banner;
+        if (usernameColor !== undefined) updates.usernameColor = usernameColor;
+        if (themeName !== undefined) updates.themeName = themeName;
+        if (themeColors !== undefined) updates.themeColors = themeColors;
 
         if (Object.keys(updates).length === 0) {
             return res.status(400).json({ message: 'Không có dữ liệu để cập nhật' });
@@ -372,6 +389,13 @@ const updateProfile = async (req, res) => {
                 isEmailVerified: updatedUser.isEmailVerified,
                 isPhoneVerified: updatedUser.isPhoneVerified,
                 authProvider: updatedUser.authProvider,
+                bio: updatedUser.bio,
+                status: updatedUser.status,
+                statusText: updatedUser.statusText,
+                banner: updatedUser.banner || null,
+                usernameColor: updatedUser.usernameColor,
+                themeName: updatedUser.themeName,
+                themeColors: updatedUser.themeColors || null,
             },
         });
 

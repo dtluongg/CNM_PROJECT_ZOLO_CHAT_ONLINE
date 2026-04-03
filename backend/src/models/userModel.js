@@ -46,6 +46,15 @@ const userSchema = new mongoose.Schema(
             type: String, // URL ảnh đại diện (từ Google/Facebook)
         },
 
+        // ── Cài đặt người dùng mở rộng ────────────────────────────
+        bio: { type: String, default: '' },
+        status: { type: String, default: 'online', enum: ['online', 'idle', 'dnd', 'invisible'] },
+        statusText: { type: String, default: '' },
+        banner: { type: String, default: null },
+        usernameColor: { type: String, default: '#5865f2' },
+        themeName: { type: String, default: 'dark' },
+        themeColors: { type: Object, default: null },
+
         // ── Trạng thái xác thực ────────────────────────────────────
         isEmailVerified: {
             type: Boolean,
