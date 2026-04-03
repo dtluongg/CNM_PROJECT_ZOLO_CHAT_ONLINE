@@ -10,7 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Chat from './pages/Chat';
 import AuthCallback from './pages/AuthCallback';
 import CompleteProfile from './pages/CompleteProfile';
-
+import Home from './pages/Home'
 const NO_NAVBAR_ROUTES = ['/chat'];
 
 const Layout = ({ children }) => {
@@ -24,18 +24,6 @@ const Layout = ({ children }) => {
   );
 };
 
-const Home = () => (
-  <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
-    <div className="text-center">
-      <h1 className="text-5xl font-bold text-white mb-6">ZOLO Chat</h1>
-      <p className="text-xl text-blue-100 mb-8">Ứng dụng chat online hiện đại</p>
-      <div className="space-x-4">
-        <a href="/signin" className="inline-block bg-white text-blue-600 font-bold py-3 px-8 rounded-lg hover:bg-blue-50 transition">Đăng Nhập</a>
-        <a href="/signup" className="inline-block bg-blue-400 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-500 transition">Đăng Ký</a>
-      </div>
-    </div>
-  </div>
-);
 
 const App = () => {
   return (
