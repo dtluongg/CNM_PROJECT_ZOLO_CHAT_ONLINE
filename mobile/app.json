@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "ChatApp",
+    "slug": "chatapp-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chatapp.mobile"
+    },
+    "android": {
+      "package": "com.chatapp.mobile"
+    },
+    "scheme": "chatapp",
+    "experiments": {
+      "typedRoutes": false
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ChatApp cần truy cập thư viện ảnh để đặt ảnh đại diện."
+        }
+      ],
+      "expo-web-browser"
+    ]
+  }
+}
