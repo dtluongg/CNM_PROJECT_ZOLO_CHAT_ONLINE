@@ -1,6 +1,7 @@
 {
   "expo": {
-    "name": "ChatApp",
+    "name": "Zolo Chat",
+    "icon": "./public/logo.png",
     "slug": "chatapp-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -20,7 +21,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "ChatApp cần truy cập thư viện ảnh để đặt ảnh đại diện."
+          "photosPermission": "Cho phép ứng dụng truy cập ảnh của bạn"
         }
       ],
       "expo-web-browser"
