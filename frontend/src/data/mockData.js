@@ -1,0 +1,34 @@
+export const MOCK_CONVERSATIONS = [
+  { id: 1, name: 'Nguyễn Văn A', avatar: null, lastMessage: 'Bạn có khỏe không?', time: '10:30', unread: 3, type: 'dm', online: true, bio: 'Yêu thích lập trình và cà phê ☕' },
+  { id: 2, name: 'Trần Thị B', avatar: null, lastMessage: 'Hẹn gặp lại nhé!', time: '09:15', unread: 0, type: 'dm', online: false, bio: null },
+  { id: 3, name: 'Nhóm Lớp 12A', avatar: null, lastMessage: 'Nguyễn: Ôn thi thôi!', time: 'Hôm qua', unread: 12, type: 'group', online: null, memberCount: 35 },
+  { id: 4, name: 'ZoloChat Team', avatar: null, lastMessage: 'Welcome to ZoloChat 🎉', time: 'T2', unread: 0, type: 'group', online: null, memberCount: 8 },
+  { id: 5, name: 'Lê Minh C', avatar: null, lastMessage: 'OK nhé!', time: 'T3', unread: 1, type: 'dm', online: true, bio: '🎮 Gamer | 🎵 Music lover' },
+];
+
+export const MOCK_MESSAGES = {
+  1: [
+    { id: 1, senderId: 'other', senderName: 'Nguyễn Văn A', content: 'Chào bạn! Lâu không gặp 👋', time: '10:25', date: 'Hôm nay' },
+    { id: 2, senderId: 'me', senderName: 'Tôi', content: 'Ừ lâu rồi! Bạn khỏe không?', time: '10:27', date: 'Hôm nay' },
+    { id: 3, senderId: 'other', senderName: 'Nguyễn Văn A', content: 'Khỏe! Dạo này bận lắm. Còn bạn?', time: '10:28', date: 'Hôm nay' },
+    { id: 4, senderId: 'me', senderName: 'Tôi', content: 'Cũng bận nhưng ổn. Dự án mới khá thú vị 🔥', time: '10:29', date: 'Hôm nay' },
+    { id: 5, senderId: 'other', senderName: 'Nguyễn Văn A', content: 'Bạn có khỏe không?', time: '10:30', date: 'Hôm nay' },
+  ],
+  2: [
+    { id: 1, senderId: 'me', senderName: 'Tôi', content: 'Tạm biệt! Hẹn gặp sau 😊', time: '09:14', date: 'Hôm nay' },
+    { id: 2, senderId: 'other', senderName: 'Trần Thị B', content: 'Hẹn gặp lại nhé!', time: '09:15', date: 'Hôm nay' },
+  ],
+  3: [
+    { id: 1, senderId: 'other', senderName: 'Nguyễn Văn D', content: 'Mọi người học bài chưa?', time: '20:00', date: 'Hôm qua' },
+    { id: 2, senderId: 'other', senderName: 'Phạm Thị E', content: 'Ôn rồi nhưng vẫn chưa chắc 😅', time: '20:05', date: 'Hôm qua' },
+    { id: 3, senderId: 'other', senderName: 'Nguyễn Văn D', content: 'Ôn thi thôi!', time: '20:10', date: 'Hôm qua' },
+  ],
+  4: [
+    { id: 1, senderId: 'other', senderName: 'Admin', content: 'Welcome to ZoloChat 🎉', time: '09:00', date: 'T2' },
+    { id: 2, senderId: 'other', senderName: 'Admin', content: 'Đây là kênh chat nội bộ của team.', time: '09:01', date: 'T2' },
+  ],
+  5: [
+    { id: 1, senderId: 'other', senderName: 'Lê Minh C', content: 'Chiều nay có rảnh không?', time: '14:00', date: 'T3' },
+    { id: 2, senderId: 'me', senderName: 'Tôi', content: 'OK nhé!', time: '14:30', date: 'T3' },
+  ],
+};
