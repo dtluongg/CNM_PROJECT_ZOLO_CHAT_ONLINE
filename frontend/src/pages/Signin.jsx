@@ -63,7 +63,7 @@ const Signin = () => {
       if (response.status === 200) {
         const { accessToken, user } = response.data;
         login(accessToken, user);
-        navigate('/dashboard');
+        navigate('/chat');
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
