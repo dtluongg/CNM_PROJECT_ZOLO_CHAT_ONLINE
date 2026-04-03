@@ -406,6 +406,89 @@ const updateProfile = async (req, res) => {
 };
 
 // ════════════════════════════════════════════════════════════════
+//  TÌM KIẾM USER (theo username, email, displayName)
+// ════════════════════════════════════════════════════════════════
+const searchUsers = async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q || q.trim().length < 2) {
+            return res.status(400).json({ message: 'Từ khóa tìm kiếm phải có ít nhất 2 ký tự' });
+        }
+
+        const keyword = q.trim();
+        const regex = new RegExp(keyword, 'i');
+
+        const users = await userModel.find({
+            _id: { $ne: req.user._id }, // Không tìm bản thân
+            $or: [
+                { displayName: regex },
+                { username: regex },
+                { email: regex },
+            ],
+        })
+        .select('_id displayName username avatar usernameColor status statusText bio')
+        .limit(20);
+
+        return res.status(200).json({
+            users: users.map(u => ({
+                _id: u._id,
+                displayName: u.displayName,
+                username: u.username || null,
+                avatar: u.avatar || null,
+                usernameColor: u.usernameColor || '#5865f2',
+                status: u.status === 'invisible' ? 'offline' : u.status,
+                statusText: u.status === 'invisible' ? '' : (u.statusText || ''),
+                bio: u.bio || '',
+            })),
+        });
+    } catch (error) {
+        console.error('searchUsers error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server khi tìm kiếm' });
+    }
+};
+
+// ════════════════════════════════════════════════════════════════
+//  PUBLIC PROFILE - Cho người dùng khác xem hồ sơ
+// ════════════════════════════════════════════════════════════════
+const getPublicProfile = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!userId || !userId.match(/^[a-f\d]{24}$/i)) {
+            return res.status(400).json({ message: 'userId không hợp lệ' });
+        }
+
+        const user = await userModel.findById(userId).select(
+            'displayName avatar banner bio status statusText usernameColor createdAt'
+        );
+
+        if (!user) {
+            return res.status(404).json({ message: 'Không tìm thấy người dùng' });
+        }
+
+        // Nếu user đặt invisible → ẩn status với người khác
+        const visibleStatus = user.status === 'invisible' ? 'offline' : user.status;
+
+        return res.status(200).json({
+            user: {
+                _id: user._id,
+                displayName: user.displayName,
+                avatar: user.avatar || null,
+                banner: user.banner || null,
+                bio: user.bio || '',
+                status: visibleStatus,
+                statusText: user.status === 'invisible' ? '' : (user.statusText || ''),
+                usernameColor: user.usernameColor || '#5865f2',
+                createdAt: user.createdAt,
+            },
+        });
+    } catch (error) {
+        console.error('getPublicProfile error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server' });
+    }
+};
+
+// ════════════════════════════════════════════════════════════════
 //  TIỆN ÍCH
 // ════════════════════════════════════════════════════════════════
 
@@ -424,6 +507,8 @@ module.exports = {
     completeOAuthProfile,
     authMe,
     updateProfile,
+    searchUsers,
+    getPublicProfile,
     sendEmailOtp,
     verifyEmailOtp,
     sendPhoneOtp,
