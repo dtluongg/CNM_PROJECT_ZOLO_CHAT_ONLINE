@@ -1,34 +1,28 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setLogoutCallback } from '../services/apiClient';
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [user, setUser]       = useState(null);
+  const [token, setToken]     = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore session from AsyncStorage on app start
   useEffect(() => {
-    // Safety timeout: nếu AsyncStorage treo quá 5s thì vẫn thoát loading
     const timeout = setTimeout(() => {
-      console.warn('[AuthContext] restoreSession timeout — forcing loading=false');
+      console.warn('[AuthContext] restoreSession timeout');
       setLoading(false);
     }, 5000);
 
-    const restoreSession = async () => {
+    (async () => {
       try {
-        const storedToken = await AsyncStorage.getItem('accessToken');
+        const storedToken   = await AsyncStorage.getItem('accessToken');
         const storedUserRaw = await AsyncStorage.getItem('currentUser');
-
         if (storedToken) {
           setToken(storedToken);
           if (storedUserRaw) {
-            try {
-              setUser(JSON.parse(storedUserRaw));
-            } catch {
-              await AsyncStorage.removeItem('currentUser');
-            }
+            try { setUser(JSON.parse(storedUserRaw)); } catch {}
           }
         }
       } catch (e) {
@@ -37,66 +31,58 @@ export const AuthProvider = ({ children }) => {
         clearTimeout(timeout);
         setLoading(false);
       }
-    };
-
-    restoreSession();
+    })();
     return () => clearTimeout(timeout);
   }, []);
 
-  const login = async (accessToken, userData) => {
-    setToken(accessToken);
-    setUser(userData);
-    try {
-      await AsyncStorage.setItem('accessToken', accessToken);
-      await AsyncStorage.setItem('currentUser', JSON.stringify(userData));
-    } catch (e) {
-      console.error('[AuthContext] login storage error:', e);
-    }
-  };
-
-  const logout = async () => {
+  const logout = useCallback(async () => {
     setToken(null);
     setUser(null);
     try {
-      await AsyncStorage.removeItem('accessToken');
-      await AsyncStorage.removeItem('currentUser');
+      await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'currentUser']);
+    } catch {}
+  }, []);
+
+  // Register logout with apiClient so it can force-logout on 401 refresh failure
+  useEffect(() => {
+    setLogoutCallback(logout);
+  }, [logout]);
+
+  const login = async (accessToken, userData, refreshToken) => {
+    setToken(accessToken);
+    setUser(userData);
+    try {
+      const items = [
+        ['accessToken', accessToken],
+        ['currentUser', JSON.stringify(userData)],
+      ];
+      if (refreshToken) items.push(['refreshToken', refreshToken]);
+      await AsyncStorage.multiSet(items);
     } catch (e) {
-      console.error('[AuthContext] logout storage error:', e);
+      console.error('[AuthContext] login error:', e);
     }
   };
 
-  const updateToken = async (newAccessToken) => {
-    setToken(newAccessToken);
-    try {
-      await AsyncStorage.setItem('accessToken', newAccessToken);
-    } catch (e) {
-      console.error('[AuthContext] updateToken error:', e);
-    }
+  const updateToken = async (newToken) => {
+    setToken(newToken);
+    try { await AsyncStorage.setItem('accessToken', newToken); } catch {}
   };
 
   const updateUser = async (newUserData) => {
     const merged = { ...user, ...newUserData };
     setUser(merged);
-    try {
-      await AsyncStorage.setItem('currentUser', JSON.stringify(merged));
-    } catch (e) {
-      console.error('[AuthContext] updateUser error:', e);
-    }
+    try { await AsyncStorage.setItem('currentUser', JSON.stringify(merged)); } catch {}
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, token, loading, login, logout, updateToken, updateUser }}
-    >
+    <AuthContext.Provider value={{ user, token, loading, login, logout, updateToken, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 };
