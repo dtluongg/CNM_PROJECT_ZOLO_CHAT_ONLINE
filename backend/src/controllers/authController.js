@@ -426,7 +426,7 @@ const searchUsers = async (req, res) => {
                 { email: regex },
             ],
         })
-        .select('_id displayName username avatar usernameColor status statusText bio')
+        .select('_id displayName username email avatar usernameColor status statusText bio')
         .limit(20);
 
         return res.status(200).json({
@@ -434,6 +434,7 @@ const searchUsers = async (req, res) => {
                 _id: u._id,
                 displayName: u.displayName,
                 username: u.username || null,
+                email: u.email,
                 avatar: u.avatar || null,
                 usernameColor: u.usernameColor || '#5865f2',
                 status: u.status === 'invisible' ? 'offline' : u.status,
@@ -459,20 +460,21 @@ const getPublicProfile = async (req, res) => {
         }
 
         const user = await userModel.findById(userId).select(
-            'displayName avatar banner bio status statusText usernameColor createdAt'
+            'displayName username email avatar banner bio status statusText usernameColor createdAt'
         );
 
         if (!user) {
             return res.status(404).json({ message: 'Không tìm thấy người dùng' });
         }
 
-        // Nếu user đặt invisible → ẩn status với người khác
         const visibleStatus = user.status === 'invisible' ? 'offline' : user.status;
 
         return res.status(200).json({
             user: {
                 _id: user._id,
                 displayName: user.displayName,
+                username: user.username || null,
+                email: user.email,
                 avatar: user.avatar || null,
                 banner: user.banner || null,
                 bio: user.bio || '',
