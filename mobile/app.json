@@ -5,7 +5,7 @@
     "slug": "chatapp-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chatapp.mobile"
@@ -21,7 +21,13 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Cho phép ứng dụng truy cập ảnh của bạn"
+          "photosPermission": "Cho phép ZoloChat truy cập ảnh để đổi avatar và ảnh bìa."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép ZoloChat dùng camera để quét mã QR."
         }
       ],
       "expo-web-browser"
