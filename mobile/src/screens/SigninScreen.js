@@ -61,8 +61,8 @@ const SigninScreen = ({ navigation, route }) => {
         password,
       });
       if (response.status === 200) {
-        const { accessToken, user } = response.data;
-        await login(accessToken, user);
+        const { accessToken, refreshToken, user } = response.data;
+        await login(accessToken, user, refreshToken);
         // Navigation happens automatically via AppNavigator when token is set
       }
     } catch (err) {
