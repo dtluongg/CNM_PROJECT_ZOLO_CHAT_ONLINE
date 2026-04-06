@@ -50,7 +50,7 @@ export default function UserProfileModal({ userId, onClose, onStartChat }) {
   // Merge presence với DB status
   const isOnline = isUserOnline(userId);
   const presStatus = getPresenceStatus(userId);
-  const displayStatus = presStatus || (profile?.status === 'offline' || !isOnline ? 'offline' : profile?.status || 'offline');
+  const displayStatus = presStatus || profile?.status || 'offline';
   const statusInfo = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.offline;
   const accentColor = profile?.usernameColor || getAvatarColor(profile?.displayName);
 

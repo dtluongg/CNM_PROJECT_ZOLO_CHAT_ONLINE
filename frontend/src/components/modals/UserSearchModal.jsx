@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { X, Search, Upload, Camera, User, CameraOff, SwitchCamera, QrCode, ChevronRight } from 'lucide-react';
 import jsQR from 'jsqr';
 import apiClient from '../../services/apiClient';
+import { usePresence } from '../../context/PresenceContext';  // ✅ THÊM DÒNG NÀY
 
 const AVATAR_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245','#9b59b6','#e67e22'];
 const getAvatarColor = (name) => AVATAR_COLORS[(name || '?').charCodeAt(0) % AVATAR_COLORS.length];
@@ -14,9 +15,14 @@ const getInitials = (name) => {
 
 const STATUS_COLOR = { online: '#3ba55c', idle: '#faa61a', dnd: '#ed4245', offline: '#80848e', invisible: '#80848e' };
 
-function UserCard({ user, onClick }) {
+function UserCard({ user, onClick, isOnline, presStatus }) {
   const [hovered, setHovered] = useState(false);
   const accentColor = user.usernameColor || getAvatarColor(user.displayName);
+   const displayStatus = isOnline
+      ? (presStatus || 'online')
+      : 'offline';  // Offline = luôn XÁM
+
+    const statusColor = STATUS_COLOR[displayStatus] || '#80848e';
   return (
     <div
       onClick={() => onClick(user)}
@@ -46,7 +52,7 @@ function UserCard({ user, onClick }) {
         <span style={{
           position: 'absolute', bottom: 1, right: 1,
           width: 11, height: 11, borderRadius: '50%',
-          background: STATUS_COLOR[user.status] || '#80848e',
+          background: statusColor || '#80848e',
           border: '2px solid var(--bg-secondary)',
         }} />
       </div>
@@ -73,6 +79,7 @@ function UserCard({ user, onClick }) {
 
 export default function UserSearchModal({ onClose }) {
   const navigate = useNavigate();
+  const { isUserOnline, getPresenceStatus } = usePresence();  // ✅ THÊM DÒNG NÀY
   const [tab, setTab] = useState('search'); // 'search' | 'qr'
   const [qrMode, setQrMode] = useState('upload'); // 'upload' | 'camera'
 
@@ -353,7 +360,13 @@ export default function UserSearchModal({ onClose }) {
                     {results.length} kết quả
                   </div>
                   {results.map(u => (
-                    <UserCard key={u._id} user={u} onClick={handleViewUser} />
+                    <UserCard
+                      key={u._id}
+                      user={u}
+                      onClick={handleViewUser}
+                      isOnline={isUserOnline(u._id)}
+                      presStatus={getPresenceStatus(u._id)}
+                    />
                   ))}
                 </div>
               )}
