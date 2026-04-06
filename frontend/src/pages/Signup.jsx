@@ -1,10 +1,31 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Chrome, Facebook } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import apiClient from '../services/apiClient';
 
 const CALLBACK_URL = `${window.location.origin}/auth/callback`;
+
+const GoogleIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+    <path
+      fill="#EA4335"
+      d="M12 10.2v3.9h5.5c-.2 1.3-1.5 3.9-5.5 3.9-3.3 0-6-2.8-6-6.2s2.7-6.2 6-6.2c1.9 0 3.2.8 3.9 1.5l2.7-2.7C16.9 2.8 14.7 2 12 2 6.9 2 2.8 6.5 2.8 12s4.1 10 9.2 10c5.3 0 8.8-3.7 8.8-8.9 0-.6-.1-1.1-.2-1.6H12z"
+    />
+    <path fill="#34A853" d="M3.9 7.3l3.2 2.3C7.9 8 9.8 6.6 12 6.6c1.9 0 3.2.8 3.9 1.5l2.7-2.7C16.9 2.8 14.7 2 12 2 8.2 2 4.9 4.2 3.9 7.3z" />
+    <path fill="#FBBC05" d="M12 22c2.7 0 4.9-.9 6.6-2.5l-3.1-2.5c-.9.6-2.1 1-3.5 1-3.9 0-5.3-2.6-5.6-3.9l-3.1 2.4C4.9 19.7 8.2 22 12 22z" />
+    <path fill="#4285F4" d="M20.8 13.1c0-.6-.1-1.1-.2-1.6H12v3.9h5.5c-.3 1.1-1 2-2 2.6l3.1 2.5c1.8-1.7 2.9-4.2 2.9-7.4z" />
+  </svg>
+);
+
+const FacebookIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+    <circle cx="12" cy="12" r="10" fill="#1877F2" />
+    <path
+      fill="#FFFFFF"
+      d="M13.8 8.1h1.8V5h-2.1c-2.6 0-4.2 1.6-4.2 4.3v1.9H7v3h2.3V19h3.1v-4.8h2.5l.4-3h-2.9V9.7c0-.9.3-1.6 1.4-1.6z"
+    />
+  </svg>
+);
 
 const OtpSection = ({ label, target, type, onSend, cooldown, otpSent, otpValue, onOtpChange, loading }) => (
   <div className="rounded-lg border border-gray-200 p-4 space-y-3">
@@ -171,8 +192,8 @@ const Signup = () => {
   const atLeastOneOtpReady = (emailOtpSent && emailOtp) || (phoneOtpSent && phoneOtp);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-start md:items-center justify-center px-4 py-8 md:py-10 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6 sm:p-8">
         <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">Đăng Ký</h1>
 
         {/* OAuth buttons */}
@@ -181,14 +202,14 @@ const Signup = () => {
             className="flex items-center justify-center gap-3 w-full border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-4 rounded-lg transition disabled:opacity-60">
             {oauthLoading === 'google'
               ? <span className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-              : <Chrome className="w-5 h-5" />}
+              : <GoogleIcon />}
             {oauthLoading === 'google' ? 'Đang chuyển hướng...' : 'Đăng ký với Google'}
           </button>
           <button type="button" onClick={() => handleOAuth('facebook')} disabled={!!oauthLoading}
             className="flex items-center justify-center gap-3 w-full border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-4 rounded-lg transition disabled:opacity-60">
             {oauthLoading === 'facebook'
               ? <span className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-              : <Facebook className="w-5 h-5" />}
+              : <FacebookIcon />}
             {oauthLoading === 'facebook' ? 'Đang chuyển hướng...' : 'Đăng ký với Facebook'}
           </button>
         </div>
