@@ -590,6 +590,7 @@ export default function ProfileSettings({ onClose }) {
                   onBlur={(e) => { e.target.style.borderColor = 'var(--border)'; }}
                 />
               </div>
+
             </div>
           )}
 

@@ -1,12 +1,11 @@
 # Node modules
 node_modules/
-backend/node_modules/
-frontend/node_modules/
 
 # Environment variables
 .env
-backend/.env
-frontend/.env
+backend/.env*
+frontend/.env*
+mobile/.env*
 
 # Logs
 logs
@@ -22,4 +21,7 @@ Thumbs.db
 # Build folders
 dist/
 build/
+<<<<<<< HEAD
+=======
 .idea
+>>>>>>> dab5fb4c408bee80d9f50587d3c803a4138034e7

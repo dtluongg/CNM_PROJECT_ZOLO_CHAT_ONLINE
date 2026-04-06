@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CircleX } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../services/apiClient';
@@ -94,7 +95,7 @@ const AuthCallback = () => {
           </>
         ) : (
           <>
-            <div className="text-4xl mb-4">❌</div>
+            <CircleX className="w-10 h-10 text-red-500 mx-auto mb-4" />
             <p className="text-red-600 font-semibold mb-2">Xác thực thất bại</p>
             <p className="text-gray-500 text-sm mb-5">{error}</p>
             <button

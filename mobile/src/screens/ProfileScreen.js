@@ -59,7 +59,7 @@ const Avatar = ({ name, avatar, size = 48, status }) => {
 };
 
 // ─── PROFILE SCREEN ───────────────────────────────────────────────
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
   const { user, logout, updateUser } = useAuth();
 
   const [profile, setProfile]     = useState(null);
@@ -391,6 +391,48 @@ export default function ProfileScreen() {
                 </View>
               </>
             )}
+
+            {d.phone && (
+              <>
+                <View style={s.infoSep} />
+                <View style={s.infoRow}>
+                  <Text style={s.infoRowIcon}>📱</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.infoRowLabel}>Số điện thoại</Text>
+                    <Text style={s.infoRowValue}>{d.phone}</Text>
+                  </View>
+                </View>
+              </>
+            )}
+
+            {d.authProvider && (
+              <>
+                <View style={s.infoSep} />
+                <View style={s.infoRow}>
+                  <Text style={s.infoRowIcon}>🔐</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.infoRowLabel}>Loại tài khoản</Text>
+                    <Text style={s.infoRowValue}>
+                      {d.authProvider === 'local' ? 'Tài khoản local' : `OAuth (${d.authProvider})`}
+                    </Text>
+                  </View>
+                </View>
+              </>
+            )}
+
+            {(typeof d.isEmailVerified === 'boolean' || typeof d.isPhoneVerified === 'boolean') && (
+              <>
+                <View style={s.infoSep} />
+                <View style={s.verifiedRow}>
+                  {typeof d.isEmailVerified === 'boolean' && (
+                    <Text style={s.verifiedText}>Email: {d.isEmailVerified ? 'Đã xác thực' : 'Chưa xác thực'}</Text>
+                  )}
+                  {typeof d.isPhoneVerified === 'boolean' && (
+                    <Text style={s.verifiedText}>SĐT: {d.isPhoneVerified ? 'Đã xác thực' : 'Chưa xác thực'}</Text>
+                  )}
+                </View>
+              </>
+            )}
           </View>
 
           {/* ── Personalisation card ───────────────────────────── */}
@@ -423,6 +465,13 @@ export default function ProfileScreen() {
               label="Mã QR của tôi"
               sub="Chia sẻ hồ sơ qua QR"
               onPress={() => setTab('qr')}
+            />
+            <View style={s.sep} />
+            <SettingRow
+              icon="🔒"
+              label="Đổi mật khẩu"
+              sub="Cập nhật mật khẩu đăng nhập"
+              onPress={() => navigation?.navigate('ChangePassword')}
             />
           </View>
 
@@ -749,6 +798,8 @@ const s = StyleSheet.create({
   infoRowIcon: { fontSize: 20, width: 28, textAlign: 'center' },
   infoRowLabel: { fontSize: 11, color: THEME.textMuted, marginBottom: 1 },
   infoRowValue: { fontSize: 14, color: THEME.textPrimary, fontWeight: '600' },
+  verifiedRow: { gap: 6 },
+  verifiedText: { color: THEME.textSecondary, fontSize: 12, fontWeight: '600' },
 
   // Settings card
   settingsCard: {

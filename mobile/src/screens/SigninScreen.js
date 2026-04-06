@@ -307,6 +307,12 @@ const SigninScreen = ({ navigation, route }) => {
             onSubmitEditing={handleSubmit}
           />
 
+          <View style={styles.forgotWrap}>
+            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+              <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             style={[styles.primaryBtn, loading && styles.disabledBtn]}
             onPress={handleSubmit}
@@ -452,6 +458,16 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 14,
     backgroundColor: '#FAFAFA',
+  },
+  forgotWrap: {
+    alignItems: 'flex-end',
+    marginTop: -6,
+    marginBottom: 10,
+  },
+  forgotText: {
+    fontSize: 12,
+    color: '#2563EB',
+    fontWeight: '700',
   },
   primaryBtn: {
     backgroundColor: '#2563EB',

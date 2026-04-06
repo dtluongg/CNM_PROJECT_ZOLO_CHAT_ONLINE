@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, Smile, CornerUpLeft } from 'lucide-react';
+import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, Smile, CornerUpLeft, Paperclip, ThumbsUp, Reply, Copy, Trash2 } from 'lucide-react';
 import MessageInput from './MessageInput';
 
 const AVATAR_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#fee75c','#ed4245','#9b59b6','#e67e22'];
@@ -107,7 +107,7 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
                 style={{ maxWidth: isMobile ? 220 : 260, maxHeight: 260, borderRadius: 8, display: 'block' }} />
             ) : msg.type === 'file' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 20 }}>📎</span>
+                <Paperclip size={18} />
                 <span style={{ fontSize: 13, textDecoration: 'underline', cursor: 'pointer' }}>{msg.content}</span>
               </div>
             ) : msg.content}
@@ -123,7 +123,7 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
               flexShrink: 0,
             }}>
               {[
-                { content: '👍', title: 'Thả cảm xúc' },
+                { content: <ThumbsUp size={13} />, title: 'Thả cảm xúc' },
                 { content: <CornerUpLeft size={13} />, title: 'Trả lời' },
                 { content: <MoreHorizontal size={14} />, title: 'Thêm' },
               ].map((btn, i) => (
@@ -179,10 +179,10 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
             </div>
             {/* Actions */}
             {[
-              { icon: '↩️', label: 'Trả lời' },
-              { icon: '📋', label: 'Sao chép' },
-              { icon: '📌', label: 'Ghim tin nhắn' },
-              { icon: '🗑️', label: 'Xóa tin nhắn', danger: true },
+              { icon: <Reply size={20} />, label: 'Trả lời' },
+              { icon: <Copy size={20} />, label: 'Sao chép' },
+              { icon: <Pin size={20} />, label: 'Ghim tin nhắn' },
+              { icon: <Trash2 size={20} />, label: 'Xóa tin nhắn', danger: true },
             ].map(action => (
               <button key={action.label}
                 onClick={() => setShowActions(false)}
@@ -197,7 +197,7 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
                 onTouchStart={e => e.currentTarget.style.background = 'var(--bg-hover)'}
                 onTouchEnd={e => e.currentTarget.style.background = 'none'}
               >
-                <span style={{ fontSize: 20 }}>{action.icon}</span>
+                <span style={{ display: 'flex', alignItems: 'center' }}>{action.icon}</span>
                 {action.label}
               </button>
             ))}

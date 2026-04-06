@@ -120,13 +120,29 @@ export default function UserProfileScreen({ route, navigation }) {
         </View>
 
         {/* Action buttons */}
-        {!isOwn && (
+        {!isOwn ? (
           <View style={s.actionRow}>
             <ActionBtn icon="💬" label="Nhắn tin" onPress={handleMessage} primary />
             <ActionBtn icon="🤝" label="Kết bạn" onPress={() => Alert.alert('Kết bạn', `Đã gửi lời mời đến ${profile.displayName}!`)} />
             <ActionBtn icon="📞" label="Gọi điện" onPress={() => Alert.alert('Gọi điện', 'Tính năng sẽ sớm ra mắt!')} />
           </View>
+        ) : (
+          <View style={s.ownActionRow}>
+            <TouchableOpacity style={s.ownActionBtn} onPress={() => navigation.navigate('ChangePassword')} activeOpacity={0.78}>
+              <Text style={s.ownActionBtnIcon}>🔒</Text>
+              <Text style={s.ownActionBtnText}>Đổi mật khẩu</Text>
+            </TouchableOpacity>
+          </View>
         )}
+
+        {profile.statusText ? (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>TRẠNG THÁI TÙY CHỈNH</Text>
+            <View style={s.bioCard}>
+              <Text style={s.bioText}>{profile.statusText}</Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* Bio */}
         {profile.bio && (
@@ -151,6 +167,25 @@ export default function UserProfileScreen({ route, navigation }) {
                 value={new Date(profile.createdAt).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long' })}
                 sep
               />
+            )}
+            {profile.phone && <InfoRow icon="📱" label="Số điện thoại" value={profile.phone} sep />}
+            {profile.authProvider && (
+              <InfoRow
+                icon="🔐"
+                label="Loại tài khoản"
+                value={profile.authProvider === 'local' ? 'Tài khoản local' : `OAuth (${profile.authProvider})`}
+                sep
+              />
+            )}
+            {(typeof profile.isEmailVerified === 'boolean' || typeof profile.isPhoneVerified === 'boolean') && (
+              <View style={s.verifyBox}>
+                {typeof profile.isEmailVerified === 'boolean' && (
+                  <Text style={s.verifyText}>Email: {profile.isEmailVerified ? 'Đã xác thực' : 'Chưa xác thực'}</Text>
+                )}
+                {typeof profile.isPhoneVerified === 'boolean' && (
+                  <Text style={s.verifyText}>SĐT: {profile.isPhoneVerified ? 'Đã xác thực' : 'Chưa xác thực'}</Text>
+                )}
+              </View>
             )}
           </View>
         </View>
@@ -240,6 +275,20 @@ const s = StyleSheet.create({
   actionBtnPrimary: { backgroundColor: THEME.accent, borderColor: THEME.accent },
   actionBtnIcon: { fontSize: 20 },
   actionBtnLabel: { color: THEME.textSecondary, fontSize: 12, fontWeight: '600' },
+  ownActionRow: { paddingHorizontal: 16, marginBottom: 16 },
+  ownActionBtn: {
+    backgroundColor: 'rgba(237,66,69,0.12)',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(237,66,69,0.35)',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  ownActionBtnIcon: { fontSize: 18 },
+  ownActionBtnText: { color: '#ed4245', fontSize: 13, fontWeight: '700' },
 
   section: { paddingHorizontal: 12, marginBottom: 12 },
   sectionLabel: {
@@ -255,4 +304,6 @@ const s = StyleSheet.create({
   infoRowIcon: { fontSize: 20, width: 28, textAlign: 'center' },
   infoLabel: { fontSize: 11, color: THEME.textMuted, marginBottom: 1 },
   infoValue: { fontSize: 14, color: THEME.textPrimary, fontWeight: '600' },
+  verifyBox: { gap: 6, marginTop: 2 },
+  verifyText: { fontSize: 12, color: THEME.textSecondary, fontWeight: '600' },
 });
