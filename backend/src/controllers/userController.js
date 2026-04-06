@@ -3,7 +3,26 @@ const authModel = require('../models/authModel');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { verifyOtp } = require('../services/otpService');
+const { saveOtp, verifyOtp } = require('../services/otpService');
+const { sendOtpEmail } = require('../services/emailService');
+
+// ── Helper: validate mật khẩu mới ───────────────────────────────
+const validatePassword = (password) => {
+    if (!password || typeof password !== 'string') {
+        return 'Mật khẩu không hợp lệ';
+    }
+
+    if (password.length < 8) {
+        return 'Mật khẩu phải có ít nhất 8 ký tự';
+    }
+
+    // Ít nhất 1 chữ hoa, 1 chữ thường và 1 số
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+        return 'Mật khẩu phải bao gồm chữ hoa, chữ thường và số';
+    }
+
+    return null;
+};
 
 // ── Helper: tạo cặp token local ──────────────────────────────────
 const createLocalTokens = async (userId, res) => {
@@ -224,5 +243,178 @@ const getNewAccessToken = async (req, res) => {
         return res.status(500).json({ message: 'Lỗi server' });
     }
 };
+// ── ĐỔI MẬT KHẨU (khi đang đăng nhập) ───────────────────────────
+// Yêu cầu: verifyLocalToken trước, body: { oldPassword, newPassword }
+const changePassword = async (req, res) => {
+    try {
+        const { oldPassword, newPassword } = req.body;
 
-module.exports = { signup, signin, signout, getNewAccessToken };
+        if (!oldPassword || !newPassword) {
+            return res.status(400).json({ message: 'Vui lòng nhập đầy đủ mật khẩu cũ và mật khẩu mới' });
+        }
+
+        const userId = req.user && req.user._id;
+        if (!userId) {
+            return res.status(401).json({ message: 'Không xác định được người dùng' });
+        }
+
+        const user = await userModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User không tồn tại' });
+        }
+
+        if (user.authProvider !== 'local' || !user.passwordHash) {
+            return res.status(400).json({ message: 'Tài khoản này không hỗ trợ đổi mật khẩu local' });
+        }
+
+        const isOldCorrect = await bcrypt.compare(oldPassword, user.passwordHash);
+        if (!isOldCorrect) {
+            return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng' });
+        }
+
+        const passwordError = validatePassword(newPassword);
+        if (passwordError) {
+            return res.status(400).json({ message: passwordError });
+        }
+
+        // Không cho phép trùng mật khẩu cũ
+        const isSameAsOld = await bcrypt.compare(newPassword, user.passwordHash);
+        if (isSameAsOld) {
+            return res.status(400).json({ message: 'Mật khẩu mới phải khác mật khẩu hiện tại' });
+        }
+
+        const newHash = await bcrypt.hash(newPassword, 10);
+        user.passwordHash = newHash;
+        await user.save();
+
+        // Invalidate toàn bộ refresh token cũ
+        await authModel.deleteMany({ userId: user._id });
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+        });
+
+        return res.status(200).json({ message: 'Đổi mật khẩu thành công, vui lòng đăng nhập lại' });
+
+    } catch (error) {
+        console.error('Change password error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server khi đổi mật khẩu' });
+    }
+};
+
+// ── QUÊN MẬT KHẨU: gửi OTP tới email ───────────────────────────
+// Body: { username }  (có thể là username hoặc email)
+const forgotPassword = async (req, res) => {
+    try {
+        const { username } = req.body;
+
+        if (!username) {
+            return res.status(400).json({ message: 'Vui lòng nhập username hoặc email' });
+        }
+
+        const identifier = username.toLowerCase();
+
+        const user = await userModel.findOne({
+            $or: [
+                { username: identifier },
+                { email: identifier },
+            ],
+        });
+
+        // Trả về message chung để tránh lộ thông tin tài khoản tồn tại hay không
+        const genericMessage = 'Nếu tài khoản tồn tại, chúng tôi đã gửi mã OTP tới email đăng ký';
+
+        if (!user) {
+            return res.status(200).json({ message: genericMessage });
+        }
+
+        if (user.authProvider !== 'local' || !user.passwordHash) {
+            return res.status(200).json({ message: genericMessage });
+        }
+
+        try {
+            const otp = await saveOtp(user.email, 'email');
+            await sendOtpEmail(user.email, otp);
+        } catch (error) {
+            // Nếu lỗi do cooldown, có thể trả về chi tiết để UX tốt hơn
+            return res.status(429).json({ message: error.message || 'Vui lòng thử lại sau một lúc' });
+        }
+
+        return res.status(200).json({ message: genericMessage });
+
+    } catch (error) {
+        console.error('Forgot password error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server khi gửi OTP reset mật khẩu' });
+    }
+};
+
+// ── QUÊN MẬT KHẨU: đặt lại mật khẩu bằng OTP ──────────────────
+// Body: { username, otp, newPassword }
+const resetPassword = async (req, res) => {
+    try {
+        const { username, otp, newPassword } = req.body;
+
+        if (!username || !otp || !newPassword) {
+            return res.status(400).json({ message: 'Vui lòng nhập đầy đủ username, OTP và mật khẩu mới' });
+        }
+
+        const identifier = username.toLowerCase();
+
+        const user = await userModel.findOne({
+            $or: [
+                { username: identifier },
+                { email: identifier },
+            ],
+        });
+
+        if (!user || user.authProvider !== 'local' || !user.passwordHash) {
+            // Không tiết lộ chi tiết vì lý do bảo mật
+            return res.status(400).json({ message: 'Không thể đặt lại mật khẩu. Vui lòng kiểm tra lại thông tin hoặc yêu cầu OTP mới' });
+        }
+
+        // Xác thực OTP theo email của user
+        const otpResult = await verifyOtp(user.email, 'email', otp);
+        if (!otpResult.success) {
+            return res.status(400).json({ message: otpResult.message });
+        }
+
+        const passwordError = validatePassword(newPassword);
+        if (passwordError) {
+            return res.status(400).json({ message: passwordError });
+        }
+
+        // Không cho phép dùng lại mật khẩu cũ
+        const isSameAsOld = await bcrypt.compare(newPassword, user.passwordHash);
+        if (isSameAsOld) {
+            return res.status(400).json({ message: 'Mật khẩu mới phải khác mật khẩu hiện tại' });
+        }
+
+        const newHash = await bcrypt.hash(newPassword, 10);
+        user.passwordHash = newHash;
+        await user.save();
+
+        await authModel.deleteMany({ userId: user._id });
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+        });
+
+        return res.status(200).json({ message: 'Đặt lại mật khẩu thành công, vui lòng đăng nhập lại' });
+
+    } catch (error) {
+        console.error('Reset password error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server khi đặt lại mật khẩu' });
+    }
+};
+
+module.exports = {
+    signup,
+    signin,
+    signout,
+    getNewAccessToken,
+    changePassword,
+    forgotPassword,
+    resetPassword,
+};

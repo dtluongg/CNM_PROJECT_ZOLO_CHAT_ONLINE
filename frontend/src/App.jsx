@@ -8,6 +8,8 @@ import Signin from './pages/Signin';
 import Dashboard from './pages/Dashboard';
 import AuthCallback from './pages/AuthCallback';
 import CompleteProfile from './pages/CompleteProfile';
+import ForgotPassword from './pages/ForgotPassword';
+import Profile from './pages/Profile';
 
 const Home = () => (
   <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
@@ -41,11 +43,20 @@ const App = () => {
           <Route path="/" element={<Home />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/signin" element={<Signin />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route
             path="/dashboard"
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
               </ProtectedRoute>
             }
           />

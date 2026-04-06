@@ -32,6 +32,9 @@ const Navbar = () => {
               <Link to="/dashboard" className="hover:text-blue-100 transition">
                 Dashboard
               </Link>
+              <Link to="/profile" className="hover:text-blue-100 transition">
+                Hồ sơ
+              </Link>
               <span className="text-sm text-blue-100">
                 {user?.displayName || 'User'}
               </span>

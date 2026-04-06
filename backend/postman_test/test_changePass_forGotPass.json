@@ -1,0 +1,239 @@
+{
+  "info": {
+    "name": "ZoloChat User Auth",
+    "_postman_id": "a5c9b8d0-0000-0000-0000-000000000000",
+    "description": "Collection test signup/signin/signout, change password, forgot/reset password cho ZoloChat backend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Signup - Send Email OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"testuser@example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/backend/api/auth/send-email-otp",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "backend",
+            "api",
+            "auth",
+            "send-email-otp"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Local Signup",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"testuser\",\n  \"password\": \"Test1234\",\n  \"email\": \"testuser@example.com\",\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"phone\": \"0901234567\",\n  \"emailOtp\": \"<NHAP_OTP_EMAIL_THUC_TE>\",\n  \"phoneOtp\": null\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/backend/api/users/signup",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "backend",
+            "api",
+            "users",
+            "signup"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Local Signin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"testuser\",\n  \"password\": \"Test1234\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/backend/api/users/signin",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "backend",
+            "api",
+            "users",
+            "signin"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Signout (Local)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/backend/api/users/signout",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "backend",
+            "api",
+            "users",
+            "signout"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Refresh Access Token (Local)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/backend/api/users/refreshme",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "backend",
+            "api",
+            "users",
+            "refreshme"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Change Password (Local, Logged In)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"oldPassword\": \"Test1234\",\n  \"newPassword\": \"NewPass123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/backend/api/users/change-password",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "backend",
+            "api",
+            "users",
+            "change-password"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Forgot Password - Send OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"testuser\"  \n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/backend/api/users/forgot-password",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "backend",
+            "api",
+            "users",
+            "forgot-password"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Reset Password with OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"testuser\",\n  \"otp\": \"<NHAP_OTP_EMAIL_THUC_TE>\",\n  \"newPassword\": \"NewPass123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/backend/api/users/reset-password",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "backend",
+            "api",
+            "users",
+            "reset-password"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    }
+  ]
+}

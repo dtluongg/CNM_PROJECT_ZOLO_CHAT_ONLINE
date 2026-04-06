@@ -150,6 +150,14 @@ const Signin = () => {
               placeholder="Mật khẩu"
             />
           </div>
+          <div className="flex justify-end -mt-2 mb-1">
+            <Link
+              to="/forgot-password"
+              className="text-xs text-blue-600 hover:text-blue-700 font-semibold"
+            >
+              Quên mật khẩu?
+            </Link>
+          </div>
           <button
             type="submit"
             disabled={loading}

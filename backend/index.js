@@ -4,6 +4,11 @@ const dotenv = require('dotenv');
 dotenv.config();
 const PORT = process.env.PORT;
 const cors = require('cors');
+
+const dns = require('node:dns');
+// Set the global DNS servers for this Node.js process
+dns.setServers(['1.1.1.1']);
+
 app.use(cors({
     origin: 'http://localhost:5173', // Thay đổi nếu frontend chạy trên cổng khác
     credentials: true, // Cho phép gửi cookie
