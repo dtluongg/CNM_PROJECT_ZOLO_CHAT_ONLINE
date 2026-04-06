@@ -7,6 +7,8 @@ const {
     completeOAuthProfile,
     authMe,
     updateProfile,
+    searchUsers,
+    getPublicProfile,
     sendEmailOtp,
     verifyEmailOtp,
     sendPhoneOtp,
@@ -29,6 +31,16 @@ router.get('/authme', verifyToken, authMe);
 //  UPDATE PROFILE (avatar, displayName)
 // ════════════════════════════════════════════════════════════════
 router.patch('/update-profile', verifyToken, updateProfile);
+
+// ════════════════════════════════════════════════════════════════
+//  TÌM KIẾM USER
+// ════════════════════════════════════════════════════════════════
+router.get('/users/search', verifyToken, searchUsers);
+
+// ════════════════════════════════════════════════════════════════
+//  PUBLIC PROFILE - Cho người dùng khác xem
+// ════════════════════════════════════════════════════════════════
+router.get('/users/:userId/profile', verifyToken, getPublicProfile);
 
 // ════════════════════════════════════════════════════════════════
 //  EMAIL OTP

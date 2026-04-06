@@ -26,11 +26,11 @@ const validatePassword = (password) => {
 
 // ── Helper: tạo cặp token local ──────────────────────────────────
 const createLocalTokens = async (userId, res) => {
-    // Access token ngắn hạn (15 phút)
+    // Access token 7 ngày (mobile không thể dùng cookie-based refresh)
     const accessToken = jwt.sign(
         { user_id: userId },
         process.env.acc_secret,
-        { expiresIn: '15m' }
+        { expiresIn: '7d' }
     );
 
     // Refresh token dài hạn (7 ngày) lưu vào DB
@@ -151,19 +151,44 @@ const signin = async (req, res) => {
             return res.status(400).json({ message: 'Mật khẩu không chính xác' });
         }
 
-        // Tạo tokens
-        const accessToken = await createLocalTokens(userFind._id, res);
+        // Tạo tokens (refreshToken cũng trả về body để mobile lưu vào AsyncStorage)
+        const plainRefreshToken = crypto.randomBytes(64).toString('hex');
+        await authModel.create({
+            userId: userFind._id,
+            refreshToken: plainRefreshToken,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        });
+        res.cookie('refreshToken', plainRefreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+        const accessToken = jwt.sign(
+            { user_id: userFind._id },
+            process.env.acc_secret,
+            { expiresIn: '7d' }
+        );
 
         return res.status(200).json({
             message: 'Đăng nhập thành công',
             accessToken,
+            refreshToken: plainRefreshToken,
             user: {
                 _id: userFind._id,
                 username: userFind.username,
                 email: userFind.email,
                 displayName: userFind.displayName,
-                avatar: userFind.avatar,
+                avatar: userFind.avatar || null,
+                banner: userFind.banner || null,
+                bio: userFind.bio || '',
+                status: userFind.status || 'online',
+                statusText: userFind.statusText || '',
+                usernameColor: userFind.usernameColor || '#5865f2',
+                themeName: userFind.themeName || 'dark',
                 authProvider: userFind.authProvider,
+                isEmailVerified: userFind.isEmailVerified,
+                createdAt: userFind.createdAt,
             },
         });
 
@@ -201,9 +226,10 @@ const signout = async (req, res) => {
 };
 
 // ── REFRESH ACCESS TOKEN ──────────────────────────────────────────
+// Chấp nhận refreshToken từ cookie (web) HOẶC body (mobile)
 const getNewAccessToken = async (req, res) => {
     try {
-        const refreshToken = req.cookies.refreshToken;
+        const refreshToken = req.cookies.refreshToken || req.body?.refreshToken;
         if (!refreshToken) {
             return res.status(401).json({ message: 'Không có refresh token', code: 'NO_REFRESH_TOKEN' });
         }
@@ -226,11 +252,11 @@ const getNewAccessToken = async (req, res) => {
             return res.status(401).json({ message: 'User không tồn tại' });
         }
 
-        // Tạo access token mới
+        // Tạo access token mới (7 ngày)
         const newAccessToken = jwt.sign(
             { user_id: user._id },
             process.env.acc_secret,
-            { expiresIn: '15m' }
+            { expiresIn: '7d' }
         );
 
         return res.status(200).json({

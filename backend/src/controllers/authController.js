@@ -181,6 +181,13 @@ const authMe = async (req, res) => {
                 isPhoneVerified: user.isPhoneVerified,
                 authProvider: user.authProvider,
                 createdAt: user.createdAt,
+                bio: user.bio,
+                status: user.status,
+                statusText: user.statusText,
+                banner: user.banner || null,
+                usernameColor: user.usernameColor,
+                themeName: user.themeName,
+                themeColors: user.themeColors || null,
             },
         });
 
@@ -331,11 +338,14 @@ const verifyPhoneOtp = async (req, res) => {
 };
 
 // ════════════════════════════════════════════════════════════════
-//  CẬP NHẬT PROFILE (avatar, displayName)
+//  CẬP NHẬT PROFILE (avatar, displayName, and extended settings)
 // ════════════════════════════════════════════════════════════════
 const updateProfile = async (req, res) => {
     try {
-        const { avatar, displayName } = req.body;
+        const {
+            avatar, displayName,
+            bio, status, statusText, banner, usernameColor, themeName, themeColors,
+        } = req.body;
         const userId = req.user._id;
 
         const updates = {};
@@ -349,6 +359,13 @@ const updateProfile = async (req, res) => {
             }
             updates.avatar = avatar;
         }
+        if (bio !== undefined) updates.bio = bio;
+        if (status !== undefined) updates.status = status;
+        if (statusText !== undefined) updates.statusText = statusText;
+        if (banner !== undefined) updates.banner = banner;
+        if (usernameColor !== undefined) updates.usernameColor = usernameColor;
+        if (themeName !== undefined) updates.themeName = themeName;
+        if (themeColors !== undefined) updates.themeColors = themeColors;
 
         if (Object.keys(updates).length === 0) {
             return res.status(400).json({ message: 'Không có dữ liệu để cập nhật' });
@@ -372,12 +389,104 @@ const updateProfile = async (req, res) => {
                 isEmailVerified: updatedUser.isEmailVerified,
                 isPhoneVerified: updatedUser.isPhoneVerified,
                 authProvider: updatedUser.authProvider,
+                bio: updatedUser.bio,
+                status: updatedUser.status,
+                statusText: updatedUser.statusText,
+                banner: updatedUser.banner || null,
+                usernameColor: updatedUser.usernameColor,
+                themeName: updatedUser.themeName,
+                themeColors: updatedUser.themeColors || null,
             },
         });
 
     } catch (error) {
         console.error('updateProfile error:', error.message);
         return res.status(500).json({ message: 'Lỗi server khi cập nhật profile' });
+    }
+};
+
+// ════════════════════════════════════════════════════════════════
+//  TÌM KIẾM USER (theo username, email, displayName)
+// ════════════════════════════════════════════════════════════════
+const searchUsers = async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q || q.trim().length < 2) {
+            return res.status(400).json({ message: 'Từ khóa tìm kiếm phải có ít nhất 2 ký tự' });
+        }
+
+        const keyword = q.trim();
+        const regex = new RegExp(keyword, 'i');
+
+        const users = await userModel.find({
+            _id: { $ne: req.user._id }, // Không tìm bản thân
+            $or: [
+                { displayName: regex },
+                { username: regex },
+                { email: regex },
+            ],
+        })
+        .select('_id displayName username email avatar usernameColor status statusText bio')
+        .limit(20);
+
+        return res.status(200).json({
+            users: users.map(u => ({
+                _id: u._id,
+                displayName: u.displayName,
+                username: u.username || null,
+                email: u.email,
+                avatar: u.avatar || null,
+                usernameColor: u.usernameColor || '#5865f2',
+                status: u.status === 'invisible' ? 'offline' : u.status,
+                statusText: u.status === 'invisible' ? '' : (u.statusText || ''),
+                bio: u.bio || '',
+            })),
+        });
+    } catch (error) {
+        console.error('searchUsers error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server khi tìm kiếm' });
+    }
+};
+
+// ════════════════════════════════════════════════════════════════
+//  PUBLIC PROFILE - Cho người dùng khác xem hồ sơ
+// ════════════════════════════════════════════════════════════════
+const getPublicProfile = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!userId || !userId.match(/^[a-f\d]{24}$/i)) {
+            return res.status(400).json({ message: 'userId không hợp lệ' });
+        }
+
+        const user = await userModel.findById(userId).select(
+            'displayName username email avatar banner bio status statusText usernameColor createdAt'
+        );
+
+        if (!user) {
+            return res.status(404).json({ message: 'Không tìm thấy người dùng' });
+        }
+
+        const visibleStatus = user.status === 'invisible' ? 'offline' : user.status;
+
+        return res.status(200).json({
+            user: {
+                _id: user._id,
+                displayName: user.displayName,
+                username: user.username || null,
+                email: user.email,
+                avatar: user.avatar || null,
+                banner: user.banner || null,
+                bio: user.bio || '',
+                status: visibleStatus,
+                statusText: user.status === 'invisible' ? '' : (user.statusText || ''),
+                usernameColor: user.usernameColor || '#5865f2',
+                createdAt: user.createdAt,
+            },
+        });
+    } catch (error) {
+        console.error('getPublicProfile error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server' });
     }
 };
 
@@ -400,6 +509,8 @@ module.exports = {
     completeOAuthProfile,
     authMe,
     updateProfile,
+    searchUsers,
+    getPublicProfile,
     sendEmailOtp,
     verifyEmailOtp,
     sendPhoneOtp,
