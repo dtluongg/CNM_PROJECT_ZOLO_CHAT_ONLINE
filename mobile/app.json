@@ -6,6 +6,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "updates": {
+      "checkAutomatically": "never"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chatapp.mobile"
