@@ -182,14 +182,13 @@ export default function ProfileSettings({ onClose }) {
         displayName, bio, status, statusText, avatar, banner, usernameColor,
         themeName, themeColors: colors,
       });
-      updateUser(res.data.user || { displayName, bio, status, statusText, avatar, banner, usernameColor });
+      updateUser(res.data.user || { displayName, bio, status, statusText, avatar, banner, usernameColor, themeName, themeColors: colors });
       setSaveMsg('saved');
       setTimeout(() => setSaveMsg(''), 2500);
     } catch (err) {
-      // Graceful local save if API fails
-      updateUser({ displayName, bio, status, statusText, avatar, banner, usernameColor });
-      setSaveMsg('saved');
-      setTimeout(() => setSaveMsg(''), 2500);
+      console.error('[ProfileSettings] Lỗi khi lưu profile:', err);
+      setSaveMsg('error');
+      setTimeout(() => setSaveMsg(''), 3000);
     } finally {
       setSaving(false);
     }
@@ -982,6 +981,11 @@ export default function ProfileSettings({ onClose }) {
           {saveMsg === 'saved' && (
             <span style={{ fontSize: 13, color: '#3ba55c', fontWeight: 600 }}>
               ✓ Đã lưu thay đổi
+            </span>
+          )}
+          {saveMsg === 'error' && (
+            <span style={{ fontSize: 13, color: '#ed4245', fontWeight: 600 }}>
+              ⚠️ Lưu thất bại
             </span>
           )}
           <button

@@ -117,6 +117,17 @@ export const ThemeProvider = ({ children }) => {
     setTheme('dark');
   }, [setTheme]);
 
+  const syncTheme = useCallback((dbThemeName, dbThemeColors) => {
+    if (dbThemeName) {
+      setThemeState(dbThemeName);
+    }
+    if (dbThemeColors && Object.keys(dbThemeColors).length > 0) {
+      setColorsState(dbThemeColors);
+    } else if (dbThemeName && THEME_PRESETS[dbThemeName]) {
+      setColorsState({ ...THEME_PRESETS[dbThemeName] });
+    }
+  }, []);
+
   return (
     <ThemeContext.Provider
       value={{
@@ -126,6 +137,7 @@ export const ThemeProvider = ({ children }) => {
         setTheme,
         setCustomColor,
         resetTheme,
+        syncTheme,
       }}
     >
       {children}

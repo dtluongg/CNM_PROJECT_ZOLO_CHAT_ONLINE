@@ -4,14 +4,15 @@ import {
   TextInput, ScrollView, StatusBar,
 } from 'react-native';
 import { MOCK_CONVERSATIONS } from '../data/mockData';
-import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
+import { STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 import ProfileScreen from './ProfileScreen';
 import SearchScreen from './SearchScreen';
 
 // ─────────────────────────────────────────────
 // Shared components
 // ─────────────────────────────────────────────
-const Avatar = ({ name, avatar, size = 44, status = null, online = null }) => {
+const Avatar = ({ name, avatar, size = 44, status = null, online = null, THEME, styles }) => {
   const bg = getAvatarColor(name);
   const dotSize = Math.floor(size * 0.28);
   const statusColor = online === false
@@ -42,7 +43,7 @@ const Avatar = ({ name, avatar, size = 44, status = null, online = null }) => {
 // ─────────────────────────────────────────────
 // CHATS TAB
 // ─────────────────────────────────────────────
-function ChatsTab({ navigation, conversations, onUpdateConversations }) {
+function ChatsTab({ navigation, conversations, onUpdateConversations, THEME, styles }) {
   const [search, setSearch] = useState('');
 
   const filtered = conversations.filter(c =>
@@ -81,6 +82,8 @@ function ChatsTab({ navigation, conversations, onUpdateConversations }) {
           size={48}
           status={item.status}
           online={item.type === 'dm' ? item.online : null}
+          THEME={THEME}
+          styles={styles}
         />
         <View style={styles.convInfo}>
           <View style={styles.convTop}>
@@ -165,7 +168,7 @@ const TABS = [
   { key: 'profile', icon: '👤', label: 'Hồ sơ' },
 ];
 
-function BottomTabBar({ activeTab, onTabChange, unreadTotal }) {
+function BottomTabBar({ activeTab, onTabChange, unreadTotal, THEME, styles }) {
   return (
     <View style={styles.bottomBar}>
       {TABS.map(tab => {
@@ -197,18 +200,22 @@ function BottomTabBar({ activeTab, onTabChange, unreadTotal }) {
 }
 
 // ─────────────────────────────────────────────
-// MAIN TAB SCREEN
+// MAIN TAB SCREEN (acts as a wrapper for Chats, Search, Profile)
 // ─────────────────────────────────────────────
-export default function MainTabScreen({ navigation }) {
+export default function MainTabScreen({ navigation, route }) {
+  const { theme: THEME } = useTheme();
+  const styles = useStyles(THEME);
+
+  // Tab State
   const [activeTab, setActiveTab] = useState('chats');
   const [conversations, setConversations] = useState(MOCK_CONVERSATIONS);
 
   const unreadTotal = conversations.reduce((s, c) => s + (c.unread || 0), 0);
 
-  const renderTab = () => {
+  const renderContent = () => {
     switch (activeTab) {
       case 'chats':
-        return <ChatsTab navigation={navigation} conversations={conversations} onUpdateConversations={setConversations} />;
+        return <ChatsTab navigation={navigation} conversations={conversations} onUpdateConversations={setConversations} THEME={THEME} styles={styles} />;
       case 'search':
         return <SearchScreen navigation={navigation} />;
       case 'profile':
@@ -221,9 +228,9 @@ export default function MainTabScreen({ navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: THEME.bgPrimary }}>
       <View style={{ flex: 1 }}>
-        {renderTab()}
+        {renderContent()}
       </View>
-      <BottomTabBar activeTab={activeTab} onTabChange={setActiveTab} unreadTotal={unreadTotal} />
+      <BottomTabBar activeTab={activeTab} onTabChange={setActiveTab} unreadTotal={unreadTotal} THEME={THEME} styles={styles} />
     </View>
   );
 }
@@ -231,7 +238,7 @@ export default function MainTabScreen({ navigation }) {
 // ─────────────────────────────────────────────
 // STYLES
 // ─────────────────────────────────────────────
-const styles = StyleSheet.create({
+const useStyles = (THEME) => StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   avatarCircle: { justifyContent: 'center', alignItems: 'center' },

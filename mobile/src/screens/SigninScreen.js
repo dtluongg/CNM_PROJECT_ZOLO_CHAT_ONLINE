@@ -20,6 +20,12 @@ import apiClient from '../services/apiClient';
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Store initial hash before React Navigation potentially strips it on Web
+let initialWebHash = '';
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  initialWebHash = window.location.hash;
+}
+
 // ── SVG-free Google/Facebook icon placeholders rendered as styled text ──
 const GoogleBadge = () => (
   <View style={styles.oauthIconBadge}>
@@ -47,6 +53,68 @@ const SigninScreen = ({ navigation, route }) => {
       setSuccessMessage(route.params.message);
     }
   }, [route.params]);
+
+  // Handle Web OAuth callback redirect automatically
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const handleWebSession = async () => {
+        try {
+          // 1. Manually check if there's a hash in the URL!
+          // Use initialWebHash in case React Navigation already cleared window.location.hash
+          const urlHash = initialWebHash || window.location.hash;
+          if (urlHash && urlHash.includes('access_token')) {
+            initialWebHash = ''; // consume it
+            const params = new URLSearchParams(urlHash.replace(/^#/, ''));
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+            
+            if (accessToken) {
+              setOauthLoading('google'); // indicator
+              // Force set the session manually 
+              const { data: { session }, error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken || '',
+              });
+              
+              if (session) {
+                await syncOAuthSession(session, navigation);
+              } else if (error) {
+                setError(error?.message || 'Lỗi thiết lập phiên đăng nhập');
+              }
+              
+              // Clear URL gracefully without reloading
+              window.history.replaceState({}, document.title, window.location.pathname);
+              setOauthLoading(null);
+              return;
+            }
+          }
+
+          // 2. Fallback: check already established session
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            setOauthLoading('google'); // indicator
+            await syncOAuthSession(session, navigation);
+            setOauthLoading(null);
+          }
+        } catch (e) {
+          setOauthLoading(null);
+          console.error('[WebSession Error]', e);
+        }
+      };
+      handleWebSession();
+
+      const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          setOauthLoading('google');
+          await syncOAuthSession(session, navigation);
+          setOauthLoading(null);
+        }
+      });
+      return () => {
+        if (authListener?.subscription) authListener.subscription.unsubscribe();
+      };
+    }
+  }, []);
 
   const handleSubmit = async () => {
     setError('');
@@ -78,7 +146,24 @@ const SigninScreen = ({ navigation, route }) => {
     setError('');
     setOauthLoading(provider);
     try {
-      const redirectUri = Linking.createURL('auth/callback');
+      if (Platform.OS === 'web') {
+        // Web: Full page redirect
+        const { error: oauthError } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: window.location.origin,
+            scopes: provider === 'facebook' ? 'email,public_profile' : undefined,
+          },
+        });
+        if (oauthError) {
+          setError(oauthError.message || `Đăng nhập ${provider} thất bại`);
+          setOauthLoading(null);
+        }
+        return; // browser will redirect away
+      }
+
+      // Mobile (iOS/Android): Use WebBrowser
+      const redirectUri = Linking.createURL('');
 
       const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
@@ -157,11 +242,16 @@ const SigninScreen = ({ navigation, route }) => {
       if (!linkHandled && result.url) {
         linkHandled = true;
         linkSub.remove();
+        
+        // Debug
+        // Alert.alert('OAuth URL', result.url);
+        
         const session = await handleCallbackUrl(result.url);
         if (session) {
           await syncOAuthSession(session, navigation);
         } else {
-          setError('Không thể lấy session OAuth. Vui lòng thử lại.');
+          // Alert.alert('Parse Fail', 'URL: ' + result.url);
+          setError('Không thể lấy session. URL: ' + (result.url.length > 50 ? result.url.substring(0, 50) + '...' : result.url));
         }
         setOauthLoading(null);
         return;

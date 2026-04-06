@@ -6,23 +6,24 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { MOCK_MESSAGES } from '../data/mockData';
-import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
+import { STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 
 // ─────────────────────────────────────────────
 // Avatar
 // ─────────────────────────────────────────────
-const Avatar = ({ name, avatar, size = 36, online = null }) => {
+const Avatar = ({ name, avatar, size = 36, online = null, THEME, styles }) => {
   const bg = getAvatarColor(name);
   return (
     <View style={{ width: size, height: size }}>
       {avatar
         ? <Image source={{ uri: avatar }} style={{ width: size, height: size, borderRadius: size / 2 }} />
-        : <View style={[msgStyles.avatarCircle, { width: size, height: size, borderRadius: size / 2, backgroundColor: bg }]}>
-            <Text style={[msgStyles.avatarText, { fontSize: size * 0.38 }]}>{getInitials(name)}</Text>
+        : <View style={[styles.avatarCircle, { width: size, height: size, borderRadius: size / 2, backgroundColor: bg }]}>
+            <Text style={[styles.avatarText, { fontSize: size * 0.38 }]}>{getInitials(name)}</Text>
           </View>
       }
       {online !== null && (
-        <View style={[msgStyles.onlineDot, {
+        <View style={[styles.onlineDot, {
           width: size * 0.28, height: size * 0.28, borderRadius: size * 0.14,
           backgroundColor: online ? THEME.statusOnline : THEME.statusOffline,
         }]} />
@@ -34,11 +35,11 @@ const Avatar = ({ name, avatar, size = 36, online = null }) => {
 // ─────────────────────────────────────────────
 // Date divider
 // ─────────────────────────────────────────────
-const DateDivider = ({ label }) => (
-  <View style={msgStyles.dateDivider}>
-    <View style={msgStyles.dateLine} />
-    <Text style={msgStyles.dateLabel}>{label}</Text>
-    <View style={msgStyles.dateLine} />
+const DateDivider = ({ label, styles }) => (
+  <View style={styles.dateDivider}>
+    <View style={styles.dateLine} />
+    <Text style={styles.dateLabel}>{label}</Text>
+    <View style={styles.dateLine} />
   </View>
 );
 
@@ -46,11 +47,11 @@ const DateDivider = ({ label }) => (
 // Message bubble
 // ─────────────────────────────────────────────
 const SENDER_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245'];
-const getSenderColor = (name) =>
+const getSenderColor = (name, THEME) =>
   name ? SENDER_COLORS[name.charCodeAt(0) % SENDER_COLORS.length] : THEME.accent;
 
-const MessageBubble = ({ msg, isMine, showHeader, onLongPress }) => {
-  const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName);
+const MessageBubble = ({ msg, isMine, showHeader, onLongPress, THEME, styles }) => {
+  const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName, THEME);
   const bubbleBg    = isMine ? THEME.bubbleSelf : THEME.bubbleOther;
   const bubbleText  = isMine ? '#ffffff'         : THEME.textPrimary;
 
@@ -64,19 +65,19 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress }) => {
   }
 
   return (
-    <View style={[msgStyles.msgRow, { flexDirection: isMine ? 'row-reverse' : 'row' }]}>
+    <View style={[styles.msgRow, { flexDirection: isMine ? 'row-reverse' : 'row' }]}>
       {/* Avatar space */}
       <View style={{ width: 38, alignItems: 'center', marginTop: showHeader ? 2 : 0 }}>
         {showHeader && !isMine && (
-          <Avatar name={msg.senderName} avatar={msg.avatar} size={36} />
+          <Avatar name={msg.senderName} avatar={msg.avatar} size={36} THEME={THEME} styles={styles} />
         )}
       </View>
 
-      <View style={[msgStyles.msgContent, { alignItems: isMine ? 'flex-end' : 'flex-start' }]}>
+      <View style={[styles.msgContent, { alignItems: isMine ? 'flex-end' : 'flex-start' }]}>
         {showHeader && (
-          <View style={[msgStyles.msgHeader, { flexDirection: isMine ? 'row-reverse' : 'row' }]}>
-            {!isMine && <Text style={[msgStyles.senderName, { color: senderColor }]}>{msg.senderName}</Text>}
-            <Text style={msgStyles.msgTime}>{msg.time}</Text>
+          <View style={[styles.msgHeader, { flexDirection: isMine ? 'row-reverse' : 'row' }]}>
+            {!isMine && <Text style={[styles.senderName, { color: senderColor }]}>{msg.senderName}</Text>}
+            <Text style={styles.msgTime}>{msg.time}</Text>
           </View>
         )}
 
@@ -84,17 +85,17 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress }) => {
           onLongPress={() => onLongPress && onLongPress(msg)}
           delayLongPress={400}
         >
-          <View style={[msgStyles.bubble, { backgroundColor: bubbleBg }, borderRadius]}>
+          <View style={[styles.bubble, { backgroundColor: bubbleBg }, borderRadius]}>
             {msg.type === 'image'
-              ? <Image source={{ uri: msg.content }} style={msgStyles.imgAttachment} resizeMode="cover" />
+              ? <Image source={{ uri: msg.content }} style={styles.imgAttachment} resizeMode="cover" />
               : msg.type === 'file'
                 ? (
-                  <View style={msgStyles.fileRow}>
+                  <View style={styles.fileRow}>
                     <Text style={{ fontSize: 20 }}>📎</Text>
-                    <Text style={[msgStyles.bubbleText, { color: bubbleText, textDecorationLine: 'underline' }]}>{msg.content}</Text>
+                    <Text style={[styles.bubbleText, { color: bubbleText, textDecorationLine: 'underline' }]}>{msg.content}</Text>
                   </View>
                 )
-                : <Text style={[msgStyles.bubbleText, { color: bubbleText }]}>{msg.content}</Text>
+                : <Text style={[styles.bubbleText, { color: bubbleText }]}>{msg.content}</Text>
             }
           </View>
         </Pressable>
@@ -118,6 +119,8 @@ const EMOJIS = [
 export default function MessageScreen({ route, navigation }) {
   const { conversation } = route.params;
   const { user } = useAuth();
+  const { theme: THEME } = useTheme();
+  const msgStyles = useStyles(THEME);
 
   const [messages, setMessages] = useState(
     MOCK_MESSAGES[conversation.id] || []
@@ -207,6 +210,8 @@ export default function MessageScreen({ route, navigation }) {
             avatar={conversation.avatar}
             size={36}
             online={isOnline}
+            THEME={THEME}
+            styles={msgStyles}
           />
         </View>
 
@@ -263,13 +268,15 @@ export default function MessageScreen({ route, navigation }) {
           )}
           renderItem={({ item }) =>
             item.type === 'date'
-              ? <DateDivider key={item.key} label={item.label} />
+              ? <DateDivider key={item.key} label={item.label} styles={msgStyles} />
               : <MessageBubble
                   key={item.key}
                   msg={item.msg}
                   isMine={item.isMine}
                   showHeader={item.showHeader}
                   onLongPress={setActionMsg}
+                  THEME={THEME}
+                  styles={msgStyles}
                 />
           }
         />
@@ -368,7 +375,7 @@ export default function MessageScreen({ route, navigation }) {
   );
 }
 
-const msgStyles = StyleSheet.create({
+const useStyles = (THEME) => StyleSheet.create({
   avatarCircle: { justifyContent: 'center', alignItems: 'center' },
   avatarText: { color: '#fff', fontWeight: '700' },
   onlineDot: {

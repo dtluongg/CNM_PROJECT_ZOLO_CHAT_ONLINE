@@ -8,7 +8,8 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import apiClient from '../services/apiClient';
-import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
+import { STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 
 const Avatar = ({ name, avatar, size = 46 }) => {
   const bg = getAvatarColor(name);
@@ -22,6 +23,9 @@ const Avatar = ({ name, avatar, size = 46 }) => {
 };
 
 export default function SearchScreen({ navigation }) {
+  const { theme: THEME } = useTheme();
+  const s = useStyles(THEME);
+  
   const [mode, setMode]       = useState('text');
   const [query, setQuery]     = useState('');
   const [results, setResults] = useState([]);
@@ -246,7 +250,7 @@ export default function SearchScreen({ navigation }) {
 
 const SCAN_SIZE = 240;
 
-const s = StyleSheet.create({
+const useStyles = (THEME) => StyleSheet.create({
   header: {
     paddingTop: 48, paddingBottom: 12, paddingHorizontal: 16,
     flexDirection: 'row', alignItems: 'center',

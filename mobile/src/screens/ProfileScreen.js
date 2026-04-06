@@ -16,7 +16,9 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
 import apiClient from '../services/apiClient';
 import { uploadImageToSupabase } from '../services/storageUpload';
-import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
+import { STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import AppearanceModal from '../components/AppearanceModal';
 
 // ─── Color palette & status options ──────────────────────────────
 const COLOR_PALETTE = [
@@ -28,6 +30,7 @@ const STATUS_OPTIONS = ['online','idle','dnd','invisible'];
 
 // ─── Avatar ──────────────────────────────────────────────────────
 const Avatar = ({ name, avatar, size = 48, status }) => {
+  const { theme: THEME } = useTheme();
   const bg = getAvatarColor(name);
   const dotSize = Math.round(size * 0.3);
   const sc = STATUS_CONFIG[status]?.color || THEME.statusOffline;
@@ -61,12 +64,15 @@ const Avatar = ({ name, avatar, size = 48, status }) => {
 // ─── PROFILE SCREEN ───────────────────────────────────────────────
 export default function ProfileScreen({ navigation }) {
   const { user, logout, updateUser } = useAuth();
+  const { theme: THEME } = useTheme();
+  const s = useStyles(THEME);
 
   const [profile, setProfile]     = useState(null);
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab]             = useState('info');
   const [editModal, setEditModal] = useState(false);
+  const [appearanceModal, setAppearanceModal] = useState(false);
   const [colorModal, setColorModal] = useState(false);
   const [logoutModal, setLogoutModal] = useState(false);
   const [statusModal, setStatusModal] = useState(false);
@@ -440,6 +446,7 @@ export default function ProfileScreen({ navigation }) {
             <Text style={s.settingsCardLabel}>CÁ NHÂN HÓA</Text>
 
             <SettingRow
+              s={s}
               icon="✏️"
               label="Chỉnh sửa hồ sơ"
               sub="Tên, bio, trạng thái"
@@ -447,13 +454,23 @@ export default function ProfileScreen({ navigation }) {
             />
             <View style={s.sep} />
             <SettingRow
+              s={s}
               icon="🖼️"
               label="Đổi ảnh đại diện"
               onPress={handlePickAvatar}
             />
             <View style={s.sep} />
             <SettingRow
+              s={s}
               icon="🎨"
+              label="Chủ đề giao diện"
+              sub="Tùy chỉnh màu sắc & chế độ tối/sáng"
+              onPress={() => setAppearanceModal(true)}
+            />
+            <View style={s.sep} />
+            <SettingRow
+              s={s}
+              icon="🔠"
               label="Màu tên hiển thị"
               sub={d.usernameColor}
               accent={d.usernameColor}
@@ -461,6 +478,7 @@ export default function ProfileScreen({ navigation }) {
             />
             <View style={s.sep} />
             <SettingRow
+              s={s}
               icon="🔲"
               label="Mã QR của tôi"
               sub="Chia sẻ hồ sơ qua QR"
@@ -468,6 +486,7 @@ export default function ProfileScreen({ navigation }) {
             />
             <View style={s.sep} />
             <SettingRow
+              s={s}
               icon="🔒"
               label="Đổi mật khẩu"
               sub="Cập nhật mật khẩu đăng nhập"
@@ -662,12 +681,18 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      <AppearanceModal 
+        visible={appearanceModal} 
+        onClose={() => setAppearanceModal(false)}
+        updateUserProfile={updateUser} 
+      />
     </View>
   );
 }
 
 // ─── Reusable setting row ─────────────────────────────────────────
-function SettingRow({ icon, label, sub, accent, onPress }) {
+function SettingRow({ s, icon, label, sub, accent, onPress }) {
   return (
     <TouchableOpacity style={s.settingRow} onPress={onPress} activeOpacity={0.7}>
       <View style={s.settingIconWrap}>
@@ -685,7 +710,7 @@ function SettingRow({ icon, label, sub, accent, onPress }) {
 }
 
 // ─── STYLES ───────────────────────────────────────────────────────
-const s = StyleSheet.create({
+const useStyles = (THEME) => StyleSheet.create({
   // Loading
   loadingScreen: {
     flex: 1, justifyContent: 'center', alignItems: 'center',

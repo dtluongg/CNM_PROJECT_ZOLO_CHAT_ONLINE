@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { PresenceProvider } from './context/PresenceContext';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -19,6 +19,21 @@ import ChangePassword from './pages/ChangePassword';
 // Các route toàn màn hình (ẩn Navbar)
 const NO_NAVBAR_ROUTES = ['/chat', '/user'];
 
+const ThemeSyncHandler = () => {
+  const { user } = useAuth();
+  const { syncTheme } = useTheme();
+
+  React.useEffect(() => {
+    if (user) {
+      syncTheme(user.themeName || 'dark', user.themeColors || null);
+    } else {
+      syncTheme('dark', null); // Reset khi đăng xuất
+    }
+  }, [user, syncTheme]);
+
+  return null;
+};
+
 const Layout = ({ children }) => {
   const location = useLocation();
   const hideNavbar = NO_NAVBAR_ROUTES.some((r) => location.pathname.startsWith(r));
@@ -35,6 +50,7 @@ const App = () => {
     <Router>
       <ThemeProvider>
         <AuthProvider>
+          <ThemeSyncHandler />
           <PresenceProvider>
             <Layout>
               <Routes>

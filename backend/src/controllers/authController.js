@@ -72,12 +72,21 @@ const syncOAuthUser = async (req, res) => {
             message: 'Đồng bộ tài khoản thành công',
             user: {
                 _id: dbUser._id,
+                username: dbUser.username || null,
                 email: dbUser.email,
                 displayName: dbUser.displayName,
-                avatar: dbUser.avatar,
+                avatar: dbUser.avatar || null,
+                banner: dbUser.banner || null,
+                bio: dbUser.bio || '',
+                status: dbUser.status || 'online',
+                statusText: dbUser.statusText || '',
+                usernameColor: dbUser.usernameColor || '#5865f2',
+                themeName: dbUser.themeName || 'dark',
+                themeColors: dbUser.themeColors || null,
                 authProvider: dbUser.authProvider,
                 isEmailVerified: dbUser.isEmailVerified,
                 isPhoneVerified: dbUser.isPhoneVerified,
+                createdAt: dbUser.createdAt,
             },
         });
 

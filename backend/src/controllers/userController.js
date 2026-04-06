@@ -186,6 +186,7 @@ const signin = async (req, res) => {
                 statusText: userFind.statusText || '',
                 usernameColor: userFind.usernameColor || '#5865f2',
                 themeName: userFind.themeName || 'dark',
+                themeColors: userFind.themeColors || null,
                 authProvider: userFind.authProvider,
                 isEmailVerified: userFind.isEmailVerified,
                 createdAt: userFind.createdAt,
