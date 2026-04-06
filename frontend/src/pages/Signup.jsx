@@ -4,6 +4,7 @@ import { supabase } from '../config/supabase';
 import apiClient from '../services/apiClient';
 
 const CALLBACK_URL = `${window.location.origin}/auth/callback`;
+const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
@@ -72,6 +73,7 @@ const Signup = () => {
     password: '',
     phone: '',
   });
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   // Email OTP state
   const [emailOtp, setEmailOtp] = useState('');
@@ -89,6 +91,7 @@ const Signup = () => {
   const [infoMessage, setInfoMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(null);
+  const isPasswordValid = PASSWORD_POLICY_REGEX.test(formData.password);
 
   const handleOAuth = async (provider) => {
     setError('');
@@ -163,6 +166,21 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (!formData.password || !confirmPassword) {
+      setError('Vui lòng nhập mật khẩu và xác nhận mật khẩu.');
+      return;
+    }
+
+    if (!isPasswordValid) {
+      setError('Mật khẩu phải có ít nhất 6 ký tự, bao gồm chữ thường và chữ in hoa.');
+      return;
+    }
+
+    if (formData.password !== confirmPassword) {
+      setError('Mật khẩu và xác nhận mật khẩu không khớp.');
+      return;
+    }
 
     const hasEmailOtp = emailOtpSent && emailOtp.trim().length > 0;
     const hasPhoneOtp = phoneOtpSent && phoneOtp.trim().length > 0;
@@ -258,7 +276,22 @@ const Signup = () => {
           <div>
             <label className="block text-gray-700 font-semibold mb-1 text-sm">Mật khẩu</label>
             <input type="password" name="password" value={formData.password} onChange={handleChange} required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Tối thiểu 6 ký tự" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Tối thiểu 8 ký tự" />
+            <p className={`mt-1 text-xs ${formData.password && !isPasswordValid ? 'text-red-500' : 'text-gray-500'}`}>
+              Mật khẩu tối thiểu 8 ký tự, gồm ít nhất 1 chữ thường, 1 chữ in hoa và 1 số.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1 text-sm">Xác nhận mật khẩu</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="Nhập lại mật khẩu"
+            />
           </div>
 
           {/* OTP Section */}
@@ -306,7 +339,7 @@ const Signup = () => {
             </div>
           </div>
 
-          <button type="submit" disabled={loading || !atLeastOneOtpReady}
+          <button type="submit" disabled={loading || !atLeastOneOtpReady || !isPasswordValid}
             className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200 disabled:opacity-50">
             {loading ? 'Đang tạo tài khoản...' : 'Đăng Ký'}
           </button>
