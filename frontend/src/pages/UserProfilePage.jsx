@@ -91,8 +91,10 @@ export default function UserProfilePage() {
 
   const isOnline = isUserOnline(userId);
   const presStatus = getPresenceStatus(userId);
-  const displayStatus = presStatus || (isOnline ? 'online' : profile?.status || 'offline');
-  const statusInfo = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.offline;
+  const displayStatus = isOnline
+    ? (presStatus || 'online')      // Online → hiện presence status
+    : 'offline';                     // Offline → luôn "offline"
+    const statusInfo = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.offline;
   const accentColor = profile?.usernameColor || getAvatarColor(profile?.displayName);
 
   const handleCopyLink = () => {
