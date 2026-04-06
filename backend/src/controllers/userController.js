@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { saveOtp, verifyOtp } = require('../services/otpService');
 const { sendOtpEmail } = require('../services/emailService');
+const { userResponse } = require('../utils/userHelper');
 
 // ── Helper: validate mật khẩu mới ───────────────────────────────
 const validatePassword = (password) => {
@@ -174,23 +175,7 @@ const signin = async (req, res) => {
             message: 'Đăng nhập thành công',
             accessToken,
             refreshToken: plainRefreshToken,
-            user: {
-                _id: userFind._id,
-                username: userFind.username,
-                email: userFind.email,
-                displayName: userFind.displayName,
-                avatar: userFind.avatar || null,
-                banner: userFind.banner || null,
-                bio: userFind.bio || '',
-                status: userFind.status || 'online',
-                statusText: userFind.statusText || '',
-                usernameColor: userFind.usernameColor || '#5865f2',
-                themeName: userFind.themeName || 'dark',
-                themeColors: userFind.themeColors || null,
-                authProvider: userFind.authProvider,
-                isEmailVerified: userFind.isEmailVerified,
-                createdAt: userFind.createdAt,
-            },
+            user: userResponse(userFind),
         });
 
     } catch (error) {
@@ -436,6 +421,142 @@ const resetPassword = async (req, res) => {
     }
 };
 
+// ════════════════════════════════════════════════════════════════
+//  CẬP NHẬT PROFILE (avatar, displayName, and extended settings)
+// ════════════════════════════════════════════════════════════════
+const updateProfile = async (req, res) => {
+    try {
+        const {
+            avatar, displayName,
+            bio, status, statusText, banner, usernameColor, themeName, themeColors,
+        } = req.body;
+        const userId = req.user._id;
+
+        const updates = {};
+        if (displayName !== undefined && displayName.trim()) {
+            updates.displayName = displayName.trim();
+        }
+        if (avatar !== undefined) {
+            // Chấp nhận URL hoặc base64 data URL
+            if (avatar && avatar.length > 5 * 1024 * 1024) {
+                return res.status(400).json({ message: 'Ảnh quá lớn, tối đa 5MB' });
+            }
+            updates.avatar = avatar;
+        }
+        if (bio !== undefined) updates.bio = bio;
+        if (status !== undefined) updates.status = status;
+        if (statusText !== undefined) updates.statusText = statusText;
+        if (banner !== undefined) updates.banner = banner;
+        if (usernameColor !== undefined) updates.usernameColor = usernameColor;
+        if (themeName !== undefined) updates.themeName = themeName;
+        if (themeColors !== undefined) updates.themeColors = themeColors;
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ message: 'Không có dữ liệu để cập nhật' });
+        }
+
+        const updatedUser = await userModel.findByIdAndUpdate(
+            userId,
+            updates,
+            { new: true, select: '-passwordHash' }
+        );
+
+        return res.status(200).json({
+            message: 'Cập nhật profile thành công',
+            user: userResponse(updatedUser),
+        });
+
+    } catch (error) {
+        console.error('updateProfile error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server khi cập nhật profile' });
+    }
+};
+
+// ════════════════════════════════════════════════════════════════
+//  TÌM KIẾM USER (theo username, email, displayName)
+// ════════════════════════════════════════════════════════════════
+const searchUsers = async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q || q.trim().length < 2) {
+            return res.status(400).json({ message: 'Từ khóa tìm kiếm phải có ít nhất 2 ký tự' });
+        }
+
+        const keyword = q.trim();
+        const regex = new RegExp(keyword, 'i');
+
+        const users = await userModel.find({
+            _id: { $ne: req.user._id }, // Không tìm bản thân
+            $or: [
+                { displayName: regex },
+                { username: regex },
+                { email: regex },
+            ],
+        })
+        .select('_id displayName username email avatar usernameColor status statusText bio')
+        .limit(20);
+
+        return res.status(200).json({
+            users: users.map(u => ({
+                _id: u._id,
+                displayName: u.displayName,
+                username: u.username || null,
+                email: u.email,
+                avatar: u.avatar || null,
+                usernameColor: u.usernameColor || '#5865f2',
+                status: u.status === 'invisible' ? 'offline' : u.status,
+                statusText: u.status === 'invisible' ? '' : (u.statusText || ''),
+                bio: u.bio || '',
+            })),
+        });
+    } catch (error) {
+        console.error('searchUsers error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server khi tìm kiếm' });
+    }
+};
+
+// ════════════════════════════════════════════════════════════════
+//  PUBLIC PROFILE - Cho người dùng khác xem hồ sơ
+// ════════════════════════════════════════════════════════════════
+const getPublicProfile = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!userId || !userId.match(/^[a-f\d]{24}$/i)) {
+            return res.status(400).json({ message: 'userId không hợp lệ' });
+        }
+
+        const user = await userModel.findById(userId).select(
+            'displayName username email avatar banner bio status statusText usernameColor createdAt'
+        );
+
+        if (!user) {
+            return res.status(404).json({ message: 'Không tìm thấy người dùng' });
+        }
+
+        const visibleStatus = user.status === 'invisible' ? 'offline' : user.status;
+
+        return res.status(200).json({
+            user: {
+                _id: user._id,
+                displayName: user.displayName,
+                username: user.username || null,
+                email: user.email,
+                avatar: user.avatar || null,
+                banner: user.banner || null,
+                bio: user.bio || '',
+                status: visibleStatus,
+                statusText: user.status === 'invisible' ? '' : (user.statusText || ''),
+                usernameColor: user.usernameColor || '#5865f2',
+                createdAt: user.createdAt,
+            },
+        });
+    } catch (error) {
+        console.error('getPublicProfile error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server' });
+    }
+};
+
 module.exports = {
     signup,
     signin,
@@ -444,4 +565,7 @@ module.exports = {
     changePassword,
     forgotPassword,
     resetPassword,
+    updateProfile,
+    searchUsers,
+    getPublicProfile
 };

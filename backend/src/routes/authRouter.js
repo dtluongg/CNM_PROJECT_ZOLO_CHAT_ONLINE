@@ -6,15 +6,21 @@ const {
     syncOAuthUser,
     completeOAuthProfile,
     authMe,
+} = require('../controllers/authController');
+
+const {
     updateProfile,
     searchUsers,
     getPublicProfile,
+} = require('../controllers/userController');
+
+const {
     sendEmailOtp,
     verifyEmailOtp,
     sendPhoneOtp,
     verifyPhoneOtp,
     getSmsBalance,
-} = require('../controllers/authController');
+} = require('../controllers/otpController');
 
 // ════════════════════════════════════════════════════════════════
 //  SUPABASE OAUTH
