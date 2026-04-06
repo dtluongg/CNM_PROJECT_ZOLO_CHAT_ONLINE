@@ -1,6 +1,5 @@
 const userModel = require('../models/userModel');
 const { supabaseAdmin } = require('../config/supabase');
-const { userResponse } = require('../utils/userHelper');
 
 // ════════════════════════════════════════════════════════════════
 //  SUPABASE OAUTH
@@ -68,7 +67,25 @@ const syncOAuthUser = async (req, res) => {
 
         return res.status(200).json({
             message: 'Đồng bộ tài khoản thành công',
-            user: userResponse(dbUser),
+            user: {
+                _id: dbUser._id,
+                username: dbUser.username || null,
+                email: dbUser.email,
+                displayName: dbUser.displayName,
+                phone: dbUser.phone || null,
+                avatar: dbUser.avatar || null,
+                banner: dbUser.banner || null,
+                bio: dbUser.bio || '',
+                status: dbUser.status || 'online',
+                statusText: dbUser.statusText || '',
+                usernameColor: dbUser.usernameColor || '#5865f2',
+                themeName: dbUser.themeName || 'dark',
+                themeColors: dbUser.themeColors || null,
+                authProvider: dbUser.authProvider,
+                isEmailVerified: dbUser.isEmailVerified,
+                isPhoneVerified: dbUser.isPhoneVerified,
+                createdAt: dbUser.createdAt,
+            },
         });
 
     } catch (error) {
@@ -124,7 +141,25 @@ const completeOAuthProfile = async (req, res) => {
 
         return res.status(200).json({
             message: 'Hoàn tất đăng ký thành công',
-            user: userResponse(dbUser),
+            user: {
+                _id: dbUser._id,
+                username: dbUser.username || null,
+                email: dbUser.email,
+                displayName: dbUser.displayName,
+                phone: dbUser.phone || null,
+                avatar: dbUser.avatar || null,
+                banner: dbUser.banner || null,
+                bio: dbUser.bio || '',
+                status: dbUser.status || 'online',
+                statusText: dbUser.statusText || '',
+                usernameColor: dbUser.usernameColor || '#5865f2',
+                themeName: dbUser.themeName || 'dark',
+                themeColors: dbUser.themeColors || null,
+                authProvider: dbUser.authProvider,
+                isEmailVerified: dbUser.isEmailVerified,
+                isPhoneVerified: dbUser.isPhoneVerified,
+                createdAt: dbUser.createdAt,
+            },
         });
 
     } catch (error) {
@@ -152,7 +187,25 @@ const authMe = async (req, res) => {
         return res.status(200).json({
             message: `Xác thực thành công, chào mừng ${user.displayName}`,
             authType: req.authType || 'unknown',
-            user: userResponse(user),
+            user: {
+                _id: user._id,
+                username: user.username || null,
+                email: user.email,
+                displayName: user.displayName,
+                phone: user.phone || null,
+                avatar: user.avatar || null,
+                banner: user.banner || null,
+                bio: user.bio || '',
+                status: user.status || 'online',
+                statusText: user.statusText || '',
+                usernameColor: user.usernameColor || '#5865f2',
+                themeName: user.themeName || 'dark',
+                themeColors: user.themeColors || null,
+                authProvider: user.authProvider,
+                isEmailVerified: user.isEmailVerified,
+                isPhoneVerified: user.isPhoneVerified,
+                createdAt: user.createdAt,
+            },
         });
 
     } catch (error) {

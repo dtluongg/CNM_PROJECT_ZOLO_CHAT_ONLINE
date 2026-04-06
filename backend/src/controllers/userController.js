@@ -5,7 +5,6 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { saveOtp, verifyOtp } = require('../services/otpService');
 const { sendOtpEmail } = require('../services/emailService');
-const { userResponse } = require('../utils/userHelper');
 
 // ── Helper: validate mật khẩu mới ───────────────────────────────
 const validatePassword = (password) => {
@@ -175,7 +174,25 @@ const signin = async (req, res) => {
             message: 'Đăng nhập thành công',
             accessToken,
             refreshToken: plainRefreshToken,
-            user: userResponse(userFind),
+            user: {
+                _id: userFind._id,
+                username: userFind.username || null,
+                email: userFind.email,
+                displayName: userFind.displayName,
+                phone: userFind.phone || null,
+                avatar: userFind.avatar || null,
+                banner: userFind.banner || null,
+                bio: userFind.bio || '',
+                status: userFind.status || 'online',
+                statusText: userFind.statusText || '',
+                usernameColor: userFind.usernameColor || '#5865f2',
+                themeName: userFind.themeName || 'dark',
+                themeColors: userFind.themeColors || null,
+                authProvider: userFind.authProvider,
+                isEmailVerified: userFind.isEmailVerified,
+                isPhoneVerified: userFind.isPhoneVerified,
+                createdAt: userFind.createdAt,
+            },
         });
 
     } catch (error) {
@@ -463,7 +480,25 @@ const updateProfile = async (req, res) => {
 
         return res.status(200).json({
             message: 'Cập nhật profile thành công',
-            user: userResponse(updatedUser),
+            user: {
+                _id: updatedUser._id,
+                username: updatedUser.username || null,
+                email: updatedUser.email,
+                displayName: updatedUser.displayName,
+                phone: updatedUser.phone || null,
+                avatar: updatedUser.avatar || null,
+                banner: updatedUser.banner || null,
+                bio: updatedUser.bio || '',
+                status: updatedUser.status || 'online',
+                statusText: updatedUser.statusText || '',
+                usernameColor: updatedUser.usernameColor || '#5865f2',
+                themeName: updatedUser.themeName || 'dark',
+                themeColors: updatedUser.themeColors || null,
+                authProvider: updatedUser.authProvider,
+                isEmailVerified: updatedUser.isEmailVerified,
+                isPhoneVerified: updatedUser.isPhoneVerified,
+                createdAt: updatedUser.createdAt,
+            },
         });
 
     } catch (error) {
