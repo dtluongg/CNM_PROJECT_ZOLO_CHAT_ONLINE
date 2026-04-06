@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Search, Upload, Camera, User, CameraOff, SwitchCamera } from 'lucide-react';
+import { X, Search, Upload, Camera, User, CameraOff, SwitchCamera, QrCode, ChevronRight } from 'lucide-react';
 import jsQR from 'jsqr';
 import apiClient from '../../services/apiClient';
 
@@ -63,7 +63,10 @@ function UserCard({ user, onClick }) {
           </div>
         )}
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>Xem hồ sơ →</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span>Xem hồ sơ</span>
+        <ChevronRight size={14} />
+      </div>
     </div>
   );
 }
@@ -297,16 +300,18 @@ export default function UserSearchModal({ onClose }) {
         {/* Main Tabs */}
         <div style={{ display: 'flex', gap: 2, margin: '14px 20px 0', background: 'var(--bg-primary)', borderRadius: 8, padding: 3, flexShrink: 0 }}>
           {[
-            { key: 'search', label: '🔍 Tìm kiếm' },
-            { key: 'qr',     label: '📷 Quét QR' },
+            { key: 'search', label: 'Tìm kiếm', icon: <Search size={14} /> },
+            { key: 'qr',     label: 'Quét QR', icon: <QrCode size={14} /> },
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
               flex: 1, background: tab === t.key ? 'var(--bg-secondary)' : 'none',
               border: 'none', cursor: 'pointer', padding: '7px 4px', borderRadius: 6,
               color: tab === t.key ? 'var(--text-primary)' : 'var(--text-muted)',
               fontWeight: tab === t.key ? 700 : 500, fontSize: 13,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               transition: 'all 0.12s',
             }}>
+              {t.icon}
               {t.label}
             </button>
           ))}

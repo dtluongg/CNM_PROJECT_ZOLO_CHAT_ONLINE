@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Plus, Pencil, CheckCircle2, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
 import apiClient from '../services/apiClient';
@@ -62,7 +63,7 @@ const AvatarSetupBanner = ({ onSave, onSkip }) => {
         >
           {preview
             ? <img src={preview} alt="preview" className="w-full h-full object-cover" />
-            : <span className="text-4xl text-blue-200">+</span>
+            : <Plus className="w-10 h-10 text-blue-200" />
           }
         </div>
         <div className="flex-1">
@@ -154,7 +155,7 @@ const AvatarEditModal = ({ currentAvatar, currentName, onSave, onClose }) => {
           >
             {preview
               ? <img src={preview} alt="avatar" className="w-full h-full object-cover" />
-              : <span className="text-4xl text-gray-300">+</span>
+              : <Plus className="w-10 h-10 text-gray-300" />
             }
           </div>
           <button type="button" onClick={() => fileRef.current.click()} className="text-sm text-blue-600 hover:underline">
@@ -303,7 +304,7 @@ const Dashboard = () => {
                     className="absolute -bottom-1 -right-1 w-7 h-7 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center text-xs transition shadow"
                     title="Chỉnh sửa ảnh"
                   >
-                    ✏️
+                    <Pencil size={13} />
                   </button>
                 </div>
                 <div>
@@ -329,8 +330,28 @@ const Dashboard = () => {
                       ['Họ tên', currentUser?.displayName || '—'],
                       ['Email', currentUser?.email],
                       ['Số điện thoại', currentUser?.phone || '—'],
-                      ['Xác thực email', currentUser?.isEmailVerified ? '✅ Đã xác thực' : '❌ Chưa xác thực'],
-                      ['Xác thực SĐT', currentUser?.isPhoneVerified ? '✅ Đã xác thực' : '❌ Chưa xác thực'],
+                      ['Xác thực email', currentUser?.isEmailVerified ? (
+                        <span className="inline-flex items-center gap-1.5 text-green-700 font-medium">
+                          <CheckCircle2 size={15} />
+                          Đã xác thực
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-rose-600 font-medium">
+                          <XCircle size={15} />
+                          Chưa xác thực
+                        </span>
+                      )],
+                      ['Xác thực SĐT', currentUser?.isPhoneVerified ? (
+                        <span className="inline-flex items-center gap-1.5 text-green-700 font-medium">
+                          <CheckCircle2 size={15} />
+                          Đã xác thực
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-rose-600 font-medium">
+                          <XCircle size={15} />
+                          Chưa xác thực
+                        </span>
+                      )],
                     ].map(([label, value]) => (
                       <tr key={label} className="border-b last:border-0">
                         <td className="px-4 py-2.5 font-semibold text-gray-600 bg-gray-50 w-1/3">{label}</td>
