@@ -70,7 +70,7 @@ const TextInput = ({ value, onChange, placeholder, ...rest }) => (
 );
 
 export default function ProfileSettings({ onClose }) {
-  const { user, updateUser, logout } = useAuth();
+  const { user, updateUser } = useAuth();
   const { theme: themeName, presets, colors, setTheme, setCustomColor, resetTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -90,12 +90,6 @@ export default function ProfileSettings({ onClose }) {
   const [bannerUploading, setBannerUploading] = useState(false);
   const [avatarIsGif, setAvatarIsGif] = useState(() => (user?.avatar || '').toLowerCase().includes('.gif'));
   const [uploadError, setUploadError] = useState('');
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [changingPw, setChangingPw] = useState(false);
-  const [pwError, setPwError] = useState('');
-  const [pwSuccess, setPwSuccess] = useState('');
   const avatarRef = useRef(null);
   const bannerRef = useRef(null);
 
@@ -205,7 +199,6 @@ export default function ProfileSettings({ onClose }) {
     { key: 'profile', label: '👤', title: 'Hồ sơ' },
     { key: 'appearance', label: '🎨', title: 'Giao diện' },
     { key: 'status', label: '💬', title: 'Trạng thái' },
-     { key: 'security', label: '🔒', title: 'Bảo mật' },
     { key: 'myqr', label: '📱', title: 'QR của tôi' },
   ];
 
@@ -222,52 +215,6 @@ export default function ProfileSettings({ onClose }) {
 
   const currentStatusInfo = STATUSES.find((s) => s.key === status) || STATUSES[0];
   const initials = (displayName || user?.displayName || 'U')[0].toUpperCase();
-  const isLocalAccount = !user?.authProvider || user?.authProvider === 'local';
-
-  const handleChangePassword = async (e) => {
-    if (e && typeof e.preventDefault === 'function') e.preventDefault();
-    setPwError('');
-    setPwSuccess('');
-
-    if (!oldPassword || !newPassword || !confirmPassword) {
-      setPwError('Vui lòng điền đầy đủ các trường.');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setPwError('Mật khẩu mới và xác nhận không khớp.');
-      return;
-    }
-
-    if (!isLocalAccount) {
-      setPwError('Tài khoản đăng nhập bằng Google/Facebook không thể đổi mật khẩu tại đây.');
-      return;
-    }
-
-    setChangingPw(true);
-    try {
-      const res = await apiClient.post('/users/change-password', {
-        oldPassword,
-        newPassword,
-      });
-      const msg = res?.data?.message || 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.';
-      setPwSuccess(msg);
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-
-      setTimeout(() => {
-        logout();
-        onClose();
-        navigate('/signin', { state: { message: msg } });
-      }, 1200);
-    } catch (err) {
-      const msg = err?.response?.data?.message || 'Đổi mật khẩu thất bại. Vui lòng thử lại.';
-      setPwError(msg);
-    } finally {
-      setChangingPw(false);
-    }
-  };
 
   return (
     <div
@@ -644,31 +591,6 @@ export default function ProfileSettings({ onClose }) {
                 />
               </div>
 
-              {/* Account info */}
-              <div>
-                <FieldLabel>Thông tin tài khoản</FieldLabel>
-                <div style={{
-                  background: 'var(--bg-primary)',
-                  borderRadius: 10,
-                  padding: '12px 14px',
-                  border: '1px solid var(--border)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 6,
-                  fontSize: 13,
-                  color: 'var(--text-secondary)',
-                }}>
-                  <div><strong>Email:</strong> {user?.email || '—'}</div>
-                  <div><strong>Username:</strong> {user?.username || '—'}</div>
-                  <div><strong>Số điện thoại:</strong> {user?.phone || '—'}</div>
-                  <div>
-                    <strong>Loại tài khoản:</strong>{' '}
-                    {isLocalAccount ? 'Tài khoản local (username/email + mật khẩu)' : `OAuth (${user?.authProvider || 'Google/Facebook'})`}
-                  </div>
-                  <div><strong>Email đã xác thực:</strong> {user?.isEmailVerified ? 'Có' : 'Chưa'}</div>
-                  <div><strong>SĐT đã xác thực:</strong> {user?.isPhoneVerified ? 'Có' : 'Chưa'}</div>
-                </div>
-              </div>
             </div>
           )}
 
@@ -938,103 +860,6 @@ export default function ProfileSettings({ onClose }) {
                       {statusText || currentStatusInfo.label}
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── SECURITY TAB ── */}
-          {tab === 'security' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div>
-                <FieldLabel>Đổi mật khẩu</FieldLabel>
-
-                {pwError && (
-                  <div style={{
-                    background: 'rgba(237,66,69,0.15)',
-                    border: '1px solid rgba(237,66,69,0.5)',
-                    borderRadius: 8,
-                    padding: '8px 12px',
-                    color: '#ed4245',
-                    fontSize: 13,
-                    marginBottom: 10,
-                  }}>
-                    {pwError}
-                  </div>
-                )}
-
-                {pwSuccess && (
-                  <div style={{
-                    background: 'rgba(59,165,92,0.18)',
-                    border: '1px solid rgba(59,165,92,0.6)',
-                    borderRadius: 8,
-                    padding: '8px 12px',
-                    color: '#3ba55c',
-                    fontSize: 13,
-                    marginBottom: 10,
-                  }}>
-                    {pwSuccess}
-                  </div>
-                )}
-
-                <div style={{
-                  background: 'var(--bg-primary)',
-                  borderRadius: 10,
-                  padding: '12px 14px',
-                  border: '1px solid var(--border)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 12,
-                }}>
-                  <TextInput
-                    type="password"
-                    value={oldPassword}
-                    onChange={(e) => setOldPassword(e.target.value)}
-                    placeholder="Mật khẩu hiện tại"
-                    disabled={!isLocalAccount || changingPw}
-                  />
-                  <TextInput
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Mật khẩu mới"
-                    disabled={!isLocalAccount || changingPw}
-                  />
-                  <TextInput
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Nhập lại mật khẩu mới"
-                    disabled={!isLocalAccount || changingPw}
-                  />
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    Mật khẩu mới cần tối thiểu 8 ký tự, bao gồm chữ hoa, chữ thường và số.
-                  </div>
-                  <button
-                    onClick={handleChangePassword}
-                    disabled={changingPw || !isLocalAccount}
-                    style={{
-                      alignSelf: 'flex-start',
-                      background: isLocalAccount ? 'var(--accent)' : 'var(--bg-hover)',
-                      color: isLocalAccount ? '#fff' : 'var(--text-muted)',
-                      border: 'none',
-                      borderRadius: 8,
-                      padding: '8px 18px',
-                      cursor: changingPw || !isLocalAccount ? 'not-allowed' : 'pointer',
-                      fontWeight: 700,
-                      fontSize: 14,
-                      opacity: changingPw ? 0.75 : 1,
-                      transition: 'background 0.12s, opacity 0.12s',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!changingPw && isLocalAccount) e.currentTarget.style.background = 'var(--accent-hover)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = isLocalAccount ? 'var(--accent)' : 'var(--bg-hover)';
-                    }}
-                  >
-                    {changingPw ? 'Đang đổi mật khẩu...' : 'Lưu thay đổi mật khẩu'}
-                  </button>
                 </div>
               </div>
             </div>

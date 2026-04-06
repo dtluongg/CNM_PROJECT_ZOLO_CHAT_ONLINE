@@ -14,6 +14,7 @@ import CompleteProfileScreen from '../screens/CompleteProfileScreen';
 import MainTabScreen        from '../screens/MainTabScreen';
 import MessageScreen        from '../screens/MessageScreen';
 import UserProfileScreen    from '../screens/UserProfileScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -24,6 +25,7 @@ const linking = {
       Signin: 'signin',
       Signup: 'signup',
       ForgotPassword: 'forgot-password',
+      ChangePassword: 'change-password',
       CompleteProfile: 'complete-profile',
       Main: 'main',
       UserProfile: 'user/:userId',
@@ -52,6 +54,7 @@ const AppNavigator = () => {
             <Stack.Screen name="Main"        component={MainTabScreen} />
             <Stack.Screen name="Message"     component={MessageScreen} />
             <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
             <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
           </>
         ) : (

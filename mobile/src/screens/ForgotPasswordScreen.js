@@ -9,8 +9,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import apiClient from '../services/apiClient';
+import { THEME } from '../theme';
 
 export default function ForgotPasswordScreen({ navigation }) {
   const [step, setStep] = useState(1); // 1: username/email, 2: otp + new password
@@ -91,24 +93,30 @@ export default function ForgotPasswordScreen({ navigation }) {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <StatusBar barStyle="light-content" backgroundColor={THEME.bgSecondary} />
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.card}>
-          <Text style={styles.title}>Quên mật khẩu</Text>
-          <Text style={styles.subtitle}>
-            Nhập username hoặc email để nhận mã OTP đặt lại mật khẩu.
-          </Text>
+          <View style={styles.headerBlock}>
+            <View style={styles.pill}>
+              <Text style={styles.pillText}>Khôi phục tài khoản</Text>
+            </View>
+            <Text style={styles.title}>Quên mật khẩu</Text>
+            <Text style={styles.subtitle}>
+              Nhập username hoặc email để nhận mã OTP đặt lại mật khẩu.
+            </Text>
+          </View>
 
           {!!error && (
-            <View style={styles.errorBox}>
+            <View style={[styles.alertBox, styles.errorBox]}>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
 
           {!!infoMessage && !error && (
-            <View style={styles.successBox}>
+            <View style={[styles.alertBox, styles.successBox]}>
               <Text style={styles.successText}>{infoMessage}</Text>
             </View>
           )}
@@ -141,7 +149,11 @@ export default function ForgotPasswordScreen({ navigation }) {
           ) : (
             <>
               <Text style={styles.label}>Username hoặc Email</Text>
-              <TextInput style={[styles.input, styles.disabledInput]} value={username} editable={false} />
+              <TextInput
+                style={[styles.input, styles.disabledInput]}
+                value={username}
+                editable={false}
+              />
 
               <Text style={styles.label}>Mã OTP</Text>
               <TextInput
@@ -201,94 +213,103 @@ export default function ForgotPasswordScreen({ navigation }) {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: '#3B82F6',
+    backgroundColor: THEME.bgPrimary,
   },
   container: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#3B82F6',
+    backgroundColor: THEME.bgPrimary,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 28,
+    backgroundColor: THEME.bgSecondary,
+    borderRadius: 22,
+    padding: 22,
     width: '100%',
     maxWidth: 420,
+    borderWidth: 1,
+    borderColor: THEME.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    elevation: 8,
   },
+  headerBlock: { alignItems: 'center', marginBottom: 16 },
+  pill: {
+    backgroundColor: 'rgba(88,101,242,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(88,101,242,0.34)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    marginBottom: 10,
+  },
+  pillText: { color: THEME.accent, fontSize: 11, fontWeight: '700', letterSpacing: 0.4 },
   title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontSize: 28,
+    fontWeight: '800',
+    color: THEME.textPrimary,
     textAlign: 'center',
     marginBottom: 6,
   },
   subtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    color: THEME.textSecondary,
     textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 18,
+    lineHeight: 19,
+  },
+  alertBox: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    borderWidth: 1,
   },
   successBox: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#86EFAC',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 14,
+    backgroundColor: 'rgba(59,165,92,0.16)',
+    borderColor: 'rgba(59,165,92,0.45)',
   },
   successText: {
-    color: '#15803D',
+    color: THEME.textPrimary,
     fontSize: 13,
   },
   errorBox: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#FCA5A5',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 14,
+    backgroundColor: 'rgba(237,66,69,0.16)',
+    borderColor: 'rgba(237,66,69,0.45)',
   },
   errorText: {
-    color: '#DC2626',
+    color: THEME.textPrimary,
     fontSize: 13,
   },
   label: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 6,
+    fontWeight: '700',
+    color: THEME.textSecondary,
+    marginBottom: 8,
     marginTop: 4,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
+    borderColor: THEME.border,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 14,
-    color: '#111827',
+    paddingVertical: 12,
+    fontSize: 15,
+    color: THEME.textPrimary,
     marginBottom: 14,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: THEME.bgInput,
   },
   disabledInput: {
-    backgroundColor: '#F3F4F6',
-    color: '#6B7280',
-    borderColor: '#E5E7EB',
+    backgroundColor: THEME.bgPrimary,
+    color: THEME.textMuted,
+    borderColor: THEME.border,
   },
   primaryBtn: {
-    backgroundColor: '#2563EB',
-    borderRadius: 10,
-    paddingVertical: 13,
+    backgroundColor: THEME.accent,
+    borderRadius: 14,
+    paddingVertical: 14,
     alignItems: 'center',
     marginTop: 4,
   },
@@ -297,7 +318,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     color: '#fff',
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: 15,
   },
   footerRow: {
@@ -308,11 +329,11 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: THEME.textSecondary,
   },
   linkText: {
     fontSize: 13,
-    color: '#2563EB',
-    fontWeight: '700',
+    color: THEME.accent,
+    fontWeight: '800',
   },
 });

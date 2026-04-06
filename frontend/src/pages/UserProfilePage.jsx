@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { ArrowLeft, Copy, Check, MessageCircle, Mail, AtSign, Calendar, UserPlus, Phone, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Copy, Check, MessageCircle, Mail, AtSign, Calendar, UserPlus, Phone, ExternalLink, Shield } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { usePresence } from '../context/PresenceContext';
 import { useAuth } from '../context/AuthContext';
@@ -343,6 +343,22 @@ export default function UserProfilePage() {
                 <ExternalLink size={14} />
                 Xem QR
               </button>
+              <button
+                onClick={() => navigate('/change-password')}
+                style={{
+                  background: 'rgba(237,66,69,0.12)', color: '#ed4245',
+                  border: '1px solid rgba(237,66,69,0.35)',
+                  borderRadius: 10, padding: '10px 14px', cursor: 'pointer',
+                  fontWeight: 700, fontSize: 13,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  transition: 'background 0.12s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(237,66,69,0.2)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(237,66,69,0.12)'}
+              >
+                <Shield size={14} />
+                Đổi mật khẩu
+              </button>
             </div>
           )}
         </div>
@@ -386,6 +402,12 @@ export default function UserProfilePage() {
                 label="Tham gia từ"
                 value={new Date(profile.createdAt).toLocaleDateString('vi-VN', { day: 'numeric', month: 'long', year: 'numeric' })}
               />
+            )}
+            {profile.phone && (
+              <InfoRow icon={<Phone size={16} />} label="Số điện thoại" value={profile.phone} />
+            )}
+            {profile.authProvider && (
+              <InfoRow icon={<Shield size={16} />} label="Loại tài khoản" value={profile.authProvider === 'local' ? 'Tài khoản local' : `OAuth (${profile.authProvider})`} />
             )}
 
             {/* Bio */}

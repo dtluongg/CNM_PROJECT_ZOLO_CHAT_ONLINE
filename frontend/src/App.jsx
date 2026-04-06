@@ -12,9 +12,9 @@ import Chat from './pages/Chat';
 import AuthCallback from './pages/AuthCallback';
 import CompleteProfile from './pages/CompleteProfile';
 import ForgotPassword from './pages/ForgotPassword';
-import Profile from './pages/Profile';
 import Home from './pages/Home';
 import UserProfilePage from './pages/UserProfilePage';
+import ChangePassword from './pages/ChangePassword';
 
 // Các route toàn màn hình (ẩn Navbar)
 const NO_NAVBAR_ROUTES = ['/chat', '/user'];
@@ -56,19 +56,19 @@ const App = () => {
                 />
 
                 <Route
-                  path="/profile"
+                  path="/user/:userId"
                   element={
                     <ProtectedRoute>
-                      <Profile />
+                      <UserProfilePage />
                     </ProtectedRoute>
                   }
                 />
 
                 <Route
-                  path="/user/:userId"
+                  path="/change-password"
                   element={
                     <ProtectedRoute>
-                      <UserProfilePage />
+                      <ChangePassword />
                     </ProtectedRoute>
                   }
                 />
