@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
 import * as Linking from 'expo-linking';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '../context/AuthContext';
 import { THEME } from '../theme';
@@ -46,6 +47,7 @@ const AppNavigator = () => {
   if (loading) return <LoadingScreen />;
 
   return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#1e1f22' }} edges={['top']}>
     <NavigationContainer linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         {token ? (
@@ -68,6 +70,8 @@ const AppNavigator = () => {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+      </SafeAreaView>
+
   );
 };
 
