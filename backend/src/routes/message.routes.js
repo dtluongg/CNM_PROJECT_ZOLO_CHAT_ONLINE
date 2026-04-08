@@ -1,3 +1,4 @@
+import messageRoutes from "./routes/message.routes.js";
 const express = require('express');
 const app = express();
 const dotenv = require('dotenv');
@@ -10,7 +11,7 @@ const dns = require('node:dns');
 dns.setServers(['1.1.1.1']);
 
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:8081'], // Thay đổi nếu frontend chạy trên cổng khác
+    origin: 'http://localhost:5173', // Thay đổi nếu frontend chạy trên cổng khác
     credentials: true, // Cho phép gửi cookie
 }));
 

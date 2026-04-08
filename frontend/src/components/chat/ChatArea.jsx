@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, Smile, CornerUpLeft, Paperclip, ThumbsUp, Reply, Copy, Trash2 } from 'lucide-react';
 import MessageInput from './MessageInput';
 
-const AVATAR_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#fee75c','#ed4245','#9b59b6','#e67e22'];
+const AVATAR_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#fee75c', '#ed4245', '#9b59b6', '#e67e22'];
 const getAvatarColor = (name) => name ? AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length] : AVATAR_COLORS[0];
 const getInitials = (name) => {
   if (!name) return '?';
@@ -14,11 +14,11 @@ const Avatar = ({ name, avatar, size = 36 }) => (
   avatar
     ? <img src={avatar} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
     : <div style={{
-        width: size, height: size, borderRadius: '50%', flexShrink: 0,
-        background: getAvatarColor(name),
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#fff', fontWeight: 700, fontSize: size * 0.38, userSelect: 'none',
-      }}>{getInitials(name)}</div>
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: getAvatarColor(name),
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: '#fff', fontWeight: 700, fontSize: size * 0.38, userSelect: 'none',
+    }}>{getInitials(name)}</div>
 );
 
 const DateDivider = ({ label }) => (
@@ -29,12 +29,43 @@ const DateDivider = ({ label }) => (
   </div>
 );
 
-const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
+const MessageBubble = ({ msg, isMine, showHeader, isMobile, onReact, onRecall, onDelete, openMenuId,
+  setOpenMenuId }) => {
+  const itemStyle = {
+    padding: '10px 14px',
+    cursor: 'pointer',
+    fontSize: 14,
+    color: '#333',
+  };
   const [hover, setHover] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const longPressRef = useRef(null);
+  const [showEmojiBar, setShowEmojiBar] = useState(false);
+  // const [showMenu, setShowMenu] = useState(false);
+  const showMenu = openMenuId === msg.id;
+  const timeoutRef = useRef(null);
+  const emojiRef = useRef(null);
+  const menuRef = useRef(null);
+  // const [openMenuId, setOpenMenuId] = useState(null);
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target)
+      ) {
+        setOpenMenuId(null);
+      }
+    };
 
-  const SENDER_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245'];
+    if (showMenu) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [showMenu]);
+  const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245'];
   const senderColor = isMine
     ? 'var(--accent)'
     : SENDER_COLORS[msg.senderName?.charCodeAt(0) % SENDER_COLORS.length] || 'var(--accent)';
@@ -61,8 +92,20 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
         alignItems: 'flex-start',
         position: 'relative',
       }}
-      onMouseEnter={() => !isMobile && setHover(true)}
-      onMouseLeave={() => !isMobile && setHover(false)}
+      onMouseEnter={() => {
+        if (!isMobile) {
+          setHover(true);
+          clearTimeout(timeoutRef.current);
+        }
+      }}
+      onMouseLeave={() => {
+        if (!isMobile) {
+          setHover(false);
+          timeoutRef.current = setTimeout(() => {
+            setShowEmojiBar(false);
+          }, 150);
+        }
+      }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
@@ -75,6 +118,7 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
         maxWidth,
         display: 'flex', flexDirection: 'column',
         alignItems: isMine ? 'flex-end' : 'flex-start',
+        position: 'relative'
       }}>
         {showHeader && (
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 3 }}>
@@ -86,7 +130,37 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{msg.time}</span>
           </div>
         )}
-
+        {showEmojiBar && !isMobile && (
+          <div
+            ref={emojiRef}
+            style={{
+              position: 'absolute',
+              top: -38,
+              left: isMine ? 'auto' : 0,
+              right: isMine ? 0 : 'auto',
+              background: '#fff',
+              borderRadius: 20,
+              padding: '6px 10px',
+              display: 'flex',
+              gap: 8,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+              zIndex: 10
+            }}>
+            {['👍', '❤️', '😂', '😮', '😢', '😡'].map(e => (
+              <span
+                key={e}
+                style={{ fontSize: 18, cursor: 'pointer' }}
+                onClick={async () => {
+                  console.log("Message", e)
+                  onReact(msg, e);
+                  setShowEmojiBar(false);
+                }}
+              >
+                {e}
+              </span>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexDirection: isMine ? 'row-reverse' : 'row' }}>
           {/* Bubble */}
           <div style={{
@@ -110,11 +184,18 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
                 <Paperclip size={18} />
                 <span style={{ fontSize: 13, textDecoration: 'underline', cursor: 'pointer' }}>{msg.content}</span>
               </div>
-            ) : msg.content}
+            ) : msg.recalled ? (
+              <span style={{ fontStyle: 'italic', opacity: 0.6 }}>
+                Tin nhắn đã được thu hồi
+              </span>
+            ) : (
+              msg.content
+            )}
           </div>
 
           {/* Desktop hover actions */}
           {hover && !isMobile && (
+
             <div style={{
               display: 'flex', gap: 2,
               background: 'var(--bg-secondary)', border: '1px solid var(--border)',
@@ -123,21 +204,136 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
               flexShrink: 0,
             }}>
               {[
-                { content: <ThumbsUp size={13} />, title: 'Thả cảm xúc' },
+                {
+                  content: <ThumbsUp size={13} />,
+                  title: 'Thả cảm xúc',
+                  onClick: () => setShowEmojiBar(prev => !prev),
+                  onMouseEnter: () => setShowEmojiBar(true),
+                  // onMouseLeave: () => setShowEmojiBar(false),
+                },
                 { content: <CornerUpLeft size={13} />, title: 'Trả lời' },
-                { content: <MoreHorizontal size={14} />, title: 'Thêm' },
+                {
+                  content: <MoreHorizontal size={14} />,
+                  title: 'Thêm',
+                  onClick: (e) => {
+                    e.stopPropagation(); // 
+                    setOpenMenuId(prev => (prev === msg.id ? null : msg.id));
+                  }
+                },
+
+
               ].map((btn, i) => (
-                <button key={i} title={btn.title}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '3px 5px', borderRadius: 4, color: 'var(--text-secondary)', lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.1s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                <button
+                  key={i}
+                  title={btn.title}
+                  onClick={btn.onClick}
+                  onMouseEnter={btn.onMouseEnter}
+                  onMouseLeave={btn.onMouseLeave}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    padding: '3px 5px',
+                    borderRadius: 4,
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'background 0.1s'
+                  }}
                 >
                   {btn.content}
                 </button>
               ))}
+
+            </div>
+          )}
+          {showMenu && (
+            <div
+              ref={menuRef}
+              style={{
+                position: 'absolute',
+                top: '110%',
+                marginTop: 6,
+                right: isMine ? 0 : 'auto',
+                left: isMine ? 'auto' : 0,
+                background: '#fff',
+                borderRadius: 10,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                padding: '6px 0',
+                zIndex: 999,
+                minWidth: 180,
+                border: '1px solid #eee'
+              }}
+            >
+
+              {/* Thu hồi */}
+              {isMine && (
+                <div
+                  onClick={() => {
+                    onRecall(msg);
+                    setOpenMenuId(null);
+                  }}
+                  style={{ ...itemStyle, color: '#ed4245', fontWeight: 600 }}
+                >
+                  ↩️ Thu hồi
+                </div>
+              )}
+
+              {/* Xóa */}
+              <div
+                onClick={() => {
+                  onDelete(msg);
+                  setOpenMenuId(null);
+                }}
+                style={{ ...itemStyle, color: '#ed4245' }}
+              >
+                🗑️ Xóa
+              </div>
             </div>
           )}
         </div>
+        {/* Hiển thị danh sách Emoji đã thả */}
+        {msg.reactions && msg.reactions.length > 0 && (
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              // Logic để xem ai đã thả cảm xúc nếu cần
+            }}
+            style={{
+              position: 'absolute',
+              bottom: -10, // Đẩy xuống dưới cạnh tin nhắn
+              [isMine ? 'left' : 'right']: 12, // Hiển thị ở góc đối diện với hướng tin nhắn
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              background: '#fff', // Nền trắng như ảnh mẫu
+              border: '1px solid #e1e4e8',
+              borderRadius: 12,
+              padding: '2px 6px',
+              fontSize: 13,
+              cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              zIndex: 2,
+              userSelect: 'none'
+            }}
+          >
+            {/* Gộp các emoji giống nhau và đếm số lượng */}
+            {Object.entries(
+              msg.reactions.reduce((acc, r) => {
+                acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                return acc;
+              }, {})
+            ).map(([emoji, count], idx) => (
+              <span key={idx} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <span>{emoji}</span>
+                {count > 1 && <span style={{ fontSize: 11, fontWeight: 600, color: '#666' }}>{count}</span>}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Timestamp on hover (desktop) */}
         {!showHeader && hover && !isMobile && (
@@ -168,10 +364,12 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
           >
             {/* Quick emoji reactions */}
             <div style={{ display: 'flex', justifyContent: 'center', gap: 4, padding: '0 16px 16px', borderBottom: '1px solid var(--border)' }}>
-              {['👍','❤️','😂','😮','😢','🔥'].map(emoji => (
+              {['👍', '❤️', '😂', '😮', '😢', '🔥'].map(emoji => (
                 <button key={emoji}
-                  onClick={() => setShowActions(false)}
-                  style={{ fontSize: 28, background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: 10, transition: 'transform 0.1s' }}
+                  onClick={() => {
+                    onReact(msg, emoji);
+                    setShowActions(false);
+                  }} style={{ fontSize: 28, background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: 10, transition: 'transform 0.1s' }}
                   onTouchStart={e => e.currentTarget.style.transform = 'scale(1.3)'}
                   onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
                 >{emoji}</button>
@@ -211,7 +409,7 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
 const TypingIndicator = ({ name }) => (
   <div style={{ padding: '4px 16px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
     <div style={{ background: 'var(--bubble-other)', padding: '10px 14px', borderRadius: '4px 16px 16px 16px', display: 'flex', alignItems: 'center', gap: 4 }}>
-      {[0,1,2].map(i => (
+      {[0, 1, 2].map(i => (
         <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--text-muted)', display: 'inline-block', animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }} />
       ))}
     </div>
@@ -224,10 +422,13 @@ const TypingIndicator = ({ name }) => (
 export default function ChatArea({
   conversation, messages, onSendMessage,
   onToggleRight, showRight, onBack, isMobile,
+  setMessages
 }) {
+  const [openMenuId, setOpenMenuId] = useState(null);
   const bottomRef = useRef(null);
   const [typing] = useState(false);
-
+  const [showReaction, setShowReaction] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -299,7 +500,6 @@ export default function ChatArea({
               <ArrowLeft size={22} />
             </button>
           )}
-
           {/* Avatar + status */}
           <div style={{ position: 'relative' }}>
             <Avatar name={conversation.name} avatar={conversation.avatar} size={isMobile ? 36 : 32} />
@@ -411,7 +611,60 @@ export default function ChatArea({
         {displayItems.map(item =>
           item.type === 'date'
             ? <DateDivider key={item.key} label={item.label} />
-            : <MessageBubble key={item.key} msg={item.msg} isMine={item.isMine} showHeader={item.showHeader} isMobile={isMobile} />
+            : <MessageBubble
+              openMenuId={openMenuId}
+              setOpenMenuId={setOpenMenuId}
+              onRecall={(msg) => {
+                setMessages(prev =>
+                  prev.map(m =>
+                    m.id === msg.id
+                      ? { ...m, content: "Tin nhắn đã được thu hồi", recalled: true }
+                      : m
+                  )
+                );
+              }}
+
+              onDelete={(msg) => {
+                setMessages(prev =>
+                  prev.filter(m => m.id !== msg.id)
+                );
+              }}
+              key={item.key}
+              msg={item.msg}
+              isMine={item.isMine}
+              showHeader={item.showHeader}
+              isMobile={isMobile}
+              onReact={(msg, emoji) => {
+
+                setMessages(prev =>
+                  prev.map(m => {
+                    if (m.id !== msg.id) return m;
+
+                    const reactions = m.reactions || [];
+                    const existing = reactions.find(r => r.userId === 'me');
+
+                    let newReactions;
+
+                    if (existing) {
+                      if (existing.emoji === emoji) {
+                        // click lại = xoá
+                        newReactions = reactions.filter(r => r.userId !== 'me');
+                      } else {
+                        // đổi emoji
+                        newReactions = reactions.map(r =>
+                          r.userId === 'me' ? { ...r, emoji } : r
+                        );
+                      }
+                    } else {
+                      // thêm mới
+                      newReactions = [...reactions, { userId: 'me', emoji }];
+                    }
+
+                    return { ...m, reactions: newReactions };
+                  })
+                );
+              }}
+            />
         )}
 
         {typing && <TypingIndicator name={conversation.name} />}
@@ -424,11 +677,13 @@ export default function ChatArea({
         placeholder={`Nhắn tin tới ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
         isMobile={isMobile}
       />
-
       <style>{`
-        @keyframes bounce { 0%,60%,100% { transform:translateY(0);opacity:.5; } 30% { transform:translateY(-5px);opacity:1; } }
-        @keyframes fadeInUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-      `}</style>
+  @keyframes bounce { 0%,60%,100% { transform:translateY(0);opacity:.5; } 30% { transform:translateY(-5px);opacity:1; } }
+  @keyframes fadeInUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+`}</style>
     </div>
+
   );
+
 }
+
