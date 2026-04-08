@@ -1,5 +1,7 @@
 # Zolo Chat - Schema Preview and Minimum API Plan
 
+Đa số mọi người dùng thư viện ODM như Mongoose (Node.js). Thư viện này hỗ trợ một tính năng gọi là timestamps. Chỉ cần bật nó lên khi định nghĩa Schema, Mongoose sẽ tự động thêm vào và quản lý song song hai trường createdAt và updatedAt ở database giúp bạn một cách hoàn toàn tự động, bạn không cần phải tự gửi lên nữa.
+
 Tài liệu này là bản xem trước trước khi viết code thật. Mục tiêu là chốt:
 
 1. Schema dữ liệu nào cần có để khớp với auth local + Supabase hiện tại.
@@ -47,12 +49,16 @@ Dùng để thiết lập kết nối trước khi chat đơn.
 - `fromUserId`
 - `toUserId`
 - `status`: `pending | accepted | rejected | canceled`
-- `createdAt`
-- `respondedAt`
 
 ### friendships
 
-Bảng quan hệ bạn bè đã xác nhận. Nếu muốn đơn giản hơn thì có thể dùng bảng này thay vì truy vấn trực tiếp từ friend_requests.
+Bảng quan hệ bạn bè đã xác nhận.
+
+- `userId1` (luôn lưu ID có giá trị nhỏ hơn vào userId1 và ID lớn hơn vào userId2)
+- `userId2` (luôn lưu ID có giá trị nhỏ hơn vào userId1 và ID lớn hơn vào userId2)
+- `nickname1` (tên User 2 đặt cho User 1)
+- `nickname2` (tên User 1 đặt cho User 2)
+- `isBlockedBy` (id của người đã chặn)
 
 ### conversations
 
@@ -61,12 +67,10 @@ Lưu cả chat đơn và chat nhóm.
 - `type`: `dm | group`
 - `name`
 - `avatar`
-- `banner`
 - `createdBy`
 - `lastMessageId`
 - `lastMessagePreview`
 - `lastMessageTime`
-- `isArchived`
 - `isLocked`
 
 ### conversation_members
@@ -78,10 +82,10 @@ Quản lý thành viên cuộc trò chuyện.
 - `leftAt`
 - `unreadCount`
 - `lastReadMessageId`
-- `muted`
 - `canSendMessages`
 - `canInviteMembers`
 - `canManageMembers`
+- `isArchived`
 
 ### messages
 
@@ -102,6 +106,7 @@ Bảng trung tâm của hệ chat.
 
 Dùng cho file, ảnh, video, nhiều attachment trên một message.
 
+- `messageId`
 - `url`
 - `fileName`
 - `mimeType`
@@ -111,19 +116,39 @@ Dùng cho file, ảnh, video, nhiều attachment trên một message.
 
 ### message_reactions
 
-Lưu emoji reaction theo user.
+Lưu emoji reaction (thả tim, haha...) theo từng user. Bảng này tách ra để 1 người thả 1 biểu tượng thì không phải Update cái bảng message nặng nề.
+
+- `messageId`
+- `userId`
+- `emoji`: (Ví dụ: '👍', '❤️', '😂' hoặc text định danh 'like', 'love')
 
 ### message_reads
 
-Lưu trạng thái đã đọc theo từng message và user.
+Lưu trạng thái đã đọc theo từng message và user (Dùng để truy vấn ngược cực kỳ chi tiết xem thằng A đã xem tin nhắn này vào đúng mấy giờ - Nếu bạn chỉ cần hiện số chưa đọc căn bản, dùng 'lastReadMessageId' ở bảng member là đủ).
+
+- `messageId`
+- `userId`
+- `conversationId` (Trường này có thể có để query nhanh cả nhóm mà không cần bóc tách)
 
 ### notification_settings
 
-Lưu cấu hình mute / push / mention cho user trong từng conversation.
+Lưu cấu hình thông báo chi tiết cho user trong từng conversation (chuyên nghiệp hơn việc chỉ xài biến 'muted' True/False giản đơn).
+
+- `userId`
+- `conversationId`
+- `isMuted`
+- `muteUntil`: (Ví dụ tính năng: Tắt thông báo trong 1 giờ / 8 giờ / Đến khi tôi mở lại)
+- `mentionConfig`: `all | mentions_only | none` (Có muốn nhận Ting Ting khi bị @ tên không)
+- `pushEnabled`: (Cho phép bắn Noti về màn hình khoá điện thoại)
 
 ### presence
 
-Lưu trạng thái online/offline và last seen cho web/app.
+Bảng chuyên dụng (cập nhật liên tục mỗi vài giây) để hiện đèn xanh lá cây "Đang hoạt động". Không nên lưu cái này vào bảng User vì nhịp độ quét (heartbeat) rất dày làm quá tải DB chính.
+
+- `userId`
+- `status`: `online | offline`
+- `lastActiveAt`: Cập nhật liên tục khi user chạm vào màn hình.
+- `deviceStr`: `web | ios | android` (Dùng để hiện icon điện thoại hay máy tính cạnh nick của họ).
 
 ## 3. Đánh giá mức độ đáp ứng yêu cầu tuần 2
 

@@ -33,3 +33,7 @@ const userRouter = require('./src/routes/userRouter');
 app.use('/backend/api/users', userRouter);
 const authRouter = require('./src/routes/authRouter');
 app.use('/backend/api/auth', authRouter); // các route cần auth đã có verifyToken riêng trong authRouter
+
+// ── Bàn đạp: Global Error Handler bắt mọi cú crash của Server ────────────────────────────────
+const errorHandler = require('./src/middlewares/errorHandler');
+app.use(errorHandler);
