@@ -15,6 +15,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import Home from './pages/Home';
 import UserProfilePage from './pages/UserProfilePage';
 import ChangePassword from './pages/ChangePassword';
+import FriendsPage from './features/friends/FriendsPage'; // <-- Đăng nhập Màn hình bạn bè của Member 1
 
 // Các route toàn màn hình (ẩn Navbar)
 const NO_NAVBAR_ROUTES = ['/chat', '/user'];
@@ -88,6 +89,17 @@ const App = () => {
                     </ProtectedRoute>
                   }
                 />
+
+                {/* MODULE BẠN BÈ */}
+                <Route
+                  path="/friends"
+                  element={
+                    <ProtectedRoute>
+                      <FriendsPage />
+                    </ProtectedRoute>
+                  }
+                />
+
 
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/complete-profile" element={<CompleteProfile />} />

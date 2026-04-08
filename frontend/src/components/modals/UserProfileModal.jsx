@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, Copy, Check, ExternalLink, MessageCircle } from 'lucide-react';
-import apiClient from '../../services/apiClient';
+import apiClient from '../../api/apiClient';
 import { usePresence } from '../../context/PresenceContext';
 
 const STATUS_CONFIG = {

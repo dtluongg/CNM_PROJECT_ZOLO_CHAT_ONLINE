@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Search, Upload, Camera, User, CameraOff, SwitchCamera, QrCode, ChevronRight } from 'lucide-react';
 import jsQR from 'jsqr';
-import apiClient from '../../services/apiClient';
+import apiClient from '../../api/apiClient';
 import { usePresence } from '../../context/PresenceContext';  // ✅ THÊM DÒNG NÀY
 
 const AVATAR_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245','#9b59b6','#e67e22'];

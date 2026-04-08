@@ -4,7 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Copy, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import apiClient from '../../services/apiClient';
+import apiClient from '../../api/apiClient';
 import { supabase } from '../../config/supabase';
 
 const STATUSES = [

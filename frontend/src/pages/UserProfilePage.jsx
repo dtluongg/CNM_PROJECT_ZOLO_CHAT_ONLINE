@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { ArrowLeft, Copy, Check, MessageCircle, Mail, AtSign, Calendar, UserPlus, Phone, ExternalLink, Shield } from 'lucide-react';
-import apiClient from '../services/apiClient';
+import apiClient from '../api/apiClient';
 import { usePresence } from '../context/PresenceContext';
 import { useAuth } from '../context/AuthContext';
 

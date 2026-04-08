@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
-import apiClient from '../services/apiClient';
+import apiClient from '../api/apiClient';
 
 // Trang này hiện ra khi Facebook không trả về email.
 // Người dùng phải nhập email + xác thực OTP để hoàn tất đăng ký.

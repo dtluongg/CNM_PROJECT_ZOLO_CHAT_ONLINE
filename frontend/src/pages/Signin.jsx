@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
-import apiClient from '../services/apiClient';
+import apiClient from '../api/apiClient';
 
 const CALLBACK_URL = `${window.location.origin}/auth/callback`;
 const MAX_FAILED_ATTEMPTS = 5;

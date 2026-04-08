@@ -34,6 +34,10 @@ app.use('/backend/api/users', userRouter);
 const authRouter = require('./src/routes/authRouter');
 app.use('/backend/api/auth', authRouter); // các route cần auth đã có verifyToken riêng trong authRouter
 
+// Khởi tạo route cho Bạn bè (Member 1)
+const friendRouter = require('./src/routes/friendRouter');
+app.use('/backend/api/friends', friendRouter);
+
 // ── Bàn đạp: Global Error Handler bắt mọi cú crash của Server ────────────────────────────────
 const errorHandler = require('./src/middlewares/errorHandler');
 app.use(errorHandler);

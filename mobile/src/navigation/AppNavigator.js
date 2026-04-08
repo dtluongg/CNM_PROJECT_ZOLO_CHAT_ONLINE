@@ -15,6 +15,7 @@ import MainTabScreen        from '../screens/MainTabScreen';
 import MessageScreen        from '../screens/MessageScreen';
 import UserProfileScreen    from '../screens/UserProfileScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import FriendsScreen        from '../screens/FriendsScreen'; // <-- Component của Member 1
 
 const Stack = createNativeStackNavigator();
 
@@ -56,6 +57,7 @@ const AppNavigator = () => {
             <Stack.Screen name="UserProfile" component={UserProfileScreen} />
             <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
             <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+            <Stack.Screen name="Friends" component={FriendsScreen} /> {/* <-- Màn hình của Member 1 */}
           </>
         ) : (
           // ── Unauthenticated ────────────────────────

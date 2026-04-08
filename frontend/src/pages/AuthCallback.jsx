@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CircleX } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../context/AuthContext';
-import apiClient from '../services/apiClient';
+import apiClient from '../api/apiClient';
 
 // Trang này nhận redirect từ Supabase sau khi đăng nhập Google/Facebook.
 // Supabase gắn session vào URL hash (#access_token=...&refresh_token=...)

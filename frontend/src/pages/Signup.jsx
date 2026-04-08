@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../config/supabase';
-import apiClient from '../services/apiClient';
+import apiClient from '../api/apiClient';
 
 const CALLBACK_URL = `${window.location.origin}/auth/callback`;
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
-import apiClient from '../services/apiClient';
+import apiClient from '../api/apiClient';
 
 const Navbar = () => {
   const { user, token, logout } = useAuth();
