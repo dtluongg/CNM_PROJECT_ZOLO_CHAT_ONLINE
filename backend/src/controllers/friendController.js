@@ -112,15 +112,19 @@ exports.getFriendList = async (req, res, next) => {
 
         // Bóc tách dữ liệu để trả về đúng cấu trúc danh sách người
         const friendList = friendships.map(f => {
-            // Xác định xem ai là bạn của mình trong dòng record này
-            const friend = f.userId1._id.toString() === userId ? f.userId2 : f.userId1;
+            const isUser1 = f.userId1._id.toString() === userId;
+            const friend = isUser1 ? f.userId2 : f.userId1;
+            const nickname = isUser1 ? f.nickname2 : f.nickname1;
+
             return {
                 friendshipId: f._id,
                 friendId: friend._id,
-                displayName: friend.displayName,
+                displayName: nickname || friend.displayName,
+                originalName: friend.displayName,
                 avatar: friend.avatar,
                 email: friend.email,
-                establishedAt: f.createdAt
+                establishedAt: f.createdAt,
+                isBlocked: f.isBlockedBy?.toString() === userId
             };
         });
 
@@ -145,6 +149,173 @@ exports.getIncomingRequests = async (req, res, next) => {
         res.status(200).json({
             success: true,
             data: requests
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// 5. Lấy danh sách Lời mời đã gửi đi (Outgoing)
+exports.getOutgoingRequests = async (req, res, next) => {
+    try {
+        const userId = req.user.id;
+        const requests = await FriendRequest.find({
+            fromUserId: userId,
+            status: 'pending'
+        }).populate('toUserId', 'displayName avatar email');
+
+        res.status(200).json({
+            success: true,
+            data: requests
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// 6. Từ chối lời mời kết bạn (Reject)
+exports.rejectFriendRequest = async (req, res, next) => {
+    try {
+        const currentUserId = req.user.id;
+        const requestId = req.params.id;
+
+        const request = await FriendRequest.findById(requestId);
+        if (!request) {
+            return res.status(404).json({ success: false, message: "Lời mời kết bạn không tồn tại." });
+        }
+
+        // Chắc chắn mình là người được nhận lời mời
+        if (request.toUserId.toString() !== currentUserId) {
+            return res.status(403).json({ success: false, message: "Không có quyền thực hiện." });
+        }
+
+        if (request.status !== 'pending') {
+            return res.status(400).json({ success: false, message: "Lời mời này không ở trạng thái chờ." });
+        }
+
+        request.status = 'rejected';
+        await request.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Đã từ chối lời mời kết bạn."
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// 7. Thu hồi lời mời kết bạn đã gửi (Cancel)
+exports.cancelFriendRequest = async (req, res, next) => {
+    try {
+        const currentUserId = req.user.id;
+        const requestId = req.params.id;
+
+        const request = await FriendRequest.findById(requestId);
+        if (!request) {
+            return res.status(404).json({ success: false, message: "Lời mời kết bạn không tồn tại." });
+        }
+
+        // Chắc chắn mình là người GỬI lời mời
+        if (request.fromUserId.toString() !== currentUserId) {
+            return res.status(403).json({ success: false, message: "Không có quyền thực hiện." });
+        }
+
+        await request.deleteOne();
+
+        res.status(200).json({
+            success: true,
+            message: "Đã thu hồi lời mời kết bạn."
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// 8. Hủy kết bạn (Unfriend)
+exports.unfriend = async (req, res, next) => {
+    try {
+        const currentUserId = req.user.id;
+        const targetUserId = req.params.userId;
+
+        const u1 = currentUserId < targetUserId ? currentUserId : targetUserId;
+        const u2 = currentUserId < targetUserId ? targetUserId : currentUserId;
+
+        const friendship = await Friendship.findOneAndDelete({ userId1: u1, userId2: u2 });
+        if (!friendship) {
+             return res.status(404).json({ success: false, message: "Hai người chưa từng kết bạn." });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Hủy kết bạn thành công."
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// 9. Cập nhật biệt danh
+exports.updateNickname = async (req, res, next) => {
+    try {
+        const currentUserId = req.user.id;
+        const targetUserId = req.params.userId;
+        const { nickname } = req.body;
+
+        const u1 = currentUserId < targetUserId ? currentUserId : targetUserId;
+        const u2 = currentUserId < targetUserId ? targetUserId : currentUserId;
+
+        const friendship = await Friendship.findOne({ userId1: u1, userId2: u2 });
+        if (!friendship) {
+             return res.status(404).json({ success: false, message: "Hai bạn chưa kết bạn." });
+        }
+
+        if (currentUserId === u1) {
+            friendship.nickname2 = nickname; // Mình (1) đặt tên cho bạn (2)
+        } else {
+            friendship.nickname1 = nickname; // Mình (2) đặt tên cho bạn (1)
+        }
+
+        await friendship.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Đã đổi biệt danh.",
+            data: friendship
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// 10. Chặn bạn bè (Block)
+exports.blockFriend = async (req, res, next) => {
+    try {
+        const currentUserId = req.user.id;
+        const targetUserId = req.params.userId;
+
+        const u1 = currentUserId < targetUserId ? currentUserId : targetUserId;
+        const u2 = currentUserId < targetUserId ? targetUserId : currentUserId;
+
+        const friendship = await Friendship.findOne({ userId1: u1, userId2: u2 });
+        if (!friendship) {
+             return res.status(404).json({ success: false, message: "Hai bạn chưa kết bạn." });
+        }
+
+        let message = '';
+        if (friendship.isBlockedBy && friendship.isBlockedBy.toString() === currentUserId) {
+             friendship.isBlockedBy = null;
+             message = 'Đã bỏ chặn người dùng.';
+        } else {
+             friendship.isBlockedBy = currentUserId;
+             message = 'Đã chặn người dùng.';
+        }
+        await friendship.save();
+
+        res.status(200).json({
+            success: true,
+            message: message,
+            data: friendship
         });
     } catch (error) {
         next(error);

@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
-import apiClient from '../api/apiClient';
+import authApi from '../features/auth/api/authApi';
 
 const Navbar = () => {
   const { user, token, logout } = useAuth();
@@ -11,7 +11,7 @@ const Navbar = () => {
   const handleLogout = async () => {
     try {
       // Signout local session (graceful — trả 200 kể cả OAuth user không có cookie)
-      await apiClient.post('/users/signout', {});
+      await authApi.signout();
     } catch { /* ignore */ }
     // Signout Supabase session (cần cho OAuth user)
     await supabase.auth.signOut().catch(() => {});

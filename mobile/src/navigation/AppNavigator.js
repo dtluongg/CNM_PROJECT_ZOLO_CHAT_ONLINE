@@ -7,15 +7,15 @@ import * as Linking from 'expo-linking';
 import { useAuth } from '../context/AuthContext';
 import { THEME } from '../theme';
 
-import SigninScreen         from '../screens/SigninScreen';
-import SignupScreen         from '../screens/SignupScreen';
-import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
-import CompleteProfileScreen from '../screens/CompleteProfileScreen';
-import MainTabScreen        from '../screens/MainTabScreen';
-import MessageScreen        from '../screens/MessageScreen';
-import UserProfileScreen    from '../screens/UserProfileScreen';
-import ChangePasswordScreen from '../screens/ChangePasswordScreen';
-import FriendsScreen        from '../screens/FriendsScreen'; // <-- Component của Member 1
+import SigninScreen         from '../features/auth/screens/SigninScreen';
+import SignupScreen         from '../features/auth/screens/SignupScreen';
+import ForgotPasswordScreen from '../features/auth/screens/ForgotPasswordScreen';
+import CompleteProfileScreen from '../features/auth/screens/CompleteProfileScreen';
+import MainTabScreen        from './MainTabScreen';
+import MessageScreen        from '../features/chat/screens/MessageScreen';
+import UserProfileScreen    from '../features/user/screens/UserProfileScreen';
+import ChangePasswordScreen from '../features/auth/screens/ChangePasswordScreen';
+import FriendsScreen        from '../features/friends/screens/FriendsScreen'; // <-- Component của Member 1
 
 const Stack = createNativeStackNavigator();
 
@@ -50,23 +50,22 @@ const AppNavigator = () => {
     <NavigationContainer linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         {token ? (
-          // ── Authenticated ──────────────────────────
-          <>
-            <Stack.Screen name="Main"        component={MainTabScreen} />
-            <Stack.Screen name="Message"     component={MessageScreen} />
+          <Stack.Group>
+            <Stack.Screen name="Main" component={MainTabScreen} />
+            <Stack.Screen name="Message" component={MessageScreen} />
             <Stack.Screen name="UserProfile" component={UserProfileScreen} />
             <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
             <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-            <Stack.Screen name="Friends" component={FriendsScreen} /> {/* <-- Màn hình của Member 1 */}
-          </>
+            <Stack.Screen name="Friends" component={FriendsScreen} />
+            <Stack.Screen name="FriendRequests" component={require('../features/friends/screens/FriendRequestsScreen').default} />
+          </Stack.Group>
         ) : (
-          // ── Unauthenticated ────────────────────────
-          <>
-            <Stack.Screen name="Signin"          component={SigninScreen} />
-            <Stack.Screen name="Signup"          component={SignupScreen} />
-            <Stack.Screen name="ForgotPassword"  component={ForgotPasswordScreen} />
+          <Stack.Group>
+            <Stack.Screen name="Signin" component={SigninScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
             <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-          </>
+          </Stack.Group>
         )}
       </Stack.Navigator>
     </NavigationContainer>

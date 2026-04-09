@@ -5,7 +5,13 @@ const {
     sendFriendRequest,
     acceptFriendRequest,
     getFriendList,
-    getIncomingRequests
+    getIncomingRequests,
+    getOutgoingRequests,
+    rejectFriendRequest,
+    cancelFriendRequest,
+    unfriend,
+    updateNickname,
+    blockFriend
 } = require('../controllers/friendController');
 
 // Mọi hoạt động Bạn bè đều phải đăng nhập
@@ -16,6 +22,12 @@ router.use(verifyToken);
 router.get('/list', getFriendList);
 router.post('/requests', sendFriendRequest);
 router.get('/requests/incoming', getIncomingRequests);
+router.get('/requests/outgoing', getOutgoingRequests);
 router.post('/requests/:id/accept', acceptFriendRequest);
+router.post('/requests/:id/reject', rejectFriendRequest);
+router.delete('/requests/:id', cancelFriendRequest);
+router.delete('/:userId', unfriend);
+router.patch('/:userId/nickname', updateNickname);
+router.post('/:userId/block', blockFriend);
 
 module.exports = router;

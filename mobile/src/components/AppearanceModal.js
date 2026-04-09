@@ -61,7 +61,7 @@ export default function AppearanceModal({ visible, onClose, updateUserProfile })
         }
       };
 
-      const res = await apiClient.patch('/auth/update-profile', payload);
+      const res = await apiClient.patch('/users/update-profile', payload);
       // Let ProfileScreen know to update auth user context
       if (updateUserProfile) {
         await updateUserProfile(res.data.user);

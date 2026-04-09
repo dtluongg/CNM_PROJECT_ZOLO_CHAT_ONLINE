@@ -183,63 +183,66 @@ Kết luận cho tuần 3: schema này đủ để triển khai, nhưng chưa t�
 
 ### Auth và profile
 
-- `POST /auth/sync-oauth`
-- `POST /auth/complete-oauth-profile`
-- `GET /auth/authme`
-- `PATCH /auth/update-profile`
-- `GET /auth/users/search`
-- `GET /auth/users/:userId/profile`
+- `POST /auth/sync-oauth` (Đồng bộ tài khoản OAuth từ Supabase về Local DB)
+- `POST /auth/complete-oauth-profile` (Cập nhật thông tin bổ sung cho tài khoản OAuth mới đăng nhập lần đầu)
+- `GET /auth/authme` (Lấy thông tin profile hiện tại của người đang đăng nhập qua Token)
+- `PATCH /auth/update-profile` (Chỉnh sửa thông tin cá nhân: avatar, bio, theme...)
+- `GET /auth/users/search` (Tìm kiếm người dùng lạ bằng tên, username, email hoặc mã QR)
+- `GET /auth/users/:userId/profile` (Xem trang cá nhân của một người dùng bất kỳ)
 
 ### Kết nối bạn bè
 
-- `POST /friends/requests`
-- `GET /friends/requests/incoming`
-- `GET /friends/requests/outgoing`
-- `POST /friends/requests/:id/accept`
-- `POST /friends/requests/:id/reject`
-- `DELETE /friends/requests/:id`
-- `GET /friends/list`
+- `POST /friends/requests` (Gửi lời mời kết bạn đến một người)
+- `GET /friends/requests/incoming` (Xem danh sách người khác gửi lời mời đến mình)
+- `GET /friends/requests/outgoing` (Xem danh sách lời mời mà mình đã gửi đi chờ người ta duyệt)
+- `POST /friends/requests/:id/accept` (Đồng ý lời mời kết bạn)
+- `POST /friends/requests/:id/reject` (Từ chối lời mời kết bạn của người khác)
+- `DELETE /friends/requests/:id` (Thu hồi lại lời mời kết bạn mình lỡ gửi đi)
+- `GET /friends/list` (Lấy danh sách tất cả bạn bè hiện tại)
+- `DELETE /friends/:userId` (Hủy kết bạn - Xóa khỏi bảng friendships)
+- `PATCH /friends/:userId/nickname` (Đổi biệt danh cho bạn bè để dễ nhớ)
+- `POST /friends/:userId/block` (Chặn một người dùng khỏi việc nhắn tin)
 
 ### Conversation
 
-- `POST /conversations/dm`
-- `POST /conversations/group`
-- `GET /conversations`
-- `GET /conversations/:id`
-- `PATCH /conversations/:id`
-- `DELETE /conversations/:id`
+- `POST /conversations/dm` (Tạo cuộc hội thoại riêng tư Nhắn tin 1-1 đôi lứa)
+- `POST /conversations/group` (Tạo lập nhóm chat mới với nhiều người)
+- `GET /conversations` (Lấy danh sách toàn bộ các phòng chat hiển thị bên thanh Sidebar)
+- `GET /conversations/:id` (Lấy thông tin chi tiết của một phòng chat cụ thể)
+- `PATCH /conversations/:id` (Chỉnh sửa thông tin nhóm: đổi tên nhóm, thay avatar nhóm)
+- `DELETE /conversations/:id` (Giải tán nhóm hoặc tự rời khỏi nhóm)
 
 ### Membership và group management
 
-- `POST /conversations/:id/members`
-- `DELETE /conversations/:id/members/:userId`
-- `PATCH /conversations/:id/members/:userId/role`
-- `PATCH /conversations/:id/members/:userId/permissions`
-- `GET /conversations/:id/members`
+- `POST /conversations/:id/members` (Thêm một hoặc nhiều người mới vào nhóm chat)
+- `DELETE /conversations/:id/members/:userId` (Đuổi một thành viên ra khỏi nhóm)
+- `PATCH /conversations/:id/members/:userId/role` (Bổ nhiệm/Bãi nhiệm chức vụ Trưởng nhóm, Phó nhóm)
+- `PATCH /conversations/:id/members/:userId/permissions` (Sửa đổi quyền hạn của mem: được chat không, được mời người không)
+- `GET /conversations/:id/members` (Lấy danh sách tất cả các thành viên đang có mặt trong nhóm)
 
 ### Messages
 
-- `GET /conversations/:id/messages`
-- `POST /conversations/:id/messages`
-- `PATCH /messages/:id`
-- `DELETE /messages/:id`
-- `POST /messages/:id/revoke`
-- `POST /messages/:id/forward`
-- `POST /messages/:id/reactions`
-- `DELETE /messages/:id/reactions/:reactionId`
-- `POST /messages/:id/read`
+- `GET /conversations/:id/messages` (Truy xuất lịch sử tin nhắn của một phòng chat - dùng để kéo lên xem tin nhắn cũ)
+- `POST /conversations/:id/messages` (Nhắn một tin mới vào phòng)
+- `PATCH /messages/:id` (Chỉnh sửa nội dung một dòng tin nhắn)
+- `DELETE /messages/:id` (Xóa vĩnh viễn tin nhắn khỏi máy cả hai phía - hoặc gỡ bỏ tin)
+- `POST /messages/:id/revoke` (Thu hồi tin nhắn - Tin sẽ biến thành thông báo "Đã thu hồi tin nhắn này")
+- `POST /messages/:id/forward` (Chuyển tiếp tin nhắn này sang cuộc trò chuyện khác)
+- `POST /messages/:id/reactions` (Thả cảm xúc Emoji, Haha, Thả tim vào tin nhắn)
+- `DELETE /messages/:id/reactions/:reactionId` (Gỡ cái biểu tượng thả tim ra khỏi tin nhắn)
+- `POST /messages/:id/read` (Đánh dấu trạng thái là Đại ca: "Đã xem" tin nhắn này)
 
 ### Upload và media
 
-- `POST /uploads/file`
-- `POST /uploads/image`
-- `POST /uploads/video`
+- `POST /uploads/file` (Tải lên một tài liệu, file nén hoặc file tĩnh)
+- `POST /uploads/image` (Tải lên hình ảnh đơn bọc nén hoặc base64)
+- `POST /uploads/video` (Tải lên video đính kèm)
 
 ### Presence và notification
 
-- `GET /presence/:userId`
-- `POST /presence/heartbeat`
-- `PATCH /notification-settings`
+- `GET /presence/:userId` (Kiểm tra trạng thái Truy Cập hiện tại của 1 user (đèn sáng hay tắt))
+- `POST /presence/heartbeat` (Ping lên Server báo cáo rằng: "Tôi vẫn đang online kìa đừng tắt đèn")
+- `PATCH /notification-settings` (Điều chỉnh cấu hình: Tắt Noti phòng này 1 tiếng, nhận Mention Only...)
 
 ## 6. Những chỗ còn phải code thêm dù schema đã đủ
 
