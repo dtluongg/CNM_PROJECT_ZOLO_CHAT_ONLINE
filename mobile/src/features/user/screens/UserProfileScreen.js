@@ -1,16 +1,12 @@
-/**
- * UserProfileScreen – view another user's public profile (modern UI)
- */
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
   ScrollView, ActivityIndicator, StatusBar, Alert,
 } from 'react-native';
-import authApi from '../../auth/api/authApi';
-import userApi from '../api/userApi';
-import apiClient from '../../../services/apiClient';
-import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../../../theme';
-import { useAuth } from '../../../context/AuthContext';
+import apiClient from '../services/apiClient';
+import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
+import { useAuth } from '../context/AuthContext';
+import { usePresence } from '../context/PresenceContext';
 
 const Avatar = ({ name, avatar, size = 80 }) => {
   const bg = getAvatarColor(name);
@@ -25,19 +21,35 @@ const Avatar = ({ name, avatar, size = 80 }) => {
 
 export default function UserProfileScreen({ route, navigation }) {
   const { user: authUser } = useAuth();
+  const { isUserOnline, getPresenceStatus } = usePresence();
+
   const [profile, setProfile] = useState(route.params?.user || null);
   const [loading, setLoading] = useState(!route.params?.user);
 
   const userId = route.params?.userId || route.params?.user?._id;
 
+  // ✅ LIVE STATUS - REALTIME cho mọi user
+  const getLiveStatusInfo = (user) => {
+    const online = isUserOnline(user._id);
+    const presStatus = getPresenceStatus(user._id);
+
+    console.log(`[STATUS DEBUG] ${user.displayName} → online: ${online}, presStatus: ${presStatus}`);
+
+    if (online && presStatus) {
+      return STATUS_CONFIG[presStatus] || STATUS_CONFIG.online;
+    }
+
+    return STATUS_CONFIG.offline;
+  };
+
   useEffect(() => {
     if (!profile && userId) loadProfile();
-  }, []);
+  }, [userId]);
 
   const loadProfile = async () => {
     setLoading(true);
     try {
-      const res = await userApi.getUserProfile(userId);
+      const res = await apiClient.get(`/auth/users/${userId}/profile`);
       setProfile(res.data.user || res.data);
     } catch {
       Alert.alert('Lỗi', 'Không thể tải hồ sơ người dùng.');
@@ -49,14 +61,15 @@ export default function UserProfileScreen({ route, navigation }) {
 
   const handleMessage = () => {
     if (!profile) return;
+    const si = getLiveStatusInfo(profile);
     navigation.navigate('Message', {
       conversation: {
         id: profile._id,
         name: profile.displayName || profile.username || 'Người dùng',
         avatar: profile.avatar,
         type: 'dm',
-        status: profile.status,
-        online: profile.status === 'online',
+        status: si.status || 'offline',
+        online: isUserOnline(profile._id),
         otherUserId: profile._id,
         usernameColor: profile.usernameColor,
         lastMessage: '', time: '', unread: 0,
@@ -76,7 +89,8 @@ export default function UserProfileScreen({ route, navigation }) {
 
   if (!profile) return null;
 
-  const si = STATUS_CONFIG[profile.status || 'offline'] || STATUS_CONFIG.offline;
+  // ✅ LIVE STATUS - dùng trực tiếp, không cần state/polling
+  const si = getLiveStatusInfo(profile);
   const isOwn = authUser?._id === profile._id;
 
   return (
@@ -101,15 +115,17 @@ export default function UserProfileScreen({ route, navigation }) {
         {/* Banner gradient */}
         <View style={s.bannerGradient} />
 
-        {/* Avatar over banner */}
+        {/* Avatar over banner - LIVE STATUS DOT */}
         <View style={s.avatarFloatRow}>
           <View style={[s.avatarRing, { borderColor: si.color }]}>
             <Avatar name={profile.displayName} avatar={profile.avatar} size={80} />
           </View>
-          {/* Status indicator */}
+          {/* Status bubble - LIVE STATUS */}
           <View style={[s.statusBubble, { backgroundColor: si.color + '20', borderColor: si.color + '60' }]}>
             <View style={[s.statusDot, { backgroundColor: si.color }]} />
-            <Text style={[s.statusBubbleText, { color: si.color }]}>{si.label}</Text>
+            <Text style={[s.statusBubbleText, { color: si.color }]} numberOfLines={1}>
+              {si.label}
+            </Text>
           </View>
         </View>
 
@@ -137,6 +153,7 @@ export default function UserProfileScreen({ route, navigation }) {
           </View>
         )}
 
+        {/* Status text */}
         {profile.statusText ? (
           <View style={s.section}>
             <Text style={s.sectionLabel}>TRẠNG THÁI TÙY CHỈNH</Text>
