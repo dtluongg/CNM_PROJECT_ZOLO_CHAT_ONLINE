@@ -230,7 +230,7 @@ Kết luận cho tuần 3: schema này đủ để triển khai, nhưng chưa t�
 - `POST /messages/:id/forward` (Chuyển tiếp tin nhắn này sang cuộc trò chuyện khác)
 - `POST /messages/:id/reactions` (Thả cảm xúc Emoji, Haha, Thả tim vào tin nhắn)
 - `DELETE /messages/:id/reactions/:reactionId` (Gỡ cái biểu tượng thả tim ra khỏi tin nhắn)
-- `POST /messages/:id/read` (Đánh dấu trạng thái là Đại ca: "Đã xem" tin nhắn này)
+- `POST /messages/:id/read` (Đánh dấu trạng thái là ai: "Đã xem" tin nhắn này)
 
 ### Upload và media
 
