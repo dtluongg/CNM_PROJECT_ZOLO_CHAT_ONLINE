@@ -48,12 +48,12 @@ apiClient.interceptors.response.use(
       }
     } catch {}
 
-    // 2. Local JWT refresh — POST /users/refreshme with token in body
+    // 2. Local JWT refresh — POST /auth/refreshme with token in body
     try {
       const refreshToken = await AsyncStorage.getItem('refreshToken');
       if (refreshToken) {
         const res = await axios.post(
-          `${API_BASE_URL}/users/refreshme`,
+          `${API_BASE_URL}/auth/refreshme`,
           { refreshToken },
           { timeout: 10000 }
         );

@@ -1,0 +1,357 @@
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { supabase } from '../../config/supabase';
+import authApi from './api/authApi';
+
+const CALLBACK_URL = `${window.location.origin}/auth/callback`;
+const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+
+const GoogleIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+    <path
+      fill="#EA4335"
+      d="M12 10.2v3.9h5.5c-.2 1.3-1.5 3.9-5.5 3.9-3.3 0-6-2.8-6-6.2s2.7-6.2 6-6.2c1.9 0 3.2.8 3.9 1.5l2.7-2.7C16.9 2.8 14.7 2 12 2 6.9 2 2.8 6.5 2.8 12s4.1 10 9.2 10c5.3 0 8.8-3.7 8.8-8.9 0-.6-.1-1.1-.2-1.6H12z"
+    />
+    <path fill="#34A853" d="M3.9 7.3l3.2 2.3C7.9 8 9.8 6.6 12 6.6c1.9 0 3.2.8 3.9 1.5l2.7-2.7C16.9 2.8 14.7 2 12 2 8.2 2 4.9 4.2 3.9 7.3z" />
+    <path fill="#FBBC05" d="M12 22c2.7 0 4.9-.9 6.6-2.5l-3.1-2.5c-.9.6-2.1 1-3.5 1-3.9 0-5.3-2.6-5.6-3.9l-3.1 2.4C4.9 19.7 8.2 22 12 22z" />
+    <path fill="#4285F4" d="M20.8 13.1c0-.6-.1-1.1-.2-1.6H12v3.9h5.5c-.3 1.1-1 2-2 2.6l3.1 2.5c1.8-1.7 2.9-4.2 2.9-7.4z" />
+  </svg>
+);
+
+const FacebookIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+    <circle cx="12" cy="12" r="10" fill="#1877F2" />
+    <path
+      fill="#FFFFFF"
+      d="M13.8 8.1h1.8V5h-2.1c-2.6 0-4.2 1.6-4.2 4.3v1.9H7v3h2.3V19h3.1v-4.8h2.5l.4-3h-2.9V9.7c0-.9.3-1.6 1.4-1.6z"
+    />
+  </svg>
+);
+
+const OtpSection = ({ label, target, type, onSend, cooldown, otpSent, otpValue, onOtpChange, loading }) => (
+  <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+    <p className="font-semibold text-gray-700 text-sm">{label}</p>
+    <div className="flex gap-2">
+      <input
+        type={type === 'email' ? 'email' : 'tel'}
+        value={target}
+        disabled
+        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-sm text-gray-500"
+      />
+      <button
+        type="button"
+        onClick={onSend}
+        disabled={loading || cooldown > 0 || !target}
+        className="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap"
+      >
+        {loading ? 'Đang gửi...' : cooldown > 0 ? `Gửi lại (${cooldown}s)` : 'Gửi OTP'}
+      </button>
+    </div>
+    {otpSent && (
+      <input
+        type="text"
+        value={otpValue}
+        onChange={(e) => onOtpChange(e.target.value)}
+        placeholder="Nhập mã OTP 6 chữ số"
+        maxLength={6}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+      />
+    )}
+    {otpSent && !otpValue && (
+      <p className="text-xs text-amber-600">Vui lòng nhập mã OTP đã gửi</p>
+    )}
+  </div>
+);
+
+const Signup = () => {
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    username: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    phone: '',
+  });
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Email OTP state
+  const [emailOtp, setEmailOtp] = useState('');
+  const [emailOtpSent, setEmailOtpSent] = useState(false);
+  const [emailOtpLoading, setEmailOtpLoading] = useState(false);
+  const [emailCooldown, setEmailCooldown] = useState(0);
+
+  // Phone OTP state
+  const [phoneOtp, setPhoneOtp] = useState('');
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
+  const [phoneOtpLoading, setPhoneOtpLoading] = useState(false);
+  const [phoneCooldown, setPhoneCooldown] = useState(0);
+
+  const [error, setError] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(null);
+  const isPasswordValid = PASSWORD_POLICY_REGEX.test(formData.password);
+
+  const handleOAuth = async (provider) => {
+    setError('');
+    setOauthLoading(provider);
+    try {
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: CALLBACK_URL,
+          scopes: provider === 'facebook' ? 'email,public_profile' : undefined,
+        },
+      });
+      if (oauthError) {
+        setError(oauthError.message || `Đăng ký ${provider} thất bại`);
+        setOauthLoading(null);
+      }
+    } catch {
+      setError(`Không thể kết nối ${provider}. Vui lòng thử lại.`);
+      setOauthLoading(null);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const startCooldown = (setter) => {
+    setter(60);
+    const interval = setInterval(() => {
+      setter((prev) => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleSendEmailOtp = async () => {
+    setError('');
+    if (!formData.email) { setError('Vui lòng nhập email trước'); return; }
+    setEmailOtpLoading(true);
+    try {
+      const res = await authApi.sendEmailOtp({ email: formData.email });
+      setEmailOtpSent(true);
+      setInfoMessage(res.data.message || 'OTP đã gửi về email');
+      startCooldown(setEmailCooldown);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Không thể gửi OTP email');
+    } finally {
+      setEmailOtpLoading(false);
+    }
+  };
+
+  const handleSendPhoneOtp = async () => {
+    setError('');
+    if (!formData.phone) { setError('Vui lòng nhập số điện thoại trước'); return; }
+    // Chỉ giữ chữ số và dấu + trước khi gửi lên backend
+    const cleanPhone = formData.phone.replace(/[^\d+]/g, '');
+    setPhoneOtpLoading(true);
+    try {
+      const res = await authApi.sendPhoneOtp({ phone: cleanPhone });
+      setPhoneOtpSent(true);
+      setInfoMessage(res.data.message || 'OTP đã gửi về điện thoại');
+      startCooldown(setPhoneCooldown);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Không thể gửi OTP điện thoại');
+    } finally {
+      setPhoneOtpLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!formData.password || !confirmPassword) {
+      setError('Vui lòng nhập mật khẩu và xác nhận mật khẩu.');
+      return;
+    }
+
+    if (!isPasswordValid) {
+      setError('Mật khẩu phải có ít nhất 6 ký tự, bao gồm chữ thường và chữ in hoa.');
+      return;
+    }
+
+    if (formData.password !== confirmPassword) {
+      setError('Mật khẩu và xác nhận mật khẩu không khớp.');
+      return;
+    }
+
+    const hasEmailOtp = emailOtpSent && emailOtp.trim().length > 0;
+    const hasPhoneOtp = phoneOtpSent && phoneOtp.trim().length > 0;
+
+    if (!hasEmailOtp && !hasPhoneOtp) {
+      setError('Cần xác thực ít nhất một phương thức: gửi OTP qua email hoặc số điện thoại');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = { ...formData };
+      if (hasEmailOtp) payload.emailOtp = emailOtp;
+      if (hasPhoneOtp) payload.phoneOtp = phoneOtp;
+
+      const response = await authApi.signup(payload);
+      if (response.status === 201) {
+        navigate('/signin', { state: { message: 'Đăng ký thành công! Vui lòng đăng nhập.' } });
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const atLeastOneOtpReady = (emailOtpSent && emailOtp) || (phoneOtpSent && phoneOtp);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-start md:items-center justify-center px-4 py-8 md:py-10 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6 sm:p-8">
+        <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">Đăng Ký</h1>
+
+        {/* OAuth buttons */}
+        <div className="space-y-3 mb-5">
+          <button type="button" onClick={() => handleOAuth('google')} disabled={!!oauthLoading}
+            className="flex items-center justify-center gap-3 w-full border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-4 rounded-lg transition disabled:opacity-60">
+            {oauthLoading === 'google'
+              ? <span className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+              : <GoogleIcon />}
+            {oauthLoading === 'google' ? 'Đang chuyển hướng...' : 'Đăng ký với Google'}
+          </button>
+          <button type="button" onClick={() => handleOAuth('facebook')} disabled={!!oauthLoading}
+            className="flex items-center justify-center gap-3 w-full border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-4 rounded-lg transition disabled:opacity-60">
+            {oauthLoading === 'facebook'
+              ? <span className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+              : <FacebookIcon />}
+            {oauthLoading === 'facebook' ? 'Đang chuyển hướng...' : 'Đăng ký với Facebook'}
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 mb-5">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs text-gray-400">hoặc đăng ký bằng tài khoản</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+
+        <p className="text-center text-sm text-gray-500 mb-4">Xác thực qua email hoặc số điện thoại (1 trong 2)</p>
+
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm">
+            {error}
+          </div>
+        )}
+        {infoMessage && !error && (
+          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 text-sm">
+            {infoMessage}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Thông tin cơ bản */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1 text-sm">First name</label>
+              <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="VD: John" />
+            </div>
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1 text-sm">Last name</label>
+              <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="VD: Doe" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1 text-sm">Username</label>
+            <input type="text" name="username" value={formData.username} onChange={handleChange} required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Tên đăng nhập" />
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1 text-sm">Mật khẩu</label>
+            <input type="password" name="password" value={formData.password} onChange={handleChange} required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Tối thiểu 8 ký tự" />
+            <p className={`mt-1 text-xs ${formData.password && !isPasswordValid ? 'text-red-500' : 'text-gray-500'}`}>
+              Mật khẩu tối thiểu 8 ký tự, gồm ít nhất 1 chữ thường, 1 chữ in hoa và 1 số.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1 text-sm">Xác nhận mật khẩu</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="Nhập lại mật khẩu"
+            />
+          </div>
+
+          {/* OTP Section */}
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-gray-700">Xác thực danh tính <span className="text-red-500">*</span></p>
+            <p className="text-xs text-gray-500">Cần xác thực ít nhất 1 trong 2 phương thức bên dưới</p>
+
+            {/* Email OTP */}
+            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+              <p className="font-semibold text-gray-700 text-sm">Xác thực qua Email</p>
+              <div className="flex gap-2">
+                <input type="email" name="email" value={formData.email} onChange={handleChange}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="your@email.com" />
+                <button type="button" onClick={handleSendEmailOtp}
+                  disabled={emailOtpLoading || emailCooldown > 0 || !formData.email}
+                  className="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap">
+                  {emailOtpLoading ? 'Đang gửi...' : emailCooldown > 0 ? `Gửi lại (${emailCooldown}s)` : 'Gửi OTP'}
+                </button>
+              </div>
+              {emailOtpSent && (
+                <input type="text" value={emailOtp} onChange={(e) => setEmailOtp(e.target.value)}
+                  placeholder="Nhập mã OTP 6 chữ số" maxLength={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              )}
+            </div>
+
+            {/* Phone OTP */}
+            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+              <p className="font-semibold text-gray-700 text-sm">Xác thực qua Số điện thoại</p>
+              <div className="flex gap-2">
+                <input type="tel" name="phone" value={formData.phone} onChange={handleChange}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  placeholder="0912345678 (10 chữ số)" />
+                <button type="button" onClick={handleSendPhoneOtp}
+                  disabled={phoneOtpLoading || phoneCooldown > 0 || !formData.phone}
+                  className="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap">
+                  {phoneOtpLoading ? 'Đang gửi...' : phoneCooldown > 0 ? `Gửi lại (${phoneCooldown}s)` : 'Gửi OTP'}
+                </button>
+              </div>
+              {phoneOtpSent && (
+                <input type="text" value={phoneOtp} onChange={(e) => setPhoneOtp(e.target.value)}
+                  placeholder="Nhập mã OTP 6 chữ số" maxLength={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              )}
+            </div>
+          </div>
+
+          <button type="submit" disabled={loading || !atLeastOneOtpReady || !isPasswordValid}
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200 disabled:opacity-50">
+            {loading ? 'Đang tạo tài khoản...' : 'Đăng Ký'}
+          </button>
+        </form>
+
+        <p className="text-center text-gray-600 mt-4 text-sm">
+          Đã có tài khoản?{' '}
+          <Link to="/signin" className="text-blue-500 hover:text-blue-600 font-semibold">Đăng nhập</Link>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default Signup;

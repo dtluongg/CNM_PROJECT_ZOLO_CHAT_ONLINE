@@ -47,7 +47,7 @@ apiClient.interceptors.response.use(
       // Thử refresh local JWT
       try {
         const res = await axios.post(
-          `${API_BASE_URL}/users/refreshme`,
+          `${API_BASE_URL}/auth/refreshme`,
           {},
           { withCredentials: true }
         );
