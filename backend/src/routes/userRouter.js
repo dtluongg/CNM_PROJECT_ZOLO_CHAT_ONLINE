@@ -1,43 +1,26 @@
 const express = require('express');
 const router = express.Router();
+const verifyToken = require('../middlewares/verifyToken');
+
 const {
-	signup,
-	signin,
-	signout,
-	getNewAccessToken,
-	changePassword,
-	forgotPassword,
-	resetPassword,
+    updateProfile,
+    searchUsers,
+    getPublicProfile,
 } = require('../controllers/userController');
-const verifyLocalToken = require('../middlewares/verifyLocalToken');
 
-// ── Đăng ký tài khoản local ──────────────────────────────────────
-// Body: { username, password, email, firstName, lastName, phone?, emailOtp, phoneOtp? }
-router.post('/signup', signup);
+// ════════════════════════════════════════════════════════════════
+//  UPDATE PROFILE (avatar, displayName, bio, banner, themes...)
+// ════════════════════════════════════════════════════════════════
+router.patch('/update-profile', verifyToken, updateProfile);
 
-// ── Đăng nhập local ──────────────────────────────────────────────
-// Body: { username, password }  (username có thể là email)
-router.post('/signin', signin);
+// ════════════════════════════════════════════════════════════════
+//  TÌM KIẾM USER
+// ════════════════════════════════════════════════════════════════
+router.get('/search', verifyToken, searchUsers);
 
-// ── Đăng xuất ────────────────────────────────────────────────────
-// Cookie: refreshToken
-router.post('/signout', signout);
-
-// ── Lấy access token mới bằng refresh token ──────────────────────
-// Cookie: refreshToken
-router.post('/refreshme', getNewAccessToken);
-
-// ── Đổi mật khẩu (yêu cầu đang đăng nhập local) ──────────────────
-// Header: Authorization: Bearer <accessToken>
-// Body: { oldPassword, newPassword }
-router.post('/change-password', verifyLocalToken, changePassword);
-
-// ── Quên mật khẩu: gửi OTP về email ─────────────────────────────
-// Body: { username }  (username hoặc email)
-router.post('/forgot-password', forgotPassword);
-
-// ── Quên mật khẩu: đặt lại mật khẩu bằng OTP ────────────────────
-// Body: { username, otp, newPassword }
-router.post('/reset-password', resetPassword);
+// ════════════════════════════════════════════════════════════════
+//  PUBLIC PROFILE - Cho người dùng khác xem hồ sơ
+// ════════════════════════════════════════════════════════════════
+router.get('/:userId/profile', verifyToken, getPublicProfile);
 
 module.exports = router;
