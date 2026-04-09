@@ -1,6 +1,6 @@
 # Zolo Chat - Schema Preview and Minimum API Plan
 
-Đa số mọi người dùng thư viện ODM như Mongoose (Node.js). Thư viện này hỗ trợ một tính năng gọi là timestamps. Chỉ cần bật nó lên khi định nghĩa Schema, Mongoose sẽ tự động thêm vào và quản lý song song hai trường createdAt và updatedAt ở database giúp bạn một cách hoàn toàn tự động, bạn không cần phải tự gửi lên nữa.
+Sử dụng thư viện ODM như Mongoose (Node.js). Thư viện này hỗ trợ một tính năng gọi là timestamps. Chỉ cần bật nó lên khi định nghĩa Schema, Mongoose sẽ tự động thêm vào và quản lý song song hai trường createdAt và updatedAt ở database giúp bạn một cách hoàn toàn tự động, bạn không cần phải tự gửi lên nữa.
 
 Tài liệu này là bản xem trước trước khi viết code thật. Mục tiêu là chốt:
 
@@ -262,5 +262,3 @@ Nếu ưu tiên đúng rubric, nên chốt theo thứ tự:
 3. Text, file, emoji, revoke, delete, forward.
 4. Group management cơ bản: tạo nhóm, thêm/xóa member, role.
 5. Nếu còn thời gian thì làm tính năng cộng điểm thưởng: ảnh nhóm, video preview, call video, import danh bạ.
-
-Nếu bạn đồng ý bản nháp này, bước tiếp theo tôi sẽ viết Mongoose models và API minimum theo đúng schema này.
