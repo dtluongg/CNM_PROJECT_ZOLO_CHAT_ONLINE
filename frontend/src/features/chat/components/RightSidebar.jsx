@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import conversationApi from '../api/conversationApi';
 import friendApi from '../../friends/api/friendApi';
+import messageApi from '../api/messageApi';
 
 const AVATAR_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#fee75c', '#ed4245', '#9b59b6', '#e67e22'];
 
@@ -17,14 +18,6 @@ const STATUS_CONFIG = {
   invisible: { color: '#80848e', label: 'An', dot: '#80848e' },
 };
 
-const MOCK_MEDIA = [
-  { id: 1, color: '#5865f2' },
-  { id: 2, color: '#eb459e' },
-  { id: 3, color: '#00b4d8' },
-  { id: 4, color: '#57f287' },
-  { id: 5, color: '#faa61a' },
-  { id: 6, color: '#ed4245' },
-];
 
 const getAvatarColor = (name) => AVATAR_COLORS[(name || '?').charCodeAt(0) % AVATAR_COLORS.length];
 
@@ -147,6 +140,9 @@ export default function RightSidebar({
 
   const [busyAction, setBusyAction] = useState('');
 
+  const [mediaData, setMediaData]     = useState({ images: [], files: [] });
+  const [loadingMedia, setLoadingMedia] = useState(false);
+
   const myUserId = (user?._id || user?.id || '').toString();
 
   const accentColor = conversation?.usernameColor || getAvatarColor(conversation?.name);
@@ -203,7 +199,17 @@ export default function RightSidebar({
   useEffect(() => {
     setEditingMemberId(null);
     setSelectedAddIds([]);
+    setMediaData({ images: [], files: [] });
   }, [conversation?.id]);
+
+  useEffect(() => {
+    if ((tab !== 'media' && tab !== 'files') || !conversation?.id) return;
+    setLoadingMedia(true);
+    messageApi.getAttachments(conversation.id)
+      .then(res => setMediaData(res.data || { images: [], files: [] }))
+      .catch(() => setMediaData({ images: [], files: [] }))
+      .finally(() => setLoadingMedia(false));
+  }, [tab, conversation?.id]);
 
   useEffect(() => {
     loadMembers();
@@ -713,58 +719,63 @@ export default function RightSidebar({
 
           {tab === 'media' && (
             <div>
-              <SectionHeader title="Anh va video" />
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-                {MOCK_MEDIA.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      aspectRatio: '1',
-                      borderRadius: 6,
-                      background: `${item.color}30`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      border: `1px solid ${item.color}40`,
-                    }}
-                  >
-                    <Image size={18} style={{ opacity: 0.6 }} />
+              <SectionHeader title="Ảnh đã chia sẻ" />
+              {loadingMedia && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Đang tải...</p>
+              )}
+              {!loadingMedia && mediaData.images.length === 0 && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Chưa có ảnh nào</p>
+              )}
+              {!loadingMedia && mediaData.images.length > 0 && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                    {mediaData.images.map((item) => (
+                      <a key={item._id} href={item.url} target="_blank" rel="noreferrer"
+                        style={{ aspectRatio: '1', borderRadius: 6, overflow: 'hidden', display: 'block', background: 'var(--bg-hover)' }}>
+                        <img src={item.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </a>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 12 }}>
-                6 anh da chia se
-              </p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 8 }}>
+                    {mediaData.images.length} ảnh đã chia sẻ
+                  </p>
+                </>
+              )}
             </div>
           )}
 
           {tab === 'files' && (
             <div>
-              <SectionHeader title="File da chia se" />
-              {[
-                { name: 'tai_lieu.pdf', size: '2.4 MB', icon: <FileText size={22} />, color: '#ed4245' },
-                { name: 'bai_tap.docx', size: '845 KB', icon: <FileText size={22} />, color: '#5865f2' },
-                { name: 'anh_nhom.zip', size: '12.1 MB', icon: <FileText size={22} />, color: '#faa61a' },
-              ].map((file, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '8px 10px',
-                    borderRadius: 8,
-                    marginBottom: 4,
-                  }}
-                >
-                  <span style={{ flexShrink: 0, color: file.color, display: 'flex', alignItems: 'center' }}>{file.icon}</span>
+              <SectionHeader title="File đã chia sẻ" />
+              {loadingMedia && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Đang tải...</p>
+              )}
+              {!loadingMedia && mediaData.files.length === 0 && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Chưa có file nào</p>
+              )}
+              {!loadingMedia && mediaData.files.map((file) => (
+                <div key={file._id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 10px', borderRadius: 8, marginBottom: 4,
+                  background: 'var(--bg-tertiary)',
+                }}>
+                  <span style={{ flexShrink: 0, color: '#5865f2', display: 'flex', alignItems: 'center' }}>
+                    <FileText size={22} />
+                  </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{file.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{file.size}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {file.fileName}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {file.fileSize ? `${(file.fileSize / 1024).toFixed(0)} KB` : ''}
+                    </div>
                   </div>
-                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: 2 }}>
-                    <Download size={14} />
-                  </button>
+                  {file.url && (
+                    <a href={file.url} target="_blank" rel="noreferrer"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex' }}>
+                      <Download size={14} />
+                    </a>
+                  )}
                 </div>
               ))}
             </div>

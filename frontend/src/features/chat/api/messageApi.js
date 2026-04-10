@@ -58,6 +58,10 @@ const messageApi = {
     apiClient.post('/uploads/image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+
+  // ── Lấy danh sách ảnh và file đã gửi trong conversation ──────────
+  getAttachments: (conversationId) =>
+    apiClient.get(`/messages/${conversationId}/attachments`),
 };
 
 export default messageApi;
