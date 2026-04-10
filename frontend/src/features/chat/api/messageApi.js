@@ -58,10 +58,32 @@ const messageApi = {
     apiClient.post('/uploads/image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+  // ── Reaction APIs ────────────────────────────────────────────────
+  getReactionTypes: () =>
+    apiClient.get('/reactions/types'),
+
+  toggleReaction: (messageId, emoji) =>
+    apiClient.post(`/reactions/${messageId}`, { emoji }),
+
+  getMessageReactions: (messageId) =>
+    apiClient.get(`/reactions/${messageId}`),
+
+  // ── Chỉnh sửa tin nhắn ──────────────────────────────────────────────
+  editMessage: (messageId, content) =>
+    apiClient.patch(`/messages/${messageId}`, { content }),
+
+  // ── Thu hồi tin nhắn ───────────────────────────────────────────────
+  revokeMessage: (messageId) =>
+    apiClient.patch(`/messages/${messageId}/revoke`),
 
   // ── Lấy danh sách ảnh và file đã gửi trong conversation ──────────
   getAttachments: (conversationId) =>
     apiClient.get(`/messages/${conversationId}/attachments`),
+
+  // ── Đánh dấu đã đọc ────────────────────────────────────────────────
+  markAsRead: (conversationId, messageId) =>
+    apiClient.post(`/messages/${conversationId}/read/${messageId}`),
 };
+
 
 export default messageApi;

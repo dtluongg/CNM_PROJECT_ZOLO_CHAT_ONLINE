@@ -59,8 +59,8 @@ const mapConversationItem = (item, dmOverrides) => {
 
 const BOTTOM_TABS = [
   { key: 'messages', icon: MessageCircle, label: 'Tin nhắn' },
-  { key: 'search',   icon: Search,        label: 'Tìm kiếm' },
-  { key: 'profile',  icon: User,          label: 'Hồ sơ'    },
+  { key: 'search', icon: Search, label: 'Tìm kiếm' },
+  { key: 'profile', icon: User, label: 'Hồ sơ' },
 ];
 
 function BottomTabBar({ activeTab, onTabChange, unreadTotal }) {
@@ -249,6 +249,71 @@ const Chat = () => {
       });
     });
 
+    // Thu hồi tin nhắn
+    socket.on('chat:message-revoked', ({ conversationId, messageId }) => {
+      // 1. Cập nhật list tin nhắn nếu đang mở conv này
+      setMessages(prev => {
+        const list = prev[conversationId] || [];
+        if (list.length === 0) return prev;
+        return {
+          ...prev,
+          [conversationId]: list.map(m =>
+            (m._id || m.id)?.toString() === messageId?.toString()
+              ? { ...m, revoked: true }
+              : m
+          )
+        };
+      });
+
+      // 2. Cập nhật preview ở sidebar
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        // Nếu tin nhắn bị thu hồi chính là tin nhắn cuối cùng hiển thị ở sidebar
+        // (Đây là một ước lượng đơn giản, DB đã cập nhật rồi nhưng socket này giúp update UI nhanh)
+        // Lưu ý: Nếu muốn chính xác 100% thì BE nên gửi kèm preview mới hoặc client tự check.
+        // Ở đây ta đơn giản là đổi preview thành "[Tin nhắn đã được thu hồi]"
+        return {
+          ...c,
+          lastMessage: '[Tin nhắn đã được thu hồi]'
+        };
+      }));
+    });
+
+    // Chỉnh sửa tin nhắn
+    socket.on('chat:message-edited', ({ conversationId, message }) => {
+      const msg = normalizeMsg(message);
+
+      // 1. Cập nhật list tin nhắn - Sử dụng MERGE logic
+      setMessages(prev => {
+        const list = prev[conversationId] || [];
+        if (list.length === 0) return prev;
+        return {
+          ...prev,
+          [conversationId]: list.map(m =>
+            (m._id || m.id)?.toString() === msg._id?.toString()
+              ? { ...m, ...msg } // Merge để giữ lại reactions/myReaction
+              : m
+          )
+        };
+      });
+
+      // 2. Cập nhật preview ở sidebar
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        return {
+          ...c,
+          lastMessage: msg.content,
+        };
+      }));
+    });
+
+    // Reset unread count khi bản thân đọc tin ở thiết bị khác hoặc qua API
+    socket.on('chat:unread-reset', ({ conversationId }) => {
+      setConversations(prev => prev.map(c =>
+        c.id === conversationId ? { ...c, unread: 0 } : c
+      ));
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
@@ -322,7 +387,7 @@ const Chat = () => {
     const myAvatar = currentUser?.avatar || null;
 
     try {
-      if (payload.type === 'text') {
+      if (payload.type === 'text' && !payload.isEdit) {
         const { content } = payload;
         if (!content?.trim()) return;
 
@@ -354,6 +419,31 @@ const Chat = () => {
           c.id === convId ? { ...c, lastMessage: content.trim(), time: real.time } : c
         ));
 
+      } else if (payload.isEdit && payload.type === 'text') {
+        const { content, messageId } = payload;
+        if (!content?.trim()) return;
+
+        // Gọi API sửa
+        const res = await messageApi.editMessage(messageId, content.trim());
+        const real = normalizeMsg(res.data.data);
+
+        // Cập nhật messages state - Sử dụng MERGE logic
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          return {
+            ...prev,
+            [convId]: list.map(m =>
+              (m._id || m.id)?.toString() === messageId?.toString()
+                ? { ...m, ...real } // Merge để giữ lại reactions
+                : m
+            )
+          };
+        });
+
+        // Cập nhật preview sidebar
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: content.trim() } : c
+        ));
       } else if (payload.type === 'voice') {
         const { blob, duration } = payload;
         const fd = new FormData();
@@ -591,6 +681,10 @@ const Chat = () => {
             <ChatArea
               conversation={activeConversation}
               messages={activeMessages}
+              setMessages={(updater) => setMessages(prev => ({
+                ...prev,
+                [activeConversation?.id]: updater(prev[activeConversation?.id] || [])
+              }))}
               currentUserId={currentUserId}
               typingUser={activeTypingUser}
               onSendMessage={handleSendMessage}
@@ -661,6 +755,10 @@ const Chat = () => {
         <ChatArea
           conversation={activeConversation}
           messages={activeMessages}
+          setMessages={(updater) => setMessages(prev => ({
+            ...prev,
+            [activeConversation?.id]: updater(prev[activeConversation?.id] || [])
+          }))}
           currentUserId={currentUserId}
           typingUser={activeTypingUser}
           onSendMessage={handleSendMessage}

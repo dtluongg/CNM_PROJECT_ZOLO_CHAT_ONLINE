@@ -30,12 +30,30 @@ function fmtDuration(secs) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export default function MessageInput({ onSend, placeholder, isMobile, conversationId, socket }) {
+export default function MessageInput({ onSend, placeholder, isMobile, conversationId, socket, editingMessage, onCancelEdit }) {
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [focused, setFocused] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSec, setRecordingSec] = useState(0);
+
+  // Sync text when editingMessage changes
+  useEffect(() => {
+    if (editingMessage) {
+      setText(editingMessage.content || '');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, isMobile ? 100 : 128) + 'px';
+            textareaRef.current.focus();
+          }
+        }, 0);
+      }
+    } else {
+      setText('');
+    }
+  }, [editingMessage, isMobile]);
 
   const textareaRef      = useRef(null);
   const emojiPickerRef   = useRef(null);
@@ -77,7 +95,13 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
   const handleSend = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    onSend({ type: 'text', content: trimmed });
+    
+    if (editingMessage) {
+      onSend({ type: 'text', content: trimmed, isEdit: true, messageId: editingMessage._id || editingMessage.id });
+    } else {
+      onSend({ type: 'text', content: trimmed });
+    }
+
     setText('');
     setShowEmoji(false);
     if (textareaRef.current) {
@@ -279,9 +303,30 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
       background: isMobile ? 'var(--bg-secondary)' : 'transparent',
       borderTop: isMobile ? '1px solid var(--border)' : 'none',
     }}>
-      {/* Hidden file inputs – use opacity/position instead of display:none so iOS Safari allows programmatic .click() */}
-      <input ref={fileInputRef} type="file" style={{ position: 'absolute', opacity: 0, width: 0, height: 0, overflow: 'hidden' }} onChange={handleFileChange} />
-      <input ref={imageInputRef} type="file" accept="image/*" style={{ position: 'absolute', opacity: 0, width: 0, height: 0, overflow: 'hidden' }} onChange={handleImageChange} />
+      {/* Thanh hiển thị đang chỉnh sửa */}
+      {editingMessage && (
+        <div style={{
+          position: 'absolute', bottom: '100%', left: isMobile ? 0 : 16, right: isMobile ? 0 : 16,
+          background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderBottom: 'none',
+          borderRadius: isMobile ? 0 : '12px 12px 0 0', padding: '8px 12px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          fontSize: 12, animation: 'fadeInUp 0.15s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: 'var(--accent)', fontWeight: 700 }}>Đang chỉnh sửa tin nhắn</span>
+            <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
+              {editingMessage.content}
+            </span>
+          </div>
+          <button onClick={onCancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Hidden file inputs */}
+      <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileChange} />
+      <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} />
 
       {/* Emoji Picker */}
       {showEmoji && (
