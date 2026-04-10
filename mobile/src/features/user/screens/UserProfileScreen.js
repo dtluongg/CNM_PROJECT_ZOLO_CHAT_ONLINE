@@ -3,10 +3,10 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Image,
   ScrollView, ActivityIndicator, StatusBar, Alert,
 } from 'react-native';
-import apiClient from '../services/apiClient';
-import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
-import { useAuth } from '../context/AuthContext';
-import { usePresence } from '../context/PresenceContext';
+import apiClient from '../../../services/apiClient';
+import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../../../theme';
+import { useAuth } from '../../../context/AuthContext';
+import { usePresence } from '../../../context/PresenceContext';
 
 const Avatar = ({ name, avatar, size = 80 }) => {
   const bg = getAvatarColor(name);
