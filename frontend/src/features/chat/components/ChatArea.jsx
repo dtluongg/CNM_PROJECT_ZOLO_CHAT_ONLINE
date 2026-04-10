@@ -114,6 +114,7 @@
           {showHeader && !isMine && <Avatar name={msg.senderName} avatar={msg.avatar} size={isMobile ? 34 : 36} />}
         </div>
 
+<<<<<<< HEAD
         <div style={{
           maxWidth,
           display: 'flex', flexDirection: 'column',
@@ -155,6 +156,65 @@
                     onReact(msg, e);
                     setShowEmojiBar(false);
                   }}
+=======
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexDirection: isMine ? 'row-reverse' : 'row' }}>
+          {/* Bubble */}
+          <div style={{
+            background: isMine ? 'var(--bubble-self)' : 'var(--bubble-other)',
+            color: isMine ? '#fff' : 'var(--text-primary)',
+            padding: isMobile ? '9px 14px' : '8px 13px',
+            borderRadius: isMine
+              ? (showHeader ? '18px 4px 18px 18px' : '18px 4px 4px 18px')
+              : (showHeader ? '4px 18px 18px 18px' : '4px 18px 18px 4px'),
+            fontSize: isMobile ? 15 : 14,
+            lineHeight: 1.5,
+            wordBreak: 'break-word',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
+            maxWidth: '100%',
+          }}>
+            {msg.type === 'image' ? (
+              <img src={msg.payload?.url || msg.content} alt="attachment"
+                style={{ maxWidth: isMobile ? 220 : 260, maxHeight: 260, borderRadius: 8, display: 'block' }} />
+            ) : msg.type === 'voice' ? (
+              <audio
+                controls
+                src={msg.payload?.url}
+                style={{ maxWidth: isMobile ? 220 : 260, display: 'block', height: 36 }}
+              />
+            ) : msg.type === 'file' ? (
+              <a
+                href={msg.payload?.url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}
+              >
+                <Paperclip size={18} />
+                <span style={{ fontSize: 13, textDecoration: 'underline' }}>
+                  {msg.payload?.fileName || msg.content}
+                </span>
+              </a>
+            ) : msg.content}
+          </div>
+
+          {/* Desktop hover actions */}
+          {hover && !isMobile && (
+            <div style={{
+              display: 'flex', gap: 2,
+              background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+              borderRadius: 8, padding: '3px 6px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+              flexShrink: 0,
+            }}>
+              {[
+                { content: <ThumbsUp size={13} />, title: 'Thả cảm xúc' },
+                { content: <CornerUpLeft size={13} />, title: 'Trả lời' },
+                { content: <MoreHorizontal size={14} />, title: 'Thêm' },
+              ].map((btn, i) => (
+                <button key={i} title={btn.title}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '3px 5px', borderRadius: 4, color: 'var(--text-secondary)', lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.1s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+>>>>>>> origin/tuongvi-dev
                 >
                   {e}
                 </span>
@@ -312,6 +372,7 @@
               </div>
             )}
           </div>
+<<<<<<< HEAD
           {/* Hiển thị danh sách Emoji đã thả */}
           {msg.reactions && msg.reactions.length > 0 && (
             <div
@@ -319,6 +380,95 @@
                 e.stopPropagation();
                 // Logic để xem ai đã thả cảm xúc nếu cần
               }}
+=======
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TypingIndicator = ({ name }) => (
+  <div style={{ padding: '4px 16px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div style={{ background: 'var(--bubble-other)', padding: '10px 14px', borderRadius: '4px 16px 16px 16px', display: 'flex', alignItems: 'center', gap: 4 }}>
+      {[0,1,2].map(i => (
+        <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--text-muted)', display: 'inline-block', animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+      ))}
+    </div>
+    <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+      {name} đang nhập...
+    </span>
+  </div>
+);
+
+export default function ChatArea({
+  conversation, messages, currentUserId, typingUser, socket,
+  onSendMessage, onToggleRight, showRight, onBack, isMobile,
+}) {
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  if (!conversation) {
+    return (
+      <div style={{
+        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--bg-tertiary)', flexDirection: 'column', gap: 16,
+        padding: 24,
+      }}>
+        <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, color: 'var(--text-muted)' }}>
+          <MessageCircle size={40} />
+        </div>
+        <p style={{ color: 'var(--text-primary)', fontSize: 22, fontWeight: 800, margin: 0, textAlign: 'center' }}>Chào mừng đến ZoloChat</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0, textAlign: 'center', maxWidth: 280 }}>
+          Chọn một cuộc trò chuyện để bắt đầu nhắn tin
+        </p>
+      </div>
+    );
+  }
+
+  // Build display items
+  const displayItems = [];
+  messages.forEach((msg, i) => {
+    const prev = messages[i - 1];
+    const msgDate = msg.time?.split(' ')[0];
+    const prevDate = prev?.time?.split(' ')[0];
+    if (i === 0 || (msgDate && prevDate && msgDate !== prevDate && msg.time?.includes(' '))) {
+      if (msg.time?.includes(' ')) {
+        displayItems.push({ type: 'date', label: msgDate, key: `date-${i}` });
+      }
+    }
+    const sameGroup = prev && prev.senderId === msg.senderId && !prev.time?.includes(' ') && !msg.time?.includes(' ');
+    displayItems.push({ type: 'msg', msg, isMine: msg.senderId === currentUserId, showHeader: !sameGroup, key: msg._id || msg.id });
+  });
+
+  const onlineStatus = conversation.type === 'dm'
+    ? (conversation.online ? 'Online' : 'Offline')
+    : `${conversation.memberCount || conversation.members || 0} thành viên`;
+
+  return (
+    <div style={{
+      flex: 1, display: 'flex', flexDirection: 'column',
+      background: 'var(--bg-tertiary)', overflow: 'hidden', height: '100%',
+    }}>
+      {/* ── Header ── */}
+      <div style={{
+        height: isMobile ? 56 : 52,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: isMobile ? '0 8px 0 4px' : '0 16px',
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--bg-secondary)',
+        flexShrink: 0,
+        boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+        paddingTop: isMobile ? 'env(safe-area-inset-top, 0px)' : 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 10 }}>
+          {/* Back button (mobile) */}
+          {isMobile && onBack && (
+            <button
+              onClick={onBack}
+>>>>>>> origin/tuongvi-dev
               style={{
                 position: 'absolute',
                 bottom: -10, // Đẩy xuống dưới cạnh tin nhắn
@@ -418,11 +568,47 @@
               ))}
             </div>
           </div>
+<<<<<<< HEAD
         )}
+=======
+          <h2 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: isMobile ? 20 : 22, margin: '0 0 6px' }}>
+            {conversation.type === 'dm' ? conversation.name : `# ${conversation.name}`}
+          </h2>
+          <div style={{ marginBottom: 6 }}>
+            <span style={{
+              display: 'inline-block',
+              fontSize: 11,
+              fontWeight: 700,
+              color: 'var(--text-muted)',
+              padding: '3px 8px',
+              borderRadius: 999,
+              background: 'var(--bg-hover)',
+            }}>
+              {conversation.type === 'dm' ? 'Tin nhắn trực tiếp' : 'Nhóm chat'}
+            </span>
+          </div>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0, lineHeight: 1.5 }}>
+            {conversation.type === 'dm'
+              ? `Đây là nơi bắt đầu cuộc trò chuyện giữa bạn và ${conversation.name}.`
+              : `Đây là kênh đầu tiên của nhóm ${conversation.name}.`}
+          </p>
+        </div>
+
+        {/* Messages */}
+        {displayItems.map(item =>
+          item.type === 'date'
+            ? <DateDivider key={item.key} label={item.label} />
+            : <MessageBubble key={item.key} msg={item.msg} isMine={item.isMine} showHeader={item.showHeader} isMobile={isMobile} />
+        )}
+
+        {typingUser && <TypingIndicator name={typingUser.displayName} />}
+        <div ref={bottomRef} style={{ height: 8 }} />
+>>>>>>> origin/tuongvi-dev
       </div>
     );
   };
 
+<<<<<<< HEAD
   const TypingIndicator = ({ name }) => (
     <div style={{ padding: '4px 16px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
       <div style={{ background: 'var(--bubble-other)', padding: '10px 14px', borderRadius: '4px 16px 16px 16px', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -433,6 +619,21 @@
       <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
         {name} đang nhập...
       </span>
+=======
+      {/* ── Message Input ── */}
+      <MessageInput
+        onSend={onSendMessage}
+        placeholder={`Nhắn tin tới ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
+        isMobile={isMobile}
+        conversationId={conversation.id}
+        socket={socket}
+      />
+
+      <style>{`
+        @keyframes bounce { 0%,60%,100% { transform:translateY(0);opacity:.5; } 30% { transform:translateY(-5px);opacity:1; } }
+        @keyframes fadeInUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+      `}</style>
+>>>>>>> origin/tuongvi-dev
     </div>
   );
 

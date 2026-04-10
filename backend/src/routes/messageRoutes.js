@@ -6,10 +6,10 @@ const {
   sendGroupMessage,
 } = require("../controllers/messageController");
 
-// const {
-//   checkFriendship,
-//   checkGroupMembership,
-// } = require("../middlewares/friendMiddleware");
+const {
+  checkFriendship,
+  checkGroupMembership,
+} = require("../middlewares/friendMiddleware");
 
 const router = express.Router();
 console.log(sendDirectMessage, sendGroupMessage);

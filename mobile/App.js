@@ -1,44 +1,29 @@
 import 'react-native-url-polyfill/auto';
 import React from 'react';
 import { registerRootComponent } from 'expo';
-import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
+import { LogBox } from 'react-native';
 
-import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { AuthProvider } from './src/context/AuthContext';
+import { PresenceProvider } from './src/context/PresenceContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
-function ThemeSyncHandler() {
-  const { user } = useAuth();
-  const { syncTheme } = useTheme();
-
-  React.useEffect(() => {
-    if (user) {
-      syncTheme(user.themeName || 'dark', user.themeColors || null);
-    } else {
-      syncTheme('dark', null); // Reset khi đăng xuất
-    }
-  }, [user, syncTheme]);
-
-  return null;
-}
+LogBox.ignoreLogs(['Text strings must be rendered']);
 
 WebBrowser.maybeCompleteAuthSession();
 
 function App() {
   return (
+    // ✅ SafeAreaProvider tự động handle notch, status bar, bottom bar
     <SafeAreaProvider>
       <AuthProvider>
-        <ThemeProvider>
-          <ThemeSyncHandler />
+        <PresenceProvider>
           <AppNavigator />
-        </ThemeProvider>
+        </PresenceProvider>
       </AuthProvider>
-      <StatusBar style="auto" />
     </SafeAreaProvider>
   );
 }
 
-// SDK 54 không dùng Expo Router: phải gọi registerRootComponent thủ công
 registerRootComponent(App);

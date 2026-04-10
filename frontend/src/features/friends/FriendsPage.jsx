@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import friendApi from './api/friendApi';
+import conversationApi from '../chat/api/conversationApi';
 
 const FriendsPage = () => {
+    const navigate = useNavigate();
     // ---- State ----
     const [activeTab, setActiveTab] = useState('friends_list'); // 'friends_list', 'friend_requests'
     const [subTab, setSubTab] = useState('received'); // 'received', 'sent' (for friend_requests)
@@ -16,6 +19,10 @@ const FriendsPage = () => {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [friendFilterText, setFriendFilterText] = useState('');
+    const [showCreateGroup, setShowCreateGroup] = useState(false);
+    const [groupName, setGroupName] = useState('');
+    const [selectedFriendIds, setSelectedFriendIds] = useState([]);
+    const [creatingChat, setCreatingChat] = useState(false);
 
     // ---- Fetch Data ----
     const fetchData = async () => {
@@ -129,6 +136,80 @@ const FriendsPage = () => {
         }
     };
 
+    const handleCreateDmFromFriend = async (friend) => {
+        try {
+            setCreatingChat(true);
+            const res = await conversationApi.createDmConversation(friend.friendId);
+            const conversationId = res?.data?.data?._id;
+
+            if (!conversationId) {
+                throw new Error('Không nhận được conversationId từ server');
+            }
+
+            navigate('/chat', {
+                state: {
+                    openConversationId: conversationId,
+                    peer: {
+                        id: friend.friendId,
+                        name: friend.displayName || friend.originalName || 'Đoạn chat trực tiếp',
+                        avatar: friend.avatar || '',
+                    },
+                },
+            });
+        } catch (error) {
+            alert('Lỗi: ' + (error.response?.data?.message || error.message));
+        } finally {
+            setCreatingChat(false);
+        }
+    };
+
+    const toggleSelectFriend = (friendId) => {
+        setSelectedFriendIds((prev) => {
+            if (prev.includes(friendId)) return prev.filter((id) => id !== friendId);
+            return [...prev, friendId];
+        });
+    };
+
+    const openCreateGroupModal = () => {
+        setGroupName('');
+        setSelectedFriendIds([]);
+        setShowCreateGroup(true);
+    };
+
+    const handleCreateGroupConversation = async () => {
+        if (!groupName.trim()) {
+            alert('Vui lòng nhập tên nhóm');
+            return;
+        }
+
+        if (selectedFriendIds.length < 2) {
+            alert('Vui lòng chọn tối thiểu 2 người bạn để tạo nhóm');
+            return;
+        }
+
+        try {
+            setCreatingChat(true);
+            const res = await conversationApi.createGroupConversation({
+                name: groupName.trim(),
+                memberIds: selectedFriendIds,
+            });
+
+            const conversationId = res?.data?.data?._id;
+            if (!conversationId) {
+                throw new Error('Không nhận được conversationId từ server');
+            }
+
+            setShowCreateGroup(false);
+            navigate('/chat', {
+                state: { openConversationId: conversationId },
+            });
+        } catch (error) {
+            alert('Lỗi: ' + (error.response?.data?.message || error.message));
+        } finally {
+            setCreatingChat(false);
+        }
+    };
+
     // ---- Grouping Alphabetically ----
     const filteredFriends = friends.filter(f => 
         (f.displayName || '').toLowerCase().includes(friendFilterText.toLowerCase())
@@ -210,8 +291,15 @@ const FriendsPage = () => {
 
     const renderFriendsList = () => (
         <div className="flex-1 flex flex-col h-full" style={{ backgroundColor: 'var(--bg-primary)' }}>
-            <div className="px-6 py-4 border-b flex items-center flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
+            <div className="px-6 py-4 border-b flex items-center justify-between gap-4 flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
                 <span className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Bạn bè ({friends.length})</span>
+                <button
+                    onClick={openCreateGroupModal}
+                    className="px-4 py-2 text-sm font-semibold rounded-lg"
+                    style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+                >
+                    Tạo nhóm chat
+                </button>
             </div>
             
             <div className="flex-1 overflow-y-auto px-6 py-4" style={{ backgroundColor: 'var(--bg-primary)' }}>
@@ -235,6 +323,14 @@ const FriendsPage = () => {
                                     
                                     {/* Action Box */}
                                     <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleCreateDmFromFriend(f); }}
+                                            disabled={creatingChat}
+                                            className="px-3 py-1.5 text-xs font-semibold rounded"
+                                            style={{ backgroundColor: 'var(--accent)', color: '#fff', opacity: creatingChat ? 0.7 : 1 }}
+                                        >
+                                            Nhắn tin
+                                        </button>
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); handleUpdateNickname(f.friendId); }}
                                             className="px-3 py-1.5 text-xs font-semibold rounded"
@@ -287,6 +383,7 @@ const FriendsPage = () => {
                          <p className="text-xs font-bold" style={{ color: 'var(--text-muted)' }}>KẾT QUẢ TÌM KIẾM</p>
                          {searchResults.map(u => {
                              const isFriend = friends.some(f => f.friendId === u._id);
+                             const friendData = friends.find(f => f.friendId === u._id);
                              const incomingReq = incomingReqs.find(req => req.fromUserId?._id === u._id);
                              const outgoingReq = outgoingReqs.find(req => req.toUserId?._id === u._id);
 
@@ -295,9 +392,16 @@ const FriendsPage = () => {
                              let btnStyle = { backgroundColor: 'var(--bg-hover)', color: 'var(--accent)' };
 
                              if (isFriend) {
-                                 btnText = 'Bạn bè';
-                                 btnAction = undefined;
-                                 btnStyle = { backgroundColor: 'transparent', color: 'var(--text-muted)' };
+                                 btnText = 'Nhắn tin';
+                                 btnAction = () => handleCreateDmFromFriend(
+                                     friendData || {
+                                         friendId: u._id,
+                                         displayName: u.displayName,
+                                         originalName: u.displayName,
+                                         avatar: u.avatar,
+                                     }
+                                 );
+                                 btnStyle = { backgroundColor: 'var(--accent)', color: '#fff' };
                              } else if (incomingReq) {
                                  btnText = 'Đồng ý';
                                  btnAction = () => handleAccept(incomingReq._id);
@@ -319,7 +423,7 @@ const FriendsPage = () => {
                                         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{u.email}</p>
                                     </div>
                                 </div>
-                                <button onClick={btnAction} disabled={isFriend} className={`px-4 py-1.5 rounded text-sm font-medium ${isFriend ? 'cursor-default opacity-50' : ''}`} style={btnStyle}>
+                                <button onClick={btnAction} className="px-4 py-1.5 rounded text-sm font-medium" style={btnStyle}>
                                     {btnText}
                                 </button>
                              </div>
@@ -414,6 +518,90 @@ const FriendsPage = () => {
             {renderSidebar()}
             {activeTab === 'friends_list' && renderFriendsList()}
             {activeTab === 'friend_requests' && renderFriendRequests()}
+
+            {showCreateGroup && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget && !creatingChat) {
+                            setShowCreateGroup(false);
+                        }
+                    }}
+                >
+                    <div className="w-full max-w-xl rounded-xl border p-5 max-h-[80vh] flex flex-col" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+                        <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Tạo nhóm chat</h3>
+
+                        <input
+                            type="text"
+                            placeholder="Nhập tên nhóm..."
+                            value={groupName}
+                            onChange={(e) => setGroupName(e.target.value)}
+                            className="w-full mb-4 p-2.5 rounded-lg border text-sm outline-none"
+                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                        />
+
+                        <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+                            Chọn bạn bè ({selectedFriendIds.length}) - tối thiểu 2 người
+                        </p>
+
+                        <div className="flex-1 overflow-y-auto space-y-2 mb-4 pr-1">
+                            {filteredFriends.length === 0 && (
+                                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Không có bạn bè để chọn.</p>
+                            )}
+
+                            {filteredFriends.map((f) => {
+                                const checked = selectedFriendIds.includes(f.friendId);
+                                return (
+                                    <label
+                                        key={f.friendshipId}
+                                        className="flex items-center justify-between gap-3 rounded-lg border p-3 cursor-pointer"
+                                        style={{
+                                            borderColor: checked ? 'var(--accent)' : 'var(--border)',
+                                            backgroundColor: checked ? 'var(--bg-hover)' : 'var(--bg-primary)',
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => toggleSelectFriend(f.friendId)}
+                                            />
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{f.displayName}</p>
+                                                <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{f.email}</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                );
+                            })}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2">
+                            <button
+                                onClick={() => setShowCreateGroup(false)}
+                                disabled={creatingChat}
+                                className="px-4 py-2 text-sm font-semibold rounded-lg"
+                                style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)', opacity: creatingChat ? 0.7 : 1 }}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={handleCreateGroupConversation}
+                                disabled={creatingChat || !groupName.trim() || selectedFriendIds.length < 2}
+                                className="px-4 py-2 text-sm font-semibold rounded-lg"
+                                style={{
+                                    backgroundColor: 'var(--accent)',
+                                    color: '#fff',
+                                    opacity: (creatingChat || !groupName.trim() || selectedFriendIds.length < 2) ? 0.6 : 1,
+                                }}
+                            >
+                                {creatingChat ? 'Đang tạo...' : 'Tạo nhóm'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

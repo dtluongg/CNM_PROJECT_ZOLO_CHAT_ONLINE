@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { ArrowLeft, Copy, Check, MessageCircle, Mail, AtSign, Calendar, UserPlus, Phone, ExternalLink, Shield } from 'lucide-react';
 import userApi from './api/userApi';
+import friendApi from '../friends/api/friendApi';
+import conversationApi from '../chat/api/conversationApi';
 import { usePresence } from '../../context/PresenceContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -76,6 +78,13 @@ export default function UserProfilePage() {
   const [error, setError] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [activeTab, setActiveTab] = useState('info'); // 'info' | 'qr'
+  const [friendState, setFriendState] = useState({
+    relation: 'none', // none | friend | incoming | outgoing
+    incomingRequestId: null,
+    outgoingRequestId: null,
+  });
+  const [friendActionLoading, setFriendActionLoading] = useState(false);
+  const [messageLoading, setMessageLoading] = useState(false);
 
   const profileLink = `${window.location.origin}/user/${userId}`;
   const isOwnProfile = me?._id === userId || me?.id === userId;
@@ -89,10 +98,111 @@ export default function UserProfilePage() {
       .finally(() => setLoading(false));
   }, [userId]);
 
+  const fetchFriendState = async () => {
+    if (!userId || isOwnProfile) return;
+
+    try {
+      const [friendRes, incomingRes, outgoingRes] = await Promise.all([
+        friendApi.getFriendList().catch(() => ({ data: { success: false } })),
+        friendApi.getIncomingRequests().catch(() => ({ data: { success: false } })),
+        friendApi.getOutgoingRequests().catch(() => ({ data: { success: false } })),
+      ]);
+
+      const friends = friendRes.data?.success ? (friendRes.data.data || []) : [];
+      const incoming = incomingRes.data?.success ? (incomingRes.data.data || []) : [];
+      const outgoing = outgoingRes.data?.success ? (outgoingRes.data.data || []) : [];
+
+      const isFriend = friends.some((f) => f.friendId === userId);
+      if (isFriend) {
+        setFriendState({ relation: 'friend', incomingRequestId: null, outgoingRequestId: null });
+        return;
+      }
+
+      const incomingReq = incoming.find((r) => r.fromUserId?._id === userId);
+      if (incomingReq) {
+        setFriendState({ relation: 'incoming', incomingRequestId: incomingReq._id, outgoingRequestId: null });
+        return;
+      }
+
+      const outgoingReq = outgoing.find((r) => r.toUserId?._id === userId);
+      if (outgoingReq) {
+        setFriendState({ relation: 'outgoing', incomingRequestId: null, outgoingRequestId: outgoingReq._id });
+        return;
+      }
+
+      setFriendState({ relation: 'none', incomingRequestId: null, outgoingRequestId: null });
+    } catch {
+      setFriendState({ relation: 'none', incomingRequestId: null, outgoingRequestId: null });
+    }
+  };
+
+  useEffect(() => {
+    fetchFriendState();
+  }, [userId, isOwnProfile]);
+
+  const handleFriendAction = async () => {
+    if (!userId || isOwnProfile) return;
+
+    try {
+      setFriendActionLoading(true);
+
+      if (friendState.relation === 'none') {
+        await friendApi.sendRequest(userId);
+      } else if (friendState.relation === 'incoming' && friendState.incomingRequestId) {
+        await friendApi.acceptRequest(friendState.incomingRequestId);
+      } else if (friendState.relation === 'outgoing' && friendState.outgoingRequestId) {
+        await friendApi.cancelRequest(friendState.outgoingRequestId);
+      }
+
+      await fetchFriendState();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Không thể thực hiện thao tác kết bạn');
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+
+  const handleCreateDm = async () => {
+    if (!userId || !profile) return;
+
+    try {
+      setMessageLoading(true);
+      const res = await conversationApi.createDmConversation(userId);
+      const conversationId = res?.data?.data?._id;
+
+      if (!conversationId) {
+        throw new Error('Không nhận được conversationId từ server');
+      }
+
+      navigate('/chat', {
+        state: {
+          openConversationId: conversationId,
+          peer: {
+            id: userId,
+            name: profile.displayName,
+            avatar: profile.avatar || '',
+          },
+        },
+      });
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Không thể tạo đoạn chat');
+    } finally {
+      setMessageLoading(false);
+    }
+  };
+
+  const friendButtonLabel =
+    friendState.relation === 'friend' ? 'Bạn bè' :
+    friendState.relation === 'incoming' ? 'Đồng ý kết bạn' :
+    friendState.relation === 'outgoing' ? 'Thu hồi lời mời' :
+    'Kết bạn';
+
   const isOnline = isUserOnline(userId);
   const presStatus = getPresenceStatus(userId);
-  const displayStatus = presStatus || (isOnline ? 'online' : profile?.status || 'offline');
-  const statusInfo = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.offline;
+  const displayStatus = isOnline
+    ? (presStatus || 'online')      // Online → hiện presence status
+    : 'offline';                     // Offline → luôn "offline"
+    const statusInfo = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.offline;
   const accentColor = profile?.usernameColor || getAvatarColor(profile?.displayName);
 
   const handleCopyLink = () => {
@@ -255,37 +365,49 @@ export default function UserProfilePage() {
           {!isOwnProfile && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
               <button
-                onClick={() => navigate('/chat')}
+                onClick={handleCreateDm}
+                disabled={messageLoading}
                 style={{
                   flex: 1, minWidth: 100,
                   background: 'var(--accent)', color: '#fff', border: 'none',
                   borderRadius: 10, padding: '11px 12px', cursor: 'pointer',
                   fontWeight: 700, fontSize: 13,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                  transition: 'background 0.12s',
+                  transition: 'background 0.12s', opacity: messageLoading ? 0.7 : 1,
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-hover)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'var(--accent)'}
               >
                 <MessageCircle size={15} />
-                Nhắn tin
+                {messageLoading ? 'Đang mở chat...' : 'Nhắn tin'}
               </button>
               <button
-                onClick={() => alert('Tính năng kết bạn sắp ra mắt!')}
+                onClick={handleFriendAction}
+                disabled={friendActionLoading || friendState.relation === 'friend'}
                 style={{
                   flex: 1, minWidth: 100,
-                  background: 'rgba(88,101,242,0.15)', color: '#5865f2',
-                  border: '1.5px solid rgba(88,101,242,0.35)',
+                  background: friendState.relation === 'friend' ? 'var(--bg-tertiary)' : 'rgba(88,101,242,0.15)',
+                  color: friendState.relation === 'friend' ? 'var(--text-muted)' : '#5865f2',
+                  border: friendState.relation === 'friend' ? '1.5px solid var(--border)' : '1.5px solid rgba(88,101,242,0.35)',
                   borderRadius: 10, padding: '11px 12px', cursor: 'pointer',
                   fontWeight: 700, fontSize: 13,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                   transition: 'background 0.12s',
+                  opacity: friendActionLoading ? 0.7 : 1,
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(88,101,242,0.25)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(88,101,242,0.15)'}
+                onMouseEnter={e => {
+                  if (friendState.relation !== 'friend') {
+                    e.currentTarget.style.background = 'rgba(88,101,242,0.25)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (friendState.relation !== 'friend') {
+                    e.currentTarget.style.background = 'rgba(88,101,242,0.15)';
+                  }
+                }}
               >
                 <UserPlus size={15} />
-                Kết bạn
+                {friendActionLoading ? 'Đang xử lý...' : friendButtonLabel}
               </button>
               <button
                 onClick={() => alert('Tính năng gọi điện sắp ra mắt!')}

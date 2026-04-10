@@ -158,7 +158,7 @@ const IconBtn = ({ icon: Icon, onClick, title, size = 16, danger = false }) => {
 
 export default function LeftSidebar({
   conversations, activeConv, onSelectConv,
-  onOpenSettings, onOpenSearch, isMobile = false,
+  onOpenSettings, onOpenSearch, onOpenCreateGroup, isMobile = false,
 }) {
   const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
@@ -328,7 +328,7 @@ export default function LeftSidebar({
         ))}
 
         {/* Groups section */}
-        {groups.length > 0 && (
+        {(groups.length > 0 || !collapsed) && (
           <>
             {!collapsed && (
               <div style={{
@@ -339,7 +339,7 @@ export default function LeftSidebar({
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
                   Nhóm ({groups.length})
                 </span>
-                {!isMobile && <IconBtn icon={Plus} title="Tạo nhóm" size={14} />}
+                {!isMobile && <IconBtn icon={Plus} title="Tạo nhóm" size={14} onClick={onOpenCreateGroup} />}
               </div>
             )}
             {collapsed && <div style={{ height: 1, background: 'var(--border)', margin: '8px 10px' }} />}
