@@ -10,8 +10,8 @@ import { MOCK_CONVERSATIONS, MOCK_MESSAGES } from '../../data/mockData';
 
 const BOTTOM_TABS = [
   { key: 'messages', icon: MessageCircle, label: 'Tin nhắn' },
-  { key: 'search',   icon: Search,        label: 'Tìm kiếm' },
-  { key: 'profile',  icon: User,          label: 'Hồ sơ'    },
+  { key: 'search', icon: Search, label: 'Tìm kiếm' },
+  { key: 'profile', icon: User, label: 'Hồ sơ' },
 ];
 
 function BottomTabBar({ activeTab, onTabChange, unreadTotal }) {
@@ -115,6 +115,8 @@ const Chat = () => {
       content: text.trim(),
       time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       type: 'text',
+      reactions: [],
+      seenBy: []
     };
     setMessages(prev => ({
       ...prev,
