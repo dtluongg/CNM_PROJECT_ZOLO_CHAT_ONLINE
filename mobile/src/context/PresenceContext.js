@@ -1,117 +1,85 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { AppState } from 'react-native';
-import { supabase } from '../config/supabase';
+import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+
+// Reuse the same URL logic as MessageScreen
+const SOCKET_URL =
+  process.env.EXPO_PUBLIC_SOCKET_URL ||
+  (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.88.135:2026/backend/api')
+    .replace('/backend/api', '');
 
 const PresenceContext = createContext();
 
 export const PresenceProvider = ({ children }) => {
-  const { user } = useAuth();
-  const [presenceMap, setPresenceMap] = useState({});
-
-  const channelRef = useRef(null);
-  const heartbeatRef = useRef(null);
-
-  const syncState = useCallback((channel) => {
-    const state = channel.presenceState();
-    const map = {};
-
-    Object.entries(state).forEach(([key, presences]) => {
-      if (!presences || presences.length === 0) return;
-      const p = presences[0];
-
-      const age = Date.now() - new Date(p.online_at || 0).getTime();
-
-      if (age > 30000) return; // chỉ giữ tối đa 30 giây
-
-      map[key] = {
-        status: p.status || 'online',
-        online_at: p.online_at,
-      };
-    });
-
-    setPresenceMap(map);
-  }, []);
+  const { user, token } = useAuth();
+  const [onlineSet, setOnlineSet] = useState(new Set());
+  const socketRef = useRef(null);
 
   useEffect(() => {
-    if (!user?._id) {
-      setPresenceMap({});
+    if (!user?._id || !token) {
+      setOnlineSet(new Set());
       return;
     }
 
-    const channel = supabase.channel('presence:global');
+    const socket = io(SOCKET_URL, {
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
+    socketRef.current = socket;
 
-    channel
-      .on('presence', { event: '*' }, () => syncState(channel))
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Supabase Presence connected for', user._id);
-          await channel.track({
-            userId: String(user._id),
-            status: user.status || 'online',
-            online_at: new Date().toISOString(),
-          });
-        }
+    // On connect, request the full list of currently online users
+    socket.on('connect', () => {
+      socket.emit('presence:subscribe');
+    });
+
+    // Receive the full snapshot of online user IDs
+    socket.on('presence:online-list', ({ userIds }) => {
+      setOnlineSet(new Set(Array.isArray(userIds) ? userIds.map(String) : []));
+    });
+
+    // Incremental: a user just came online
+    socket.on('presence:online', ({ userId }) => {
+      setOnlineSet(prev => new Set([...prev, String(userId)]));
+    });
+
+    // Incremental: a user just went offline
+    socket.on('presence:offline', ({ userId }) => {
+      setOnlineSet(prev => {
+        const next = new Set(prev);
+        next.delete(String(userId));
+        return next;
       });
+    });
 
-    channelRef.current = channel;
-
-    // Heartbeat mạnh
-    heartbeatRef.current = setInterval(async () => {
-      if (channelRef.current && AppState.currentState === 'active') {
-        await channelRef.current.track({
-          userId: String(user._id),
-          status: user.status || 'online',
-          online_at: new Date().toISOString(),
-        });
-      }
-    }, 8000); // 8 giây
-
-    // AppState
-    const appStateListener = AppState.addEventListener('change', async (nextState) => {
-      if (!channelRef.current) return;
-
-      if (nextState === 'background' || nextState === 'inactive') {
-        console.log('📴 App background → untrack');
-        await channelRef.current.untrack();
-      } else if (nextState === 'active') {
-        console.log('📱 App foreground → track');
-        await channelRef.current.track({
-          userId: String(user._id),
-          status: user.status || 'online',
-          online_at: new Date().toISOString(),
-        });
+    // Reconnect when app comes back to foreground
+    const appSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && socketRef.current && !socketRef.current.connected) {
+        socketRef.current.connect();
       }
     });
 
     return () => {
-      clearInterval(heartbeatRef.current);
-      appStateListener.remove();
-      if (channelRef.current) {
-        channelRef.current.untrack();
-        supabase.removeChannel(channelRef.current);
-      }
+      appSub.remove();
+      socket.disconnect();
+      socketRef.current = null;
     };
-  }, [user?._id, user?.status]);
+  }, [user?._id, token]);
 
-  const isUserOnline = useCallback((userId) => {
-    const data = presenceMap[String(userId)];
-    if (!data || data.status === 'invisible') return false;
-    const age = Date.now() - new Date(data.online_at).getTime();
-    return age < 30000; // 30 giây
-  }, [presenceMap]);
+  const isUserOnline = useCallback(
+    (userId) => onlineSet.has(String(userId)),
+    [onlineSet],
+  );
 
-  const getPresenceStatus = useCallback((userId) => {
-    const data = presenceMap[String(userId)];
-    if (!data || data.status === 'invisible') return null;
-    return data.status;
-  }, [presenceMap]);
+  const getPresenceStatus = useCallback(
+    (userId) => (onlineSet.has(String(userId)) ? 'online' : null),
+    [onlineSet],
+  );
 
   return (
-    <PresenceContext.Provider value={{
-      isUserOnline,
-      getPresenceStatus,
-    }}>
+    <PresenceContext.Provider value={{ isUserOnline, getPresenceStatus }}>
       {children}
     </PresenceContext.Provider>
   );

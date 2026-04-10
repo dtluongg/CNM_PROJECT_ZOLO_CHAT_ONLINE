@@ -4,6 +4,7 @@ import {
   ScrollView, ActivityIndicator, StatusBar, Alert,
 } from 'react-native';
 import apiClient from '../../../services/apiClient';
+import conversationApi from '../../chat/api/conversationApi';
 import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
 import { usePresence } from '../../../context/PresenceContext';
@@ -23,8 +24,9 @@ export default function UserProfileScreen({ route, navigation }) {
   const { user: authUser } = useAuth();
   const { isUserOnline, getPresenceStatus } = usePresence();
 
-  const [profile, setProfile] = useState(route.params?.user || null);
-  const [loading, setLoading] = useState(!route.params?.user);
+  const [profile, setProfile]         = useState(route.params?.user || null);
+  const [loading, setLoading]         = useState(!route.params?.user);
+  const [messaging, setMessaging]     = useState(false);
 
   const userId = route.params?.userId || route.params?.user?._id;
 
@@ -59,22 +61,35 @@ export default function UserProfileScreen({ route, navigation }) {
     }
   };
 
-  const handleMessage = () => {
-    if (!profile) return;
-    const si = getLiveStatusInfo(profile);
-    navigation.navigate('Message', {
-      conversation: {
-        id: profile._id,
-        name: profile.displayName || profile.username || 'Người dùng',
-        avatar: profile.avatar,
-        type: 'dm',
-        status: si.status || 'offline',
-        online: isUserOnline(profile._id),
-        otherUserId: profile._id,
-        usernameColor: profile.usernameColor,
-        lastMessage: '', time: '', unread: 0,
-      },
-    });
+  const handleMessage = async () => {
+    if (!profile || messaging) return;
+    setMessaging(true);
+    try {
+      // Get or create the real DM conversation with this user.
+      // Using profile._id directly as conversation id causes 403 because
+      // it's a user id, not a conversation id.
+      const res  = await conversationApi.createDm(profile._id);
+      const conv = res.data.data;
+      const si   = getLiveStatusInfo(profile);
+      navigation.navigate('Message', {
+        conversation: {
+          id:           conv._id,
+          name:         profile.displayName || profile.username || 'Người dùng',
+          avatar:       profile.avatar,
+          type:         'dm',
+          status:       si.status || 'offline',
+          online:       isUserOnline(profile._id),
+          otherUserId:  profile._id,
+          usernameColor: profile.usernameColor,
+          lastMessage: '', time: '', unread: 0,
+        },
+      });
+    } catch (err) {
+      console.error('handleMessage error:', err);
+      Alert.alert('Lỗi', 'Không thể mở cuộc trò chuyện. Vui lòng thử lại.');
+    } finally {
+      setMessaging(false);
+    }
   };
 
   if (loading) {
@@ -140,7 +155,7 @@ export default function UserProfileScreen({ route, navigation }) {
         {/* Action buttons */}
         {!isOwn ? (
           <View style={s.actionRow}>
-            <ActionBtn icon="💬" label="Nhắn tin" onPress={handleMessage} primary />
+            <ActionBtn icon={messaging ? '⏳' : '💬'} label={messaging ? 'Đang mở...' : 'Nhắn tin'} onPress={handleMessage} primary />
             <ActionBtn icon="🤝" label="Kết bạn" onPress={() => Alert.alert('Kết bạn', `Đã gửi lời mời đến ${profile.displayName}!`)} />
             <ActionBtn icon="📞" label="Gọi điện" onPress={() => Alert.alert('Gọi điện', 'Tính năng sẽ sớm ra mắt!')} />
           </View>
