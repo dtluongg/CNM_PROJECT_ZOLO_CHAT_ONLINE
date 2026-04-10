@@ -1,0 +1,921 @@
+﻿{
+  "info": {
+    "_postman_id": "5b5bb7b2-4d5d-4f84-8d6d-4a81f0a6f5d3",
+    "name": "ZoloChat - Conversations API",
+    "description": "Collection test cho cÃ¡c API Conversations má»›i hoÃ n thiá»‡n.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Signin (Get Access Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData && jsonData.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', jsonData.accessToken);",
+                  "}",
+                  "if (jsonData && jsonData.refreshToken) {",
+                  "    pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{loginUsername}}\",\n  \"password\": \"{{loginPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/auth/signin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "auth",
+                "signin"
+              ]
+            },
+            "description": "ÄÄƒng nháº­p tÃ i khoáº£n local vÃ  tá»± lÆ°u accessToken Ä‘á»ƒ dÃ¹ng cho cÃ¡c request conversations."
+          },
+          "response": []
+        },
+        {
+          "name": "Signin (Get Access Token Alt)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData && jsonData.accessToken) {",
+                  "    pm.collectionVariables.set('accessTokenAlt', jsonData.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{loginUsernameAlt}}\",\n  \"password\": \"{{loginPasswordAlt}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/auth/signin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "auth",
+                "signin"
+              ]
+            },
+            "description": "ÄÄƒng nháº­p tÃ i khoáº£n phá»¥ Ä‘á»ƒ test quyá»n owner/admin/member. LÆ°u vÃ o accessTokenAlt."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Conversations",
+      "item": [
+        {
+          "name": "Create DM Conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 or 201', function () {",
+                  "    pm.expect([200, 201]).to.include(pm.response.code);",
+                  "});",
+                  "",
+                  "const data = pm.response.json().data;",
+                  "if (data && data._id) {",
+                  "    pm.collectionVariables.set('id', data._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetUserId\": \"{{targetUserId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/dm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "dm"
+              ]
+            },
+            "description": "Táº¡o DM giá»¯a user hiá»‡n táº¡i vÃ  targetUserId theo endpoint chuáº©n /conversations/dm."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Group Conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.expect(pm.response.code).to.eql(201);",
+                  "});",
+                  "",
+                  "const data = pm.response.json().data;",
+                  "if (data && data._id) {",
+                  "    pm.collectionVariables.set('id', data._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Team Backend\",\n  \"avatar\": \"\",\n  \"memberIds\": [\n    \"{{targetUserId}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/group",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "group"
+              ]
+            },
+            "description": "Táº¡o nhÃ³m má»›i theo endpoint chuáº©n /conversations/group, user hiá»‡n táº¡i lÃ  owner."
+          },
+          "response": []
+        },
+        {
+          "name": "List Conversations (Default: exclude archived)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations"
+              ]
+            },
+            "description": "Láº¥y danh sÃ¡ch conversation chÆ°a archive (máº·c Ä‘á»‹nh)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Conversations (archive=only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations?archive=only",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations"
+              ],
+              "query": [
+                {
+                  "key": "archive",
+                  "value": "only"
+                }
+              ]
+            },
+            "description": "Láº¥y danh sÃ¡ch conversation Ä‘Ã£ archive."
+          },
+          "response": []
+        },
+        {
+          "name": "List Conversations (archive=all)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations?archive=all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations"
+              ],
+              "query": [
+                {
+                  "key": "archive",
+                  "value": "all"
+                }
+              ]
+            },
+            "description": "Láº¥y táº¥t cáº£ conversation (bao gá»“m archive vÃ  khÃ´ng archive)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Conversation Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}"
+              ]
+            },
+            "description": "Láº¥y chi tiáº¿t conversation theo id."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Group Info",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Team Backend Updated\",\n  \"avatar\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}"
+              ]
+            },
+            "description": "Cáº­p nháº­t name/avatar cho group conversation."
+          },
+          "response": []
+        },
+        {
+          "name": "Lock Conversation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isLocked\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/lock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "lock"
+              ]
+            },
+            "description": "KhÃ³a group conversation."
+          },
+          "response": []
+        },
+        {
+          "name": "Unlock Conversation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isLocked\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/lock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "lock"
+              ]
+            },
+            "description": "Má»Ÿ khÃ³a group conversation."
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Conversation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isArchived\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/archive",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "archive"
+              ]
+            },
+            "description": "Archive conversation theo user hiá»‡n táº¡i."
+          },
+          "response": []
+        },
+        {
+          "name": "Unarchive Conversation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isArchived\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/archive",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "archive"
+              ]
+            },
+            "description": "Bá» archive conversation theo user hiá»‡n táº¡i."
+          },
+          "response": []
+        },
+        {
+          "name": "List Group Members",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "members"
+              ]
+            },
+            "description": "Láº¥y danh sÃ¡ch thÃ nh viÃªn Ä‘ang active cá»§a nhÃ³m."
+          },
+          "response": []
+        },
+        {
+          "name": "List Group Members (includeLeft=true)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/members?includeLeft=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "members"
+              ],
+              "query": [
+                {
+                  "key": "includeLeft",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Láº¥y cáº£ thÃ nh viÃªn Ä‘Ã£ rá»i nhÃ³m."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Member (Single)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberUserId\": \"{{userId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "members"
+              ]
+            },
+            "description": "ThÃªm 1 thÃ nh viÃªn vÃ o nhÃ³m."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Members (Multiple)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberUserIds\": [\n    \"{{userId}}\",\n    \"{{userId2}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "members"
+              ]
+            },
+            "description": "ThÃªm nhiá»u thÃ nh viÃªn vÃ o nhÃ³m trong má»™t láº§n gá»i API."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Member (Role/Permissions)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"member\",\n  \"canSendMessages\": true,\n  \"canInviteMembers\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/members/{{userId}}/role",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "members",
+                "{{userId}}",
+                "role"
+              ]
+            },
+            "description": "Cáº­p nháº­t role/quyá»n Ä‘áº·c biá»‡t theo endpoint chuáº©n PATCH /:id/members/:userId/role."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Member (Permissions Only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"canSendMessages\": false,\n  \"canInviteMembers\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/members/{{userId}}/role",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "members",
+                "{{userId}}",
+                "role"
+              ]
+            },
+            "description": "Cáº­p nháº­t quyá»n Ä‘áº·c biá»‡t cho 1 member theo endpoint chuáº©n PATCH /:id/members/:userId/role."
+          },
+          "response": []
+        },
+        {
+          "name": "Kick Member",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/members/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "members",
+                "{{userId}}"
+              ]
+            },
+            "description": "Kick thÃ nh viÃªn theo policy: owner kick admin/member, admin chá»‰ kick member."
+          },
+          "response": []
+        },
+        {
+          "name": "Transfer Owner",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newOwnerUserId\": \"{{newOwnerUserId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/transfer-owner",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "transfer-owner"
+              ]
+            },
+            "description": "Owner chuyá»ƒn quyá»n owner cho thÃ nh viÃªn khÃ¡c trong cÃ¹ng nhÃ³m."
+          },
+          "response": []
+        },
+        {
+          "name": "Leave Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/leave",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "leave"
+              ]
+            },
+            "description": "ThÃ nh viÃªn tá»± rá»i nhÃ³m. Owner cáº§n chuyá»ƒn quyá»n trÆ°á»›c náº¿u nhÃ³m cÃ²n ngÆ°á»i khÃ¡c."
+          },
+          "response": []
+        },
+        {
+          "name": "Disband Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/conversations/{{id}}/disband",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backend",
+                "api",
+                "conversations",
+                "{{id}}",
+                "disband"
+              ]
+            },
+            "description": "Giáº£i tÃ¡n nhÃ³m (owner-only)."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "loginUsername",
+      "value": ""
+    },
+    {
+      "key": "loginPassword",
+      "value": ""
+    },
+    {
+      "key": "accessTokenAlt",
+      "value": ""
+    },
+    {
+      "key": "loginUsernameAlt",
+      "value": ""
+    },
+    {
+      "key": "loginPasswordAlt",
+      "value": ""
+    },
+    {
+      "key": "targetUserId",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "userId2",
+      "value": ""
+    },
+    {
+      "key": "newOwnerUserId",
+      "value": ""
+    },
+    {
+      "key": "id",
+      "value": ""
+    }
+  ]
+}
+
