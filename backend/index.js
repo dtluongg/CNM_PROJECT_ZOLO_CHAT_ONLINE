@@ -33,6 +33,8 @@ const callRouter         = require('./src/routes/callRouter');
 const voiceRouter        = require('./src/routes/voiceRouter');
 const conversationRouter = require('./src/routes/conversationRouter');
 const messageRouter      = require('./src/routes/messageRouter');
+const reactionRouter     = require('./src/routes/reactionRouter');
+
 
 app.use('/backend/api/users',         userRouter);
 app.use('/backend/api/auth',          authRouter);
@@ -42,6 +44,8 @@ app.use('/backend/api/calls',         callRouter);
 app.use('/backend/api/voice',         voiceRouter);
 app.use('/backend/api/conversations', conversationRouter);
 app.use('/backend/api/messages',      messageRouter);
+app.use('/backend/api/reactions',     reactionRouter);
+
 
 // ── SOCKET ──
 const { initSocket } = require('./src/socket/socketManager');

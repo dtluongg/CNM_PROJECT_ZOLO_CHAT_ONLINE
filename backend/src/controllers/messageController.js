@@ -11,7 +11,9 @@ const Message                = require('../models/messageModel');
 const Attachment             = require('../models/attachmentModel');
 const Conversation           = require('../models/conversationModel');
 const ConversationMember     = require('../models/conversationMemberModel');
+const MessageReaction        = require('../models/messageReactionModel');
 const { getIO }              = require('../socket/socketManager');
+
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -209,20 +211,41 @@ const getMessages = async (req, res) => {
             .populate('senderId', 'displayName avatar')
             .lean();
 
+        const msgIds = raw.map(m => m._id);
+        const allReactions = await MessageReaction.find({ messageId: { $in: msgIds } }).lean();
+
         // Đảo ngược để hiển thị theo chiều thời gian (cũ → mới)
-        const messages = raw.reverse().map(msg => ({
-            _id:              msg._id,
-            conversationId:   msg.conversationId,
-            senderId:         msg.senderId?._id    || msg.senderId,
-            senderName:       msg.senderId?.displayName || 'Unknown',
-            avatar:           msg.senderId?.avatar  || null,
-            type:             msg.type,
-            content:          msg.content,
-            payload:          msg.payload || {},
-            replyToMessageId: msg.replyToMessageId || null,
-            edited:           msg.edited,
-            createdAt:        msg.createdAt,
-        }));
+        const messages = raw.reverse().map(msg => {
+            // Lọc reaction của tin nhắn này
+            const reactions = allReactions.filter(r => r.messageId.toString() === msg._id.toString());
+            
+            // Gom nhóm reaction: { "❤️": 2, "👍": 5 }
+            const reactionCounts = reactions.reduce((acc, curr) => {
+                acc[curr.emoji] = (acc[curr.emoji] || 0) + 1;
+                return acc;
+            }, {});
+
+            // Reaction của chính user đang gọi API
+            const myReaction = reactions.find(r => r.userId.toString() === userId)?.emoji || null;
+
+            return {
+                _id:              msg._id,
+                conversationId:   msg.conversationId,
+                senderId:         msg.senderId?._id    || msg.senderId,
+                senderName:       msg.senderId?.displayName || 'Unknown',
+                avatar:           msg.senderId?.avatar  || null,
+                type:             msg.type,
+                content:          msg.content,
+                payload:          msg.payload || {},
+                replyToMessageId: msg.replyToMessageId || null,
+                edited:           msg.edited,
+                revoked:          msg.revoked, // Thêm revoked vào để FE xử lý UI
+                createdAt:        msg.createdAt,
+                reactions:        reactionCounts,
+                myReaction:       myReaction
+            };
+        });
+
 
         return res.status(200).json({ messages, hasMore: raw.length === limit });
     } catch (err) {
