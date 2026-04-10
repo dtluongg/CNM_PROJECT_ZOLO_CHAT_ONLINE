@@ -50,7 +50,8 @@ const MessageBubble = ({
   onRead,
   onShowReadDetails,
   conversationType,
-  currentUserId
+  currentUserId,
+  onAvatarClick,
 }) => {
   const observerRef = useRef(null);
 
@@ -111,7 +112,7 @@ const MessageBubble = ({
   useEffect(() => {
     if (isMine || msg.revoked || !onRead) return;
 
-    // Nếu chính mình đã đọc rồi thì không cần observe nữa 
+    // Nếu chính mình đã đọc rồi thì không cần observe nữa
     // (Kiểm tra xem currentUserId có trong readBy không)
     const iReadIt = msg.readBy?.some(r => r.userId === currentUserId);
     if (iReadIt) return;
@@ -187,9 +188,17 @@ const MessageBubble = ({
       onTouchEnd={handleTouchEnd}
       ref={observerRef}
     >
-      {/* Avatar */}
+      {/* Avatar — clickable to view profile */}
       <div style={{ width: isMobile ? 34 : 36, flexShrink: 0, marginTop: showHeader ? 2 : 0 }}>
-        {showHeader && !isMine && <Avatar name={msg.senderName} avatar={msg.avatar} size={isMobile ? 34 : 36} />}
+        {showHeader && !isMine && (
+          <div
+            onClick={() => onAvatarClick && onAvatarClick(msg.senderId)}
+            style={{ cursor: onAvatarClick ? 'pointer' : 'default' }}
+            title={onAvatarClick ? `Xem hồ sơ ${msg.senderName}` : undefined}
+          >
+            <Avatar name={msg.senderName} avatar={msg.avatar} size={isMobile ? 34 : 36} />
+          </div>
+        )}
       </div>
 
       <div style={{
@@ -549,7 +558,8 @@ export default function ChatArea({
   showRight,
   onBack,
   isMobile,
-  setMessages
+  setMessages,
+  onViewProfile,
 }) {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [reactionTypes, setReactionTypes] = useState([]);
@@ -892,6 +902,7 @@ export default function ChatArea({
               onShowReadDetails={handleShowReadDetails}
               conversationType={conversation.type}
               currentUserId={currentUserId}
+              onAvatarClick={onViewProfile}
             />
         )}
 

@@ -692,6 +692,7 @@ const Chat = () => {
               showRight={showRightSidebar}
               onBack={handleMobileBack}
               socket={socketRef.current}
+              onViewProfile={handleViewProfile}
               isMobile
             />
           </div>
@@ -765,6 +766,7 @@ const Chat = () => {
           onToggleRight={() => setShowRightSidebar(v => !v)}
           showRight={showRightSidebar}
           socket={socketRef.current}
+          onViewProfile={handleViewProfile}
         />
       </div>
 

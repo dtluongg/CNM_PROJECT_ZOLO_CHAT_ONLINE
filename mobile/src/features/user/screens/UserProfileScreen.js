@@ -71,15 +71,16 @@ export default function UserProfileScreen({ route, navigation }) {
       const res  = await conversationApi.createDm(profile._id);
       const conv = res.data.data;
       const si   = getLiveStatusInfo(profile);
-      navigation.navigate('Message', {
+      // Dùng push để luôn mở screen mới và load đúng lịch sử chat (kể cả lần 2+)
+      navigation.push('Message', {
         conversation: {
-          id:           conv._id,
+          id:           conv._id?.toString(),
           name:         profile.displayName || profile.username || 'Người dùng',
           avatar:       profile.avatar,
           type:         'dm',
           status:       si.status || 'offline',
           online:       isUserOnline(profile._id),
-          otherUserId:  profile._id,
+          otherUserId:  profile._id?.toString(),
           usernameColor: profile.usernameColor,
           lastMessage: '', time: '', unread: 0,
         },

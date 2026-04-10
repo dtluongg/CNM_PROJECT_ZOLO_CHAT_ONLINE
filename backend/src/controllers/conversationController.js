@@ -67,39 +67,34 @@ const requireConversationMember = async (conversationId, userId) => {
 };
 
 // Tìm DM đã tồn tại giữa 2 user để tránh tạo conversation trùng.
-// Logic: gom member theo conversationId, chỉ lấy conversation có đúng 2 người này.
+// Dùng approach đơn giản: tìm DM conversation mà cả 2 user đều là member.
 const findExistingDmConversation = async (userId, targetUserId) => {
-    const pairs = await ConversationMember.aggregate([
-        {
-            $match: {
-                userId: { $in: [toObjectId(userId), toObjectId(targetUserId)] },
-                leftAt: null,
-            },
-        },
-        {
-            $group: {
-                _id: '$conversationId',
-                members: { $addToSet: '$userId' },
-                count: { $sum: 1 },
-            },
-        },
-        {
-            $match: {
-                count: 2,
-                $expr: { $eq: [{ $size: '$members' }, 2] },
-            },
-        },
-    ]);
+    // Bước 1: Lấy tất cả conversationId của userId
+    const myMemberships = await ConversationMember.find({
+        userId: toObjectId(userId.toString()),
+    }).select('conversationId').lean();
 
-    if (!pairs.length) return null;
+    if (!myMemberships.length) return null;
 
-    const conversationIds = pairs.map((item) => item._id);
-    const conversation = await Conversation.findOne({
-        _id: { $in: conversationIds },
+    const myConvObjectIds = myMemberships.map((m) => m.conversationId);
+
+    // Bước 2: Trong các conversation trên, tìm conversation mà targetUser cũng là member
+    const sharedMemberships = await ConversationMember.find({
+        conversationId: { $in: myConvObjectIds },
+        userId: toObjectId(targetUserId.toString()),
+    }).select('conversationId').lean();
+
+    if (!sharedMemberships.length) return null;
+
+    const sharedConvIds = sharedMemberships.map((m) => m.conversationId);
+
+    // Bước 3: Lấy conversation type='dm' đầu tiên trong danh sách chung
+    const dmConversation = await Conversation.findOne({
+        _id: { $in: sharedConvIds },
         type: 'dm',
     });
 
-    return conversation;
+    return dmConversation || null;
 };
 
 // Tạo mới DM trong transaction: 1 conversation + 2 bản ghi member.

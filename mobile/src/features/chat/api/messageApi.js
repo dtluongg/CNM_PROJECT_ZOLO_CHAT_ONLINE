@@ -42,6 +42,10 @@ const messageApi = {
   uploadVoice: (formData) => apiClient.post('/voice/upload', formData, rnUploadConfig),
   uploadFile:  (formData) => apiClient.post('/uploads/file',  formData, rnUploadConfig),
   uploadImage: (formData) => apiClient.post('/uploads/image', formData, rnUploadConfig),
+
+  // Lấy ảnh & file đã chia sẻ trong conversation
+  getAttachments: (conversationId) =>
+    apiClient.get(`/messages/${conversationId}/attachments`),
 };
 
 export default messageApi;
