@@ -59,7 +59,7 @@ const messageApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   // ── Reaction APIs ────────────────────────────────────────────────
-  getReactionTypes: () => 
+  getReactionTypes: () =>
     apiClient.get('/reactions/types'),
 
   toggleReaction: (messageId, emoji) =>
@@ -67,6 +67,10 @@ const messageApi = {
 
   getMessageReactions: (messageId) =>
     apiClient.get(`/reactions/${messageId}`),
+
+  // ── Lấy danh sách ảnh và file đã gửi trong conversation ──────────
+  getAttachments: (conversationId) =>
+    apiClient.get(`/messages/${conversationId}/attachments`),
 };
 
 

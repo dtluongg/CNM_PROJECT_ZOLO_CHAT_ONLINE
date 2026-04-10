@@ -7,6 +7,7 @@ import { LogBox } from 'react-native';
 
 import { AuthProvider } from './src/context/AuthContext';
 import { PresenceProvider } from './src/context/PresenceContext';
+import { ThemeProvider } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
 LogBox.ignoreLogs(['Text strings must be rendered']);
@@ -18,9 +19,11 @@ function App() {
     // ✅ SafeAreaProvider tự động handle notch, status bar, bottom bar
     <SafeAreaProvider>
       <AuthProvider>
-        <PresenceProvider>
-          <AppNavigator />
-        </PresenceProvider>
+        <ThemeProvider>
+          <PresenceProvider>
+            <AppNavigator />
+          </PresenceProvider>
+        </ThemeProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

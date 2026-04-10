@@ -255,4 +255,57 @@ const getMessages = async (req, res) => {
     }
 };
 
-module.exports = { sendMessage, getMessages };
+// ═════════════════════════════════════════════════════════════════════════
+//  GET /backend/api/messages/:conversationId/attachments
+//  Lấy danh sách ảnh và file đã gửi trong conversation.
+//
+//  Response 200:
+//    { images: [...], files: [...] }
+// ═════════════════════════════════════════════════════════════════════════
+const getAttachments = async (req, res) => {
+    try {
+        const userId             = req.user._id.toString();
+        const { conversationId } = req.params;
+
+        if (!isValidId(conversationId)) {
+            return res.status(400).json({ message: 'conversationId không hợp lệ' });
+        }
+
+        await requireMembership(conversationId, userId);
+
+        const msgs = await Message.find({
+            conversationId,
+            type:    { $in: ['image', 'file'] },
+            deleted: false,
+            revoked: false,
+        })
+            .sort({ _id: -1 })
+            .limit(60)
+            .lean();
+
+        const images = [];
+        const files  = [];
+
+        for (const msg of msgs) {
+            const item = {
+                _id:       msg._id,
+                type:      msg.type,
+                url:       msg.payload?.url     || '',
+                fileName:  msg.payload?.fileName || msg.content || '',
+                fileSize:  msg.payload?.fileSize || 0,
+                mimeType:  msg.payload?.mimeType || '',
+                createdAt: msg.createdAt,
+            };
+            if (msg.type === 'image') images.push(item);
+            else                      files.push(item);
+        }
+
+        return res.status(200).json({ images, files });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ message: err.message });
+        console.error('getAttachments error:', err);
+        return res.status(500).json({ message: 'Lỗi server' });
+    }
+};
+
+module.exports = { sendMessage, getMessages, getAttachments };

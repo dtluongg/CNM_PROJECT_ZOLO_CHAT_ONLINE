@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { usePresence } from '../context/PresenceContext';
+import { usePresence } from '../../../context/PresenceContext';
 import {
   View,
   Text,
@@ -18,11 +18,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../config/supabase';
-import apiClient from '../services/apiClient';
-import { uploadImageToSupabase } from '../services/storageUpload';
-import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
+import { useAuth } from '../../../context/AuthContext';
+import { supabase } from '../../../config/supabase';
+import apiClient from '../../../services/apiClient';
+import { uploadImageToSupabase } from '../../../services/storageUpload';
+import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../../../theme';
 
 const COLOR_PALETTE = [
   '#5865f2', '#eb459e', '#00b4d8', '#57f287',

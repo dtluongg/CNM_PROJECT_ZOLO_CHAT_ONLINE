@@ -402,12 +402,45 @@ const listMyConversations = async (req, res, next) => {
             memberCounts.map((item) => [item._id.toString(), item.totalMembers])
         );
 
+        // For DM conversations: populate the other user's info so frontend can show their name/avatar
+        const otherUserMap = new Map();
+        const dmConvIds = conversations
+            .filter((c) => c.type === 'dm')
+            .map((c) => c._id);
+
+        if (dmConvIds.length > 0) {
+            const otherMembers = await ConversationMember.find({
+                conversationId: { $in: dmConvIds },
+                userId:         { $ne: toObjectId(userId) },
+                leftAt:         null,
+            })
+                .populate('userId', '_id displayName avatar status')
+                .lean();
+
+            for (const member of otherMembers) {
+                const cid = member.conversationId.toString();
+                if (!otherUserMap.has(cid) && member.userId) {
+                    const u = member.userId;
+                    otherUserMap.set(cid, {
+                        _id:         u._id,
+                        displayName: u.displayName,
+                        avatar:      u.avatar || null,
+                        status:      u.status || 'online',
+                    });
+                }
+            }
+        }
+
         const data = conversations.map((conversation) => {
             const myMember = memberMap.get(conversation._id.toString());
-            return {
+            const item = {
                 ...buildConversationItem(conversation, myMember),
                 totalMembers: memberCountMap.get(conversation._id.toString()) || 0,
             };
+            if (conversation.type === 'dm') {
+                item.otherUser = otherUserMap.get(conversation._id.toString()) || null;
+            }
+            return item;
         });
 
         return res.status(200).json({

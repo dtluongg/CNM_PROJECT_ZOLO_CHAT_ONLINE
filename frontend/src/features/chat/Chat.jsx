@@ -35,21 +35,25 @@ const formatConversationTime = (isoString) => {
 
 const mapConversationItem = (item, dmOverrides) => {
   const override = dmOverrides[item._id] || null;
-  const isDm = item.type === 'dm';
+  const isDm     = item.type === 'dm';
+  const other    = isDm ? item.otherUser : null;
 
   return {
-    id: item._id,
-    name: isDm
-      ? (override?.name || item.name || 'Đoạn chat trực tiếp')
+    id:          item._id,
+    name:        isDm
+      ? (override?.name    || other?.displayName || item.name || 'Đoạn chat trực tiếp')
       : (item.name || 'Nhóm chưa đặt tên'),
-    avatar: isDm ? (override?.avatar || item.avatar || null) : (item.avatar || null),
+    avatar:      isDm
+      ? (override?.avatar  || other?.avatar      || item.avatar || null)
+      : (item.avatar || null),
+    otherUserId: isDm ? (other?._id?.toString() || null) : null,
     lastMessage: item.lastMessagePreview || 'Chưa có tin nhắn',
-    time: formatConversationTime(item.lastMessageTime || item.updatedAt || item.createdAt),
-    unread: item.myMembership?.unreadCount || 0,
-    type: item.type,
-    online: false,
+    time:        formatConversationTime(item.lastMessageTime || item.updatedAt || item.createdAt),
+    unread:      item.myMembership?.unreadCount || 0,
+    type:        item.type,
+    online:      false,
     memberCount: item.totalMembers,
-    raw: item,
+    raw:         item,
   };
 };
 
@@ -332,14 +336,19 @@ const Chat = () => {
         };
         setMessages(prev => ({ ...prev, [convId]: [...(prev[convId] || []), tempMsg] }));
 
-        const res = await messageApi.sendText(convId, content.trim());
-        const real = normalizeMsg(res.data.data);
+        const res    = await messageApi.sendText(convId, content.trim());
+        const real   = normalizeMsg(res.data.data);
+        const realId = real._id?.toString();
 
-        // Thay temp bằng message thật
-        setMessages(prev => ({
-          ...prev,
-          [convId]: (prev[convId] || []).map(m => m._id === tempId ? real : m),
-        }));
+        // Replace temp with real; also remove any socket-delivered copy to prevent duplicate keys
+        setMessages(prev => {
+          const list    = prev[convId] || [];
+          const cleaned = list.filter(m => m._id?.toString() !== realId); // remove socket copy if any
+          return {
+            ...prev,
+            [convId]: cleaned.map(m => m._id === tempId ? real : m),
+          };
+        });
 
         setConversations(prev => prev.map(c =>
           c.id === convId ? { ...c, lastMessage: content.trim(), time: real.time } : c
