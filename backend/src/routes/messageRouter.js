@@ -1,7 +1,7 @@
 const express     = require('express');
 const router      = express.Router();
 const verifyToken = require('../middlewares/verifytoken');
-const { sendMessage, getMessages, getAttachments, revokeMessage, editMessage } = require('../controllers/messageController');
+const { sendMessage, getMessages, getAttachments, revokeMessage, editMessage, markAsRead } = require('../controllers/messageController');
 
 // ════════════════════════════════════════════════════════════════
 //  GET  /backend/api/messages/:conversationId/attachments – Ảnh & file
@@ -15,6 +15,7 @@ const { sendMessage, getMessages, getAttachments, revokeMessage, editMessage } =
 router.get( '/:conversationId/attachments', verifyToken, getAttachments);
 router.get( '/:conversationId',             verifyToken, getMessages);
 router.post('/:conversationId',             verifyToken, sendMessage);
+router.post('/:conversationId/read/:messageId', verifyToken, markAsRead);
 router.patch('/:messageId/revoke',         verifyToken, revokeMessage);
 router.patch('/:messageId',                verifyToken, editMessage);
 

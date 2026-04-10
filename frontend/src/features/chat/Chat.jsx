@@ -307,6 +307,13 @@ const Chat = () => {
       }));
     });
 
+    // Reset unread count khi bản thân đọc tin ở thiết bị khác hoặc qua API
+    socket.on('chat:unread-reset', ({ conversationId }) => {
+      setConversations(prev => prev.map(c =>
+        c.id === conversationId ? { ...c, unread: 0 } : c
+      ));
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;

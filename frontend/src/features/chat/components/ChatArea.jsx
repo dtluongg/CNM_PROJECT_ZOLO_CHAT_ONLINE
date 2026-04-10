@@ -46,8 +46,13 @@ const MessageBubble = ({
   openMenuId,
   setOpenMenuId,
   reactionTypes,
-  onEdit
+  onEdit,
+  onRead,
+  onShowReadDetails,
+  conversationType,
+  currentUserId
 }) => {
+  const observerRef = useRef(null);
 
   const [hover, setHover] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -55,6 +60,8 @@ const MessageBubble = ({
   const [showEmojiBar, setShowEmojiBar] = useState(false);
   const showMenu = openMenuId === (msg.id || msg._id);
   const menuRef = useRef(null);
+  const actionButtonRef = useRef(null);
+  const [menuPlacement, setMenuPlacement] = useState('down');
 
   const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245'];
   const senderColor = isMine
@@ -84,6 +91,47 @@ const MessageBubble = ({
       document.removeEventListener('click', handleClickOutside);
     };
   }, [showMenu, setOpenMenuId]);
+
+  useEffect(() => {
+    if (showMenu && actionButtonRef.current) {
+      const rect = actionButtonRef.current.getBoundingClientRect();
+      const screenHeight = window.innerHeight;
+      const spaceBelow = screenHeight - rect.bottom;
+
+      // Nếu khoảng trống bên dưới ít hơn 200px, hiện menu phía trên
+      if (spaceBelow < 200) {
+        setMenuPlacement('up');
+      } else {
+        setMenuPlacement('down');
+      }
+    }
+  }, [showMenu]);
+
+  // IntersectionObserver to mark as read
+  useEffect(() => {
+    if (isMine || msg.revoked || !onRead) return;
+
+    // Nếu chính mình đã đọc rồi thì không cần observe nữa 
+    // (Kiểm tra xem currentUserId có trong readBy không)
+    const iReadIt = msg.readBy?.some(r => r.userId === currentUserId);
+    if (iReadIt) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          onRead(msg);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 } // Chỉ cần thấy 10% tin nhắn là tính đã đọc
+    );
+
+    if (observerRef.current) {
+      observer.observe(observerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [msg, isMine, onRead, currentUserId]);
 
   const maxWidth = isMobile ? '82%' : '68%';
 
@@ -137,6 +185,7 @@ const MessageBubble = ({
       onMouseLeave={() => { if (!isMobile) { setHover(false); setShowEmojiBar(false); } }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      ref={observerRef}
     >
       {/* Avatar */}
       <div style={{ width: isMobile ? 34 : 36, flexShrink: 0, marginTop: showHeader ? 2 : 0 }}>
@@ -258,6 +307,7 @@ const MessageBubble = ({
               ].map((btn, i) => (
                 <div
                   key={i}
+                  ref={btn.title === 'Thêm' ? actionButtonRef : null}
                   title={btn.title}
                   onClick={btn.onClick}
                   style={{
@@ -281,13 +331,16 @@ const MessageBubble = ({
               ref={menuRef}
               style={{
                 position: 'absolute',
-                top: '110%',
-                marginTop: 6,
+                ...(menuPlacement === 'up'
+                  ? { bottom: '110%', marginBottom: 6 }
+                  : { top: '110%', marginTop: 6 }),
                 right: isMine ? 0 : 'auto',
                 left: isMine ? 'auto' : 0,
                 background: '#fff',
                 borderRadius: 10,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                boxShadow: menuPlacement === 'up'
+                  ? '0 -4px 12px rgba(0,0,0,0.15)'
+                  : '0 4px 12px rgba(0,0,0,0.15)',
                 padding: '6px 0',
                 zIndex: 999,
                 minWidth: 180,
@@ -366,12 +419,43 @@ const MessageBubble = ({
           </div>
         )}
 
-
         {/* Timestamp on hover */}
-        {!showHeader && hover && !isMobile && (
+        {/* {!showHeader && hover && !isMobile && (
           <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, paddingLeft: isMine ? 0 : 4 }}>
             {msg.time}
           </span>
+        )} */}
+
+        {/* --- Phần hiển thị "Đã xem" --- */}
+        {isMine && (
+          <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+            {conversationType === 'dm' ? (
+              // Chat cá nhân: Hiện chữ "Đã xem" nếu đối phương đã đọc
+              msg.readBy && msg.readBy.length > 0 && (
+                <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>Đã xem</span>
+              )
+            ) : (
+              // Chat nhóm: Hiện avatar những người đã xem
+              msg.readBy && msg.readBy.length > 0 && (
+                <div
+                  onClick={() => onShowReadDetails(msg.readBy)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}
+                  title="Xem danh sách người đã đọc"
+                >
+                  <div style={{ display: 'flex', marginLeft: 4 }}>
+                    {msg.readBy.slice(0, 5).map((reader, idx) => (
+                      <div key={reader.userId} style={{ marginLeft: idx === 0 ? 0 : -6, border: '2px solid var(--bg-tertiary)', borderRadius: '50%' }}>
+                        <Avatar name={reader.displayName} avatar={reader.avatar} size={14} />
+                      </div>
+                    ))}
+                  </div>
+                  {msg.readBy.length > 5 && (
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{msg.readBy.length - 5}</span>
+                  )}
+                </div>
+              )
+            )}
+          </div>
         )}
       </div>
 
@@ -471,6 +555,7 @@ export default function ChatArea({
   const [reactionTypes, setReactionTypes] = useState([]);
   const [showReactionList, setShowReactionList] = useState(null); // msgId
   const [reactionDetails, setReactionDetails] = useState([]);
+  const [showReadList, setShowReadList] = useState(null); // stores readBy array
   const [editingMessage, setEditingMessage] = useState(null);
   const bottomRef = useRef(null);
 
@@ -509,10 +594,47 @@ export default function ChatArea({
 
     socket.on('chat:message-reaction', handleReaction);
 
+    // 3. Socket listener for "Read" status
+    const handleRead = (data) => {
+      const { conversationId: cid, messageId, userId, displayName, avatar, readAt } = data;
+      const convId = conversation?.id || conversation?._id;
+
+      if (convId && cid !== convId.toString()) return;
+
+      setMessages(prev => prev.map(m => {
+        const mId = (m._id || m.id)?.toString();
+        if (mId !== messageId) return m;
+
+        // Prevent duplicates
+        const alreadyIn = m.readBy?.some(r => r.userId === userId);
+        if (alreadyIn) return m;
+
+        return {
+          ...m,
+          readBy: [...(m.readBy || []), { userId, displayName, avatar, readAt }]
+        };
+      }));
+    };
+
+    socket.on('chat:message-read', handleRead);
+
     return () => {
       socket.off('chat:message-reaction', handleReaction);
+      socket.off('chat:message-read', handleRead);
     };
   }, [socket, conversation?.id, conversation?._id, currentUserId, setMessages]);
+
+  const handleMarkAsRead = async (msg) => {
+    try {
+      const mId = msg._id || msg.id;
+      const cId = conversation?.id || conversation?._id;
+      if (!mId || !cId) return;
+
+      await messageApi.markAsRead(cId.toString(), mId.toString());
+    } catch (err) {
+      console.error('Mark as read error:', err);
+    }
+  };
 
 
 
@@ -534,6 +656,9 @@ export default function ChatArea({
     } catch (err) {
       console.error('Fetch reaction details error:', err);
     }
+  };
+  const handleShowReadDetails = (readBy) => {
+    setShowReadList(readBy);
   };
 
 
@@ -755,7 +880,6 @@ export default function ChatArea({
                   // Hoặc có thể làm optimistic update nếu muốn cực nhanh.
                 } catch (err) {
                   console.error('Revoke message error:', err);
-                  alert(err.response?.data?.message || 'Không thể thu hồi tin nhắn');
                 }
               }}
               onDelete={(msg) => {
@@ -764,6 +888,10 @@ export default function ChatArea({
                 );
               }}
               onEdit={(msg) => setEditingMessage(msg)}
+              onRead={handleMarkAsRead}
+              onShowReadDetails={handleShowReadDetails}
+              conversationType={conversation.type}
+              currentUserId={currentUserId}
             />
         )}
 
@@ -814,6 +942,45 @@ export default function ChatArea({
                       <div style={{ fontWeight: 600, fontSize: 14 }}>{r.userId?.displayName}</div>
                     </div>
                     <span style={{ fontSize: 20 }}>{r.emoji}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Read Details List */}
+      {showReadList && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 3000,
+          background: 'rgba(0,0,0,0.4)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(2px)'
+        }} onClick={() => setShowReadList(null)}>
+          <div style={{
+            width: isMobile ? '85%' : 400,
+            maxHeight: '60vh',
+            background: '#fff', borderRadius: 12,
+            overflow: 'hidden', display: 'flex', flexDirection: 'column'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 700 }}>Người đã xem</span>
+              <button onClick={() => setShowReadList(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+              {showReadList.length === 0 ? (
+                <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>Chưa có người xem</div>
+              ) : (
+                showReadList.map((r, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px' }}>
+                    <Avatar name={r.displayName} avatar={r.avatar} size={36} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{r.displayName}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        Đã xem lúc {new Date(r.readAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
                   </div>
                 ))
               )}

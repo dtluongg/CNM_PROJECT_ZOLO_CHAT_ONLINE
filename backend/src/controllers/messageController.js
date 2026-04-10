@@ -12,6 +12,7 @@ const Attachment             = require('../models/attachmentModel');
 const Conversation           = require('../models/conversationModel');
 const ConversationMember     = require('../models/conversationMemberModel');
 const MessageReaction        = require('../models/messageReactionModel');
+const MessageRead            = require('../models/messageReadModel');
 const { getIO }              = require('../socket/socketManager');
 
 
@@ -212,13 +213,26 @@ const getMessages = async (req, res) => {
             .lean();
 
         const msgIds = raw.map(m => m._id);
-        const allReactions = await MessageReaction.find({ messageId: { $in: msgIds } }).lean();
+        const [allReactions, allReads] = await Promise.all([
+            MessageReaction.find({ messageId: { $in: msgIds } }).lean(),
+            MessageRead.find({ messageId: { $in: msgIds } }).populate('userId', 'displayName avatar').lean()
+        ]);
 
         // Đảo ngược để hiển thị theo chiều thời gian (cũ → mới)
         const messages = raw.reverse().map(msg => {
             // Lọc reaction của tin nhắn này
             const reactions = allReactions.filter(r => r.messageId.toString() === msg._id.toString());
             
+            // Lọc danh sách người đã đọc
+            const readBy = allReads
+                .filter(r => r.messageId.toString() === msg._id.toString())
+                .map(r => ({
+                    userId: r.userId?._id || r.userId,
+                    displayName: r.userId?.displayName || 'Unknown',
+                    avatar: r.userId?.avatar || null,
+                    readAt: r.createdAt
+                }));
+
             // Gom nhóm reaction: { "❤️": 2, "👍": 5 }
             const reactionCounts = reactions.reduce((acc, curr) => {
                 acc[curr.emoji] = (acc[curr.emoji] || 0) + 1;
@@ -239,10 +253,11 @@ const getMessages = async (req, res) => {
                 payload:          msg.payload || {},
                 replyToMessageId: msg.replyToMessageId || null,
                 edited:           msg.edited,
-                revoked:          msg.revoked, // Thêm revoked vào để FE xử lý UI
+                revoked:          msg.revoked, 
                 createdAt:        msg.createdAt,
                 reactions:        reactionCounts,
-                myReaction:       myReaction
+                myReaction:       myReaction,
+                readBy:           readBy // Trả về danh sách người đã đọc
             };
         });
 
@@ -444,4 +459,59 @@ const editMessage = async (req, res) => {
     }
 };
 
-module.exports = { sendMessage, getMessages, getAttachments, revokeMessage, editMessage };
+// ═════════════════════════════════════════════════════════════════════════
+//  POST /backend/api/messages/:conversationId/read/:messageId
+//  Đánh dấu tin nhắn là đã đọc.
+// ═════════════════════════════════════════════════════════════════════════
+const markAsRead = async (req, res) => {
+    try {
+        const userId = req.user._id.toString();
+        const { conversationId, messageId } = req.params;
+
+        if (!isValidId(conversationId) || !isValidId(messageId)) {
+            return res.status(400).json({ message: 'ID không hợp lệ' });
+        }
+
+        await requireMembership(conversationId, userId);
+
+        // 1. Lưu trạng thái đã đọc (upsert để tránh duplicate)
+        await MessageRead.findOneAndUpdate(
+            { messageId, userId },
+            { conversationId, messageId, userId },
+            { upsert: true, new: true }
+        );
+
+        // 2. Kiểm tra nếu tin nhắn này là cuối cùng thì reset unreadCount
+        const conv = await Conversation.findById(conversationId);
+        if (conv && conv.lastMessageId?.toString() === messageId) {
+            await ConversationMember.findOneAndUpdate(
+                { conversationId, userId },
+                { unreadCount: 0 }
+            );
+        }
+
+        // 3. Phát socket thông báo cho mọi người trong conversation room
+        const io = getIO();
+        io.to(`user:${userId}`).emit('chat:unread-reset', { conversationId }); // Riêng cho mình để update unread ở sidebar
+        
+        // Broadcast tới những người khác
+        const allMembers = await ConversationMember.find({ conversationId, leftAt: null }, { userId: 1 });
+        allMembers.forEach(({ userId: memberId }) => {
+            io.to(`user:${memberId.toString()}`).emit('chat:message-read', {
+                conversationId,
+                messageId,
+                userId,
+                displayName: req.user.displayName,
+                avatar: req.user.avatar,
+                readAt: new Date()
+            });
+        });
+
+        return res.status(200).json({ message: 'Đã đánh dấu đã đọc' });
+    } catch (err) {
+        console.error('markAsRead error:', err);
+        return res.status(500).json({ message: 'Lỗi server khi đánh dấu đã đọc' });
+    }
+};
+
+module.exports = { sendMessage, getMessages, getAttachments, revokeMessage, editMessage, markAsRead };

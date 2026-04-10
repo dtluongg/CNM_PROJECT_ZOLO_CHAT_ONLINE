@@ -79,6 +79,10 @@ const messageApi = {
   // ── Lấy danh sách ảnh và file đã gửi trong conversation ──────────
   getAttachments: (conversationId) =>
     apiClient.get(`/messages/${conversationId}/attachments`),
+
+  // ── Đánh dấu đã đọc ────────────────────────────────────────────────
+  markAsRead: (conversationId, messageId) =>
+    apiClient.post(`/messages/${conversationId}/read/${messageId}`),
 };
 
 
