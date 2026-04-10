@@ -66,11 +66,24 @@ const initSocket = (httpServer) => {
         const userId = socket.user._id.toString();
 
         // Ghi nhận online
+        const isFirstSocket = !onlineUsers.has(userId) || onlineUsers.get(userId).size === 0;
         if (!onlineUsers.has(userId)) onlineUsers.set(userId, new Set());
         onlineUsers.get(userId).add(socket.id);
 
         // Mỗi user có room riêng để nhận targeted events
         socket.join(`user:${userId}`);
+
+        // Thông báo user vừa online cho tất cả clients khác
+        if (isFirstSocket) {
+            socket.broadcast.emit('presence:online', { userId });
+        }
+
+        // Client yêu cầu danh sách online hiện tại (gọi 1 lần khi kết nối)
+        socket.on('presence:subscribe', () => {
+            socket.emit('presence:online-list', {
+                userIds: [...onlineUsers.keys()],
+            });
+        });
 
         // Đăng ký các event handler theo từng feature
         require('./callSocket')(io, socket, onlineUsers);
@@ -81,7 +94,11 @@ const initSocket = (httpServer) => {
             const sockets = onlineUsers.get(userId);
             if (sockets) {
                 sockets.delete(socket.id);
-                if (sockets.size === 0) onlineUsers.delete(userId);
+                if (sockets.size === 0) {
+                    onlineUsers.delete(userId);
+                    // Thông báo user vừa offline cho tất cả clients
+                    io.emit('presence:offline', { userId });
+                }
             }
         });
     });
