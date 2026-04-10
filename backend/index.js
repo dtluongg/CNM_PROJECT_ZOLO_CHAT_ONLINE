@@ -38,6 +38,10 @@ app.use('/backend/api/auth', authRouter); // các route cần auth đã có veri
 const friendRouter = require('./src/routes/friendRouter');
 app.use('/backend/api/friends', friendRouter);
 
+// Khởi tạo route cho Conversation
+const conversationRouter = require('./src/routes/conversationRouter');
+app.use('/backend/api/conversations', conversationRouter);
+
 // ── Bàn đạp: Global Error Handler bắt mọi cú crash của Server ────────────────────────────────
 const errorHandler = require('./src/middlewares/errorHandler');
 app.use(errorHandler);
