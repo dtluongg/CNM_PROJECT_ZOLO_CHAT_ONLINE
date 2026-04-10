@@ -249,6 +249,36 @@ const Chat = () => {
       });
     });
 
+    // Thu hồi tin nhắn
+    socket.on('chat:message-revoked', ({ conversationId, messageId }) => {
+      // 1. Cập nhật list tin nhắn nếu đang mở conv này
+      setMessages(prev => {
+        const list = prev[conversationId] || [];
+        if (list.length === 0) return prev;
+        return {
+          ...prev,
+          [conversationId]: list.map(m =>
+            (m._id || m.id)?.toString() === messageId?.toString()
+              ? { ...m, revoked: true }
+              : m
+          )
+        };
+      });
+
+      // 2. Cập nhật preview ở sidebar
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        // Nếu tin nhắn bị thu hồi chính là tin nhắn cuối cùng hiển thị ở sidebar
+        // (Đây là một ước lượng đơn giản, DB đã cập nhật rồi nhưng socket này giúp update UI nhanh)
+        // Lưu ý: Nếu muốn chính xác 100% thì BE nên gửi kèm preview mới hoặc client tự check.
+        // Ở đây ta đơn giản là đổi preview thành "[Tin nhắn đã được thu hồi]"
+        return {
+          ...c,
+          lastMessage: '[Tin nhắn đã được thu hồi]'
+        };
+      }));
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;

@@ -68,6 +68,10 @@ const messageApi = {
   getMessageReactions: (messageId) =>
     apiClient.get(`/reactions/${messageId}`),
 
+  // ── Thu hồi tin nhắn ───────────────────────────────────────────────
+  revokeMessage: (messageId) =>
+    apiClient.patch(`/messages/${messageId}/revoke`),
+
   // ── Lấy danh sách ảnh và file đã gửi trong conversation ──────────
   getAttachments: (conversationId) =>
     apiClient.get(`/messages/${conversationId}/attachments`),

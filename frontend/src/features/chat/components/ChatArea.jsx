@@ -497,7 +497,10 @@ export default function ChatArea({
     };
 
     socket.on('chat:message-reaction', handleReaction);
-    return () => socket.off('chat:message-reaction', handleReaction);
+
+    return () => {
+      socket.off('chat:message-reaction', handleReaction);
+    };
   }, [socket, conversation?.id, conversation?._id, currentUserId, setMessages]);
 
 
@@ -733,15 +736,16 @@ export default function ChatArea({
               onReact={handleReact}
               onShowDetails={handleShowReactionDetails}
 
-              onRecall={(msg) => {
-
-                setMessages(prev =>
-                  prev.map(m =>
-                    (m.id || m._id) === (msg.id || msg._id)
-                      ? { ...m, content: "Tin nhắn đã được thu hồi", recalled: true }
-                      : m
-                  )
-                );
+              onRecall={async (msg) => {
+                try {
+                  await messageApi.revokeMessage(msg._id || msg.id);
+                  // Khi gọi API thành công, socket sẽ gửi về cho mình và những người khác
+                  // nên không cần setMessages thủ công ở đây để tránh bị double update hoặc conflict.
+                  // Hoặc có thể làm optimistic update nếu muốn cực nhanh.
+                } catch (err) {
+                  console.error('Revoke message error:', err);
+                  alert(err.response?.data?.message || 'Không thể thu hồi tin nhắn');
+                }
               }}
               onDelete={(msg) => {
                 setMessages(prev =>

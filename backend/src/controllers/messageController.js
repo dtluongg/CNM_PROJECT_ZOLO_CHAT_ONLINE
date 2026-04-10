@@ -200,7 +200,7 @@ const getMessages = async (req, res) => {
         const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit)  || 30));
         const before = req.query.before;
 
-        const filter = { conversationId, deleted: false, revoked: false };
+        const filter = { conversationId, deleted: false };
         if (isValidId(before)) {
             filter._id = { $lt: new mongoose.Types.ObjectId(before) };
         }
@@ -308,4 +308,66 @@ const getAttachments = async (req, res) => {
     }
 };
 
-module.exports = { sendMessage, getMessages, getAttachments };
+// ═════════════════════════════════════════════════════════════════════════
+//  PATCH /backend/api/messages/:messageId/revoke
+//  Thu hồi tin nhắn của chính mình.
+// ═════════════════════════════════════════════════════════════════════════
+const revokeMessage = async (req, res) => {
+    try {
+        const userId = req.user._id.toString();
+        const { messageId } = req.params;
+
+        if (!isValidId(messageId)) {
+            return res.status(400).json({ message: 'messageId không hợp lệ' });
+        }
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            return res.status(404).json({ message: 'Tin nhắn không tồn tại' });
+        }
+
+        // Chỉ chủ nhân tin nhắn mới được thu hồi
+        if (message.senderId.toString() !== userId) {
+            return res.status(403).json({ message: 'Bạn không có quyền thu hồi tin nhắn này' });
+        }
+
+        if (message.revoked) {
+            return res.status(400).json({ message: 'Tin nhắn đã được thu hồi trước đó' });
+        }
+
+        // Cập nhật trạng thái thu hồi
+        message.revoked = true;
+        message.revokedAt = new Date();
+        message.revokedBy = userId;
+        await message.save();
+
+        // ── Cập nhật lastMessage của conversation nếu cần ─────────────
+        const conversation = await Conversation.findById(message.conversationId);
+        if (conversation && conversation.lastMessageId?.toString() === messageId) {
+            await Conversation.findByIdAndUpdate(message.conversationId, {
+                lastMessagePreview: '[Tin nhắn đã được thu hồi]'
+            });
+        }
+
+        // ── Phát real-time tới tất cả thành viên ─────────────────────
+        const allMembers = await ConversationMember.find(
+            { conversationId: message.conversationId, leftAt: null },
+            { userId: 1 }
+        );
+
+        const io = getIO();
+        allMembers.forEach(({ userId: memberId }) => {
+            io.to(`user:${memberId.toString()}`).emit('chat:message-revoked', {
+                conversationId: message.conversationId,
+                messageId: message._id,
+            });
+        });
+
+        return res.status(200).json({ message: 'Thu hồi tin nhắn thành công', data: { _id: message._id, revoked: true } });
+    } catch (err) {
+        console.error('revokeMessage error:', err);
+        return res.status(500).json({ message: 'Lỗi server khi thu hồi tin nhắn' });
+    }
+};
+
+module.exports = { sendMessage, getMessages, getAttachments, revokeMessage };
