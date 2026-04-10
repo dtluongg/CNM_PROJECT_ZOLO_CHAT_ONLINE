@@ -293,31 +293,6 @@ const Chat = () => {
       setMobileTab('messages');
     }
 
-<<<<<<< HEAD
-  const handleSendMessage = useCallback((text) => {
-    if (!activeConversation || !text.trim()) return;
-    const newMsg = {
-      id: Date.now(),
-      senderId: 'me',
-      senderName: 'Tôi',
-      content: text.trim(),
-      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      type: 'text',
-      reactions: [],
-      seenBy: []
-    };
-    setMessages(prev => ({
-      ...prev,
-      [activeConversation.id]: [...(prev[activeConversation.id] || []), newMsg],
-    }));
-    setConversations(prev =>
-      prev.map(c => c.id === activeConversation.id
-        ? { ...c, lastMessage: text.trim(), time: newMsg.time }
-        : c
-      )
-    );
-  }, [activeConversation]);
-=======
     // Load messages nếu chưa có
     if (messages[conv.id]) return;
     try {
@@ -422,7 +397,6 @@ const Chat = () => {
       }
     }
   }, [activeConversation, currentUser]);
->>>>>>> origin/tuongvi-dev
 
   const handleViewProfile = useCallback((userId) => {
     navigate(`/user/${userId}`);
