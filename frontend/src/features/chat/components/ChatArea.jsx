@@ -267,7 +267,7 @@ export default function ChatArea({
 
   const onlineStatus = conversation.type === 'dm'
     ? (conversation.online ? 'Online' : 'Offline')
-    : `${conversation.members || ''} thành viên`;
+    : `${conversation.memberCount || conversation.members || 0} thành viên`;
 
   return (
     <div style={{
@@ -400,6 +400,19 @@ export default function ChatArea({
           <h2 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: isMobile ? 20 : 22, margin: '0 0 6px' }}>
             {conversation.type === 'dm' ? conversation.name : `# ${conversation.name}`}
           </h2>
+          <div style={{ marginBottom: 6 }}>
+            <span style={{
+              display: 'inline-block',
+              fontSize: 11,
+              fontWeight: 700,
+              color: 'var(--text-muted)',
+              padding: '3px 8px',
+              borderRadius: 999,
+              background: 'var(--bg-hover)',
+            }}>
+              {conversation.type === 'dm' ? 'Tin nhắn trực tiếp' : 'Nhóm chat'}
+            </span>
+          </div>
           <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0, lineHeight: 1.5 }}>
             {conversation.type === 'dm'
               ? `Đây là nơi bắt đầu cuộc trò chuyện giữa bạn và ${conversation.name}.`

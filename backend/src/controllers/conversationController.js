@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Conversation = require('../models/conversationModel');
 const ConversationMember = require('../models/conversationMemberModel');
+const Friendship = require('../models/friendshipModel');
 const User = require('../models/userModel');
 
 // Chuyển id string sang ObjectId để dùng trong aggregate/query có kiểu chặt chẽ.
@@ -264,11 +265,44 @@ const createConversation = async (req, res, next) => {
             ensureValidObjectId(memberId, 'memberIds');
         }
 
-        const uniqueMemberIds = [...new Set(memberIds.map((id) => id.toString()))];
+        const uniqueMemberIds = [...new Set(memberIds.map((id) => id.toString()))]
+            .filter((id) => id !== userId);
+
+        if (uniqueMemberIds.length < 2) {
+            return res.status(400).json({
+                message: 'Tạo nhóm cần chọn tối thiểu 2 người bạn',
+            });
+        }
+
         if (uniqueMemberIds.length > 0) {
             const foundUsers = await User.countDocuments({ _id: { $in: uniqueMemberIds } });
             if (foundUsers !== uniqueMemberIds.length) {
                 return res.status(404).json({ message: 'Một hoặc nhiều member không tồn tại' });
+            }
+
+            const friendshipDocs = await Friendship.find({
+                isBlockedBy: null,
+                $or: [
+                    { userId1: userId, userId2: { $in: uniqueMemberIds } },
+                    { userId1: { $in: uniqueMemberIds }, userId2: userId },
+                ],
+            })
+                .select('userId1 userId2')
+                .lean();
+
+            const friendSet = new Set();
+            for (const item of friendshipDocs) {
+                const id1 = item.userId1.toString();
+                const id2 = item.userId2.toString();
+                const friendId = id1 === userId ? id2 : id1;
+                friendSet.add(friendId);
+            }
+
+            const hasNonFriendMember = uniqueMemberIds.some((id) => !friendSet.has(id));
+            if (hasNonFriendMember) {
+                return res.status(400).json({
+                    message: 'Chỉ có thể tạo nhóm với người đã là bạn bè',
+                });
             }
         }
 
@@ -349,9 +383,31 @@ const listMyConversations = async (req, res, next) => {
             .populate('lastMessageId', '_id senderId content type createdAt')
             .lean();
 
+        const memberCounts = await ConversationMember.aggregate([
+            {
+                $match: {
+                    conversationId: { $in: members.map((m) => toObjectId(m.conversationId.toString())) },
+                    leftAt: null,
+                },
+            },
+            {
+                $group: {
+                    _id: '$conversationId',
+                    totalMembers: { $sum: 1 },
+                },
+            },
+        ]);
+
+        const memberCountMap = new Map(
+            memberCounts.map((item) => [item._id.toString(), item.totalMembers])
+        );
+
         const data = conversations.map((conversation) => {
             const myMember = memberMap.get(conversation._id.toString());
-            return buildConversationItem(conversation, myMember);
+            return {
+                ...buildConversationItem(conversation, myMember),
+                totalMembers: memberCountMap.get(conversation._id.toString()) || 0,
+            };
         });
 
         return res.status(200).json({
