@@ -279,6 +279,34 @@ const Chat = () => {
       }));
     });
 
+    // Chỉnh sửa tin nhắn
+    socket.on('chat:message-edited', ({ conversationId, message }) => {
+      const msg = normalizeMsg(message);
+
+      // 1. Cập nhật list tin nhắn - Sử dụng MERGE logic
+      setMessages(prev => {
+        const list = prev[conversationId] || [];
+        if (list.length === 0) return prev;
+        return {
+          ...prev,
+          [conversationId]: list.map(m =>
+            (m._id || m.id)?.toString() === msg._id?.toString()
+              ? { ...m, ...msg } // Merge để giữ lại reactions/myReaction
+              : m
+          )
+        };
+      });
+
+      // 2. Cập nhật preview ở sidebar
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        return {
+          ...c,
+          lastMessage: msg.content,
+        };
+      }));
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
@@ -352,7 +380,7 @@ const Chat = () => {
     const myAvatar = currentUser?.avatar || null;
 
     try {
-      if (payload.type === 'text') {
+      if (payload.type === 'text' && !payload.isEdit) {
         const { content } = payload;
         if (!content?.trim()) return;
 
@@ -384,6 +412,31 @@ const Chat = () => {
           c.id === convId ? { ...c, lastMessage: content.trim(), time: real.time } : c
         ));
 
+      } else if (payload.isEdit && payload.type === 'text') {
+        const { content, messageId } = payload;
+        if (!content?.trim()) return;
+
+        // Gọi API sửa
+        const res = await messageApi.editMessage(messageId, content.trim());
+        const real = normalizeMsg(res.data.data);
+
+        // Cập nhật messages state - Sử dụng MERGE logic
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          return {
+            ...prev,
+            [convId]: list.map(m =>
+              (m._id || m.id)?.toString() === messageId?.toString()
+                ? { ...m, ...real } // Merge để giữ lại reactions
+                : m
+            )
+          };
+        });
+
+        // Cập nhật preview sidebar
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: content.trim() } : c
+        ));
       } else if (payload.type === 'voice') {
         const { blob, duration } = payload;
         const fd = new FormData();

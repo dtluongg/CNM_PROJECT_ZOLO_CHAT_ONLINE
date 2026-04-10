@@ -370,4 +370,78 @@ const revokeMessage = async (req, res) => {
     }
 };
 
-module.exports = { sendMessage, getMessages, getAttachments, revokeMessage };
+// ═════════════════════════════════════════════════════════════════════════
+//  PATCH /backend/api/messages/:messageId
+//  Chỉnh sửa nội dung tin nhắn văn bản.
+// ═════════════════════════════════════════════════════════════════════════
+const editMessage = async (req, res) => {
+    try {
+        const userId = req.user._id.toString();
+        const { messageId } = req.params;
+        const { content } = req.body;
+
+        if (!isValidId(messageId)) {
+            return res.status(400).json({ message: 'messageId không hợp lệ' });
+        }
+
+        if (!content || !content.trim()) {
+            return res.status(400).json({ message: 'Nội dung tin nhắn không được để trống' });
+        }
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            return res.status(404).json({ message: 'Tin nhắn không tồn tại' });
+        }
+
+        // Chỉ chủ nhân tin nhắn mới được sửa
+        if (message.senderId.toString() !== userId) {
+            return res.status(403).json({ message: 'Bạn không có quyền chỉnh sửa tin nhắn này' });
+        }
+
+        if (message.revoked || message.deleted) {
+            return res.status(400).json({ message: 'Không thể chỉnh sửa tin nhắn đã bị thu hồi hoặc xóa' });
+        }
+
+        if (message.type !== 'text') {
+            return res.status(400).json({ message: 'Chỉ hỗ trợ chỉnh sửa tin nhắn văn bản' });
+        }
+
+        // Cập nhật
+        message.content = content.trim();
+        message.edited  = true;
+        message.editedAt = new Date();
+        await message.save();
+
+        // ── Cập nhật lastMessage của conversation nếu cần ─────────────
+        const conversation = await Conversation.findById(message.conversationId);
+        if (conversation && conversation.lastMessageId?.toString() === messageId) {
+            const shortPreview = message.content.length > 60 ? message.content.slice(0, 60) + '…' : message.content;
+            await Conversation.findByIdAndUpdate(message.conversationId, {
+                lastMessagePreview: shortPreview
+            });
+        }
+
+        // ── Phát real-time tới tất cả thành viên ─────────────────────
+        const allMembers = await ConversationMember.find(
+            { conversationId: message.conversationId, leftAt: null },
+            { userId: 1 }
+        );
+
+        const io = getIO();
+        const formatted = formatMsg(message, req.user);
+
+        allMembers.forEach(({ userId: memberId }) => {
+            io.to(`user:${memberId.toString()}`).emit('chat:message-edited', {
+                conversationId: message.conversationId,
+                message: formatted,
+            });
+        });
+
+        return res.status(200).json({ message: 'Chỉnh sửa tin nhắn thành công', data: formatted });
+    } catch (err) {
+        console.error('editMessage error:', err);
+        return res.status(500).json({ message: 'Lỗi server khi chỉnh sửa tin nhắn' });
+    }
+};
+
+module.exports = { sendMessage, getMessages, getAttachments, revokeMessage, editMessage };

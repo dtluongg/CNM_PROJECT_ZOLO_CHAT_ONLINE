@@ -68,6 +68,10 @@ const messageApi = {
   getMessageReactions: (messageId) =>
     apiClient.get(`/reactions/${messageId}`),
 
+  // ── Chỉnh sửa tin nhắn ──────────────────────────────────────────────
+  editMessage: (messageId, content) =>
+    apiClient.patch(`/messages/${messageId}`, { content }),
+
   // ── Thu hồi tin nhắn ───────────────────────────────────────────────
   revokeMessage: (messageId) =>
     apiClient.patch(`/messages/${messageId}/revoke`),

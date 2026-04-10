@@ -45,7 +45,8 @@ const MessageBubble = ({
   onDelete,
   openMenuId,
   setOpenMenuId,
-  reactionTypes
+  reactionTypes,
+  onEdit
 }) => {
 
   const [hover, setHover] = useState(false);
@@ -108,7 +109,16 @@ const MessageBubble = ({
         </a>
       );
     }
-    return msg.content;
+    return (
+      <>
+        {msg.content}
+        {msg.edited && (
+          <span style={{ fontSize: 10, opacity: 0.5, marginLeft: 6, fontStyle: 'italic', fontWeight: 400 }}>
+            (đã chỉnh sửa)
+          </span>
+        )}
+      </>
+    );
   };
 
   return (
@@ -461,6 +471,7 @@ export default function ChatArea({
   const [reactionTypes, setReactionTypes] = useState([]);
   const [showReactionList, setShowReactionList] = useState(null); // msgId
   const [reactionDetails, setReactionDetails] = useState([]);
+  const [editingMessage, setEditingMessage] = useState(null);
   const bottomRef = useRef(null);
 
   // 1. Fetch reaction types
@@ -752,6 +763,7 @@ export default function ChatArea({
                   prev.filter(m => (m.id || m._id) !== (msg.id || msg._id))
                 );
               }}
+              onEdit={(msg) => setEditingMessage(msg)}
             />
         )}
 
@@ -761,11 +773,16 @@ export default function ChatArea({
 
       {/* ── Message Input ── */}
       <MessageInput
-        onSend={onSendMessage}
+        onSend={async (payload) => {
+          await onSendMessage(payload);
+          if (payload.isEdit) setEditingMessage(null);
+        }}
         placeholder={`Nhắn tin tới ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
         isMobile={isMobile}
         conversationId={conversation.id}
         socket={socket}
+        editingMessage={editingMessage}
+        onCancelEdit={() => setEditingMessage(null)}
       />
 
       {/* Modal Reaction List */}
