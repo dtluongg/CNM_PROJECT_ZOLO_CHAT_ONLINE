@@ -58,6 +58,16 @@ const messageApi = {
     apiClient.post('/uploads/image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+  // ── Reaction APIs ────────────────────────────────────────────────
+  getReactionTypes: () => 
+    apiClient.get('/reactions/types'),
+
+  toggleReaction: (messageId, emoji) =>
+    apiClient.post(`/reactions/${messageId}`, { emoji }),
+
+  getMessageReactions: (messageId) =>
+    apiClient.get(`/reactions/${messageId}`),
 };
+
 
 export default messageApi;

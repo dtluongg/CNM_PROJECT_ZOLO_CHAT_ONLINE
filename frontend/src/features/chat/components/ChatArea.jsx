@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, Paperclip, ThumbsUp, Reply, Copy, Trash2 } from 'lucide-react';
 import MessageInput from './MessageInput';
+import messageApi from '../api/messageApi';
+import { X } from 'lucide-react'; // Dùng cho modal
+
 
 const AVATAR_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#fee75c', '#ed4245', '#9b59b6', '#e67e22'];
 
@@ -37,11 +40,14 @@ const MessageBubble = ({
   showHeader,
   isMobile,
   onReact,
+  onShowDetails,
   onRecall,
   onDelete,
   openMenuId,
-  setOpenMenuId
+  setOpenMenuId,
+  reactionTypes
 }) => {
+
   const [hover, setHover] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const longPressRef = useRef(null);
@@ -81,9 +87,10 @@ const MessageBubble = ({
   const maxWidth = isMobile ? '82%' : '68%';
 
   const renderContent = () => {
-    if (msg.recalled) {
+    if (msg.revoked || msg.recalled) {
       return <span style={{ fontStyle: 'italic', opacity: 0.6 }}>Tin nhắn đã được thu hồi</span>;
     }
+
     if (msg.type === 'image') {
       return <img src={msg.payload?.url || msg.content} alt="attachment" style={{ maxWidth: isMobile ? 220 : 260, maxHeight: 260, borderRadius: 8, display: 'block' }} />;
     }
@@ -145,33 +152,52 @@ const MessageBubble = ({
         )}
 
         {/* Hover Emoji Bar (Desktop) */}
-        {showEmojiBar && !isMobile && (
-          <div
-            style={{
-              position: 'absolute',
-              top: -38,
-              left: isMine ? 'auto' : 0,
-              right: isMine ? 0 : 'auto',
-              background: '#fff',
-              borderRadius: 20,
-              padding: '6px 10px',
-              display: 'flex',
-              gap: 8,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-              zIndex: 10
-            }}>
-            {['👍', '❤️', '😂', '😮', '😢', '😡'].map(e => (
-              <span
-                key={e}
-                style={{ fontSize: 18, cursor: 'pointer' }}
-                onClick={() => {
-                  onReact(msg, e);
-                  setShowEmojiBar(false);
-                }}
-              >
-                {e}
-              </span>
-            ))}
+        {showEmojiBar && !isMobile && !(msg.revoked || msg.recalled) && (
+          <div style={{
+            position: 'absolute',
+            top: -45,
+            [isMine ? 'right' : 'left']: 0,
+            background: '#ffffff',
+            border: '1px solid #e1e4e8',
+            borderRadius: 24,
+            padding: '6px 12px',
+            display: 'flex',
+            gap: 12,
+            boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+            zIndex: 2000,
+            animation: 'fadeInUp 0.15s ease-out'
+          }}>
+            {reactionTypes && reactionTypes.length > 0 ? (
+              reactionTypes.map(r => (
+                <span
+                  key={r.code}
+                  title={r.label}
+                  style={{ fontSize: 18, cursor: 'pointer', transition: 'transform 0.1s' }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.3)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                  onClick={() => {
+                    onReact(msg, r.emoji);
+                    setShowEmojiBar(false);
+                  }}
+                >
+                  {r.emoji}
+                </span>
+              ))
+            ) : (
+              ['👍', '❤️', '😂', '😮', '😢', '😡'].map(e => (
+                <span
+                  key={e}
+                  style={{ fontSize: 18, cursor: 'pointer' }}
+                  onClick={() => {
+                    onReact(msg, e);
+                    setShowEmojiBar(false);
+                  }}
+                >
+                  {e}
+                </span>
+              ))
+            )}
+
           </div>
         )}
 
@@ -196,15 +222,21 @@ const MessageBubble = ({
           {/* Desktop hover actions */}
           {hover && !isMobile && (
             <div style={{
-              display: 'flex', gap: 2,
-              background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-              borderRadius: 8, padding: '3px 6px',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              background: '#ffffff',
+              border: '1px solid #e1e4e8',
+              borderRadius: 20,
+              padding: '2px 6px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             }}>
+
               {[
-                { content: <ThumbsUp size={13} />, title: 'Thả cảm xúc', onClick: () => setShowEmojiBar(prev => !prev) },
-                { content: <CornerUpLeft size={13} />, title: 'Trả lời' },
+                ...(!(msg.revoked || msg.recalled) ? [
+                  { content: <ThumbsUp size={13} />, title: 'Thả cảm xúc', onClick: () => setShowEmojiBar(prev => !prev) },
+                  { content: <CornerUpLeft size={13} />, title: 'Trả lời' },
+                ] : []),
                 {
                   content: <MoreHorizontal size={14} />,
                   title: 'Thêm',
@@ -214,29 +246,23 @@ const MessageBubble = ({
                   }
                 },
               ].map((btn, i) => (
-                <button
+                <div
                   key={i}
                   title={btn.title}
                   onClick={btn.onClick}
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    padding: '3px 5px',
-                    borderRadius: 4,
-                    color: 'var(--text-secondary)',
-                    lineHeight: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'background 0.1s'
+                    width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: '50%', cursor: 'pointer',
+                    color: '#5f6368', transition: 'all 0.15s',
                   }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#f1f3f4'; e.currentTarget.style.color = 'var(--accent)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#5f6368'; }}
                 >
                   {btn.content}
-                </button>
+                </div>
               ))}
             </div>
+
           )}
 
           {/* Context Menu */}
@@ -292,40 +318,44 @@ const MessageBubble = ({
           )}
         </div>
 
-        {/* Hiển thị reactions */}
-        {msg.reactions && msg.reactions.length > 0 && (
+        {/* Hiển thị tóm tắt reactions */}
+        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
           <div
+            onClick={() => onShowDetails(msg)}
             style={{
               position: 'absolute',
               bottom: -10,
               [isMine ? 'left' : 'right']: 12,
               display: 'flex',
               alignItems: 'center',
-              gap: 2,
+              gap: 4,
               background: '#fff',
               border: '1px solid #e1e4e8',
               borderRadius: 12,
-              padding: '2px 6px',
+              padding: '2px 8px',
               fontSize: 13,
               cursor: 'pointer',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
               zIndex: 2,
               userSelect: 'none'
             }}
           >
-            {Object.entries(
-              msg.reactions.reduce((acc, r) => {
-                acc[r.emoji] = (acc[r.emoji] || 0) + 1;
-                return acc;
-              }, {})
-            ).map(([emoji, count], idx) => (
-              <span key={idx} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {Object.entries(msg.reactions).map(([emoji, count], idx) => (
+              <span key={idx} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                // background: msg.myReaction === emoji ? '' : 'transparent',
+                borderRadius: 4,
+                padding: '0 2px'
+              }}>
                 <span>{emoji}</span>
-                {count > 1 && <span style={{ fontSize: 11, fontWeight: 600, color: '#666' }}>{count}</span>}
+                {count > 1 && <span style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>{count}</span>}
               </span>
             ))}
           </div>
         )}
+
 
         {/* Timestamp on hover */}
         {!showHeader && hover && !isMobile && (
@@ -428,7 +458,70 @@ export default function ChatArea({
   setMessages
 }) {
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [reactionTypes, setReactionTypes] = useState([]);
+  const [showReactionList, setShowReactionList] = useState(null); // msgId
+  const [reactionDetails, setReactionDetails] = useState([]);
   const bottomRef = useRef(null);
+
+  // 1. Fetch reaction types
+  useEffect(() => {
+    messageApi.getReactionTypes()
+      .then(res => setReactionTypes(res.data.data))
+      .catch(console.error);
+  }, []);
+
+  // 2. Socket listener for reactions
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleReaction = (data) => {
+      const { conversationId: cid, messageId, userId, emoji, action, reactions: serverReactions } = data;
+      const convId = conversation?.id || conversation?._id;
+
+      if (convId && cid !== convId.toString()) return;
+
+      setMessages(prev => prev.map(m => {
+        const mId = (m._id || m.id)?.toString();
+        if (mId !== messageId) return m;
+
+        // Cập nhật bảng counts từ server (Tin cậy 100%)
+        const newReactions = serverReactions || m.reactions || {};
+
+        let newMyReaction = m.myReaction;
+        if (userId === currentUserId) {
+          newMyReaction = (action === 'removed') ? null : emoji;
+        }
+
+        return { ...m, reactions: newReactions, myReaction: newMyReaction };
+      }));
+    };
+
+    socket.on('chat:message-reaction', handleReaction);
+    return () => socket.off('chat:message-reaction', handleReaction);
+  }, [socket, conversation?.id, conversation?._id, currentUserId, setMessages]);
+
+
+
+  const handleReact = async (msg, emoji) => {
+    try {
+      // Optimistic update
+      // (Bỏ qua cho MVP để đảm bảo tính ổn định, đợi socket/response)
+      await messageApi.toggleReaction(msg._id || msg.id, emoji);
+    } catch (err) {
+      console.error('React error:', err);
+    }
+  };
+
+  const handleShowReactionDetails = async (msg) => {
+    try {
+      setShowReactionList(msg._id || msg.id);
+      const res = await messageApi.getMessageReactions(msg._id || msg.id);
+      setReactionDetails(res.data.data);
+    } catch (err) {
+      console.error('Fetch reaction details error:', err);
+    }
+  };
+
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -636,32 +729,12 @@ export default function ChatArea({
               isMobile={isMobile}
               openMenuId={openMenuId}
               setOpenMenuId={setOpenMenuId}
-              onReact={(msg, emoji) => {
-                setMessages(prev =>
-                  prev.map(m => {
-                    if ((m.id || m._id) !== (msg.id || msg._id)) return m;
+              reactionTypes={reactionTypes}
+              onReact={handleReact}
+              onShowDetails={handleShowReactionDetails}
 
-                    const reactions = m.reactions || [];
-                    const existing = reactions.find(r => r.userId === currentUserId);
-
-                    let newReactions;
-                    if (existing) {
-                      if (existing.emoji === emoji) {
-                        newReactions = reactions.filter(r => r.userId !== currentUserId);
-                      } else {
-                        newReactions = reactions.map(r =>
-                          r.userId === currentUserId ? { ...r, emoji } : r
-                        );
-                      }
-                    } else {
-                      newReactions = [...reactions, { userId: currentUserId, emoji }];
-                    }
-
-                    return { ...m, reactions: newReactions };
-                  })
-                );
-              }}
               onRecall={(msg) => {
+
                 setMessages(prev =>
                   prev.map(m =>
                     (m.id || m._id) === (msg.id || msg._id)
@@ -691,10 +764,48 @@ export default function ChatArea({
         socket={socket}
       />
 
+      {/* Modal Reaction List */}
+      {showReactionList && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 3000,
+          background: 'rgba(0,0,0,0.4)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(2px)'
+        }} onClick={() => setShowReactionList(null)}>
+          <div style={{
+            width: isMobile ? '85%' : 400,
+            maxHeight: '60vh',
+            background: '#fff', borderRadius: 12,
+            overflow: 'hidden', display: 'flex', flexDirection: 'column'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 700 }}>Biểu cảm</span>
+              <button onClick={() => setShowReactionList(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+              {reactionDetails.length === 0 ? (
+                <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>Chưa có biểu cảm nào</div>
+              ) : (
+                reactionDetails.map((r, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px' }}>
+                    <Avatar name={r.userId?.displayName} avatar={r.userId?.avatar} size={36} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{r.userId?.displayName}</div>
+                    </div>
+                    <span style={{ fontSize: 20 }}>{r.emoji}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes bounce { 0%,60%,100% { transform:translateY(0);opacity:.5; } 30% { transform:translateY(-5px);opacity:1; } }
         @keyframes fadeInUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
     </div>
+
   );
 }

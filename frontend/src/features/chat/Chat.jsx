@@ -567,6 +567,10 @@ const Chat = () => {
             <ChatArea
               conversation={activeConversation}
               messages={activeMessages}
+              setMessages={(updater) => setMessages(prev => ({
+                ...prev,
+                [activeConversation?.id]: updater(prev[activeConversation?.id] || [])
+              }))}
               currentUserId={currentUserId}
               typingUser={activeTypingUser}
               onSendMessage={handleSendMessage}
@@ -637,6 +641,10 @@ const Chat = () => {
         <ChatArea
           conversation={activeConversation}
           messages={activeMessages}
+          setMessages={(updater) => setMessages(prev => ({
+            ...prev,
+            [activeConversation?.id]: updater(prev[activeConversation?.id] || [])
+          }))}
           currentUserId={currentUserId}
           typingUser={activeTypingUser}
           onSendMessage={handleSendMessage}
