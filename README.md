@@ -36,6 +36,6 @@ Cập nhật preview tin nhắn cuối cùng
 ## mobile bị lỗi gọi api cập nhật trong profile,..
 ## mobile chưa fecth đc profile từ chat
 ## bàn phím nhập từ thiết bị khuất 1 phần giao diện, config chưa oke
-## Mobile trừ việc gửi tin nhắn thì lỗi update liên quan tới api
+## Mobile trừ việc gửi tin nhắn(chưa tải được các file hay xem file đọc trước file ) thì lỗi update liên quan tới api
 
 ## web : linking tới các component cũng oke rồi
