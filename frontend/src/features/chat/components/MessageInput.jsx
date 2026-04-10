@@ -279,9 +279,9 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
       background: isMobile ? 'var(--bg-secondary)' : 'transparent',
       borderTop: isMobile ? '1px solid var(--border)' : 'none',
     }}>
-      {/* Hidden file inputs */}
-      <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileChange} />
-      <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} />
+      {/* Hidden file inputs – use opacity/position instead of display:none so iOS Safari allows programmatic .click() */}
+      <input ref={fileInputRef} type="file" style={{ position: 'absolute', opacity: 0, width: 0, height: 0, overflow: 'hidden' }} onChange={handleFileChange} />
+      <input ref={imageInputRef} type="file" accept="image/*" style={{ position: 'absolute', opacity: 0, width: 0, height: 0, overflow: 'hidden' }} onChange={handleImageChange} />
 
       {/* Emoji Picker */}
       {showEmoji && (
@@ -297,7 +297,7 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
             borderRadius: 12,
             padding: 12,
             display: 'grid',
-            gridTemplateColumns: 'repeat(7, 1fr)',
+            gridTemplateColumns: 'repeat(8, 1fr)',
             gap: isMobile ? 4 : 3,
             zIndex: 200,
             boxShadow: '0 8px 32px rgba(0,0,0,0.35)',

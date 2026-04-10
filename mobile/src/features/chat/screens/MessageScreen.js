@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  FlatList, TextInput, KeyboardAvoidingView, Platform,
+  FlatList, TextInput, Platform, Keyboard,
   Modal, StatusBar, Pressable, Alert,
 } from 'react-native';
 import { Audio } from 'expo-av';
@@ -80,7 +80,10 @@ const VoicePlayer = ({ url, duration, isMine, THEME }) => {
         setIsPlaying(false);
       } else {
         if (!soundRef.current) {
-          await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false });
+          // setAudioModeAsync is iOS/Android only; skip on web
+          if (Platform.OS !== 'web') {
+            await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false });
+          }
           const { sound } = await Audio.Sound.createAsync({ uri: url });
           soundRef.current = sound;
           sound.setOnPlaybackStatusUpdate((status) => {
@@ -100,9 +103,7 @@ const VoicePlayer = ({ url, duration, isMine, THEME }) => {
   };
 
   useEffect(() => {
-    return () => {
-      soundRef.current?.unloadAsync();
-    };
+    return () => { soundRef.current?.unloadAsync(); };
   }, []);
 
   return (
@@ -216,23 +217,44 @@ export default function MessageScreen({ route, navigation }) {
 
   const currentUserId = user?._id?.toString() || null;
 
-  const [messages, setMessages]     = useState([]);
-  const [text, setText]             = useState('');
-  const [showEmoji, setShowEmoji]   = useState(false);
-  const [actionMsg, setActionMsg]   = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
+  const [messages, setMessages]         = useState([]);
+  const [text, setText]                 = useState('');
+  const [showEmoji, setShowEmoji]       = useState(false);
+  const [actionMsg, setActionMsg]       = useState(null);
+  const [isRecording, setIsRecording]   = useState(false);
   const [recordingSec, setRecordingSec] = useState(0);
-  const [typingUser, setTypingUser] = useState(null);
+  const [typingUser, setTypingUser]     = useState(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0); // ← keyboard height state
 
-  const flatRef          = useRef(null);
-  const inputRef         = useRef(null);
-  const socketRef        = useRef(null);
-  const recordingRef     = useRef(null);
+  const flatRef           = useRef(null);
+  const inputRef          = useRef(null);
+  const socketRef         = useRef(null);
+  const recordingRef      = useRef(null);
   const recordingTimerRef = useRef(null);
-  const typingTimerRef   = useRef(null);
+  const typingTimerRef    = useRef(null);
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
+  }, []);
+
+  // ── Keyboard listener (fixes Android keyboard overlap) ─────────────────
+  useEffect(() => {
+    const showEvent = Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow';
+    const hideEvent = Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide';
+
+    const onShow = (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      setShowEmoji(false); // ẩn emoji picker khi bàn phím hiện
+    };
+    const onHide = () => setKeyboardHeight(0);
+
+    const subShow = Keyboard.addListener(showEvent, onShow);
+    const subHide = Keyboard.addListener(hideEvent, onHide);
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
   }, []);
 
   // ── Load messages from API ─────────────────────────────────────────────
@@ -240,7 +262,14 @@ export default function MessageScreen({ route, navigation }) {
     (async () => {
       try {
         const res = await messageApi.getMessages(conversation.id);
-        const msgs = (res.data.messages || []).map(normalizeMsg);
+        const raw  = (res.data.messages || []).map(normalizeMsg);
+        const seen = new Set();
+        const msgs = raw.filter(m => {
+          const k = m._id?.toString();
+          if (!k || seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
         setMessages(msgs);
       } catch (err) {
         console.error('Load messages error:', err);
@@ -300,6 +329,14 @@ export default function MessageScreen({ route, navigation }) {
     return () => clearTimeout(t);
   }, [messages]);
 
+  // scroll khi keyboard hiện để tin nhắn cuối không bị che
+  useEffect(() => {
+    if (keyboardHeight > 0) {
+      const t = setTimeout(scrollToBottom, 80);
+      return () => clearTimeout(t);
+    }
+  }, [keyboardHeight]);
+
   // ── Typing indicator ───────────────────────────────────────────────────
   const emitTyping = useCallback(() => {
     if (!socketRef.current) return;
@@ -337,7 +374,6 @@ export default function MessageScreen({ route, navigation }) {
       const res    = await messageApi.sendText(conversation.id, trimmed);
       const real   = normalizeMsg(res.data.data);
       const realId = real._id?.toString();
-      // Remove any socket-delivered copy, then replace temp → prevent duplicate keys
       setMessages(prev => {
         const cleaned = prev.filter(m => m._id?.toString() !== realId);
         return cleaned.map(m => m._id === tempId ? real : m);
@@ -348,8 +384,12 @@ export default function MessageScreen({ route, navigation }) {
     }
   };
 
-  // ── Voice recording ───────────────────────────────────────────────────
+  // ── Voice recording (native only — expo-av Recording not supported on web) ──
   const startRecording = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Thông báo', 'Ghi âm chưa được hỗ trợ trên web.');
+      return;
+    }
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
@@ -382,7 +422,9 @@ export default function MessageScreen({ route, navigation }) {
       const recording = recordingRef.current;
       if (!recording) return;
       await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      if (Platform.OS !== 'web') {
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      }
 
       const uri = recording.getURI();
       recordingRef.current = null;
@@ -394,7 +436,8 @@ export default function MessageScreen({ route, navigation }) {
       const up  = await messageApi.uploadVoice(fd);
       const res = await messageApi.sendVoice(conversation.id, up.data.voice.fileId);
       const msg = normalizeMsg(res.data.data);
-      setMessages(prev => [...prev, msg]);
+      const id  = msg._id?.toString();
+      setMessages(prev => prev.some(m => m._id?.toString() === id) ? prev : [...prev, msg]);
     } catch (err) {
       console.error('stopRecording error:', err);
     }
@@ -408,7 +451,9 @@ export default function MessageScreen({ route, navigation }) {
       recordingRef.current = null;
       if (recording) {
         await recording.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        if (Platform.OS !== 'web') {
+          await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        }
       }
     } catch {}
   };
@@ -416,27 +461,41 @@ export default function MessageScreen({ route, navigation }) {
   // ── Send image ────────────────────────────────────────────────────────
   const handlePickImage = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh.');
-        return;
+      // On web, permissions are not required (browser file picker handles it)
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        // 'limited' = iOS user granted access to selected photos only – still allow picker
+        if (status !== 'granted' && status !== 'limited') {
+          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh trong Cài đặt.');
+          return;
+        }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         quality: 0.8,
       });
-      if (result.canceled) return;
+      if (result.canceled || !result.assets?.length) return;
 
       const asset = result.assets[0];
       const fd = new FormData();
-      fd.append('file', { uri: asset.uri, name: asset.fileName || 'image.jpg', type: asset.mimeType || 'image/jpeg' });
+      if (Platform.OS === 'web') {
+        // On web, asset.uri is a blob: or data: URL – convert to Blob for browser FormData
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        fd.append('file', blob, asset.fileName || 'image.jpg');
+      } else {
+        // React Native FormData accepts { uri, name, type } objects
+        fd.append('file', { uri: asset.uri, name: asset.fileName || 'image.jpg', type: asset.mimeType || 'image/jpeg' });
+      }
 
       const up  = await messageApi.uploadImage(fd);
       const res = await messageApi.sendImage(conversation.id, up.data.file.fileId);
       const msg = normalizeMsg(res.data.data);
-      setMessages(prev => [...prev, msg]);
+      const id  = msg._id?.toString();
+      setMessages(prev => prev.some(m => m._id?.toString() === id) ? prev : [...prev, msg]);
     } catch (err) {
       console.error('handlePickImage error:', err);
+      Alert.alert('Lỗi', 'Không thể gửi ảnh. Vui lòng thử lại.');
     }
   };
 
@@ -444,18 +503,27 @@ export default function MessageScreen({ route, navigation }) {
   const handlePickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
-      if (result.canceled) return;
+      if (result.canceled || !result.assets?.length) return;
 
       const asset = result.assets[0];
       const fd = new FormData();
-      fd.append('file', { uri: asset.uri, name: asset.name, type: asset.mimeType || 'application/octet-stream' });
+      if (Platform.OS === 'web') {
+        // On web, asset.uri is a blob: URL – convert to Blob for browser FormData
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        fd.append('file', blob, asset.name);
+      } else {
+        fd.append('file', { uri: asset.uri, name: asset.name, type: asset.mimeType || 'application/octet-stream' });
+      }
 
       const up  = await messageApi.uploadFile(fd);
       const res = await messageApi.sendFile(conversation.id, up.data.file.fileId);
       const msg = normalizeMsg(res.data.data);
-      setMessages(prev => [...prev, msg]);
+      const id  = msg._id?.toString();
+      setMessages(prev => prev.some(m => m._id?.toString() === id) ? prev : [...prev, msg]);
     } catch (err) {
       console.error('handlePickFile error:', err);
+      Alert.alert('Lỗi', 'Không thể gửi file. Vui lòng thử lại.');
     }
   };
 
@@ -465,21 +533,26 @@ export default function MessageScreen({ route, navigation }) {
     inputRef.current?.focus();
   };
 
-  // ── Build display list ────────────────────────────────────────────────
+  // ── Build display list ─────────────────────────────────────────────────
   const displayItems = [];
+  const seenIds = new Set();
   messages.forEach((msg, i) => {
+    const msgKey = msg._id?.toString() || msg.id?.toString();
+    if (msgKey && seenIds.has(msgKey)) return;
+    if (msgKey) seenIds.add(msgKey);
+
     const prev = messages[i - 1];
     const msgDate  = msg.time?.split(' ')[0];
     const prevDate = prev?.time?.split(' ')[0];
     if (i === 0 || (msgDate && prevDate && msgDate !== prevDate && msg.time?.includes(' '))) {
       if (msg.time?.includes(' ')) {
-        displayItems.push({ type: 'date', label: msgDate, key: `date-${i}` });
+        displayItems.push({ type: 'date', label: msgDate, key: `date-${msgKey || i}` });
       }
     }
     const sameGroup = prev && prev.senderId === msg.senderId
       && !msg.time?.includes(' ') && !prev.time?.includes(' ');
     displayItems.push({
-      type: 'msg', msg, key: String(msg._id || msg.id || i),
+      type: 'msg', msg, key: `msg-${msgKey || i}`,
       isMine: msg.senderId === currentUserId,
       showHeader: !sameGroup,
     });
@@ -533,20 +606,17 @@ export default function MessageScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* ── Messages ── */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
+      {/* ── Body: messages + input — dùng View thường, padding theo keyboardHeight ── */}
+      <View style={{ flex: 1 }}>
         <FlatList
           ref={flatRef}
           data={displayItems}
           keyExtractor={item => item.key}
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 8 }}
+          contentContainerStyle={{ paddingBottom: 8, flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={scrollToBottom}
+          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
           ListHeaderComponent={() => (
             <View style={msgStyles.introBox}>
               <View style={[msgStyles.introAvatar, { backgroundColor: getAvatarColor(conversation.name) }]}>
@@ -585,74 +655,79 @@ export default function MessageScreen({ route, navigation }) {
           }
         />
 
-        {/* ── Emoji picker ── */}
-        {showEmoji && (
-          <View style={msgStyles.emojiPicker}>
-            <View style={msgStyles.emojiGrid}>
-              {EMOJIS.map(e => (
-                <TouchableOpacity key={e} onPress={() => insertEmoji(e)} style={msgStyles.emojiBtn}>
-                  <Text style={msgStyles.emojiChar}>{e}</Text>
-                </TouchableOpacity>
-              ))}
+        {/* ── Wrapper bọc emoji + input/recording, đẩy lên theo keyboardHeight ── */}
+        <View style={{ paddingBottom: keyboardHeight }}>
+
+          {/* ── Emoji picker ── */}
+          {showEmoji && (
+            <View style={msgStyles.emojiPicker}>
+              <View style={msgStyles.emojiGrid}>
+                {EMOJIS.map(e => (
+                  <TouchableOpacity key={e} onPress={() => insertEmoji(e)} style={msgStyles.emojiBtn}>
+                    <Text style={msgStyles.emojiChar}>{e}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* ── Recording bar ── */}
-        {isRecording ? (
-          <View style={msgStyles.recordingBar}>
-            <View style={msgStyles.recordingDot} />
-            <Text style={msgStyles.recordingTimer}>
-              {fmtDur(recordingSec)}
-            </Text>
-            <Text style={{ flex: 1, fontSize: 13, color: THEME.textMuted }}>Đang ghi âm...</Text>
-            <TouchableOpacity onPress={cancelRecording} style={msgStyles.inputBtn}>
-              <Text style={{ fontSize: 20 }}>✕</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={stopRecording} style={[msgStyles.sendBtn, { backgroundColor: '#ed4245' }]}>
-              <Text style={msgStyles.sendIcon}>↑</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          /* ── Input bar ── */
-          <View style={msgStyles.inputBar}>
-            <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickFile}>
-              <Text style={msgStyles.inputBtnIcon}>📎</Text>
-            </TouchableOpacity>
-
-            <View style={msgStyles.inputWrap}>
-              <TextInput
-                ref={inputRef}
-                style={msgStyles.textInput}
-                value={text}
-                onChangeText={(v) => { setText(v); if (v.trim()) emitTyping(); }}
-                placeholder={`Nhắn tin ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
-                placeholderTextColor={THEME.textMuted}
-                multiline
-                selectionColor={THEME.accent}
-              />
-              <TouchableOpacity onPress={() => setShowEmoji(v => !v)} style={msgStyles.emojiToggle}>
-                <Text style={{ fontSize: 20 }}>😊</Text>
+          {/* ── Recording bar ── */}
+          {isRecording ? (
+            <View style={msgStyles.recordingBar}>
+              <View style={msgStyles.recordingDot} />
+              <Text style={msgStyles.recordingTimer}>{fmtDur(recordingSec)}</Text>
+              <Text style={{ flex: 1, fontSize: 13, color: THEME.textMuted }}>Đang ghi âm...</Text>
+              <TouchableOpacity onPress={cancelRecording} style={msgStyles.inputBtn}>
+                <Text style={{ fontSize: 20 }}>✕</Text>
               </TouchableOpacity>
-            </View>
-
-            {text.trim().length > 0 ? (
-              <TouchableOpacity style={msgStyles.sendBtn} onPress={handleSend}>
+              <TouchableOpacity onPress={stopRecording} style={[msgStyles.sendBtn, { backgroundColor: '#ed4245' }]}>
                 <Text style={msgStyles.sendIcon}>↑</Text>
               </TouchableOpacity>
-            ) : (
-              <>
-                <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickImage}>
-                  <Text style={msgStyles.inputBtnIcon}>🖼️</Text>
+            </View>
+          ) : (
+            /* ── Input bar ── */
+            <View style={msgStyles.inputBar}>
+              <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickFile}>
+                <Text style={msgStyles.inputBtnIcon}>📎</Text>
+              </TouchableOpacity>
+
+              <View style={msgStyles.inputWrap}>
+                <TextInput
+                  ref={inputRef}
+                  style={msgStyles.textInput}
+                  value={text}
+                  onChangeText={(v) => { setText(v); if (v.trim()) emitTyping(); }}
+                  placeholder={`Nhắn tin ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
+                  placeholderTextColor={THEME.textMuted}
+                  multiline
+                  selectionColor={THEME.accent}
+                />
+                <TouchableOpacity onPress={() => setShowEmoji(v => !v)} style={msgStyles.emojiToggle}>
+                  <Text style={{ fontSize: 20 }}>😊</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={msgStyles.inputBtn} onPress={startRecording}>
-                  <Text style={msgStyles.inputBtnIcon}>🎤</Text>
+              </View>
+
+              {text.trim().length > 0 ? (
+                <TouchableOpacity style={msgStyles.sendBtn} onPress={handleSend}>
+                  <Text style={msgStyles.sendIcon}>↑</Text>
                 </TouchableOpacity>
-              </>
-            )}
-          </View>
-        )}
-      </KeyboardAvoidingView>
+              ) : (
+                <>
+                  <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickImage}>
+                    <Text style={msgStyles.inputBtnIcon}>🖼️</Text>
+                  </TouchableOpacity>
+                  {/* expo-av Recording is not supported on Expo Web */}
+                  {Platform.OS !== 'web' && (
+                    <TouchableOpacity style={msgStyles.inputBtn} onPress={startRecording}>
+                      <Text style={msgStyles.inputBtnIcon}>🎤</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
+          )}
+        </View>
+      </View>
 
       {/* ── Long press action sheet ── */}
       <Modal visible={!!actionMsg} transparent animationType="slide">

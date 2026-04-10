@@ -363,8 +363,13 @@ const Chat = () => {
         const up  = await messageApi.uploadVoice(fd);
         const res = await messageApi.sendVoice(convId, up.data.voice.fileId);
         const msg = normalizeMsg(res.data.data);
+        const voiceId = msg._id?.toString();
 
-        setMessages(prev => ({ ...prev, [convId]: [...(prev[convId] || []), msg] }));
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          if (list.some(m => m._id?.toString() === voiceId)) return prev;
+          return { ...prev, [convId]: [...list, msg] };
+        });
         setConversations(prev => prev.map(c =>
           c.id === convId ? { ...c, lastMessage: msg.content, time: msg.time } : c
         ));
@@ -376,8 +381,13 @@ const Chat = () => {
         const up  = await messageApi.uploadImage(fd);
         const res = await messageApi.sendImage(convId, up.data.file.fileId);
         const msg = normalizeMsg(res.data.data);
+        const imgId = msg._id?.toString();
 
-        setMessages(prev => ({ ...prev, [convId]: [...(prev[convId] || []), msg] }));
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          if (list.some(m => m._id?.toString() === imgId)) return prev;
+          return { ...prev, [convId]: [...list, msg] };
+        });
         setConversations(prev => prev.map(c =>
           c.id === convId ? { ...c, lastMessage: '[Hình ảnh]', time: msg.time } : c
         ));
@@ -389,8 +399,13 @@ const Chat = () => {
         const up  = await messageApi.uploadFile(fd);
         const res = await messageApi.sendFile(convId, up.data.file.fileId);
         const msg = normalizeMsg(res.data.data);
+        const fileId = msg._id?.toString();
 
-        setMessages(prev => ({ ...prev, [convId]: [...(prev[convId] || []), msg] }));
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          if (list.some(m => m._id?.toString() === fileId)) return prev;
+          return { ...prev, [convId]: [...list, msg] };
+        });
         setConversations(prev => prev.map(c =>
           c.id === convId ? { ...c, lastMessage: msg.content, time: msg.time } : c
         ));
