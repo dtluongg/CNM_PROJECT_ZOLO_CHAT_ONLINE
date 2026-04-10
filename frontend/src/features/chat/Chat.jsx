@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import { MessageCircle, Search, User } from 'lucide-react';
 import LeftSidebar from './components/LeftSidebar';
 import ChatArea from './components/ChatArea';
@@ -7,7 +8,11 @@ import RightSidebar from './components/RightSidebar';
 import ProfileSettings from '../user/components/ProfileSettings';
 import UserSearchModal from '../user/components/UserSearchModal';
 import conversationApi from './api/conversationApi';
+import messageApi from './api/messageApi';
 import friendApi from '../friends/api/friendApi';
+import { useAuth } from '../../context/AuthContext';
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
 
 const formatConversationTime = (isoString) => {
   if (!isoString) return '';
@@ -117,7 +122,16 @@ function BottomTabBar({ activeTab, onTabChange, unreadTotal }) {
   );
 }
 
+// ── Normalize message từ API → format UI ────────────────────────────────────
+const fmtTime = (iso) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+};
+const normalizeMsg = (msg) => ({ ...msg, time: fmtTime(msg.createdAt) });
+
 const Chat = () => {
+  const { user: currentUser, token } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [activeConversation, setActiveConversation] = useState(null);
@@ -126,7 +140,14 @@ const Chat = () => {
   const [showUserSearch, setShowUserSearch] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState({});
+  const [typingUsers, setTypingUsers] = useState({}); // convId → { userId, displayName }
   const [dmOverrides, setDmOverrides] = useState({});
+
+  // Socket ref
+  const socketRef = useRef(null);
+  // Keep active conversation accessible inside socket callbacks
+  const activeConvRef = useRef(null);
+  useEffect(() => { activeConvRef.current = activeConversation; }, [activeConversation]);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [friendsForGroup, setFriendsForGroup] = useState([]);
   const [groupName, setGroupName] = useState('');
@@ -169,6 +190,68 @@ const Chat = () => {
     return () => window.removeEventListener('resize', check);
   }, []);
 
+  // ── Socket.io connection ──────────────────────────────────────────────────
+  useEffect(() => {
+    const accessToken = token || localStorage.getItem('accessToken');
+    if (!accessToken) return;
+
+    const socket = io(SOCKET_URL, {
+      auth: { token: accessToken },
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
+
+    socketRef.current = socket;
+
+    // Nhận tin nhắn mới
+    socket.on('chat:new-message', ({ conversationId, message }) => {
+      const msg = normalizeMsg(message);
+
+      setMessages(prev => {
+        const list = prev[conversationId] || [];
+        // Tránh duplicate nếu người gửi đã optimistic update
+        if (list.some(m => m._id?.toString() === msg._id?.toString())) return prev;
+        return { ...prev, [conversationId]: [...list, msg] };
+      });
+
+      // Cập nhật preview + unread ở sidebar
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        const isActive = activeConvRef.current?.id === conversationId;
+        return {
+          ...c,
+          lastMessage: msg.content,
+          time: msg.time,
+          unread: isActive ? 0 : (c.unread || 0) + 1,
+        };
+      }));
+    });
+
+    // Typing indicator
+    socket.on('chat:typing', ({ conversationId, userId, displayName }) => {
+      if (userId === currentUser?._id?.toString()) return;
+      setTypingUsers(prev => ({
+        ...prev,
+        [conversationId]: { userId, displayName },
+      }));
+    });
+
+    socket.on('chat:stop-typing', ({ conversationId }) => {
+      setTypingUsers(prev => {
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
   useEffect(() => {
     const peer = location.state?.peer;
     const openConversationId = location.state?.openConversationId;
@@ -189,38 +272,131 @@ const Chat = () => {
     fetchConversations();
   }, [fetchConversations]);
 
-  const handleSelectConversation = useCallback((conv) => {
+  const handleSelectConversation = useCallback(async (conv) => {
+    // Rời conversation cũ khỏi socket room
+    if (activeConvRef.current?.id && socketRef.current) {
+      socketRef.current.emit('chat:leave', { conversationId: activeConvRef.current.id });
+    }
+
     setActiveConversation(conv);
     setConversations(prev =>
       prev.map(c => c.id === conv.id ? { ...c, unread: 0 } : c)
     );
+
+    // Tham gia conversation room mới (typing indicators)
+    if (socketRef.current) {
+      socketRef.current.emit('chat:join', { conversationId: conv.id });
+    }
+
     if (isMobile) {
       setMobileView('chat');
       setMobileTab('messages');
     }
-  }, [isMobile]);
 
-  const handleSendMessage = useCallback((text) => {
-    if (!activeConversation || !text.trim()) return;
-    const newMsg = {
-      id: Date.now(),
-      senderId: 'me',
-      senderName: 'Tôi',
-      content: text.trim(),
-      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      type: 'text',
-    };
-    setMessages(prev => ({
-      ...prev,
-      [activeConversation.id]: [...(prev[activeConversation.id] || []), newMsg],
-    }));
-    setConversations(prev =>
-      prev.map(c => c.id === activeConversation.id
-        ? { ...c, lastMessage: text.trim(), time: newMsg.time }
-        : c
-      )
-    );
-  }, [activeConversation]);
+    // Load messages nếu chưa có
+    if (messages[conv.id]) return;
+    try {
+      const res = await messageApi.getMessages(conv.id);
+      const msgs = (res.data.messages || []).map(normalizeMsg);
+      setMessages(prev => ({ ...prev, [conv.id]: msgs }));
+    } catch (err) {
+      console.error('Load messages error:', err);
+      setMessages(prev => ({ ...prev, [conv.id]: [] }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile, messages]);
+
+  // ── Gửi tin nhắn (text | voice | file | image) ──────────────────────────
+  // payload: { type: 'text', content } | { type: 'voice', blob, duration }
+  //          | { type: 'file', file } | { type: 'image', file }
+  const handleSendMessage = useCallback(async (payload) => {
+    if (!activeConversation) return;
+
+    const convId = activeConversation.id;
+    const myId   = currentUser?._id?.toString() || 'me';
+    const myName = currentUser?.displayName || 'Tôi';
+    const myAvatar = currentUser?.avatar || null;
+
+    try {
+      if (payload.type === 'text') {
+        const { content } = payload;
+        if (!content?.trim()) return;
+
+        // Optimistic UI
+        const tempId = `temp_${Date.now()}`;
+        const now = new Date().toISOString();
+        const tempMsg = {
+          _id: tempId, senderId: myId, senderName: myName, avatar: myAvatar,
+          type: 'text', content: content.trim(), payload: {},
+          time: fmtTime(now), createdAt: now,
+        };
+        setMessages(prev => ({ ...prev, [convId]: [...(prev[convId] || []), tempMsg] }));
+
+        const res = await messageApi.sendText(convId, content.trim());
+        const real = normalizeMsg(res.data.data);
+
+        // Thay temp bằng message thật
+        setMessages(prev => ({
+          ...prev,
+          [convId]: (prev[convId] || []).map(m => m._id === tempId ? real : m),
+        }));
+
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: content.trim(), time: real.time } : c
+        ));
+
+      } else if (payload.type === 'voice') {
+        const { blob, duration } = payload;
+        const fd = new FormData();
+        fd.append('voice', blob, 'voice.webm');
+        if (duration) fd.append('duration', String(Math.round(duration)));
+
+        const up  = await messageApi.uploadVoice(fd);
+        const res = await messageApi.sendVoice(convId, up.data.voice.fileId);
+        const msg = normalizeMsg(res.data.data);
+
+        setMessages(prev => ({ ...prev, [convId]: [...(prev[convId] || []), msg] }));
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: msg.content, time: msg.time } : c
+        ));
+
+      } else if (payload.type === 'image') {
+        const fd = new FormData();
+        fd.append('file', payload.file);
+
+        const up  = await messageApi.uploadImage(fd);
+        const res = await messageApi.sendImage(convId, up.data.file.fileId);
+        const msg = normalizeMsg(res.data.data);
+
+        setMessages(prev => ({ ...prev, [convId]: [...(prev[convId] || []), msg] }));
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: '[Hình ảnh]', time: msg.time } : c
+        ));
+
+      } else if (payload.type === 'file') {
+        const fd = new FormData();
+        fd.append('file', payload.file);
+
+        const up  = await messageApi.uploadFile(fd);
+        const res = await messageApi.sendFile(convId, up.data.file.fileId);
+        const msg = normalizeMsg(res.data.data);
+
+        setMessages(prev => ({ ...prev, [convId]: [...(prev[convId] || []), msg] }));
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: msg.content, time: msg.time } : c
+        ));
+      }
+    } catch (err) {
+      console.error('handleSendMessage error:', err);
+      // Xóa optimistic message nếu lỗi (chỉ áp dụng cho text)
+      if (payload.type === 'text') {
+        setMessages(prev => ({
+          ...prev,
+          [convId]: (prev[convId] || []).filter(m => !m._id?.startsWith('temp_')),
+        }));
+      }
+    }
+  }, [activeConversation, currentUser]);
 
   const handleViewProfile = useCallback((userId) => {
     navigate(`/user/${userId}`);
@@ -344,7 +520,9 @@ const Chat = () => {
   }, [fetchConversations]);
 
   const unreadTotal = conversations.reduce((s, c) => s + (c.unread || 0), 0);
-  const activeMessages = activeConversation ? messages[activeConversation.id] || [] : [];
+  const activeMessages     = activeConversation ? messages[activeConversation.id] || [] : [];
+  const activeTypingUser   = activeConversation ? typingUsers[activeConversation.id] || null : null;
+  const currentUserId      = currentUser?._id?.toString() || null;
 
   /* ── MOBILE LAYOUT ── */
   if (isMobile) {
@@ -389,10 +567,13 @@ const Chat = () => {
             <ChatArea
               conversation={activeConversation}
               messages={activeMessages}
+              currentUserId={currentUserId}
+              typingUser={activeTypingUser}
               onSendMessage={handleSendMessage}
               onToggleRight={() => setShowRightSidebar(v => !v)}
               showRight={showRightSidebar}
               onBack={handleMobileBack}
+              socket={socketRef.current}
               isMobile
             />
           </div>
@@ -456,9 +637,12 @@ const Chat = () => {
         <ChatArea
           conversation={activeConversation}
           messages={activeMessages}
+          currentUserId={currentUserId}
+          typingUser={activeTypingUser}
           onSendMessage={handleSendMessage}
           onToggleRight={() => setShowRightSidebar(v => !v)}
           showRight={showRightSidebar}
+          socket={socketRef.current}
         />
       </div>
 

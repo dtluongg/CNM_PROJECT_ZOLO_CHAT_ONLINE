@@ -103,13 +103,26 @@ const MessageBubble = ({ msg, isMine, showHeader, isMobile }) => {
             maxWidth: '100%',
           }}>
             {msg.type === 'image' ? (
-              <img src={msg.content} alt="attachment"
+              <img src={msg.payload?.url || msg.content} alt="attachment"
                 style={{ maxWidth: isMobile ? 220 : 260, maxHeight: 260, borderRadius: 8, display: 'block' }} />
+            ) : msg.type === 'voice' ? (
+              <audio
+                controls
+                src={msg.payload?.url}
+                style={{ maxWidth: isMobile ? 220 : 260, display: 'block', height: 36 }}
+              />
             ) : msg.type === 'file' ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <a
+                href={msg.payload?.url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}
+              >
                 <Paperclip size={18} />
-                <span style={{ fontSize: 13, textDecoration: 'underline', cursor: 'pointer' }}>{msg.content}</span>
-              </div>
+                <span style={{ fontSize: 13, textDecoration: 'underline' }}>
+                  {msg.payload?.fileName || msg.content}
+                </span>
+              </a>
             ) : msg.content}
           </div>
 
@@ -222,11 +235,10 @@ const TypingIndicator = ({ name }) => (
 );
 
 export default function ChatArea({
-  conversation, messages, onSendMessage,
-  onToggleRight, showRight, onBack, isMobile,
+  conversation, messages, currentUserId, typingUser, socket,
+  onSendMessage, onToggleRight, showRight, onBack, isMobile,
 }) {
   const bottomRef = useRef(null);
-  const [typing] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -262,7 +274,7 @@ export default function ChatArea({
       }
     }
     const sameGroup = prev && prev.senderId === msg.senderId && !prev.time?.includes(' ') && !msg.time?.includes(' ');
-    displayItems.push({ type: 'msg', msg, isMine: msg.senderId === 'me', showHeader: !sameGroup, key: msg.id });
+    displayItems.push({ type: 'msg', msg, isMine: msg.senderId === currentUserId, showHeader: !sameGroup, key: msg._id || msg.id });
   });
 
   const onlineStatus = conversation.type === 'dm'
@@ -427,7 +439,7 @@ export default function ChatArea({
             : <MessageBubble key={item.key} msg={item.msg} isMine={item.isMine} showHeader={item.showHeader} isMobile={isMobile} />
         )}
 
-        {typing && <TypingIndicator name={conversation.name} />}
+        {typingUser && <TypingIndicator name={typingUser.displayName} />}
         <div ref={bottomRef} style={{ height: 8 }} />
       </div>
 
@@ -436,6 +448,8 @@ export default function ChatArea({
         onSend={onSendMessage}
         placeholder={`Nhắn tin tới ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
         isMobile={isMobile}
+        conversationId={conversation.id}
+        socket={socket}
       />
 
       <style>{`

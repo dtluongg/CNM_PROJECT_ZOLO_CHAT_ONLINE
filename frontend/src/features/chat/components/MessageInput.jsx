@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Paperclip, Smile, Mic, Send, Image } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Paperclip, Smile, Mic, Send, Image, X } from 'lucide-react';
 
 const EMOJIS = [
   '😀','😂','😍','🥺','😭','😊','😎','🤔',
@@ -8,13 +8,45 @@ const EMOJIS = [
   '🤣','😘','🥳','😇','🤩','😤','😬','🫡',
 ];
 
-export default function MessageInput({ onSend, placeholder, isMobile }) {
+const SUPPORTED_AUDIO_TYPES = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/ogg;codecs=opus',
+  'audio/ogg',
+  'audio/mp4',
+];
+
+function getBestMimeType() {
+  if (typeof MediaRecorder === 'undefined') return '';
+  for (const type of SUPPORTED_AUDIO_TYPES) {
+    if (MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return '';
+}
+
+function fmtDuration(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+export default function MessageInput({ onSend, placeholder, isMobile, conversationId, socket }) {
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [focused, setFocused] = useState(false);
-  const textareaRef = useRef(null);
-  const emojiPickerRef = useRef(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSec, setRecordingSec] = useState(0);
 
+  const textareaRef      = useRef(null);
+  const emojiPickerRef   = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef        = useRef([]);
+  const recordingTimerRef = useRef(null);
+  const typingTimerRef   = useRef(null);
+  const fileInputRef     = useRef(null);
+  const imageInputRef    = useRef(null);
+
+  // Close emoji picker on outside click
   useEffect(() => {
     if (!showEmoji) return;
     const handleClick = (e) => {
@@ -30,15 +62,31 @@ export default function MessageInput({ onSend, placeholder, isMobile }) {
     };
   }, [showEmoji]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      clearInterval(recordingTimerRef.current);
+      clearTimeout(typingTimerRef.current);
+      if (mediaRecorderRef.current?.state !== 'inactive') {
+        mediaRecorderRef.current?.stop();
+      }
+    };
+  }, []);
+
+  // ── Text send ──────────────────────────────────────────────────────────────
   const handleSend = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    onSend(trimmed);
+    onSend({ type: 'text', content: trimmed });
     setText('');
     setShowEmoji(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.focus();
+    }
+    if (socket && conversationId) {
+      clearTimeout(typingTimerRef.current);
+      socket.emit('chat:stop-typing', { conversationId });
     }
   };
 
@@ -49,17 +97,29 @@ export default function MessageInput({ onSend, placeholder, isMobile }) {
     }
   };
 
+  // ── Typing indicator ───────────────────────────────────────────────────────
+  const emitTyping = useCallback(() => {
+    if (!socket || !conversationId) return;
+    socket.emit('chat:typing', { conversationId });
+    clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => {
+      socket.emit('chat:stop-typing', { conversationId });
+    }, 2000);
+  }, [socket, conversationId]);
+
   const handleInput = (e) => {
     setText(e.target.value);
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(e.target.scrollHeight, isMobile ? 100 : 128) + 'px';
+    if (e.target.value.trim()) emitTyping();
   };
 
+  // ── Emoji ─────────────────────────────────────────────────────────────────
   const insertEmoji = (emoji) => {
     const ta = textareaRef.current;
     if (ta) {
       const start = ta.selectionStart;
-      const end = ta.selectionEnd;
+      const end   = ta.selectionEnd;
       const newText = text.slice(0, start) + emoji + text.slice(end);
       setText(newText);
       setTimeout(() => {
@@ -72,18 +132,157 @@ export default function MessageInput({ onSend, placeholder, isMobile }) {
     setShowEmoji(false);
   };
 
+  // ── Voice recording ───────────────────────────────────────────────────────
+  const startRecording = async () => {
+    try {
+      const stream   = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = getBestMimeType();
+      const options  = mimeType ? { mimeType } : {};
+      const mr       = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = mr;
+      chunksRef.current = [];
+
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mr.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob     = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        const duration = recordingSec;
+        chunksRef.current = [];
+        onSend({ type: 'voice', blob, duration });
+      };
+
+      mr.start(250);
+      setIsRecording(true);
+      setRecordingSec(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSec(s => s + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Microphone access denied:', err);
+    }
+  };
+
+  const stopRecording = () => {
+    clearInterval(recordingTimerRef.current);
+    setIsRecording(false);
+    if (mediaRecorderRef.current?.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const cancelRecording = () => {
+    clearInterval(recordingTimerRef.current);
+    setIsRecording(false);
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.onstop = () => { chunksRef.current = []; };
+      if (mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+    }
+  };
+
+  // ── File / image pickers ───────────────────────────────────────────────────
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) onSend({ type: 'file', file });
+    e.target.value = '';
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) onSend({ type: 'image', file });
+    e.target.value = '';
+  };
+
   const canSend = text.trim().length > 0;
 
+  // ── Recording UI ──────────────────────────────────────────────────────────
+  if (isRecording) {
+    return (
+      <div style={{
+        padding: isMobile ? '8px 10px' : '0 16px 14px',
+        paddingBottom: isMobile ? 'calc(8px + env(safe-area-inset-bottom, 0px))' : '14px',
+        flexShrink: 0, position: 'relative',
+        background: isMobile ? 'var(--bg-secondary)' : 'transparent',
+        borderTop: isMobile ? '1px solid var(--border)' : 'none',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 12,
+          background: 'var(--input-bg)',
+          borderRadius: isMobile ? 24 : 10,
+          padding: isMobile ? '8px 12px' : '10px 14px',
+          border: '1.5px solid #ed4245',
+        }}>
+          {/* Red pulse dot */}
+          <div style={{
+            width: 12, height: 12, borderRadius: '50%',
+            background: '#ed4245', flexShrink: 0,
+            animation: 'recordPulse 1s ease-in-out infinite',
+          }} />
+
+          {/* Duration */}
+          <span style={{ flex: 1, fontSize: 16, fontWeight: 700, color: '#ed4245', letterSpacing: 1 }}>
+            {fmtDuration(recordingSec)}
+          </span>
+
+          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Đang ghi âm...</span>
+
+          {/* Cancel */}
+          <button
+            onClick={cancelRecording}
+            title="Hủy ghi âm"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', display: 'flex', alignItems: 'center',
+              padding: '4px', borderRadius: 6, flexShrink: 0,
+            }}
+          >
+            <X size={20} />
+          </button>
+
+          {/* Stop & send */}
+          <button
+            onClick={stopRecording}
+            title="Dừng và gửi"
+            style={{
+              background: '#ed4245', border: 'none', cursor: 'pointer',
+              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: isMobile ? '50%' : 8,
+              width: isMobile ? 36 : 'auto',
+              height: isMobile ? 36 : 'auto',
+              padding: isMobile ? 0 : '7px 12px',
+              flexShrink: 0,
+            }}
+          >
+            <Send size={isMobile ? 17 : 15} />
+          </button>
+        </div>
+        <style>{`
+          @keyframes recordPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // ── Normal UI ─────────────────────────────────────────────────────────────
   return (
     <div style={{
       padding: isMobile ? '8px 10px' : '0 16px 14px',
-      paddingBottom: isMobile
-        ? 'calc(8px + env(safe-area-inset-bottom, 0px))'
-        : '14px',
+      paddingBottom: isMobile ? 'calc(8px + env(safe-area-inset-bottom, 0px))' : '14px',
       flexShrink: 0, position: 'relative',
       background: isMobile ? 'var(--bg-secondary)' : 'transparent',
       borderTop: isMobile ? '1px solid var(--border)' : 'none',
     }}>
+      {/* Hidden file inputs */}
+      <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileChange} />
+      <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} />
+
       {/* Emoji Picker */}
       {showEmoji && (
         <div
@@ -98,7 +297,7 @@ export default function MessageInput({ onSend, placeholder, isMobile }) {
             borderRadius: 12,
             padding: 12,
             display: 'grid',
-            gridTemplateColumns: isMobile ? 'repeat(8, 1fr)' : 'repeat(8, 1fr)',
+            gridTemplateColumns: 'repeat(8, 1fr)',
             gap: isMobile ? 4 : 3,
             zIndex: 200,
             boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
@@ -143,14 +342,39 @@ export default function MessageInput({ onSend, placeholder, isMobile }) {
         transition: 'border-color 0.15s',
         boxShadow: isMobile ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
       }}>
-        {/* Attach - desktop only or mobile compact */}
+        {/* Desktop: Attach file button */}
         {!isMobile && (
-          <button title="Đính kèm file"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', transition: 'color 0.12s', marginBottom: 3 }}
+          <button
+            title="Đính kèm file"
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 6,
+              flexShrink: 0, display: 'flex', alignItems: 'center',
+              transition: 'color 0.12s', marginBottom: 3,
+            }}
             onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
           >
             <Paperclip size={18} />
+          </button>
+        )}
+
+        {/* Desktop: Image button */}
+        {!isMobile && (
+          <button
+            title="Gửi ảnh"
+            onClick={() => imageInputRef.current?.click()}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 6,
+              flexShrink: 0, display: 'flex', alignItems: 'center',
+              transition: 'color 0.12s', marginBottom: 3,
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+          >
+            <Image size={18} />
           </button>
         )}
 
@@ -188,9 +412,11 @@ export default function MessageInput({ onSend, placeholder, isMobile }) {
           <Smile size={isMobile ? 20 : 18} />
         </button>
 
-        {/* Mobile attach */}
+        {/* Mobile: image button when no text */}
         {isMobile && !canSend && (
-          <button title="Đính kèm ảnh"
+          <button
+            title="Gửi ảnh"
+            onClick={() => imageInputRef.current?.click()}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 6,
@@ -203,17 +429,7 @@ export default function MessageInput({ onSend, placeholder, isMobile }) {
         )}
 
         {/* Send / Mic */}
-        {!canSend ? (
-          !isMobile && (
-            <button title="Ghi âm"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', marginBottom: 3, transition: 'color 0.12s' }}
-              onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-            >
-              <Mic size={18} />
-            </button>
-          )
-        ) : (
+        {canSend ? (
           <button onClick={handleSend} title="Gửi"
             style={{
               background: 'var(--accent)', border: 'none', cursor: 'pointer',
@@ -231,6 +447,22 @@ export default function MessageInput({ onSend, placeholder, isMobile }) {
             onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
           >
             <Send size={isMobile ? 17 : 15} />
+          </button>
+        ) : (
+          <button
+            title="Ghi âm"
+            onClick={startRecording}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 6,
+              flexShrink: 0, display: 'flex', alignItems: 'center',
+              marginBottom: isMobile ? 0 : 3, transition: 'color 0.12s',
+              minWidth: 32, minHeight: 32, justifyContent: 'center',
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+          >
+            <Mic size={isMobile ? 20 : 18} />
           </button>
         )}
       </div>
