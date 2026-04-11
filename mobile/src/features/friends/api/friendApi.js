@@ -31,6 +31,12 @@ const friendApi = {
     // 10. Chặn (POST /friends/:userId/block)
     blockFriend: (userId) => apiClient.post(`/friends/${userId}/block`),
 
+    // 11. Lấy danh sách người bị chặn (GET /friends/blocked)
+    getBlockedList: () => apiClient.get('/friends/blocked'),
+
+    // 12. Lấy trạng thái bạn bè / chặn (GET /friends/:userId/status)
+    getFriendStatus: (userId) => apiClient.get(`/friends/${userId}/status`),
+
     // Tiện ích Tìm kiếm (Ánh xạ qua users)
     searchUsers: (q) => apiClient.get(`/users/search?q=${q}`),
 };

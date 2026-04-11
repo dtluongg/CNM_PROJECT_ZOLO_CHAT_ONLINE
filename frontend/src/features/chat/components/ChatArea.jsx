@@ -439,10 +439,12 @@ const MessageBubble = ({
           </span>
         )} */}
 
-        {/* --- Phần hiển thị "Đã xem" --- */}
+        {/* --- Phần hiển thị "Đã xem" / "Bị chặn" --- */}
         {isMine && (
           <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-            {conversationType === 'dm' ? (
+            {msg.blocked ? (
+              <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 600 }}>Bị chặn bởi người dùng này</span>
+            ) : conversationType === 'dm' ? (
               // Chat cá nhân: Hiện chữ "Đã xem" nếu đối phương đã đọc, ngược lại "Đã gửi"
               msg.readBy && msg.readBy.length > 0 ? (
                 <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>Đã xem</span>
@@ -718,6 +720,9 @@ export default function ChatArea({
   isMobile,
   setMessages,
   onViewProfile,
+  sendBlockError,
+  blockStatus,
+  onBlockStatusChanged,
 }) {
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -1142,7 +1147,75 @@ export default function ChatArea({
         <div ref={bottomRef} style={{ height: 8 }} />
       </div>
 
-      {/* ── Message Input ── */}
+      {/* ── Block error banner (send failed due to block) ── */}
+      {sendBlockError && (
+        <div style={{
+          padding: '8px 16px',
+          background: '#ed4245',
+          color: '#fff',
+          fontSize: 13,
+          textAlign: 'center',
+          flexShrink: 0,
+        }}>
+          {sendBlockError}
+        </div>
+      )}
+
+      {/* ── Người chặn: no input, show unblock banner ── */}
+      {conversation.type === 'dm' && blockStatus?.iBlocked && (
+        <div style={{
+          padding: '10px 16px',
+          background: 'var(--bg-secondary)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 12,
+          flexShrink: 0,
+        }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Bạn đã chặn người này. Không thể gửi tin nhắn.</span>
+          <button
+            onClick={async () => {
+              try {
+                await import('../../friends/api/friendApi').then(m => m.default.blockFriend(conversation.otherUserId));
+                onBlockStatusChanged?.();
+              } catch (err) {
+                window.alert(err?.response?.data?.message || 'Không thể bỏ chặn');
+              }
+            }}
+            style={{
+              padding: '5px 14px',
+              borderRadius: 6,
+              border: 'none',
+              cursor: 'pointer',
+              background: 'var(--accent)',
+              color: '#fff',
+              fontSize: 13,
+              fontWeight: 700,
+            }}
+          >
+            Bỏ chặn
+          </button>
+        </div>
+      )}
+
+      {/* ── Người bị chặn: vẫn có input, nhưng hiện banner cảnh báo ── */}
+      {conversation.type === 'dm' && blockStatus?.theyBlockedMe && (
+        <div style={{
+          padding: '7px 16px',
+          background: '#fef3c7',
+          borderTop: '1px solid #fcd34d',
+          textAlign: 'center',
+          flexShrink: 0,
+          color: '#92400e',
+          fontSize: 12,
+        }}>
+          Bạn đã bị người này chặn. Tin nhắn của bạn sẽ không được nhận.
+        </div>
+      )}
+
+      {/* ── Message Input (ẩn khi mình chặn người kia) ── */}
+      {!(conversation.type === 'dm' && blockStatus?.iBlocked) && (
       <MessageInput
         onSend={async (payload) => {
           await onSendMessage(payload);
@@ -1155,6 +1228,7 @@ export default function ChatArea({
         editingMessage={editingMessage}
         onCancelEdit={() => setEditingMessage(null)}
       />
+      )}
 
       {/* Modal Reaction List */}
       {showReactionList && (

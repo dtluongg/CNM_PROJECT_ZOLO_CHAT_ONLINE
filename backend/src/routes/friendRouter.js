@@ -12,7 +12,8 @@ const {
     unfriend,
     updateNickname,
     blockFriend,
-    getBlockedList
+    getBlockedList,
+    getFriendStatus,
 } = require('../controllers/friendController');
 
 // Mọi hoạt động Bạn bè đều phải đăng nhập
@@ -29,6 +30,7 @@ router.post('/requests/:id/accept', acceptFriendRequest);
 router.post('/requests/:id/reject', rejectFriendRequest);
 router.delete('/requests/:id', cancelFriendRequest);
 router.delete('/:userId', unfriend);
+router.get('/:userId/status', getFriendStatus);
 router.patch('/:userId/nickname', updateNickname);
 router.post('/:userId/block', blockFriend);
 

@@ -1,27 +1,150 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, Image,
-  FlatList, TextInput, Platform, Keyboard,
-  Modal, StatusBar, Pressable, Alert, ScrollView,
-} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { Audio } from 'expo-av';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { useAuth } from '../../../context/AuthContext';
-import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
-import messageApi from '../api/messageApi';
-import conversationApi from '../api/conversationApi';
-import friendApi from '../../friends/api/friendApi';
-import { getAvatarColor, getInitials } from '../../../theme';
-import { useTheme } from '../../../context/ThemeContext';
+import { MessageCircle, Search, User } from 'lucide-react';
+import LeftSidebar from './components/LeftSidebar';
+import ChatArea from './components/ChatArea';
+import RightSidebar from './components/RightSidebar';
+import ProfileSettings from '../user/components/ProfileSettings';
+import UserSearchModal from '../user/components/UserSearchModal';
+import conversationApi from './api/conversationApi';
+import messageApi from './api/messageApi';
+import friendApi from '../friends/api/friendApi';
+import { useAuth } from '../../context/AuthContext';
 
-const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL ||
-  (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.88.135:2026/backend/api')
-    .replace('/backend/api', '');
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
 
+const formatConversationTime = (isoString) => {
+  if (!isoString) return '';
+
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const sameDay =
+    date.getDate() === now.getDate()
+    && date.getMonth() === now.getMonth()
+    && date.getFullYear() === now.getFullYear();
+
+  if (sameDay) {
+    return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+};
+
+const mapConversationItem = (item, dmOverrides) => {
+  const override = dmOverrides[item._id] || null;
+  const isDm     = item.type === 'dm';
+  const other    = isDm ? item.otherUser : null;
+
+  return {
+    id:          item._id,
+    name:        isDm
+      ? (override?.name    || other?.displayName || item.name || 'Đoạn chat trực tiếp')
+      : (item.name || 'Nhóm chưa đặt tên'),
+    avatar:      isDm
+      ? (override?.avatar  || other?.avatar      || item.avatar || null)
+      : (item.avatar || null),
+    otherUserId: isDm ? (other?._id?.toString() || null) : null,
+    lastMessage: item.lastMessagePreview || 'Chưa có tin nhắn',
+    time:        formatConversationTime(item.lastMessageTime || item.updatedAt || item.createdAt),
+    unread:      item.myMembership?.unreadCount || 0,
+    type:        item.type,
+    online:      false,
+    memberCount: item.totalMembers,
+    otherUserId: isDm ? (item.otherUserId || other?._id?.toString() || null) : null,
+    raw:         item,
+  };
+};
+
+const buildPendingDmConversation = (peer) => ({
+  id: `pending-dm-${peer.id}`,
+  name: peer.name || 'Đoạn chat trực tiếp',
+  avatar: peer.avatar || null,
+  lastMessage: 'Chưa có tin nhắn',
+  time: '',
+  unread: 0,
+  type: 'dm',
+  online: false,
+  memberCount: 2,
+  otherUserId: peer.id,
+  raw: {
+    pendingDm: true,
+    targetUserId: peer.id,
+  },
+});
+
+const BOTTOM_TABS = [
+  { key: 'messages', icon: MessageCircle, label: 'Tin nhắn' },
+  { key: 'search', icon: Search, label: 'Tìm kiếm' },
+  { key: 'profile', icon: User, label: 'Hồ sơ' },
+];
+
+function BottomTabBar({ activeTab, onTabChange, unreadTotal }) {
+  return (
+    <div style={{
+      height: 56,
+      background: 'var(--bg-secondary)',
+      borderTop: '1px solid var(--border)',
+      display: 'flex',
+      alignItems: 'stretch',
+      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      flexShrink: 0,
+      zIndex: 20,
+    }}>
+      {/* eslint-disable-next-line no-unused-vars */}
+      {BOTTOM_TABS.map(({ key, icon: Icon, label }) => {
+        const active = activeTab === key;
+        return (
+          <button
+            key={key}
+            onClick={() => onTabChange(key)}
+            style={{
+              flex: 1, background: 'none', border: 'none', cursor: 'pointer',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 3,
+              color: active ? 'var(--accent)' : 'var(--text-muted)',
+              transition: 'color 0.15s',
+              position: 'relative',
+              minHeight: 0,
+            }}
+          >
+            <div style={{ position: 'relative' }}>
+              <Icon
+                size={22}
+                strokeWidth={active ? 2.5 : 2}
+                fill={active && key === 'messages' ? 'var(--accent)' : 'none'}
+              />
+              {key === 'messages' && unreadTotal > 0 && !active && (
+                <span style={{
+                  position: 'absolute', top: -4, right: -6,
+                  minWidth: 16, height: 16, background: '#ed4245', color: '#fff',
+                  borderRadius: 8, fontSize: 9, fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 3px', border: '2px solid var(--bg-secondary)',
+                }}>
+                  {unreadTotal > 99 ? '99+' : unreadTotal}
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: 10, fontWeight: active ? 700 : 500, letterSpacing: 0.2 }}>
+              {label}
+            </span>
+            {active && (
+              <span style={{
+                position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+                width: 32, height: 3, background: 'var(--accent)', borderRadius: '0 0 4px 4px',
+              }} />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Normalize message từ API → format UI ────────────────────────────────────
 const fmtTime = (iso) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -29,530 +152,80 @@ const fmtTime = (iso) => {
 };
 const normalizeMsg = (msg) => ({ ...msg, time: fmtTime(msg.createdAt) });
 
-const fmtDur = (secs) => {
-  if (!secs) return '0:00';
-  const m = Math.floor(secs / 60);
-  const s = Math.round(secs % 60);
-  return `${m}:${String(s).padStart(2, '0')}`;
-};
-
-// ─────────────────────────────────────────────
-// Avatar
-// ─────────────────────────────────────────────
-const Avatar = ({ name, avatar, size = 36, online = null, THEME, styles }) => {
-  const bg = getAvatarColor(name);
-  return (
-    <View style={{ width: size, height: size }}>
-      {avatar
-        ? <Image source={{ uri: avatar }} style={{ width: size, height: size, borderRadius: size / 2 }} />
-        : <View style={[styles.avatarCircle, { width: size, height: size, borderRadius: size / 2, backgroundColor: bg }]}>
-          <Text style={[styles.avatarText, { fontSize: size * 0.38 }]}>{getInitials(name)}</Text>
-        </View>
-      }
-      {online !== null && (
-        <View style={[styles.onlineDot, {
-          width: size * 0.28, height: size * 0.28, borderRadius: size * 0.14,
-          backgroundColor: online ? THEME.statusOnline : THEME.statusOffline,
-        }]} />
-      )}
-    </View>
-  );
-};
-
-// ─────────────────────────────────────────────
-// Date divider
-// ─────────────────────────────────────────────
-const DateDivider = ({ label, styles }) => (
-  <View style={styles.dateDivider}>
-    <View style={styles.dateLine} />
-    <Text style={styles.dateLabel}>{label}</Text>
-    <View style={styles.dateLine} />
-  </View>
-);
-
-// ─────────────────────────────────────────────
-// Voice player
-// ─────────────────────────────────────────────
-const VoicePlayer = ({ url, duration, isMine, THEME }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const soundRef = useRef(null);
-
-  const togglePlay = async () => {
-    try {
-      if (isPlaying) {
-        await soundRef.current?.pauseAsync();
-        setIsPlaying(false);
-      } else {
-        if (!soundRef.current) {
-          // setAudioModeAsync is iOS/Android only; skip on web
-          if (Platform.OS !== 'web') {
-            await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false });
-          }
-          const { sound } = await Audio.Sound.createAsync({ uri: url });
-          soundRef.current = sound;
-          sound.setOnPlaybackStatusUpdate((status) => {
-            if (status.didJustFinish) {
-              setIsPlaying(false);
-              soundRef.current?.unloadAsync();
-              soundRef.current = null;
-            }
-          });
-        }
-        await soundRef.current.playAsync();
-        setIsPlaying(true);
-      }
-    } catch (err) {
-      console.error('VoicePlayer error:', err);
-    }
-  };
-
-  useEffect(() => {
-    return () => { soundRef.current?.unloadAsync(); };
-  }, []);
-
-  return (
-    <TouchableOpacity onPress={togglePlay} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 140 }}>
-      <Text style={{ fontSize: 20 }}>{isPlaying ? '⏸' : '▶️'}</Text>
-      <View style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: isMine ? 'rgba(255,255,255,0.4)' : THEME.border }} />
-      <Text style={{ fontSize: 12, color: isMine ? 'rgba(255,255,255,0.8)' : THEME.textMuted }}>
-        {fmtDur(duration)}
-      </Text>
-    </TouchableOpacity>
-  );
-};
-
-// ─────────────────────────────────────────────
-// Message bubble
-// ─────────────────────────────────────────────
-const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245'];
-const getSenderColor = (name, THEME) =>
-  name ? SENDER_COLORS[name.charCodeAt(0) % SENDER_COLORS.length] : THEME.accent;
-
-const MessageBubble = ({ msg, isMine, showHeader, onLongPress, onShowReadBy, currentUserId, conversation, onAvatarPress, THEME, styles }) => {
-  const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName, THEME);
-  const bubbleBg = isMine ? THEME.bubbleSelf : THEME.bubbleOther;
-  const bubbleText = isMine ? '#ffffff' : THEME.textPrimary;
-
-  const borderRadius = { borderRadius: 18 };
-  if (isMine) {
-    borderRadius.borderTopRightRadius = showHeader ? 4 : 18;
-    borderRadius.borderBottomRightRadius = 4;
-  } else {
-    borderRadius.borderTopLeftRadius = showHeader ? 4 : 18;
-    borderRadius.borderBottomLeftRadius = 4;
-  }
-
-  const renderContent = () => {
-    if (msg.revoked || msg.recalled) {
-      return <Text style={[styles.bubbleText, { color: bubbleText, fontStyle: 'italic', opacity: 0.7 }]}>Tin nhắn đã được thu hồi</Text>;
-    }
-    if (msg.type === 'image') {
-      return (
-        <Image
-          source={{ uri: msg.payload?.url || msg.content }}
-          style={styles.imgAttachment}
-          resizeMode="cover"
-        />
-      );
-    }
-    if (msg.type === 'voice') {
-      return (
-        <VoicePlayer
-          url={msg.payload?.url}
-          duration={msg.payload?.duration}
-          isMine={isMine}
-          THEME={THEME}
-        />
-      );
-    }
-    if (msg.type === 'file') {
-      return (
-        <View style={styles.fileRow}>
-          <Text style={{ fontSize: 20 }}>📎</Text>
-          <Text style={[styles.bubbleText, { color: bubbleText, textDecorationLine: 'underline' }]}>
-            {msg.payload?.fileName || msg.content}
-          </Text>
-        </View>
-      );
-    }
-    return (
-      <Text style={[styles.bubbleText, { color: bubbleText }]}>
-        {msg.content}
-        {msg.edited && (
-          <Text style={{ fontSize: 11, fontStyle: 'italic', opacity: 0.6 }}> (đã chỉnh sửa)</Text>
-        )}
-      </Text>
-    );
-  };
-
-  const renderSeenStatus = () => {
-    if (!isMine || msg.revoked) return null;
-    const readBy = msg.readBy || [];
-
-    if (conversation.type !== 'group') {
-      // Chat đơn: Đã xem / Đã gửi
-      const isSeen = readBy.length > 0;
-      return (
-        <Text style={styles.seenText}>
-          {isSeen ? 'Đã xem' : 'Đã gửi'}
-        </Text>
-      );
-    } else {
-      // Chat group: Avatars
-      if (readBy.length === 0) return null;
-      return (
-        <TouchableOpacity 
-          style={styles.seenAvatars} 
-          onPress={() => onShowReadBy(readBy)}
-        >
-          {readBy.slice(0, 3).map((r, i) => (
-            <View key={r.userId} style={[styles.miniAvatar, { marginLeft: i === 0 ? 0 : -6, zIndex: 10 - i }]}>
-              {r.avatar ? (
-                <Image source={{ uri: r.avatar }} style={styles.miniAvatarImg} />
-              ) : (
-                <View style={[styles.miniAvatarImg, { backgroundColor: THEME.accent, justifyContent: 'center', alignItems: 'center' }]}>
-                  <Text style={{ fontSize: 6, color: '#fff' }}>{r.displayName?.charAt(0)}</Text>
-                </View>
-              )}
-            </View>
-          ))}
-          {readBy.length > 3 && (
-            <Text style={styles.seenCount}>+{readBy.length - 3}</Text>
-          )}
-        </TouchableOpacity>
-      );
-    }
-  };
-
-  return (
-    <View style={[styles.msgRow, { flexDirection: isMine ? 'row-reverse' : 'row' }]}>
-      <View style={{ width: 38, alignItems: 'center', marginTop: showHeader ? 2 : 0 }}>
-        {showHeader && !isMine && (
-          <TouchableOpacity
-            onPress={() => onAvatarPress && onAvatarPress(msg.senderId)}
-            activeOpacity={onAvatarPress ? 0.7 : 1}
-          >
-            <Avatar name={msg.senderName} avatar={msg.avatar} size={36} THEME={THEME} styles={styles} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <View style={[styles.msgContent, { alignItems: isMine ? 'flex-end' : 'flex-start' }]}>
-        {showHeader && (
-          <View style={[styles.msgHeader, { flexDirection: isMine ? 'row-reverse' : 'row' }]}>
-            {!isMine && <Text style={[styles.senderName, { color: senderColor }]}>{msg.senderName}</Text>}
-            <Text style={styles.msgTime}>{msg.time}</Text>
-          </View>
-        )}
-
-        <Pressable onLongPress={() => onLongPress && onLongPress(msg)} delayLongPress={400}>
-          <View style={[styles.bubble, { backgroundColor: bubbleBg }, borderRadius]}>
-            {renderContent()}
-          </View>
-        </Pressable>
-
-        {/* Reactions Summary */}
-        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-          <View style={[
-            styles.reactionSummary,
-            isMine ? { right: 12 } : { left: 12 }
-          ]}>
-            {Object.entries(msg.reactions).map(([emoji, count], idx) => (
-              <View key={idx} style={styles.reactionItem}>
-                <Text style={styles.reactionEmoji}>{emoji}</Text>
-                {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
-              </View>
-            ))}
-          </View>
-        )}
-        {renderSeenStatus()}
-      </View>
-    </View>
-  );
-};
-
-// ─────────────────────────────────────────────
-// Emoji list
-// ─────────────────────────────────────────────
-const EMOJIS = [
-  '😀', '😂', '😍', '🥺', '😭', '😊', '😎', '🤔',
-  '😅', '🥰', '😢', '😡', '😴', '🤗', '😏', '🙄',
-  '❤️', '🔥', '✨', '🎉', '👍', '👏', '🙏', '💯',
-];
-
-// ─────────────────────────────────────────────
-// Forward Modal
-// ─────────────────────────────────────────────
-const ForwardModal = ({ isOpen, onClose, msg, THEME, styles }) => {
+const Chat = () => {
+  const { user: currentUser, token } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [activeConversation, setActiveConversation] = useState(null);
+  const [showRightSidebar, setShowRightSidebar] = useState(true);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [showUserSearch, setShowUserSearch] = useState(false);
   const [conversations, setConversations] = useState([]);
-  const [search, setSearch] = useState('');
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [messages, setMessages] = useState({});
+  const [typingUsers, setTypingUsers] = useState({}); // convId → { userId, displayName }
+  const [dmOverrides, setDmOverrides] = useState({});
 
-  useEffect(() => {
-    if (isOpen) {
-      setLoading(true);
-      conversationApi.listMyConversations()
-        .then(res => setConversations(res.data.data || []))
-        .catch(err => console.error('listMyConversations error:', err))
-        .finally(() => setLoading(false));
-    } else {
-      setSearch('');
-      setSelectedIds([]);
-      setSending(false);
-    }
-  }, [isOpen]);
-
-  const filtered = conversations.filter(c => {
-    const name = c.type === 'dm' ? c.otherUser?.displayName : c.name;
-    return name?.toLowerCase().includes(search.toLowerCase());
-  });
-
-  const toggleSelect = (id) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const handleSend = async () => {
-    if (selectedIds.length === 0) return;
-    setSending(true);
-    try {
-      for (const convId of selectedIds) {
-        await messageApi.forwardMessage(convId, msg._id || msg.id);
-      }
-      onClose();
-      Alert.alert('Thành công', 'Đã chuyển tiếp tin nhắn');
-    } catch (err) {
-      console.error('Forward error:', err);
-      Alert.alert('Lỗi', 'Không thể chuyển tiếp tin nhắn');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <Modal visible={isOpen} animationType="slide" transparent={false}>
-      <View style={{ flex: 1, backgroundColor: THEME.bgTertiary, paddingTop: Platform.OS === 'ios' ? 50 : 10 }}>
-        {/* Header */}
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', padding: 16,
-          backgroundColor: THEME.bgSecondary, borderBottomWidth: 1, borderBottomColor: THEME.border
-        }}>
-          <Text style={{ flex: 1, fontSize: 18, fontWeight: '700', color: THEME.textPrimary }}>Chuyển tiếp</Text>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={{ fontSize: 24, color: THEME.textMuted }}>✕</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Search */}
-        <View style={{ padding: 12 }}>
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', backgroundColor: THEME.bgInput,
-            borderRadius: 10, paddingHorizontal: 12
-          }}>
-            <Text style={{ fontSize: 18 }}>🔍</Text>
-            <TextInput
-              style={{ flex: 1, padding: 10, color: THEME.textPrimary }}
-              placeholder="Tìm kiếm người hoặc nhóm..."
-              placeholderTextColor={THEME.textMuted}
-              value={search}
-              onChangeText={setSearch}
-            />
-          </View>
-        </View>
-
-        {/* List */}
-        <FlatList
-          data={filtered}
-          keyExtractor={item => item._id}
-          renderItem={({ item }) => {
-            const name = item.type === 'dm' ? item.otherUser?.displayName : item.name;
-            const avatar = item.type === 'dm' ? item.otherUser?.avatar : item.avatar;
-            const isSelected = selectedIds.includes(item._id);
-
-            return (
-              <TouchableOpacity
-                onPress={() => toggleSelect(item._id)}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', padding: 12, gap: 12,
-                  backgroundColor: isSelected ? THEME.bgHover : 'transparent'
-                }}
-              >
-                <Avatar name={name} avatar={avatar} size={44} THEME={THEME} styles={styles} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '600', color: THEME.textPrimary }}>{name}</Text>
-                  <Text style={{ fontSize: 12, color: THEME.textMuted }}>
-                    {item.type === 'dm' ? 'Cá nhân' : `${item.totalMembers || 0} thành viên`}
-                  </Text>
-                </View>
-                <View style={{
-                  width: 24, height: 24, borderRadius: 6, borderWidth: 2,
-                  borderColor: isSelected ? THEME.accent : THEME.border,
-                  backgroundColor: isSelected ? THEME.accent : 'transparent',
-                  justifyContent: 'center', alignItems: 'center'
-                }}>
-                  {isSelected && <Text style={{ color: '#fff', fontSize: 14 }}>✔️</Text>}
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-          ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: THEME.textMuted }}>Không tìm thấy kết quả</Text>}
-        />
-
-        {/* Footer */}
-        <View style={{ padding: 20, borderTopWidth: 1, borderTopColor: THEME.border, backgroundColor: THEME.bgSecondary }}>
-          <TouchableOpacity
-            disabled={selectedIds.length === 0 || sending}
-            onPress={handleSend}
-            style={{
-              backgroundColor: selectedIds.length > 0 ? THEME.accent : THEME.border,
-              padding: 14, borderRadius: 10, alignItems: 'center'
-            }}
-          >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>
-              {sending ? 'Đang gửi...' : `Chuyển tiếp ${selectedIds.length > 0 ? `(${selectedIds.length})` : ''}`}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
-// ─────────────────────────────────────────────
-// Message Screen
-// ─────────────────────────────────────────────
-export default function MessageScreen({ route, navigation }) {
-  const { conversation } = route.params;
-  const { user, token } = useAuth();
-  const { theme: THEME } = useTheme();
-  const { isUserOnline, getLastSeen } = usePresence();
-  const msgStyles = useStyles(THEME);
-
-  const currentUserId = user?._id?.toString() || null;
-
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState('');
-  const [showEmoji, setShowEmoji] = useState(false);
-  const [actionMsg, setActionMsg] = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingSec, setRecordingSec] = useState(0);
-  const [typingUser, setTypingUser] = useState(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [reactionTypes, setReactionTypes] = useState([]);
-  const [editingMessage, setEditingMessage] = useState(null);
-  const [showReadByModal, setShowReadByModal] = useState(false);
-  const [currentReadByList, setCurrentReadByList] = useState([]);
-  const [showForwardModal, setShowForwardModal] = useState(false);
-  const [forwardingMsg, setForwardingMsg] = useState(null);
-
-  // Info panel state (from demo)
-  const [showInfoPanel, setShowInfoPanel] = useState(false);
-  const [infoTab, setInfoTab] = useState('info'); // 'info' | 'media' | 'files'
-  const [mediaData, setMediaData] = useState({ images: [], files: [] });
-  const [loadingMedia, setLoadingMedia] = useState(false);
-  const [blockConfirm, setBlockConfirm] = useState(false);
-  const [blockBusy, setBlockBusy] = useState(false);
-
-  const flatRef = useRef(null);
-  const inputRef = useRef(null);
+  // Socket ref
   const socketRef = useRef(null);
-  const recordingRef = useRef(null);
-  const recordingTimerRef = useRef(null);
-  const typingTimerRef = useRef(null);
+  // Keep active conversation accessible inside socket callbacks
+  const activeConvRef = useRef(null);
+  useEffect(() => { activeConvRef.current = activeConversation; }, [activeConversation]);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [friendsForGroup, setFriendsForGroup] = useState([]);
+  const [groupName, setGroupName] = useState('');
+  const [selectedFriendIds, setSelectedFriendIds] = useState([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [mobileView, setMobileView] = useState('list');   // 'list' | 'chat'
+  const [mobileTab, setMobileTab] = useState('messages'); // for bottom nav highlight
+  const [sendBlockError, setSendBlockError] = useState(''); // thông báo khi bị chặn
+  const blockErrorTimerRef = useRef(null);
+  const [dmBlockStatus, setDmBlockStatus] = useState(null); // { iBlocked, theyBlockedMe } for active DM
+
+  const fetchConversations = useCallback(async () => {
+    try {
+      const res = await conversationApi.listMyConversations('exclude');
+      const list = Array.isArray(res?.data?.data) ? res.data.data : [];
+      const mapped = list.map((item) => mapConversationItem(item, dmOverrides));
+      const openConversationId = location.state?.openConversationId;
+
+      setConversations(mapped);
+
+      if (openConversationId) {
+        const openConversation = mapped.find((c) => c.id === openConversationId);
+        if (openConversation) {
+          setActiveConversation(openConversation);
+          if (isMobile) setMobileView('chat');
+        }
+      } else {
+        setActiveConversation((prevActive) => {
+          if (!prevActive?.id) return prevActive;
+          // Nếu đang là pending DM, thử tìm conversation thực trong danh sách
+          if (prevActive.raw?.pendingDm && prevActive.otherUserId) {
+            const existing = mapped.find(
+              (c) => c.type === 'dm' && c.otherUserId === prevActive.otherUserId
+            );
+            if (existing) return existing;
+          }
+          if (prevActive.raw?.pendingDm) return prevActive;
+          return mapped.find((c) => c.id === prevActive.id) || null;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load conversations:', error);
+    }
+  }, [dmOverrides, isMobile, location.state?.openConversationId]);
 
   useEffect(() => {
-    navigation.setOptions({ headerShown: false });
-    // Load reaction types
-    messageApi.getReactionTypes()
-      .then(res => setReactionTypes(res.data.data))
-      .catch(err => console.error('getReactionTypes error:', err));
+    const check = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
   }, []);
 
-  // ── Keyboard listener (fixes Android keyboard overlap) ─────────────────
+  // ── Socket.io connection ──────────────────────────────────────────────────
   useEffect(() => {
-    const showEvent = Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow';
-    const hideEvent = Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide';
-
-    const onShow = (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-      setShowEmoji(false); // ẩn emoji picker khi bàn phím hiện
-    };
-    const onHide = () => setKeyboardHeight(0);
-
-    const subShow = Keyboard.addListener(showEvent, onShow);
-    const subHide = Keyboard.addListener(hideEvent, onHide);
-
-    return () => {
-      subShow.remove();
-      subHide.remove();
-    };
-  }, []);
-
-  // ── Load messages from API (với cơ chế cache và lọc trùng lặp) ────────
-  const loadMessages = useCallback(async () => {
-    try {
-      const res = await messageApi.getMessages(conversation.id);
-      const raw = (res.data.messages || []).map(normalizeMsg);
-      const seen = new Set();
-      const msgs = raw.filter(m => {
-        const k = m._id?.toString();
-        if (!k || seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
-      setMessages(msgs);
-    } catch (err) {
-      console.error('Load messages error:', err);
-    }
-  }, [conversation.id]);
-
-  useEffect(() => { loadMessages(); }, [loadMessages]);
-
-  // Reload khi screen gain focus (back từ profile, v.v.)
-  useFocusEffect(useCallback(() => { loadMessages(); }, [loadMessages]));
-
-  // ── Load media/files khi mở info panel tab media/files ────────────────
-  const loadMediaData = useCallback(async () => {
-    if (!conversation.id) return;
-    setLoadingMedia(true);
-    try {
-      const res = await messageApi.getAttachments(conversation.id);
-      setMediaData(res.data || { images: [], files: [] });
-    } catch {
-      setMediaData({ images: [], files: [] });
-    } finally {
-      setLoadingMedia(false);
-    }
-  }, [conversation.id]);
-
-  useEffect(() => {
-    if (showInfoPanel && (infoTab === 'media' || infoTab === 'files')) {
-      loadMediaData();
-    }
-  }, [showInfoPanel, infoTab, loadMediaData]);
-
-  // ── Block user ─────────────────────────────────────────────────────────
-  const handleBlockUser = async () => {
-    if (!conversation.otherUserId) return;
-    setBlockBusy(true);
-    try {
-      await friendApi.blockFriend(conversation.otherUserId);
-      setBlockConfirm(false);
-      setShowInfoPanel(false);
-      Alert.alert('Đã chặn', `Bạn đã chặn ${conversation.name}.`);
-    } catch (err) {
-      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể chặn người dùng.');
-    } finally {
-      setBlockBusy(false);
-    }
-  };
-
-  // ── Socket.io connection ───────────────────────────────────────────────
-  useEffect(() => {
-    const accessToken = token;
+    const accessToken = token || localStorage.getItem('accessToken');
     if (!accessToken) return;
 
     const socket = io(SOCKET_URL, {
@@ -561,1067 +234,917 @@ export default function MessageScreen({ route, navigation }) {
       reconnectionAttempts: 5,
       reconnectionDelay: 2000,
     });
+
     socketRef.current = socket;
 
-    socket.emit('chat:join', { conversationId: conversation.id });
-
+    // Nhận tin nhắn mới
     socket.on('chat:new-message', ({ conversationId, message }) => {
-      if (conversationId !== conversation.id) return;
       const msg = normalizeMsg(message);
+
       setMessages(prev => {
-        if (prev.some(m => m._id?.toString() === msg._id?.toString())) return prev;
-        return [...prev, msg];
+        const list = prev[conversationId] || [];
+        // Tránh duplicate nếu người gửi đã optimistic update
+        if (list.some(m => m._id?.toString() === msg._id?.toString())) return prev;
+        return { ...prev, [conversationId]: [...list, msg] };
+      });
+
+      // Cập nhật preview + unread ở sidebar
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        const isActive = activeConvRef.current?.id === conversationId;
+        return {
+          ...c,
+          lastMessage: msg.content,
+          time: msg.time,
+          unread: isActive ? 0 : (c.unread || 0) + 1,
+        };
+      }));
+    });
+
+    // Typing indicator
+    socket.on('chat:typing', ({ conversationId, userId, displayName }) => {
+      if (userId === currentUser?._id?.toString()) return;
+      setTypingUsers(prev => ({
+        ...prev,
+        [conversationId]: { userId, displayName },
+      }));
+    });
+
+    socket.on('chat:stop-typing', ({ conversationId }) => {
+      setTypingUsers(prev => {
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
       });
     });
 
-    socket.on('chat:typing', ({ conversationId: cid, userId, displayName }) => {
-      if (cid !== conversation.id || userId === currentUserId) return;
-      setTypingUser({ userId, displayName });
-    });
+    // Thu hồi tin nhắn
+    socket.on('chat:message-revoked', ({ conversationId, messageId }) => {
+      // 1. Cập nhật list tin nhắn nếu đang mở conv này
+      setMessages(prev => {
+        const list = prev[conversationId] || [];
+        if (list.length === 0) return prev;
+        return {
+          ...prev,
+          [conversationId]: list.map(m =>
+            (m._id || m.id)?.toString() === messageId?.toString()
+              ? { ...m, revoked: true }
+              : m
+          )
+        };
+      });
 
-    socket.on('chat:stop-typing', ({ conversationId: cid }) => {
-      if (cid !== conversation.id) return;
-      setTypingUser(null);
-    });
-
-    socket.on('chat:message-reaction', (data) => {
-      const { conversationId: cid, messageId, userId, emoji, action, reactions: serverReactions } = data;
-      if (cid !== conversation.id) return;
-
-      setMessages(prev => prev.map(m => {
-        const mId = m._id?.toString();
-        if (mId !== messageId) return m;
-
-        const newReactions = serverReactions || m.reactions || {};
-        let newMyReaction = m.myReaction;
-        if (userId === currentUserId) {
-          newMyReaction = (action === 'removed') ? null : emoji;
-        }
-
-        return { ...m, reactions: newReactions, myReaction: newMyReaction };
+      // 2. Cập nhật preview ở sidebar
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        // Nếu tin nhắn bị thu hồi chính là tin nhắn cuối cùng hiển thị ở sidebar
+        // (Đây là một ước lượng đơn giản, DB đã cập nhật rồi nhưng socket này giúp update UI nhanh)
+        // Lưu ý: Nếu muốn chính xác 100% thì BE nên gửi kèm preview mới hoặc client tự check.
+        // Ở đây ta đơn giản là đổi preview thành "[Tin nhắn đã được thu hồi]"
+        return {
+          ...c,
+          lastMessage: '[Tin nhắn đã được thu hồi]'
+        };
       }));
     });
 
-    socket.on('chat:message-revoked', ({ conversationId: cid, messageId }) => {
-      if (cid !== conversation.id) return;
-      setMessages(prev => prev.map(m => 
-        (m._id?.toString() === messageId?.toString()) ? { ...m, revoked: true } : m
+    // Chỉnh sửa tin nhắn
+    socket.on('chat:message-edited', ({ conversationId, message }) => {
+      const msg = normalizeMsg(message);
+
+      // 1. Cập nhật list tin nhắn - Sử dụng MERGE logic
+      setMessages(prev => {
+        const list = prev[conversationId] || [];
+        if (list.length === 0) return prev;
+        return {
+          ...prev,
+          [conversationId]: list.map(m =>
+            (m._id || m.id)?.toString() === msg._id?.toString()
+              ? { ...m, ...msg } // Merge để giữ lại reactions/myReaction
+              : m
+          )
+        };
+      });
+
+      // 2. Cập nhật preview ở sidebar
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        return {
+          ...c,
+          lastMessage: msg.content,
+        };
+      }));
+    });
+
+    // Reset unread count khi bản thân đọc tin ở thiết bị khác hoặc qua API
+    socket.on('chat:unread-reset', ({ conversationId }) => {
+      setConversations(prev => prev.map(c =>
+        c.id === conversationId ? { ...c, unread: 0 } : c
       ));
-    });
-
-    socket.on('chat:message-edited', ({ conversationId: cid, message }) => {
-      if (cid !== conversation.id) return;
-      setMessages(prev => prev.map(m => {
-        if (m._id?.toString() === message._id?.toString()) {
-          const normalized = normalizeMsg(message);
-          // TRỘN DỮ LIỆU: Giữ lại reactions và myReaction cũ
-          return {
-            ...m,
-            ...normalized,
-            reactions: m.reactions,
-            myReaction: m.myReaction
-          };
-        }
-        return m;
-      }));
-    });
-
-    socket.on('chat:message-read', (data) => {
-      const { conversationId: cid, messageId, userId, displayName, avatar, readAt } = data;
-      if (cid !== conversation.id) return;
-
-      setMessages(prev => prev.map(m => {
-        if (m._id?.toString() === messageId?.toString()) {
-          const alreadyRead = (m.readBy || []).some(r => r.userId?.toString() === userId?.toString());
-          if (alreadyRead) return m;
-          const newReadBy = [...(m.readBy || []), { userId, displayName, avatar, readAt }];
-          return { ...m, readBy: newReadBy };
-        }
-        return m;
-      }));
-    });
-
-    socket.on('chat:message-deleted-for-me', ({ conversationId: cid, messageId }) => {
-      if (cid !== conversation.id) return;
-      setMessages(prev => prev.filter(m => (m._id || m.id)?.toString() !== messageId?.toString()));
     });
 
     return () => {
-      socket.emit('chat:leave', { conversationId: conversation.id });
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [token, conversation.id, currentUserId]);
-
-  const scrollToBottom = useCallback(() => {
-    if (flatRef.current && messages.length > 0) {
-      flatRef.current.scrollToEnd({ animated: true });
-    }
-  }, [messages.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   useEffect(() => {
-    const t = setTimeout(scrollToBottom, 100);
-    return () => clearTimeout(t);
-  }, [messages]);
+    const peer = location.state?.peer;
+    const openConversationId = location.state?.openConversationId;
 
-  // ── Auto mark as read ───────────────────────────────────────────────────
-  useEffect(() => {
-    if (messages.length === 0) return;
-    const lastMsg = messages[messages.length - 1];
-    if (lastMsg.senderId !== currentUserId) {
-      const mId = lastMsg._id?.toString();
-      if (mId && !mId.startsWith('temp_')) {
-        messageApi.markAsRead(conversation.id, mId).catch(() => { });
-      }
+    if (peer && openConversationId) {
+      setDmOverrides((prev) => ({
+        ...prev,
+        [openConversationId]: {
+          id: peer.id,
+          name: peer.name,
+          avatar: peer.avatar,
+        },
+      }));
     }
-  }, [messages.length, conversation.id]);
+  }, [location.state]);
 
-  // scroll khi keyboard hiện để tin nhắn cuối không bị che
   useEffect(() => {
-    if (keyboardHeight > 0) {
-      const t = setTimeout(scrollToBottom, 80);
-      return () => clearTimeout(t);
+    const pendingPeer = location.state?.pendingPeer;
+    if (!pendingPeer?.id) return;
+
+    setActiveConversation(buildPendingDmConversation(pendingPeer));
+    if (isMobile) {
+      setMobileView('chat');
+      setMobileTab('messages');
     }
-  }, [keyboardHeight]);
+  }, [isMobile, location.state]);
 
-  // ── Typing indicator ───────────────────────────────────────────────────
-  const emitTyping = useCallback(() => {
-    if (!socketRef.current) return;
-    socketRef.current.emit('chat:typing', { conversationId: conversation.id });
-    clearTimeout(typingTimerRef.current);
-    typingTimerRef.current = setTimeout(() => {
-      socketRef.current?.emit('chat:stop-typing', { conversationId: conversation.id });
-    }, 2000);
-  }, [conversation.id]);
+  useEffect(() => {
+    fetchConversations();
+  }, [fetchConversations]);
 
-  // ── Send text / Update edited text ──────────────────────────────────
-  const handleSend = async () => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+  const fetchDmBlockStatus = useCallback(async (otherUserId) => {
+    if (!otherUserId) { setDmBlockStatus(null); return; }
+    try {
+      const res = await friendApi.getFriendStatus(otherUserId);
+      const d = res?.data?.data;
+      setDmBlockStatus(d ? { iBlocked: !!d.iBlocked, theyBlockedMe: !!d.theyBlockedMe } : null);
+    } catch {
+      setDmBlockStatus(null);
+    }
+  }, []);
 
-    if (editingMessage) {
-      // ── Chế độ CHỈNH SỬA ──────────────────────────────────────────
-      const mId = editingMessage._id?.toString();
-      const oldContent = editingMessage.content;
-      
-      // Optimistic update
-      setMessages(prev => prev.map(m => 
-        (m._id?.toString() === mId) ? { ...m, content: trimmed, edited: true } : m
-      ));
-      setEditingMessage(null);
-      setText('');
-      Keyboard.dismiss();
+  const handleSelectConversation = useCallback(async (conv) => {
+    // Rời conversation cũ khỏi socket room
+    if (activeConvRef.current?.id && socketRef.current) {
+      socketRef.current.emit('chat:leave', { conversationId: activeConvRef.current.id });
+    }
+
+    setActiveConversation(conv);
+    setConversations(prev =>
+      prev.map(c => c.id === conv.id ? { ...c, unread: 0 } : c)
+    );
+
+    // Tham gia conversation room mới (typing indicators)
+    if (socketRef.current) {
+      socketRef.current.emit('chat:join', { conversationId: conv.id });
+    }
+
+    if (isMobile) {
+      setMobileView('chat');
+      setMobileTab('messages');
+    }
+
+    // Lấy trạng thái chặn cho DM
+    if (conv.type === 'dm' && conv.otherUserId) {
+      fetchDmBlockStatus(conv.otherUserId);
+    } else {
+      setDmBlockStatus(null);
+    }
+
+    // Load messages nếu chưa có
+    if (messages[conv.id]) return;
+    try {
+      const res = await messageApi.getMessages(conv.id);
+      const msgs = (res.data.messages || []).map(normalizeMsg);
+      setMessages(prev => ({ ...prev, [conv.id]: msgs }));
+    } catch (err) {
+      console.error('Load messages error:', err);
+      setMessages(prev => ({ ...prev, [conv.id]: [] }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile, messages, fetchDmBlockStatus]);
+
+  // ── Gửi tin nhắn (text | voice | file | image) ──────────────────────────
+  // payload: { type: 'text', content } | { type: 'voice', blob, duration }
+  //          | { type: 'file', file } | { type: 'image', file }
+  const handleSendMessage = useCallback(async (payload) => {
+    if (!activeConversation) return;
+
+    let resolvedConversation = activeConversation;
+    let convId = activeConversation.id;
+
+    if (payload.type === 'text' && !payload.isEdit && activeConversation.raw?.pendingDm && activeConversation.raw?.targetUserId) {
+      const content = payload.content?.trim();
+      if (!content) return;
 
       try {
-        await messageApi.editMessage(mId, trimmed);
-      } catch (err) {
-        console.error('editMessage error:', err);
-        Alert.alert('Lỗi', 'Không thể chỉnh sửa tin nhắn');
-        // Rollback nếu cần hoặc thông báo cho user
-      }
-      return;
-    }
+        const targetUserId = activeConversation.raw.targetUserId;
+        const res = await conversationApi.createDmConversation(targetUserId, content);
+        const createdConversation = res?.data?.data;
+        const createdConversationId = createdConversation?._id;
 
-    // ── Chế độ GỬI MỚI ──────────────────────────────────────────────
-    const tempId = `temp_${Date.now()}`;
-    const now = new Date().toISOString();
-    const tempMsg = {
-      _id: tempId, senderId: currentUserId,
-      senderName: user?.displayName || 'Tôi',
-      avatar: user?.avatar || null,
-      type: 'text', content: trimmed, payload: {},
-      time: fmtTime(now), createdAt: now,
-    };
-    setMessages(prev => [...prev, tempMsg]);
-    setText('');
-    setShowEmoji(false);
+        if (!createdConversationId) {
+          throw new Error('Không nhận được conversationId từ server');
+        }
 
-    if (socketRef.current) {
-      clearTimeout(typingTimerRef.current);
-      socketRef.current.emit('chat:stop-typing', { conversationId: conversation.id });
-    }
+        const override = {
+          id: targetUserId,
+          name: activeConversation.name,
+          avatar: activeConversation.avatar || '',
+        };
 
-    try {
-      const res = await messageApi.sendText(conversation.id, trimmed);
-      const real = normalizeMsg(res.data.data);
-      const realId = real._id?.toString();
-      setMessages(prev => {
-        const cleaned = prev.filter(m => m._id?.toString() !== realId);
-        return cleaned.map(m => m._id === tempId ? real : m);
-      });
-    } catch (err) {
-      console.error('sendText error:', err);
-      setMessages(prev => prev.filter(m => m._id !== tempId));
-    }
-  };
+        setDmOverrides((prev) => ({
+          ...prev,
+          [createdConversationId]: override,
+        }));
 
-  // ── Voice recording (native only — expo-av Recording not supported on web) ──
-  const startRecording = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Thông báo', 'Ghi âm chưa được hỗ trợ trên web.');
-      return;
-    }
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Quyền truy cập mic', 'Vui lòng cấp quyền microphone để ghi âm.');
+        const mappedCreated = mapConversationItem(createdConversation, {
+          [createdConversationId]: override,
+        });
+
+        setConversations((prev) => {
+          const withoutPending = prev.filter((c) => c.id !== activeConversation.id);
+          const existingIndex = withoutPending.findIndex((c) => c.id === mappedCreated.id);
+
+          if (existingIndex >= 0) {
+            const next = [...withoutPending];
+            next[existingIndex] = { ...next[existingIndex], ...mappedCreated };
+            return next;
+          }
+
+          return [mappedCreated, ...withoutPending];
+        });
+
+        setMessages((prev) => {
+          const next = { ...prev };
+          const pendingMessages = next[activeConversation.id] || [];
+          delete next[activeConversation.id];
+          next[createdConversationId] = pendingMessages;
+          return next;
+        });
+
+        setActiveConversation(mappedCreated);
+        resolvedConversation = mappedCreated;
+        convId = createdConversationId;
+      } catch (error) {
+        window.alert(error.response?.data?.message || error.message || 'Không thể tạo cuộc trò chuyện');
         return;
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      await recording.startAsync();
-      recordingRef.current = recording;
-
-      setIsRecording(true);
-      setRecordingSec(0);
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingSec(s => s + 1);
-      }, 1000);
-    } catch (err) {
-      console.error('startRecording error:', err);
     }
-  };
 
-  const stopRecording = async () => {
-    clearInterval(recordingTimerRef.current);
-    setIsRecording(false);
-    const duration = recordingSec;
+    const myId   = currentUser?._id?.toString() || 'me';
+    const myName = currentUser?.displayName || 'Tôi';
+    const myAvatar = currentUser?.avatar || null;
 
     try {
-      const recording = recordingRef.current;
-      if (!recording) return;
-      await recording.stopAndUnloadAsync();
-      if (Platform.OS !== 'web') {
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      if (payload.type === 'text' && !payload.isEdit) {
+        const { content } = payload;
+        if (!content?.trim()) return;
+
+        // Optimistic UI
+        const tempId = `temp_${Date.now()}`;
+        const now = new Date().toISOString();
+        const tempMsg = {
+          _id: tempId, senderId: myId, senderName: myName, avatar: myAvatar,
+          type: 'text', content: content.trim(), payload: {},
+          time: fmtTime(now), createdAt: now,
+        };
+        setMessages(prev => ({ ...prev, [convId]: [...(prev[convId] || []), tempMsg] }));
+
+        const res    = await messageApi.sendText(convId, content.trim());
+        const real   = normalizeMsg(res.data.data);
+        const realId = real._id?.toString();
+
+        // Replace temp with real; also remove any socket-delivered copy to prevent duplicate keys
+        setMessages(prev => {
+          const list    = prev[convId] || [];
+          const cleaned = list.filter(m => m._id?.toString() !== realId); // remove socket copy if any
+          return {
+            ...prev,
+            [convId]: cleaned.map(m => m._id === tempId ? real : m),
+          };
+        });
+
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: content.trim(), time: real.time } : c
+        ));
+        setActiveConversation((prev) => (
+          prev?.id === convId ? { ...resolvedConversation, ...prev, lastMessage: content.trim(), time: real.time } : prev
+        ));
+
+      } else if (payload.isEdit && payload.type === 'text') {
+        const { content, messageId } = payload;
+        if (!content?.trim()) return;
+
+        // Gọi API sửa
+        const res = await messageApi.editMessage(messageId, content.trim());
+        const real = normalizeMsg(res.data.data);
+
+        // Cập nhật messages state - Sử dụng MERGE logic
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          return {
+            ...prev,
+            [convId]: list.map(m =>
+              (m._id || m.id)?.toString() === messageId?.toString()
+                ? { ...m, ...real } // Merge để giữ lại reactions
+                : m
+            )
+          };
+        });
+
+        // Cập nhật preview sidebar
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: content.trim() } : c
+        ));
+      } else if (payload.type === 'voice') {
+        const { blob, duration } = payload;
+        const fd = new FormData();
+        fd.append('voice', blob, 'voice.webm');
+        if (duration) fd.append('duration', String(Math.round(duration)));
+
+        const up  = await messageApi.uploadVoice(fd);
+        const res = await messageApi.sendVoice(convId, up.data.voice.fileId);
+        const msg = normalizeMsg(res.data.data);
+        const voiceId = msg._id?.toString();
+
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          if (list.some(m => m._id?.toString() === voiceId)) return prev;
+          return { ...prev, [convId]: [...list, msg] };
+        });
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: msg.content, time: msg.time } : c
+        ));
+        setActiveConversation((prev) => (
+          prev?.id === convId ? { ...prev, lastMessage: msg.content, time: msg.time } : prev
+        ));
+
+      } else if (payload.type === 'image') {
+        const fd = new FormData();
+        fd.append('file', payload.file);
+
+        const up  = await messageApi.uploadImage(fd);
+        const res = await messageApi.sendImage(convId, up.data.file.fileId);
+        const msg = normalizeMsg(res.data.data);
+        const imgId = msg._id?.toString();
+
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          if (list.some(m => m._id?.toString() === imgId)) return prev;
+          return { ...prev, [convId]: [...list, msg] };
+        });
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: '[Hình ảnh]', time: msg.time } : c
+        ));
+        setActiveConversation((prev) => (
+          prev?.id === convId ? { ...prev, lastMessage: '[Hình ảnh]', time: msg.time } : prev
+        ));
+
+      } else if (payload.type === 'file') {
+        const fd = new FormData();
+        fd.append('file', payload.file);
+
+        const up  = await messageApi.uploadFile(fd);
+        const res = await messageApi.sendFile(convId, up.data.file.fileId);
+        const msg = normalizeMsg(res.data.data);
+        const fileId = msg._id?.toString();
+
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          if (list.some(m => m._id?.toString() === fileId)) return prev;
+          return { ...prev, [convId]: [...list, msg] };
+        });
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: msg.content, time: msg.time } : c
+        ));
+        setActiveConversation((prev) => (
+          prev?.id === convId ? { ...prev, lastMessage: msg.content, time: msg.time } : prev
+        ));
       }
-
-      const uri = recording.getURI();
-      recordingRef.current = null;
-
-      const fd = new FormData();
-      fd.append('voice', { uri, name: 'voice.m4a', type: 'audio/mp4' });
-      fd.append('duration', String(duration));
-
-      const up = await messageApi.uploadVoice(fd);
-      const res = await messageApi.sendVoice(conversation.id, up.data.voice.fileId);
-      const msg = normalizeMsg(res.data.data);
-      const id = msg._id?.toString();
-      setMessages(prev => prev.some(m => m._id?.toString() === id) ? prev : [...prev, msg]);
     } catch (err) {
-      console.error('stopRecording error:', err);
-    }
-  };
-
-  const cancelRecording = async () => {
-    clearInterval(recordingTimerRef.current);
-    setIsRecording(false);
-    try {
-      const recording = recordingRef.current;
-      recordingRef.current = null;
-      if (recording) {
-        await recording.stopAndUnloadAsync();
-        if (Platform.OS !== 'web') {
-          await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      console.error('handleSendMessage error:', err);
+      if (err?.response?.status === 403) {
+        // Khi bị chặn: giữ lại tin nhắn optimistic nhưng đánh dấu là blocked
+        if (payload.type === 'text') {
+          setMessages(prev => ({
+            ...prev,
+            [convId]: (prev[convId] || []).map(m =>
+              m._id?.startsWith('temp_') ? { ...m, blocked: true } : m
+            ),
+          }));
         }
-      }
-    } catch { }
-  };
-
-  // ── Send image ────────────────────────────────────────────────────────
-  const handlePickImage = async () => {
-    try {
-      // On web, permissions are not required (browser file picker handles it)
-      if (Platform.OS !== 'web') {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        // 'limited' = iOS user granted access to selected photos only – still allow picker
-        if (status !== 'granted' && status !== 'limited') {
-          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh trong Cài đặt.');
-          return;
-        }
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        quality: 0.8,
-      });
-      if (result.canceled || !result.assets?.length) return;
-
-      const asset = result.assets[0];
-      const fd = new FormData();
-      if (Platform.OS === 'web') {
-        // On web, asset.uri is a blob: or data: URL – convert to Blob for browser FormData
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        fd.append('file', blob, asset.fileName || 'image.jpg');
-      } else {
-        // React Native FormData accepts { uri, name, type } objects
-        fd.append('file', { uri: asset.uri, name: asset.fileName || 'image.jpg', type: asset.mimeType || 'image/jpeg' });
-      }
-
-      const up = await messageApi.uploadImage(fd);
-      const res = await messageApi.sendImage(conversation.id, up.data.file.fileId);
-      const msg = normalizeMsg(res.data.data);
-      const id = msg._id?.toString();
-      setMessages(prev => prev.some(m => m._id?.toString() === id) ? prev : [...prev, msg]);
-    } catch (err) {
-      console.error('handlePickImage error:', err);
-      Alert.alert('Lỗi', 'Không thể gửi ảnh. Vui lòng thử lại.');
-    }
-  };
-
-  // ── Send file ─────────────────────────────────────────────────────────
-  const handlePickFile = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
-      if (result.canceled || !result.assets?.length) return;
-
-      const asset = result.assets[0];
-      const fd = new FormData();
-      if (Platform.OS === 'web') {
-        // On web, asset.uri is a blob: URL – convert to Blob for browser FormData
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        fd.append('file', blob, asset.name);
-      } else {
-        fd.append('file', { uri: asset.uri, name: asset.name, type: asset.mimeType || 'application/octet-stream' });
-      }
-
-      const up = await messageApi.uploadFile(fd);
-      const res = await messageApi.sendFile(conversation.id, up.data.file.fileId);
-      const msg = normalizeMsg(res.data.data);
-      const id = msg._id?.toString();
-      setMessages(prev => prev.some(m => m._id?.toString() === id) ? prev : [...prev, msg]);
-    } catch (err) {
-      console.error('handlePickFile error:', err);
-      Alert.alert('Lỗi', 'Không thể gửi file. Vui lòng thử lại.');
-    }
-  };
-
-  const insertEmoji = (emoji) => {
-    setText(prev => prev + emoji);
-    setShowEmoji(false);
-    inputRef.current?.focus();
-  };
-
-  const handleReact = async (msg, emoji) => {
-    try {
-      const mId = msg._id || msg.id;
-      if (!mId) return;
-      await messageApi.toggleReaction(mId.toString(), emoji);
-    } catch (err) {
-      console.error('handleReact error:', err);
-    }
-  };
-
-  const handleRevoke = async (msg) => {
-    try {
-      const mId = msg._id || msg.id;
-      if (!mId) return;
-      await messageApi.revokeMessage(mId.toString());
-      // Optimistic update
-      setMessages(prev => prev.map(m => 
-        (m._id?.toString() === mId.toString()) ? { ...m, revoked: true } : m
-      ));
-    } catch (err) {
-      console.error('handleRevoke error:', err);
-      Alert.alert('Lỗi', 'Không thể thu hồi tin nhắn');
-    }
-  };
-
-  const handleDeleteForMe = async (msg) => {
-    try {
-      const mId = msg._id || msg.id;
-      if (!mId) return;
-
-      // Optimistic update: Xóa ngay lập tức trên UI
-      setMessages(prev => prev.filter(m => (m._id || m.id) !== mId));
-
-      // Gọi API xóa phía tôi
-      await messageApi.deleteForMe(mId.toString());
-    } catch (err) {
-      console.error('handleDeleteForMe error:', err);
-      Alert.alert('Lỗi', 'Không thể xóa tin nhắn');
-    }
-  };
-
-  const handleStartEdit = (msg) => {
-    setEditingMessage(msg);
-    setText(msg.content || '');
-    setShowEmoji(false);
-    setTimeout(() => inputRef.current?.focus(), 100);
-  };
-
-  const handleShowReadBy = (readBy) => {
-    setCurrentReadByList(readBy);
-    setShowReadByModal(true);
-  };
-
-
-  // ── Build display list ─────────────────────────────────────────────────
-  const displayItems = [];
-  const seenIds = new Set();
-  messages.forEach((msg, i) => {
-    const msgKey = msg._id?.toString() || msg.id?.toString();
-    if (msgKey && seenIds.has(msgKey)) return;
-    if (msgKey) seenIds.add(msgKey);
-
-    const prev = messages[i - 1];
-    const msgDate = msg.time?.split(' ')[0];
-    const prevDate = prev?.time?.split(' ')[0];
-    if (i === 0 || (msgDate && prevDate && msgDate !== prevDate && msg.time?.includes(' '))) {
-      if (msg.time?.includes(' ')) {
-        displayItems.push({ type: 'date', label: msgDate, key: `date-${msgKey || i}` });
+        // Refresh block status để cập nhật UI
+        const otherUserId = resolvedConversation?.otherUserId || activeConversation?.otherUserId;
+        if (otherUserId) fetchDmBlockStatus(otherUserId);
+      } else if (payload.type === 'text') {
+        // Xóa optimistic message nếu lỗi khác
+        setMessages(prev => ({
+          ...prev,
+          [convId]: (prev[convId] || []).filter(m => !m._id?.startsWith('temp_')),
+        }));
       }
     }
-    const sameGroup = prev && prev.senderId === msg.senderId
-      && !msg.time?.includes(' ') && !prev.time?.includes(' ');
-    displayItems.push({
-      type: 'msg', msg, key: `msg-${msgKey || i}`,
-      isMine: msg.senderId === currentUserId,
-      showHeader: !sameGroup,
+  }, [activeConversation, currentUser]);
+
+  const handleViewProfile = useCallback((userId) => {
+    navigate(`/user/${userId}`);
+  }, [navigate]);
+
+  const handleMobileBack = useCallback(() => {
+    setMobileView('list');
+    setShowRightSidebar(false);
+  }, []);
+
+  const handleMobileTabChange = useCallback((tab) => {
+    setMobileTab(tab);
+    if (tab === 'search') {
+      setShowUserSearch(true);
+    } else if (tab === 'profile') {
+      setShowProfileSettings(true);
+    } else if (tab === 'messages') {
+      if (mobileView === 'chat') {
+        // stay in chat, just highlight tab
+      }
+    }
+  }, [mobileView]);
+
+  const handleOpenCreateGroup = useCallback(async () => {
+    try {
+      setShowCreateGroupModal(true);
+      setGroupName('');
+      setSelectedFriendIds([]);
+      setLoadingFriends(true);
+
+      const res = await friendApi.getFriendList();
+      const list = res?.data?.success ? (res.data.data || []) : [];
+      setFriendsForGroup(list);
+    } catch (error) {
+      console.error('Failed to load friend list for group create:', error);
+      setFriendsForGroup([]);
+    } finally {
+      setLoadingFriends(false);
+    }
+  }, []);
+
+  const toggleSelectFriend = useCallback((friendId) => {
+    setSelectedFriendIds((prev) => {
+      if (prev.includes(friendId)) return prev.filter((id) => id !== friendId);
+      return [...prev, friendId];
     });
-  });
+  }, []);
 
-  // Live presence — không dùng conversation.online (static, luôn false)
-  const isOnline = conversation.type === 'dm' && conversation.otherUserId
-    ? isUserOnline(conversation.otherUserId)
-    : null;
-  const statusText = conversation.type === 'dm'
-    ? (isOnline
-        ? 'Đang hoạt động'
-        : (() => {
-            const ls = conversation.otherUserId ? getLastSeen(conversation.otherUserId) : null;
-            return ls ? `Hoạt động ${formatLastSeen(ls)}` : 'Ngoại tuyến';
-          })())
-    : `${conversation.memberCount || conversation.members || 0} thành viên`;
+  const handleCreateGroup = useCallback(async () => {
+    if (!groupName.trim()) {
+      window.alert('Vui lòng nhập tên nhóm');
+      return;
+    }
 
-  return (
-    <View style={{ flex: 1, backgroundColor: THEME.bgTertiary }}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.bgSecondary} />
+    if (selectedFriendIds.length < 2) {
+      window.alert('Vui lòng chọn tối thiểu 2 người bạn để tạo nhóm');
+      return;
+    }
 
-      {/* ── Header ── */}
-      <View style={msgStyles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={msgStyles.backBtn}>
-          <Text style={msgStyles.backArrow}>←</Text>
-        </TouchableOpacity>
+    try {
+      setCreatingGroup(true);
+      const res = await conversationApi.createGroupConversation({
+        name: groupName.trim(),
+        memberIds: selectedFriendIds,
+      });
 
-        <TouchableOpacity
-          style={{ marginRight: 10 }}
-          onPress={() => conversation.otherUserId && navigation.push('UserProfile', { userId: conversation.otherUserId })}
-          activeOpacity={conversation.otherUserId ? 0.7 : 1}
-        >
-          <Avatar
-            name={conversation.name}
-            avatar={conversation.avatar}
-            size={36}
-            online={isOnline}
-            THEME={THEME}
-            styles={msgStyles}
-          />
-        </TouchableOpacity>
+      const created = res?.data?.data;
+      const conversationId = created?._id;
 
-        <View style={{ flex: 1 }}>
-          <Text style={msgStyles.headerName} numberOfLines={1}>
-            {conversation.type === 'group' ? `# ${conversation.name}` : conversation.name}
-          </Text>
-          <Text style={[msgStyles.headerStatus, { color: isOnline ? THEME.statusOnline : THEME.textMuted }]}>
-            {statusText}
-          </Text>
-        </View>
+      if (!conversationId) {
+        throw new Error('Không nhận được conversationId từ server');
+      }
 
-        <View style={msgStyles.headerActions}>
-          <TouchableOpacity style={msgStyles.headerBtn}>
-            <Text style={{ fontSize: 18 }}>📞</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={msgStyles.headerBtn}>
-            <Text style={{ fontSize: 18 }}>📹</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={msgStyles.headerBtn} onPress={() => { setInfoTab('info'); setShowInfoPanel(true); }}>
-            <Text style={{ fontSize: 18 }}>⋯</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      await fetchConversations();
 
-      {/* ── Body: messages + input — dùng View thường, padding theo keyboardHeight ── */}
-      <View style={{ flex: 1 }}>
-        <FlatList
-          ref={flatRef}
-          data={displayItems}
-          keyExtractor={item => item.key}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 8, flexGrow: 1 }}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={scrollToBottom}
-          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-          ListHeaderComponent={() => (
-            <View style={msgStyles.introBox}>
-              <View style={[msgStyles.introAvatar, { backgroundColor: getAvatarColor(conversation.name) }]}>
-                <Text style={msgStyles.introInitials}>{getInitials(conversation.name)}</Text>
-              </View>
-              <Text style={msgStyles.introName}>
-                {conversation.type === 'dm' ? conversation.name : `# ${conversation.name}`}
-              </Text>
-              <Text style={msgStyles.introDesc}>
-                {conversation.type === 'dm'
-                  ? `Đây là bắt đầu trò chuyện với ${conversation.name}.`
-                  : `Chào mừng đến kênh #${conversation.name}!`}
-              </Text>
-            </View>
-          )}
-          ListFooterComponent={() =>
-            typingUser ? (
-              <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
-                <Text style={{ fontSize: 12, color: THEME.textMuted, fontStyle: 'italic' }}>
-                  {typingUser.displayName} đang nhập...
-                </Text>
-              </View>
-            ) : null
-          }
-          renderItem={({ item }) =>
-            item.type === 'date'
-              ? <DateDivider label={item.label} styles={msgStyles} />
-              : <MessageBubble
-                msg={item.msg}
-                isMine={item.isMine}
-                showHeader={item.showHeader}
-                onLongPress={setActionMsg}
-                onShowReadBy={handleShowReadBy}
-                onAvatarPress={(senderId) => senderId && navigation.push('UserProfile', { userId: senderId })}
-                currentUserId={currentUserId}
-                conversation={conversation}
-                THEME={THEME}
-                styles={msgStyles}
-              />
-          }
+      setShowCreateGroupModal(false);
+      setActiveConversation((prev) => {
+        if (prev?.id === conversationId) return prev;
+        return {
+          id: conversationId,
+          name: created.name || 'Nhóm mới',
+          avatar: created.avatar || null,
+          lastMessage: created.lastMessagePreview || 'Chưa có tin nhắn',
+          time: formatConversationTime(created.lastMessageTime || created.updatedAt || created.createdAt),
+          unread: 0,
+          type: 'group',
+          online: false,
+          memberCount: 1 + selectedFriendIds.length,
+          raw: created,
+        };
+      });
+
+      if (isMobile) {
+        setMobileView('chat');
+        setMobileTab('messages');
+      }
+    } catch (error) {
+      window.alert(error.response?.data?.message || error.message || 'Không thể tạo nhóm chat');
+    } finally {
+      setCreatingGroup(false);
+    }
+  }, [fetchConversations, groupName, isMobile, selectedFriendIds]);
+
+  const handleLeaveGroup = useCallback(async (conversationId) => {
+    if (!conversationId) return;
+    const ok = window.confirm('Bạn có chắc chắn muốn rời nhóm này?');
+    if (!ok) return;
+
+    try {
+      await conversationApi.leaveConversation(conversationId);
+      setMessages((prev) => {
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
+      });
+      await fetchConversations();
+      setActiveConversation((prev) => (prev?.id === conversationId ? null : prev));
+    } catch (error) {
+      window.alert(error.response?.data?.message || 'Không thể rời nhóm');
+    }
+  }, [fetchConversations]);
+
+  const handleDeleteConversation = useCallback(async (conversationId) => {
+    if (!conversationId) return;
+
+    const activeId = activeConversation?.id;
+
+    // Conversation tạm (chưa tạo DB) chỉ cần dọn local state.
+    if (conversationId.startsWith('pending-dm-')) {
+      setMessages((prev) => {
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
+      });
+      setActiveConversation((prev) => (prev?.id === conversationId ? null : prev));
+      return;
+    }
+
+    const ok = window.confirm('Bạn có chắc chắn muốn xóa cuộc trò chuyện này ở phía bạn?');
+    if (!ok) return;
+
+    try {
+      await conversationApi.deleteConversationForMe(conversationId);
+
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      setMessages((prev) => {
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
+      });
+      setActiveConversation((prev) => (prev?.id === conversationId ? null : prev));
+
+      if (isMobile && activeId === conversationId) {
+        setMobileView('list');
+      }
+    } catch (error) {
+      window.alert(error.response?.data?.message || 'Không thể xóa cuộc trò chuyện');
+    }
+  }, [activeConversation?.id, isMobile]);
+
+  const unreadTotal = conversations.reduce((s, c) => s + (c.unread || 0), 0);
+  const activeMessages     = activeConversation ? messages[activeConversation.id] || [] : [];
+  const activeTypingUser   = activeConversation ? typingUsers[activeConversation.id] || null : null;
+  const currentUserId      = currentUser?._id?.toString() || null;
+
+  /* ── MOBILE LAYOUT ── */
+  if (isMobile) {
+    return (
+      <div style={{
+        width: '100vw', height: '100%',
+        background: 'var(--bg-primary)',
+        position: 'fixed', inset: 0,
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        {/* Sliding views container */}
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          {/* ── Conversation List (slides from left) ── */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            transform: mobileView === 'list' ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 0.28s cubic-bezier(0.4,0,0.2,1)',
+            zIndex: mobileView === 'list' ? 2 : 1,
+            willChange: 'transform',
+          }}>
+            <LeftSidebar
+              conversations={conversations}
+              activeConv={activeConversation}
+              onSelectConv={handleSelectConversation}
+              onOpenSettings={() => setShowProfileSettings(true)}
+              onOpenSearch={() => setShowUserSearch(true)}
+              onOpenCreateGroup={handleOpenCreateGroup}
+              isMobile
+            />
+          </div>
+
+          {/* ── Chat Area (slides from right) ── */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            transform: mobileView === 'chat' ? 'translateX(0)' : 'translateX(100%)',
+            transition: 'transform 0.28s cubic-bezier(0.4,0,0.2,1)',
+            zIndex: mobileView === 'chat' ? 2 : 1,
+            willChange: 'transform',
+            display: 'flex', flexDirection: 'column',
+          }}>
+            <ChatArea
+              conversation={activeConversation}
+              messages={activeMessages}
+              setMessages={(updater) => setMessages(prev => ({
+                ...prev,
+                [activeConversation?.id]: updater(prev[activeConversation?.id] || [])
+              }))}
+              currentUserId={currentUserId}
+              typingUser={activeTypingUser}
+              onSendMessage={handleSendMessage}
+              onToggleRight={() => setShowRightSidebar(v => !v)}
+              showRight={showRightSidebar}
+              onBack={handleMobileBack}
+              socket={socketRef.current}
+              sendBlockError={sendBlockError}
+              blockStatus={dmBlockStatus}
+              onBlockStatusChanged={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
+              isMobile
+            />
+          </div>
+        </div>
+
+        {/* ── Bottom Navigation Bar ── */}
+        <BottomTabBar
+          activeTab={mobileTab}
+          onTabChange={handleMobileTabChange}
+          unreadTotal={unreadTotal}
         />
 
-        {/* ── Wrapper bọc emoji + input/recording, đẩy lên theo keyboardHeight ── */}
-        <View style={{ paddingBottom: keyboardHeight }}>
+        {/* ── Modals ── */}
+        {showProfileSettings && (
+          <ProfileSettings onClose={() => { setShowProfileSettings(false); setMobileTab('messages'); }} />
+        )}
+        {showUserSearch && (
+          <UserSearchModal onClose={() => { setShowUserSearch(false); setMobileTab('messages'); }} />
+        )}
 
-          {/* ── Editing bar ── */}
-          {editingMessage && (
-            <View style={msgStyles.editBar}>
-              <View style={{ flex: 1 }}>
-                <Text style={msgStyles.editLabel}>Đang chỉnh sửa tin nhắn</Text>
-                <Text style={msgStyles.editContent} numberOfLines={1}>
-                  {editingMessage.content}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => { setEditingMessage(null); setText(''); }} style={{ padding: 8 }}>
-                <Text style={{ fontSize: 18, color: THEME.textMuted }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+        {/* Right sidebar as full-screen overlay on mobile */}
+        {showRightSidebar && activeConversation && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            animation: 'slideInRight 0.25s cubic-bezier(0.4,0,0.2,1)',
+          }}>
+            <RightSidebar
+              conversation={activeConversation}
+              onClose={() => setShowRightSidebar(false)}
+              onViewProfile={handleViewProfile}
+              onLeaveGroup={handleLeaveGroup}
+              onGroupUpdated={fetchConversations}
+              onDeleteConversation={handleDeleteConversation}
+              onBlockToggled={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
+              isMobile
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
 
-          {/* ── Emoji picker ── */}
-          {showEmoji && (
-            <View style={msgStyles.emojiPicker}>
-              <View style={msgStyles.emojiGrid}>
-                {EMOJIS.map(e => (
-                  <TouchableOpacity key={e} onPress={() => insertEmoji(e)} style={msgStyles.emojiBtn}>
-                    <Text style={msgStyles.emojiChar}>{e}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* ── Recording bar ── */}
-          {isRecording ? (
-            <View style={msgStyles.recordingBar}>
-              <View style={msgStyles.recordingDot} />
-              <Text style={msgStyles.recordingTimer}>{fmtDur(recordingSec)}</Text>
-              <Text style={{ flex: 1, fontSize: 13, color: THEME.textMuted }}>Đang ghi âm...</Text>
-              <TouchableOpacity onPress={cancelRecording} style={msgStyles.inputBtn}>
-                <Text style={{ fontSize: 20 }}>✕</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={stopRecording} style={[msgStyles.sendBtn, { backgroundColor: '#ed4245' }]}>
-                <Text style={msgStyles.sendIcon}>↑</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            /* ── Input bar ── */
-            <View style={msgStyles.inputBar}>
-              <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickFile}>
-                <Text style={msgStyles.inputBtnIcon}>📎</Text>
-              </TouchableOpacity>
-
-              <View style={msgStyles.inputWrap}>
-                <TextInput
-                  ref={inputRef}
-                  style={msgStyles.textInput}
-                  value={text}
-                  onChangeText={(v) => { setText(v); if (v.trim()) emitTyping(); }}
-                  placeholder={`Nhắn tin ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
-                  placeholderTextColor={THEME.textMuted}
-                  multiline
-                  selectionColor={THEME.accent}
-                />
-                <TouchableOpacity onPress={() => setShowEmoji(v => !v)} style={msgStyles.emojiToggle}>
-                  <Text style={{ fontSize: 20 }}>😊</Text>
-                </TouchableOpacity>
-              </View>
-
-              {text.trim().length > 0 ? (
-                <TouchableOpacity style={msgStyles.sendBtn} onPress={handleSend}>
-                  <Text style={msgStyles.sendIcon}>↑</Text>
-                </TouchableOpacity>
-              ) : (
-                <>
-                  <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickImage}>
-                    <Text style={msgStyles.inputBtnIcon}>🖼️</Text>
-                  </TouchableOpacity>
-                  {/* expo-av Recording is not supported on Expo Web */}
-                  {Platform.OS !== 'web' && (
-                    <TouchableOpacity style={msgStyles.inputBtn} onPress={startRecording}>
-                      <Text style={msgStyles.inputBtnIcon}>🎤</Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              )}
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* ── Conversation Info Panel ── */}
-      <Modal visible={showInfoPanel} transparent animationType="slide" onRequestClose={() => setShowInfoPanel(false)}>
-        <Pressable style={msgStyles.sheetOverlay} onPress={() => setShowInfoPanel(false)}>
-          <View style={[msgStyles.sheet, { maxHeight: '85%' }]} onStartShouldSetResponder={() => true}>
-            <View style={msgStyles.sheetHandle} />
-
-            {/* Avatar + Name */}
-            <View style={{ alignItems: 'center', paddingVertical: 16, paddingHorizontal: 20 }}>
-              <Avatar
-                name={conversation.name}
-                avatar={conversation.avatar}
-                size={72}
-                online={isOnline}
-                THEME={THEME}
-                styles={msgStyles}
-              />
-              <Text style={{ fontSize: 18, fontWeight: '800', color: THEME.textPrimary, marginTop: 10 }}>
-                {conversation.name}
-              </Text>
-              {conversation.type === 'dm' && (
-                <Text style={{ fontSize: 12, color: isOnline ? THEME.statusOnline : THEME.textMuted, marginTop: 2 }}>
-                  {isOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}
-                </Text>
-              )}
-            </View>
-
-            {/* Tab bar */}
-            <View style={{ flexDirection: 'row', marginHorizontal: 16, backgroundColor: THEME.bgPrimary, borderRadius: 8, padding: 3, marginBottom: 12 }}>
-              {[
-                { key: 'info', label: 'Thông tin' },
-                { key: 'media', label: 'Ảnh' },
-                { key: 'files', label: 'File' },
-              ].map(t => (
-                <TouchableOpacity
-                  key={t.key}
-                  onPress={() => setInfoTab(t.key)}
-                  style={{
-                    flex: 1, paddingVertical: 7, borderRadius: 6, alignItems: 'center',
-                    backgroundColor: infoTab === t.key ? THEME.bgSecondary : 'transparent',
-                  }}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: infoTab === t.key ? '700' : '500', color: infoTab === t.key ? THEME.textPrimary : THEME.textMuted }}>
-                    {t.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-              {/* Info tab */}
-              {infoTab === 'info' && (
-                <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
-                  <View style={{ backgroundColor: THEME.bgPrimary, borderRadius: 12, overflow: 'hidden', marginBottom: 12 }}>
-                    <View style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: THEME.border, flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 13, color: THEME.textMuted }}>Loại</Text>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: THEME.textPrimary }}>
-                        {conversation.type === 'dm' ? 'Tin nhắn trực tiếp' : 'Nhóm chat'}
-                      </Text>
-                    </View>
-                    {conversation.type === 'dm' && conversation.otherUserId && (
-                      <TouchableOpacity
-                        style={{ padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
-                        onPress={() => { setShowInfoPanel(false); navigation.push('UserProfile', { userId: conversation.otherUserId }); }}
-                      >
-                        <Text style={{ fontSize: 13, color: THEME.textMuted }}>Xem hồ sơ</Text>
-                        <Text style={{ fontSize: 13, color: THEME.accent, fontWeight: '600' }}>→</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {/* Actions */}
-                  {conversation.type === 'dm' && conversation.otherUserId && (
-                    <>
-                      {!blockConfirm ? (
-                        <TouchableOpacity
-                          onPress={() => setBlockConfirm(true)}
-                          style={{ backgroundColor: 'rgba(237,66,69,0.12)', borderRadius: 12, padding: 14, alignItems: 'center', flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: 'rgba(237,66,69,0.3)' }}
-                        >
-                          <Text style={{ fontSize: 18 }}>🚫</Text>
-                          <Text style={{ color: '#ed4245', fontWeight: '700', fontSize: 15 }}>Chặn {conversation.name}</Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <View style={{ backgroundColor: 'rgba(237,66,69,0.12)', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: 'rgba(237,66,69,0.4)' }}>
-                          <Text style={{ color: THEME.textPrimary, fontWeight: '700', fontSize: 14, marginBottom: 6 }}>
-                            Xác nhận chặn {conversation.name}?
-                          </Text>
-                          <Text style={{ color: THEME.textMuted, fontSize: 12, marginBottom: 14 }}>
-                            Người này sẽ không thể nhắn tin cho bạn nữa.
-                          </Text>
-                          <View style={{ flexDirection: 'row', gap: 10 }}>
-                            <TouchableOpacity
-                              onPress={() => setBlockConfirm(false)}
-                              style={{ flex: 1, padding: 10, borderRadius: 8, backgroundColor: THEME.bgHover, alignItems: 'center' }}
-                            >
-                              <Text style={{ color: THEME.textPrimary, fontWeight: '600' }}>Hủy</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={handleBlockUser}
-                              disabled={blockBusy}
-                              style={{ flex: 1, padding: 10, borderRadius: 8, backgroundColor: '#ed4245', alignItems: 'center', opacity: blockBusy ? 0.6 : 1 }}
-                            >
-                              <Text style={{ color: '#fff', fontWeight: '700' }}>{blockBusy ? 'Đang chặn...' : 'Chặn'}</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      )}
-                    </>
-                  )}
-                </View>
-              )}
-
-              {/* Media tab */}
-              {infoTab === 'media' && (
-                <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
-                  {loadingMedia && (
-                    <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Đang tải...</Text>
-                  )}
-                  {!loadingMedia && mediaData.images.length === 0 && (
-                    <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Chưa có ảnh nào được chia sẻ</Text>
-                  )}
-                  {!loadingMedia && mediaData.images.length > 0 && (
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
-                      {mediaData.images.map((item) => (
-                        <Image
-                          key={item._id}
-                          source={{ uri: item.url }}
-                          style={{ width: '32%', aspectRatio: 1, borderRadius: 6 }}
-                          resizeMode="cover"
-                        />
-                      ))}
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Files tab */}
-              {infoTab === 'files' && (
-                <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
-                  {loadingMedia && (
-                    <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Đang tải...</Text>
-                  )}
-                  {!loadingMedia && mediaData.files.length === 0 && (
-                    <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Chưa có file nào được chia sẻ</Text>
-                  )}
-                  {!loadingMedia && mediaData.files.map((file) => (
-                    <View
-                      key={file._id}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, backgroundColor: THEME.bgPrimary, borderRadius: 10, marginBottom: 6 }}
-                    >
-                      <Text style={{ fontSize: 24 }}>📄</Text>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: THEME.textPrimary }} numberOfLines={1}>
-                          {file.fileName}
-                        </Text>
-                        {file.fileSize && (
-                          <Text style={{ fontSize: 11, color: THEME.textMuted }}>
-                            {(file.fileSize / 1024).toFixed(0)} KB
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* ── Long press action sheet ── */}
-      <Modal visible={!!actionMsg} transparent animationType="slide">
-        <Pressable style={msgStyles.sheetOverlay} onPress={() => setActionMsg(null)}>
-          <View style={msgStyles.sheet}>
-            <View style={msgStyles.sheetHandle} />
-
-            {!actionMsg?.revoked && (
-              <View style={msgStyles.reactRow}>
-                {(reactionTypes.length > 0 ? reactionTypes : [
-                  { emoji: '👍' }, { emoji: '❤️' }, { emoji: '😂' }, { emoji: '😮' }, { emoji: '😢' }, { emoji: '🔥' }
-                ]).map(r => (
-                  <TouchableOpacity
-                    key={r.emoji}
-                    onPress={() => { handleReact(actionMsg, r.emoji); setActionMsg(null); }}
-                    style={msgStyles.reactBtn}
-                  >
-                    <Text style={msgStyles.reactEmoji}>{r.emoji}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            {[
-              { icon: '↩️', label: 'Trả lời', action: 'reply' },
-              { icon: '➡️', label: 'Chuyển tiếp', action: 'forward' },
-              { icon: '📋', label: 'Sao chép tin nhắn', action: 'copy' },
-              { icon: '📌', label: 'Ghim tin nhắn', action: 'pin' },
-              { icon: '🛡️', label: 'Thu hồi', action: 'revoke', danger: true },
-              { icon: '✏️', label: 'Chỉnh sửa tin nhắn', action: 'edit' },
-              { icon: '🗑️', label: 'Xóa tin nhắn', action: 'delete', danger: true },
-            ].map(a => {
-              // Logic hiển thị:
-              const isMe = actionMsg?.senderId === currentUserId;
-              const isRevoked = actionMsg?.revoked;
-
-              if (a.action === 'revoke' && (!isMe || isRevoked)) return null;
-              if (a.action === 'edit' && (!isMe || isRevoked || actionMsg?.type !== 'text')) return null;
-              if (a.action === 'copy' && actionMsg?.type !== 'text') return null;
-
-              return (
-                <TouchableOpacity
-                  key={a.label}
-                  onPress={() => {
-                    if (a.action === 'revoke') handleRevoke(actionMsg);
-                    if (a.action === 'edit') handleStartEdit(actionMsg);
-                    if (a.action === 'delete') handleDeleteForMe(actionMsg);
-                    if (a.action === 'forward') {
-                      setForwardingMsg(actionMsg);
-                      setShowForwardModal(true);
-                    }
-                    setActionMsg(null);
-                  }}
-                  style={msgStyles.sheetAction}
-                >
-                  <Text style={msgStyles.sheetActionIcon}>{a.icon}</Text>
-                  <Text style={[msgStyles.sheetActionLabel, a.danger && { color: THEME.danger }]}>
-                    {a.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* ── Read By Modal ── */}
-      <Modal visible={showReadByModal} transparent animationType="fade">
-        <Pressable style={msgStyles.sheetOverlay} onPress={() => setShowReadByModal(false)}>
-          <View style={[msgStyles.sheet, { paddingBottom: 20 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: THEME.border }}>
-              <Text style={{ flex: 1, fontSize: 18, fontWeight: '700', color: THEME.textPrimary }}>Người đã xem</Text>
-              <TouchableOpacity onPress={() => setShowReadByModal(false)}>
-                <Text style={{ fontSize: 22, color: THEME.textMuted }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{ maxHeight: 400 }}>
-              {currentReadByList.map(r => (
-                <View key={r.userId} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: THEME.accent, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-                    {r.avatar ? <Image source={{ uri: r.avatar }} style={{ width: '100%', height: '100%' }} /> : <Text style={{ color: '#fff', fontWeight: '700' }}>{r.displayName?.charAt(0)}</Text>}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '600', color: THEME.textPrimary }}>{r.displayName}</Text>
-                    <Text style={{ fontSize: 12, color: THEME.textMuted }}>Đã xem lúc {new Date(r.readAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</Text>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* ── Forward Modal ── */}
-      <ForwardModal
-        isOpen={showForwardModal}
-        onClose={() => setShowForwardModal(false)}
-        msg={forwardingMsg}
-        THEME={THEME}
-        styles={msgStyles}
+  /* ── DESKTOP LAYOUT ── */
+  return (
+    <div style={{
+      width: '100%', height: '100%',
+      background: 'var(--bg-primary)',
+      position: 'relative',
+      display: 'flex', overflow: 'hidden',
+    }}>
+      {/* Left Sidebar */}
+      <LeftSidebar
+        conversations={conversations}
+        activeConv={activeConversation}
+        onSelectConv={handleSelectConversation}
+        onOpenSettings={() => setShowProfileSettings(true)}
+        onOpenSearch={() => setShowUserSearch(true)}
+        onOpenCreateGroup={handleOpenCreateGroup}
       />
 
-    </View>
+      {/* Chat Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        <ChatArea
+          conversation={activeConversation}
+          messages={activeMessages}
+          setMessages={(updater) => setMessages(prev => ({
+            ...prev,
+            [activeConversation?.id]: updater(prev[activeConversation?.id] || [])
+          }))}
+          currentUserId={currentUserId}
+          typingUser={activeTypingUser}
+          onSendMessage={handleSendMessage}
+          onToggleRight={() => setShowRightSidebar(v => !v)}
+          showRight={showRightSidebar}
+          socket={socketRef.current}
+          sendBlockError={sendBlockError}
+          blockStatus={dmBlockStatus}
+          onBlockStatusChanged={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
+        />
+      </div>
+
+      {/* Right Sidebar */}
+      {showRightSidebar && (
+        <div style={{ flexShrink: 0 }}>
+          {activeConversation ? (
+            <RightSidebar
+              conversation={activeConversation}
+              onClose={() => setShowRightSidebar(false)}
+              onViewProfile={handleViewProfile}
+              onLeaveGroup={handleLeaveGroup}
+              onGroupUpdated={fetchConversations}
+              onDeleteConversation={handleDeleteConversation}
+              onBlockToggled={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
+            />
+          ) : (
+            <div style={{
+              width: 280,
+              minWidth: 280,
+              height: '100%',
+              borderLeft: '1px solid var(--border)',
+              background: 'var(--bg-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 20,
+              color: 'var(--text-muted)',
+              fontSize: 13,
+              textAlign: 'center',
+            }}>
+              Chọn một cuộc trò chuyện để xem thông tin chi tiết.
+            </div>
+          )}
+        </div>
+      )}
+
+      {showProfileSettings && <ProfileSettings onClose={() => setShowProfileSettings(false)} />}
+      {showUserSearch && <UserSearchModal onClose={() => setShowUserSearch(false)} />}
+
+      {showCreateGroupModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 300,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !creatingGroup) {
+              setShowCreateGroupModal(false);
+            }
+          }}
+        >
+          <div style={{
+            width: '100%',
+            maxWidth: 540,
+            maxHeight: '80vh',
+            overflow: 'hidden',
+            borderRadius: 12,
+            border: '1px solid var(--border)',
+            background: 'var(--bg-secondary)',
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            <div style={{ padding: '16px 18px 8px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: 18 }}>Tạo nhóm chat</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>
+                Chọn tối thiểu 2 người bạn để tạo nhóm
+              </div>
+            </div>
+
+            <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input
+                type="text"
+                placeholder="Nhập tên nhóm..."
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                style={{
+                  width: '100%',
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  padding: '10px 12px',
+                  outline: 'none',
+                  fontSize: 14,
+                }}
+              />
+
+              <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 700 }}>
+                Bạn bè đã chọn: {selectedFriendIds.length}
+              </div>
+
+              <div style={{
+                maxHeight: 320,
+                overflowY: 'auto',
+                border: '1px solid var(--border)',
+                borderRadius: 10,
+                padding: 8,
+                background: 'var(--bg-primary)',
+              }}>
+                {loadingFriends && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 10 }}>
+                    Đang tải danh sách bạn bè...
+                  </div>
+                )}
+
+                {!loadingFriends && friendsForGroup.length === 0 && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 10 }}>
+                    Bạn chưa có bạn bè để tạo nhóm.
+                  </div>
+                )}
+
+                {!loadingFriends && friendsForGroup.map((f) => {
+                  const checked = selectedFriendIds.includes(f.friendId);
+                  return (
+                    <label
+                      key={f.friendshipId}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '9px 10px',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        background: checked ? 'var(--bg-hover)' : 'transparent',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSelectFriend(f.friendId)}
+                      />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 14 }}>
+                          {f.displayName}
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                          {f.email}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ padding: 14, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={() => setShowCreateGroupModal(false)}
+                disabled={creatingGroup}
+                style={{
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  padding: '9px 14px',
+                  background: 'var(--bg-hover)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 600,
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleCreateGroup}
+                disabled={creatingGroup || !groupName.trim() || selectedFriendIds.length < 2}
+                style={{
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  padding: '9px 14px',
+                  background: 'var(--accent)',
+                  color: '#fff',
+                  fontWeight: 700,
+                  opacity: (creatingGroup || !groupName.trim() || selectedFriendIds.length < 2) ? 0.6 : 1,
+                }}
+              >
+                {creatingGroup ? 'Đang tạo...' : 'Tạo nhóm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
-}
+};
 
-const useStyles = (THEME) => StyleSheet.create({
-  avatarCircle: { justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#fff', fontWeight: '700' },
-  onlineDot: {
-    position: 'absolute', bottom: -1, right: -1,
-    borderWidth: 2, borderColor: THEME.bgSecondary,
-  },
-
-  // Header
-  header: {
-    height: 56, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: THEME.bgSecondary,
-    borderBottomWidth: 1, borderBottomColor: THEME.border,
-    paddingHorizontal: 4,
-  },
-  backBtn: { padding: 12 },
-  backArrow: { fontSize: 22, color: THEME.accent, fontWeight: '700' },
-  headerName: { fontSize: 15, fontWeight: '700', color: THEME.textPrimary },
-  headerStatus: { fontSize: 11 },
-  headerActions: { flexDirection: 'row', alignItems: 'center' },
-  headerBtn: { padding: 10 },
-
-  // Intro
-  introBox: { padding: 20, borderBottomWidth: 1, borderBottomColor: THEME.border, marginBottom: 8 },
-  introAvatar: {
-    width: 56, height: 56, borderRadius: 28,
-    justifyContent: 'center', alignItems: 'center', marginBottom: 12,
-  },
-  introInitials: { color: '#fff', fontWeight: '800', fontSize: 22 },
-  introName: { fontSize: 20, fontWeight: '800', color: THEME.textPrimary, marginBottom: 4 },
-  introDesc: { fontSize: 14, color: THEME.textMuted, lineHeight: 20 },
-
-  // Date divider
-  dateDivider: { flexDirection: 'row', alignItems: 'center', marginVertical: 12, paddingHorizontal: 16 },
-  dateLine: { flex: 1, height: 1, backgroundColor: THEME.border },
-  dateLabel: { fontSize: 11, color: THEME.textMuted, fontWeight: '600', paddingHorizontal: 8 },
-
-  // Message
-  msgRow: { paddingHorizontal: 12, paddingVertical: 2, alignItems: 'flex-start' },
-  msgContent: { maxWidth: '80%', flex: 1 },
-  msgHeader: { gap: 6, alignItems: 'baseline', marginBottom: 3 },
-  senderName: { fontSize: 13, fontWeight: '700' },
-  msgTime: { fontSize: 10, color: THEME.textMuted },
-  bubble: {
-    paddingHorizontal: 14, paddingVertical: 9,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12, shadowRadius: 2, elevation: 1,
-  },
-  bubbleText: { fontSize: 15, lineHeight: 22 },
-  reactionSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: THEME.bgSecondary,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    position: 'absolute',
-    bottom: -12,
-    zIndex: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1, shadowRadius: 1, elevation: 2,
-  },
-  reactionItem: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  reactionEmoji: { fontSize: 13 },
-  reactionCount: { fontSize: 11, fontWeight: '700', color: THEME.textMuted },
-  
-  // Seen status
-  seenText: { fontSize: 10, color: THEME.textMuted, alignSelf: 'flex-end', marginTop: 2, marginRight: 2 },
-  seenAvatars: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4, marginRight: 2 },
-  miniAvatar: { width: 14, height: 14, borderRadius: 7, overflow: 'hidden', borderWidth: 1, borderColor: THEME.bgSecondary },
-  miniAvatarImg: { width: '100%', height: '100%' },
-  seenCount: { fontSize: 9, color: THEME.textMuted, marginLeft: 2 },
-
-  imgAttachment: { width: 220, height: 160, borderRadius: 8 },
-  fileRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-
-  // Emoji picker
-  emojiPicker: {
-    backgroundColor: THEME.bgSecondary, borderTopWidth: 1, borderTopColor: THEME.border,
-    padding: 10,
-  },
-  emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
-  emojiBtn: { width: '11.5%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 6 },
-  emojiChar: { fontSize: 22 },
-
-  // Input bar
-  inputBar: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 6,
-    paddingHorizontal: 8, paddingVertical: 8,
-    backgroundColor: THEME.bgSecondary,
-    borderTopWidth: 1, borderTopColor: THEME.border,
-  },
-  inputBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  inputBtnIcon: { fontSize: 22, color: THEME.textMuted },
-  inputWrap: {
-    flex: 1, flexDirection: 'row', alignItems: 'flex-end',
-    backgroundColor: THEME.bgInput, borderRadius: 22,
-    paddingHorizontal: 14, paddingVertical: 6, gap: 6,
-    minHeight: 40,
-  },
-  textInput: {
-    flex: 1, color: THEME.textPrimary, fontSize: 16,
-    maxHeight: 100, paddingVertical: 4,
-  },
-  emojiToggle: { paddingBottom: 4, justifyContent: 'flex-end' },
-  sendBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: THEME.accent,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  sendIcon: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: -2 },
-
-  // Recording bar
-  recordingBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 12, paddingVertical: 10,
-    backgroundColor: THEME.bgSecondary,
-    borderTopWidth: 1, borderTopColor: '#ed4245',
-  },
-  recordingDot: {
-    width: 12, height: 12, borderRadius: 6, backgroundColor: '#ed4245',
-  },
-  recordingTimer: {
-    fontSize: 16, fontWeight: '700', color: '#ed4245', letterSpacing: 1, minWidth: 48,
-  },
-
-  // Action sheet
-  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: THEME.bgSecondary, borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingBottom: 32,
-  },
-  sheetHandle: {
-    width: 40, height: 4, backgroundColor: THEME.bgHover,
-    borderRadius: 2, alignSelf: 'center', marginVertical: 12,
-  },
-  reactRow: {
-    flexDirection: 'row', justifyContent: 'space-around',
-    paddingHorizontal: 20, paddingBottom: 16,
-    borderBottomWidth: 1, borderBottomColor: THEME.border,
-  },
-  reactBtn: { padding: 8, borderRadius: 10 },
-  reactEmoji: { fontSize: 30 },
-  sheetAction: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingHorizontal: 20, paddingVertical: 15,
-  },
-  sheetActionIcon: { fontSize: 20 },
-  sheetActionLabel: { fontSize: 16, color: THEME.textPrimary, fontWeight: '500' },
-
-  // Edit bar
-  editBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 16, paddingVertical: 8,
-    backgroundColor: THEME.bgSecondary,
-    borderTopWidth: 1, borderTopColor: THEME.accent,
-  },
-  editLabel: { fontSize: 12, fontWeight: '700', color: THEME.accent, marginBottom: 2 },
-  editContent: { fontSize: 13, color: THEME.textMuted },
-});
+export default Chat;

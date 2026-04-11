@@ -32,7 +32,9 @@ export default function FriendsScreen({ navigation }) {
   const [friends, setFriends] = useState([]);
   const [incomingReqs, setIncomingReqs] = useState([]);
   const [outgoingReqs, setOutgoingReqs] = useState([]);
+  const [blockedList, setBlockedList] = useState([]);
   const [loadingContacts, setLoadingContacts] = useState(true);
+  const [openingChat, setOpeningChat] = useState(false);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,15 +49,17 @@ export default function FriendsScreen({ navigation }) {
   const fetchContacts = async () => {
     try {
       setLoadingContacts(true);
-      const [friendRes, inReqRes, outReqRes] = await Promise.all([
+      const [friendRes, inReqRes, outReqRes, blockedRes] = await Promise.all([
          friendApi.getFriendList().catch(() => ({ data: { success: false } })),
          friendApi.getIncomingRequests().catch(() => ({ data: { success: false } })),
-         friendApi.getOutgoingRequests().catch(() => ({ data: { success: false } }))
+         friendApi.getOutgoingRequests().catch(() => ({ data: { success: false } })),
+         friendApi.getBlockedList().catch(() => ({ data: { success: false } })),
       ]);
-      
+
       if (inReqRes?.data?.success) setIncomingReqs(inReqRes.data.data || []);
       if (outReqRes?.data?.success) setOutgoingReqs(outReqRes.data.data || []);
       if (friendRes?.data?.success) setFriends(friendRes.data.data || []);
+      if (blockedRes?.data?.success) setBlockedList(blockedRes.data.data || []);
 
     } catch (error) {
       console.log('Fetch contacts error:', error);
@@ -74,12 +78,12 @@ export default function FriendsScreen({ navigation }) {
       let data = friends;
       if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
-          data = data.filter(f => 
-             f.displayName?.toLowerCase().includes(q) || 
+          data = data.filter(f =>
+             f.displayName?.toLowerCase().includes(q) ||
              f.email?.toLowerCase().includes(q)
           );
       }
-      
+
       const grouped = data.reduce((acc, f) => {
           const firstLetter = f.displayName ? f.displayName[0].toUpperCase() : '#';
           const group = /[A-Z]/.test(firstLetter) ? firstLetter : '#';
@@ -101,7 +105,7 @@ export default function FriendsScreen({ navigation }) {
       if (localSections.length > 0) {
           finalSections.push(...localSections);
       }
-      
+
       return finalSections;
   }, [friends, searchQuery, searchResults]);
 
@@ -156,6 +160,43 @@ export default function FriendsScreen({ navigation }) {
      setSearchResults([]);
   };
 
+  const handleOpenChat = async (friend) => {
+    if (openingChat) return;
+    try {
+      setOpeningChat(true);
+      const conversationApi = require('../../chat/api/conversationApi').default;
+      const res = await conversationApi.createDm(friend.friendId);
+      const conv = res?.data?.data || res?.data;
+      if (conv?._id) {
+        navigation.navigate('Message', {
+          conversation: {
+            id: conv._id,
+            name: friend.displayName || 'Đoạn chat trực tiếp',
+            avatar: friend.avatar || null,
+            type: 'dm',
+            otherUserId: friend.friendId,
+            lastMessage: conv.lastMessagePreview || '',
+            memberCount: 2,
+          },
+        });
+      }
+    } catch (error) {
+      Alert.alert('Lỗi', error.response?.data?.message || 'Không thể mở cuộc trò chuyện');
+    } finally {
+      setOpeningChat(false);
+    }
+  };
+
+  const handleUnblockFromList = async (userId) => {
+    try {
+      await friendApi.blockFriend(userId);
+      Alert.alert('Thành công', 'Đã bỏ chặn người dùng');
+      fetchContacts();
+    } catch (error) {
+      Alert.alert('Lỗi', error.response?.data?.message || 'Không thể bỏ chặn');
+    }
+  };
+
   // Xử lý Camera & Mã QR
   const handleBarcodeScan = useCallback(async ({ data }) => {
     if (scanned) return;
@@ -201,6 +242,14 @@ export default function FriendsScreen({ navigation }) {
       `Thao tác với ${friendInfo.displayName}?`,
       [
         {
+           text: 'Nhắn tin',
+           onPress: () => handleOpenChat(friendInfo),
+        },
+        {
+           text: 'Xem hồ sơ',
+           onPress: () => navigation.navigate('UserProfile', { user: friendInfo }),
+        },
+        {
            text: 'Đổi biệt danh',
            onPress: () => {
              Alert.prompt(
@@ -219,16 +268,16 @@ export default function FriendsScreen({ navigation }) {
              );
            }
         },
-        { 
-           text: friendInfo.isBlocked ? 'Bỏ chặn' : 'Chặn', 
-           style: 'destructive', 
-           onPress: async () => { 
+        {
+           text: friendInfo.iBlocked ? 'Bỏ chặn' : 'Chặn',
+           style: 'destructive',
+           onPress: async () => {
                try {
                   await friendApi.blockFriend(friendInfo.friendId);
-                  Alert.alert('Thành công', friendInfo.isBlocked ? 'Đã bỏ chặn' : 'Đã chặn');
+                  Alert.alert('Thành công', friendInfo.iBlocked ? 'Đã bỏ chặn' : 'Đã chặn');
                   fetchContacts();
                } catch (e) {}
-           } 
+           }
         },
         {
            text: 'Hủy kết bạn',
@@ -282,8 +331,8 @@ export default function FriendsScreen({ navigation }) {
                     <Text style={[s.userName, { color: THEME.textPrimary }]} numberOfLines={1}>{item.displayName}</Text>
                     <Text style={s.userHandle}>{item.email}</Text>
                 </View>
-                <TouchableOpacity 
-                    style={[curStyle, { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, zIndex: 10 }]} 
+                <TouchableOpacity
+                    style={[curStyle, { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, zIndex: 10 }]}
                     onPress={btnAction}
                     activeOpacity={isFriend ? 1 : 0.6}
                 >
@@ -294,19 +343,33 @@ export default function FriendsScreen({ navigation }) {
     }
 
     return (
-        <TouchableOpacity 
-            style={s.userCard} 
+        <TouchableOpacity
+            style={s.userCard}
             onPress={() => navigation.navigate('UserProfile', { user: item })}
             onLongPress={() => handleFriendOptions(item)}
             activeOpacity={0.7}
         >
             <Avatar name={item.displayName} avatar={item.avatar} size={50} />
             <View style={{ flex: 1, marginLeft: 16 }}>
-                <Text style={[s.userName, { color: THEME.textPrimary }]} numberOfLines={1}>
-                    {item.displayName}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[s.userName, { color: THEME.textPrimary }]} numberOfLines={1}>
+                        {item.displayName}
+                    </Text>
+                    {item.theyBlockedMe && (
+                        <View style={{ backgroundColor: '#ef444420', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
+                            <Text style={{ color: '#ef4444', fontSize: 10, fontWeight: '700' }}>Đã chặn bạn</Text>
+                        </View>
+                    )}
+                </View>
                 {item.email && <Text style={s.userHandle}>{item.email}</Text>}
             </View>
+            <TouchableOpacity
+                style={[s.chatBtn, { backgroundColor: THEME.accent }]}
+                onPress={() => handleOpenChat(item)}
+                disabled={openingChat || !!item.theyBlockedMe}
+            >
+                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>💬</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={s.optionsBtn} onPress={() => handleFriendOptions(item)}>
                 <Text style={{ fontSize: 18, color: THEME.textMuted }}>⋮</Text>
             </TouchableOpacity>
@@ -322,7 +385,7 @@ export default function FriendsScreen({ navigation }) {
       <View style={s.header}>
         <View style={s.searchBoxFake}>
             <Text style={{fontSize: 16, color: THEME.textMuted}}>🔍</Text>
-            <TextInput 
+            <TextInput
                 style={{ flex: 1, color: THEME.textPrimary, marginLeft: 8, fontSize: 16, paddingVertical: 0 }}
                 placeholder="Tìm kiếm bạn bè, sđt..."
                 placeholderTextColor={THEME.textMuted}
@@ -363,8 +426,8 @@ export default function FriendsScreen({ navigation }) {
           )}
           ListHeaderComponent={
               <View style={s.listHeaderWrap}>
-                 <TouchableOpacity 
-                    style={s.bigRequestBtn} 
+                 <TouchableOpacity
+                    style={s.bigRequestBtn}
                     activeOpacity={0.8}
                     onPress={() => navigation.navigate('FriendRequests')}
                  >
@@ -378,6 +441,29 @@ export default function FriendsScreen({ navigation }) {
                         </View>
                     )}
                  </TouchableOpacity>
+
+                 {blockedList.length > 0 && (
+                   <View>
+                     <View style={[s.sectionHeader, { backgroundColor: THEME.bgSecondary }]}>
+                       <Text style={[s.sectionTitle, { color: '#ef4444' }]}>🚫 Đã chặn ({blockedList.length})</Text>
+                     </View>
+                     {blockedList.map((u) => (
+                       <View key={u.userId?.toString()} style={[s.userCard, { backgroundColor: THEME.bgSecondary }]}>
+                         <Avatar name={u.displayName} avatar={u.avatar} size={46} />
+                         <View style={{ flex: 1, marginLeft: 14 }}>
+                           <Text style={[s.userName, { color: THEME.textPrimary }]} numberOfLines={1}>{u.displayName}</Text>
+                           <Text style={s.userHandle}>{u.email}</Text>
+                         </View>
+                         <TouchableOpacity
+                           style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: THEME.accent }}
+                           onPress={() => handleUnblockFromList(u.userId)}
+                         >
+                           <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Bỏ chặn</Text>
+                         </TouchableOpacity>
+                       </View>
+                     ))}
+                   </View>
+                 )}
               </View>
           }
           showsVerticalScrollIndicator={false}
@@ -391,7 +477,7 @@ export default function FriendsScreen({ navigation }) {
                     <Text style={s.emptyIcon}>{searchQuery ? '🔎' : '👥'}</Text>
                     <Text style={s.emptyTitle}>{searchQuery ? 'Không tìm thấy kết quả' : 'Chưa có bạn bè'}</Text>
                     <Text style={s.emptyDesc}>
-                        {searchQuery 
+                        {searchQuery
                             ? 'Bấm phím tìm kiếm trên bàn phím để tra người lạ trên toàn hệ thống ZoloChat.'
                             : 'Hãy quét mã QR hoặc đồng ý các lời mời để thêm bạn mới nhé!'}
                     </Text>
@@ -477,6 +563,7 @@ const useStyles = (THEME) => StyleSheet.create({
   },
   userName: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
   userHandle: { fontSize: 13, color: THEME.textMuted },
+  chatBtn: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', marginRight: 4 },
   optionsBtn: { padding: 8 },
 
   emptyWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, marginTop: 40 },
@@ -490,3 +577,4 @@ const useStyles = (THEME) => StyleSheet.create({
   permBtn: { backgroundColor: THEME.accent, borderRadius: 24, paddingHorizontal: 28, paddingVertical: 13 },
   permBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });
+N

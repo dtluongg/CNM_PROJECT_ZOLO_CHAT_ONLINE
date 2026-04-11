@@ -120,6 +120,7 @@ export default function RightSidebar({
   onLeaveGroup,
   onGroupUpdated,
   onDeleteConversation,
+  onBlockToggled,
 }) {
   const [tab, setTab] = useState('info');
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
@@ -363,6 +364,7 @@ export default function RightSidebar({
       const res = await friendApi.blockFriend(targetUserId);
       window.alert(res?.data?.message || 'Đã cập nhật trạng thái chặn người dùng');
       await loadDmFriendState();
+      onBlockToggled?.();
     } catch (error) {
       window.alert(error.response?.data?.message || 'Không thể chặn người dùng');
     } finally {
@@ -772,16 +774,6 @@ export default function RightSidebar({
                   />
                 )}
 
-                {conversation.type === 'dm' && (
-                  <ActionButton
-                    icon={<Ban size={15} />}
-                    label={dmFriendState?.iBlocked ? 'Bo chan nguoi dung' : 'Chan nguoi dung'}
-                    variant="danger"
-                    onClick={handleBlockUser}
-                    disabled={busyAction === 'block-user' || !conversation.otherUserId}
-                  />
-                )}
-
                 {conversation.type === 'dm' && conversation.otherUserId && (
                   <ActionButton
                     icon={<Shield size={15} />}
@@ -790,13 +782,13 @@ export default function RightSidebar({
                   />
                 )}
 
-                {conversation.type === 'dm' && conversation.otherUserId && (
+                {conversation.type === 'dm' && (
                   <ActionButton
                     icon={<Ban size={15} />}
-                    label="Chặn người dùng"
+                    label={dmFriendState?.iBlocked ? 'Bỏ chặn người dùng' : 'Chặn người dùng'}
                     variant="danger"
                     onClick={handleBlockUser}
-                    disabled={busyAction === 'block-user'}
+                    disabled={busyAction === 'block-user' || !conversation.otherUserId}
                   />
                 )}
 
