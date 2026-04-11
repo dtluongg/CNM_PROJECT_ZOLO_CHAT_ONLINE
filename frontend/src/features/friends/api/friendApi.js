@@ -20,7 +20,8 @@ const friendApi = {
     cancelRequest: (requestId) => apiClient.delete(`/friends/requests/${requestId}`),
 
     // 7. Lấy danh bạ bạn bè (GET /friends/list)
-    getFriendList: () => apiClient.get('/friends/list'),
+    getFriendList: (includeBlocked = false) =>
+        apiClient.get(`/friends/list?includeBlocked=${includeBlocked ? 'true' : 'false'}`),
 
     // 8. Hủy kết bạn (DELETE /friends/:userId)
     unfriend: (userId) => apiClient.delete(`/friends/${userId}`),
@@ -30,6 +31,9 @@ const friendApi = {
 
     // 10. Chặn (POST /friends/:userId/block)
     blockFriend: (userId) => apiClient.post(`/friends/${userId}/block`),
+
+    // 11. Lấy danh sách người bị chặn (GET /friends/blocked)
+    getBlockedList: () => apiClient.get('/friends/blocked'),
 
     // Tiện ích Tìm kiếm (Ánh xạ qua users)
     searchUsers: (q) => apiClient.get(`/users/search?q=${q}`),

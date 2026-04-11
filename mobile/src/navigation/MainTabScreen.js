@@ -13,6 +13,7 @@ import FriendsScreen from '../features/friends/screens/FriendsScreen';
 import conversationApi from '../features/chat/api/conversationApi';
 import { SOCKET_URL } from '../config/env';
 
+
 const formatTime = (iso) => {
   if (!iso) return '';
   const d = new Date(iso);
@@ -25,18 +26,18 @@ const formatTime = (iso) => {
 };
 
 const mapConv = (item) => {
-  const isDm  = item.type === 'dm';
+  const isDm = item.type === 'dm';
   const other = isDm ? item.otherUser : null;
   return {
-    id:          item._id,
-    name:        isDm ? (other?.displayName || item.name || 'Đoạn chat trực tiếp') : (item.name || 'Nhóm'),
-    avatar:      isDm ? (other?.avatar || null) : (item.avatar || null),
+    id: item._id,
+    name: isDm ? (other?.displayName || item.name || 'Đoạn chat trực tiếp') : (item.name || 'Nhóm'),
+    avatar: isDm ? (other?.avatar || null) : (item.avatar || null),
     otherUserId: isDm ? (other?._id?.toString() || null) : null,
     lastMessage: item.lastMessagePreview || 'Chưa có tin nhắn',
-    time:        formatTime(item.lastMessageTime || item.updatedAt || item.createdAt),
-    unread:      item.myMembership?.unreadCount || 0,
-    type:        item.type,
-    online:      false,
+    time: formatTime(item.lastMessageTime || item.updatedAt || item.createdAt),
+    unread: item.myMembership?.unreadCount || 0,
+    type: item.type,
+    online: false,
     memberCount: item.totalMembers || 0,
   };
 };
@@ -81,8 +82,8 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, THEME, sty
   const filtered = conversations.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );
-  const dms     = filtered.filter(c => c.type === 'dm');
-  const groups  = filtered.filter(c => c.type === 'group');
+  const dms = filtered.filter(c => c.type === 'dm');
+  const groups = filtered.filter(c => c.type === 'group');
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0);
 
   const openConversation = (conv) => {
@@ -199,7 +200,7 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, THEME, sty
 // BOTTOM TAB BAR
 // ─────────────────────────────────────────────
 const TABS = [
-  { key: 'chats',   icon: '💬', label: 'Tin nhắn' },
+  { key: 'chats', icon: '💬', label: 'Tin nhắn' },
   { key: 'friends', icon: '👥', label: 'Bạn bè' },
   { key: 'profile', icon: '👤', label: 'Hồ sơ' },
 ];
@@ -243,13 +244,13 @@ export default function MainTabScreen({ navigation, route }) {
   const { token } = useAuth();
   const styles = useStyles(THEME);
 
-  const [activeTab, setActiveTab]         = useState('chats');
+  const [activeTab, setActiveTab] = useState('chats');
   const [conversations, setConversations] = useState([]);
   const socketRef = useRef(null);
 
   const fetchConversations = useCallback(async () => {
     try {
-      const res  = await conversationApi.listMyConversations('exclude');
+      const res = await conversationApi.listMyConversations('exclude');
       const list = Array.isArray(res?.data?.data) ? res.data.data : [];
       setConversations(list.map(mapConv));
     } catch (err) {
@@ -283,8 +284,8 @@ export default function MainTabScreen({ navigation, route }) {
         return {
           ...c,
           lastMessage: message.content || c.lastMessage,
-          time:        fmtTime(message.createdAt),
-          unread:      (c.unread || 0) + 1,
+          time: fmtTime(message.createdAt),
+          unread: (c.unread || 0) + 1,
         };
       }));
     });
@@ -327,7 +328,7 @@ const useStyles = (THEME) => StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   avatarCircle: { justifyContent: 'center', alignItems: 'center' },
-  avatarText:   { color: '#fff', fontWeight: '700' },
+  avatarText: { color: '#fff', fontWeight: '700' },
   statusDot: {
     position: 'absolute', borderWidth: 2,
     borderColor: THEME.bgSecondary,

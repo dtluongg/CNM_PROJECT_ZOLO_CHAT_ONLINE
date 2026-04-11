@@ -119,6 +119,7 @@ export default function RightSidebar({
   onViewProfile,
   onLeaveGroup,
   onGroupUpdated,
+  onDeleteConversation,
 }) {
   const [tab, setTab] = useState('info');
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
@@ -131,6 +132,7 @@ export default function RightSidebar({
   const [friendPool, setFriendPool] = useState([]);
   const [selectedAddIds, setSelectedAddIds] = useState([]);
   const [loadingFriendPool, setLoadingFriendPool] = useState(false);
+  const [dmFriendState, setDmFriendState] = useState(null);
 
   const [editingMemberId, setEditingMemberId] = useState(null);
   const [editRole, setEditRole] = useState('member');
@@ -143,9 +145,7 @@ export default function RightSidebar({
   const [mediaData, setMediaData]     = useState({ images: [], files: [] });
   const [loadingMedia, setLoadingMedia] = useState(false);
 
-  // Block + Nickname modals (DM only)
-  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
-  const [blockBusy, setBlockBusy]               = useState(false);
+  // Nickname modal (DM only)
   const [showNickname, setShowNickname]         = useState(false);
   const [nicknameInput, setNicknameInput]       = useState('');
   const [nicknameBusy, setNicknameBusy]         = useState(false);
@@ -203,6 +203,22 @@ export default function RightSidebar({
     }
   }, [canInviteMembers, conversation?.id, conversation?.type, members]);
 
+  const loadDmFriendState = useCallback(async () => {
+    if (!conversation?.otherUserId) {
+      setDmFriendState(null);
+      return;
+    }
+
+    try {
+      const res = await friendApi.getFriendList(true);
+      const list = res?.data?.success ? (res.data.data || []) : [];
+      const state = list.find((item) => (item.friendId || '').toString() === conversation.otherUserId);
+      setDmFriendState(state || null);
+    } catch {
+      setDmFriendState(null);
+    }
+  }, [conversation?.otherUserId]);
+
   useEffect(() => {
     setEditingMemberId(null);
     setSelectedAddIds([]);
@@ -221,6 +237,14 @@ export default function RightSidebar({
   useEffect(() => {
     loadMembers();
   }, [loadMembers]);
+
+  useEffect(() => {
+    if (conversation?.type === 'dm') {
+      loadDmFriendState();
+    } else {
+      setDmFriendState(null);
+    }
+  }, [conversation?.type, loadDmFriendState]);
 
   useEffect(() => {
     loadFriendPool();
@@ -328,16 +352,21 @@ export default function RightSidebar({
   };
 
   const handleBlockUser = async () => {
-    if (!conversation.otherUserId) return;
-    setBlockBusy(true);
+    const targetUserId = conversation?.otherUserId;
+    if (!targetUserId) return;
+
+    const confirmed = window.confirm(dmFriendState?.iBlocked ? 'Bạn muốn bỏ chặn người dùng này?' : 'Bạn muốn chặn người dùng này?');
+    if (!confirmed) return;
+
     try {
-      await friendApi.blockFriend(conversation.otherUserId);
-      setShowBlockConfirm(false);
-      if (onGroupUpdated) onGroupUpdated();
+      setBusyAction('block-user');
+      const res = await friendApi.blockFriend(targetUserId);
+      window.alert(res?.data?.message || 'Đã cập nhật trạng thái chặn người dùng');
+      await loadDmFriendState();
     } catch (error) {
       window.alert(error.response?.data?.message || 'Không thể chặn người dùng');
     } finally {
-      setBlockBusy(false);
+      setBusyAction('');
     }
   };
 
@@ -734,6 +763,25 @@ export default function RightSidebar({
                 <ActionButton icon={<Phone size={15} />} label="Goi dien" />
                 <ActionButton icon={<BellOff size={15} />} label="Tắt thông báo" />
 
+                {conversation.type === 'dm' && (
+                  <ActionButton
+                    icon={<Trash2 size={15} />}
+                    label="Xoa cuoc tro chuyen"
+                    variant="danger"
+                    onClick={() => onDeleteConversation?.(conversation.id)}
+                  />
+                )}
+
+                {conversation.type === 'dm' && (
+                  <ActionButton
+                    icon={<Ban size={15} />}
+                    label={dmFriendState?.iBlocked ? 'Bo chan nguoi dung' : 'Chan nguoi dung'}
+                    variant="danger"
+                    onClick={handleBlockUser}
+                    disabled={busyAction === 'block-user' || !conversation.otherUserId}
+                  />
+                )}
+
                 {conversation.type === 'dm' && conversation.otherUserId && (
                   <ActionButton
                     icon={<Shield size={15} />}
@@ -747,38 +795,11 @@ export default function RightSidebar({
                     icon={<Ban size={15} />}
                     label="Chặn người dùng"
                     variant="danger"
-                    onClick={() => setShowBlockConfirm(true)}
+                    onClick={handleBlockUser}
+                    disabled={busyAction === 'block-user'}
                   />
                 )}
 
-                {/* Block confirmation inline */}
-                {showBlockConfirm && conversation.type === 'dm' && (
-                  <div style={{ background: 'rgba(237,66,69,0.1)', border: '1px solid rgba(237,66,69,0.35)', borderRadius: 10, padding: 12, marginTop: 4 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-                      Chặn {conversation.name}?
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-                      Người này sẽ không thể nhắn tin cho bạn.
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        onClick={() => setShowBlockConfirm(false)}
-                        style={{ flex: 1, padding: '7px 0', border: 'none', borderRadius: 7, background: 'var(--bg-hover)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                      >
-                        Hủy
-                      </button>
-                      <button
-                        onClick={handleBlockUser}
-                        disabled={blockBusy}
-                        style={{ flex: 1, padding: '7px 0', border: 'none', borderRadius: 7, background: '#ed4245', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, opacity: blockBusy ? 0.6 : 1 }}
-                      >
-                        {blockBusy ? 'Đang chặn...' : 'Chặn'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Nickname modal inline */}
                 {showNickname && conversation.type === 'dm' && (
                   <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginTop: 4 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>

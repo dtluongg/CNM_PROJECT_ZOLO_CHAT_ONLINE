@@ -17,7 +17,7 @@ const messageSchema = new mongoose.Schema(
     // Xóa phía tôi (Xóa)
     deleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
-    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    deletedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     
     // Thu hồi 2 chiều (Revoke)
     revoked: { type: Boolean, default: false },

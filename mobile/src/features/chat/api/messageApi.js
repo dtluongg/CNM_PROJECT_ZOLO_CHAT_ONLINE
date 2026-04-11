@@ -11,9 +11,9 @@ import apiClient from '../../../services/apiClient';
 // Content-Type without boundary breaks browser multipart encoding).
 const rnUploadConfig = Platform.OS !== 'web'
   ? {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      transformRequest: [(data) => data],
-    }
+    headers: { 'Content-Type': 'multipart/form-data' },
+    transformRequest: [(data) => data],
+  }
   : {};
 
 const messageApi = {
@@ -40,9 +40,32 @@ const messageApi = {
     apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId }),
 
   uploadVoice: (formData) => apiClient.post('/voice/upload', formData, rnUploadConfig),
-  uploadFile:  (formData) => apiClient.post('/uploads/file',  formData, rnUploadConfig),
+  uploadFile: (formData) => apiClient.post('/uploads/file', formData, rnUploadConfig),
   uploadImage: (formData) => apiClient.post('/uploads/image', formData, rnUploadConfig),
 
+  // REACTION API
+  getReactionTypes: () => apiClient.get('/reactions/types'),
+
+  toggleReaction: (messageId, emoji) =>
+    apiClient.post(`/reactions/${messageId}`, { emoji }),
+
+  getMessageReactions: (messageId) =>
+    apiClient.get(`/reactions/${messageId}`),
+
+  revokeMessage: (messageId) =>
+    apiClient.patch(`/messages/${messageId}/revoke`),
+
+  editMessage: (messageId, content) =>
+    apiClient.patch(`/messages/${messageId}`, { content }),
+
+  markAsRead: (conversationId, messageId) =>
+    apiClient.post(`/messages/${conversationId}/read/${messageId}`),
+
+  forwardMessage: (conversationId, forwardFromMessageId) =>
+    apiClient.post(`/messages/${conversationId}`, { forwardFromMessageId }),
+
+  deleteForMe: (messageId) =>
+    apiClient.patch(`/messages/${messageId}/delete-for-me`),
   // Lấy ảnh & file đã chia sẻ trong conversation
   getAttachments: (conversationId) =>
     apiClient.get(`/messages/${conversationId}/attachments`),
