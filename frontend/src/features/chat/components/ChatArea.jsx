@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, Paperclip, ThumbsUp, Reply, Copy, Trash2 } from 'lucide-react';
+import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2 } from 'lucide-react';
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
-import { X } from 'lucide-react'; // Dùng cho modal
+import conversationApi from '../api/conversationApi';
+import { X, Check } from 'lucide-react'; // Dùng cho modal
 
 
 const AVATAR_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#fee75c', '#ed4245', '#9b59b6', '#e67e22'];
@@ -49,6 +50,7 @@ const MessageBubble = ({
   onEdit,
   onRead,
   onShowReadDetails,
+  onForward,
   conversationType,
   currentUserId
 }) => {
@@ -295,6 +297,7 @@ const MessageBubble = ({
                 ...(!(msg.revoked || msg.recalled) ? [
                   { content: <ThumbsUp size={13} />, title: 'Thả cảm xúc', onClick: () => setShowEmojiBar(prev => !prev) },
                   { content: <CornerUpLeft size={13} />, title: 'Trả lời' },
+                  { content: <CornerUpRight size={13} />, title: 'Chuyển tiếp', onClick: () => onForward(msg) },
                 ] : []),
                 {
                   content: <MoreHorizontal size={14} />,
@@ -500,13 +503,14 @@ const MessageBubble = ({
             {/* Actions */}
             {[
               { icon: <Reply size={20} />, label: 'Trả lời' },
+              { icon: <CornerUpRight size={20} />, label: 'Chuyển tiếp', onClick: () => { onForward(msg); setShowActions(false); } },
               { icon: <Copy size={20} />, label: 'Sao chép' },
               { icon: <Pin size={20} />, label: 'Ghim tin nhắn' },
               { icon: <Trash2 size={20} />, label: 'Xóa tin nhắn', danger: true },
             ].map(action => (
               <button
                 key={action.label}
-                onClick={() => setShowActions(false)}
+                onClick={action.onClick || (() => setShowActions(false))}
                 style={{
                   width: '100%', background: 'none', border: 'none',
                   padding: '14px 20px', cursor: 'pointer', textAlign: 'left',
@@ -542,6 +546,155 @@ const TypingIndicator = ({ name }) => (
   </div>
 );
 
+const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
+  const [conversations, setConversations] = useState([]);
+  const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLoading(true);
+      conversationApi.listMyConversations()
+        .then(res => {
+          setConversations(res.data.data || []);
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    } else {
+      setSearch('');
+      setSelectedIds([]);
+      setSending(false);
+    }
+  }, [isOpen]);
+
+  const filtered = conversations.filter(c => {
+    const displayName = c.type === 'dm' ? c.otherUser?.displayName : c.name;
+    return displayName?.toLowerCase().includes(search.toLowerCase());
+  });
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSend = async () => {
+    if (selectedIds.length === 0) return;
+    setSending(true);
+    try {
+      // Gửi lần lượt tới các hội thoại đã chọn
+      for (const convId of selectedIds) {
+        await messageApi.forwardMessage(convId, msg._id || msg.id);
+      }
+      onForward(); // callback thông báo thành công
+      onClose();
+    } catch (err) {
+      console.error('Forward error:', err);
+      alert('Có lỗi xảy ra khi chuyển tiếp tin nhắn');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 3000,
+      background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+    }}>
+      <div style={{
+        width: '100%', maxWidth: 440, background: '#fff', borderRadius: 16,
+        boxShadow: '0 10px 40px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column',
+        maxHeight: '80vh', animation: 'modalIn 0.25s ease-out'
+      }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontWeight: 700, fontSize: 18 }}>Chuyển tiếp</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666' }}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div style={{ padding: '12px 20px' }}>
+          <div style={{ position: 'relative', background: '#f3f4f6', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '0 12px' }}>
+            <Search size={18} color="#888" />
+            <input 
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Tìm kiếm người hoặc nhóm..."
+              style={{ flex: 1, border: 'none', background: 'none', padding: '10px 8px', outline: 'none', fontSize: 14 }}
+            />
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Đang tải...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Không tìm thấy kết quả</div>
+          ) : (
+            filtered.map(c => (
+              <div 
+                key={c.id || c._id} 
+                onClick={() => toggleSelect(c.id || c._id)}
+                style={{ 
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', 
+                  borderRadius: 10, cursor: 'pointer', transition: 'background 0.2s',
+                  background: selectedIds.includes(c.id || c._id) ? '#f0f7ff' : 'transparent'
+                }}
+                onMouseEnter={e => !selectedIds.includes(c.id || c._id) && (e.currentTarget.style.background = '#f9fafb')}
+                onMouseLeave={e => !selectedIds.includes(c.id || c._id) && (e.currentTarget.style.background = 'transparent')}
+              >
+                <Avatar 
+                  name={c.type === 'dm' ? c.otherUser?.displayName : c.name} 
+                  avatar={c.type === 'dm' ? c.otherUser?.avatar : c.avatar} 
+                  size={40} 
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>
+                    {c.type === 'dm' ? c.otherUser?.displayName : c.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#666' }}>
+                    {c.type === 'dm' ? 'Cá nhân' : `${c.totalMembers} thành viên`}
+                  </div>
+                </div>
+                <div style={{ 
+                  width: 22, height: 22, borderRadius: 6, border: '2px solid',
+                  borderColor: selectedIds.includes(c.id || c._id) ? 'var(--accent)' : '#ccc',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: selectedIds.includes(c.id || c._id) ? 'var(--accent)' : 'transparent',
+                  transition: 'all 0.2s'
+                }}>
+                  {selectedIds.includes(c.id || c._id) && <Check size={14} color="#fff" strokeWidth={4} />}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div style={{ padding: 20, borderTop: '1px solid #eee' }}>
+          <button 
+            disabled={selectedIds.length === 0 || sending}
+            onClick={handleSend}
+            style={{ 
+              width: '100%', background: selectedIds.length > 0 ? 'var(--accent)' : '#ccc',
+              color: '#fff', border: 'none', borderRadius: 10, padding: '12px', 
+              fontWeight: 700, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed',
+              transition: 'opacity 0.2s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+            }}
+          >
+            {sending ? 'Đang gửi...' : `Chuyển tiếp ${selectedIds.length > 0 ? `(${selectedIds.length})` : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function ChatArea({
   conversation,
   messages,
@@ -561,6 +714,8 @@ export default function ChatArea({
   const [reactionDetails, setReactionDetails] = useState([]);
   const [showReadList, setShowReadList] = useState(null); // stores readBy array
   const [editingMessage, setEditingMessage] = useState(null);
+  const [forwardingMsg, setForwardingMsg] = useState(null);
+  const [showForwardModal, setShowForwardModal] = useState(false);
   const bottomRef = useRef(null);
 
   // 1. Fetch reaction types
@@ -705,6 +860,10 @@ export default function ChatArea({
       msg,
       isMine: msg.senderId === currentUserId,
       showHeader: !sameGroup,
+      onForward: (m) => {
+        setForwardingMsg(m);
+        setShowForwardModal(true);
+      },
       key: msg._id || msg.id
     });
   });
@@ -894,6 +1053,7 @@ export default function ChatArea({
               onEdit={(msg) => setEditingMessage(msg)}
               onRead={handleMarkAsRead}
               onShowReadDetails={handleShowReadDetails}
+              onForward={item.onForward}
               conversationType={conversation.type}
               currentUserId={currentUserId}
             />
@@ -954,7 +1114,7 @@ export default function ChatArea({
         </div>
       )}
 
-      {/* Modal Read Details List */}
+          {/* Modal Read Details List */}
       {showReadList && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 3000,
@@ -992,6 +1152,18 @@ export default function ChatArea({
           </div>
         </div>
       )}
+
+      {/* Modal Chuyển tiếp */}
+      <ForwardModal 
+        isOpen={showForwardModal}
+        onClose={() => setShowForwardModal(false)}
+        msg={forwardingMsg}
+        onForward={() => {
+          // Xử lý sau khi chuyển tiếp thành công
+          // Có thể hiện 1 toast notification ở đây
+          console.log('Forwarded successfully');
+        }}
+      />
 
       <style>{`
         @keyframes bounce { 0%,60%,100% { transform:translateY(0);opacity:.5; } 30% { transform:translateY(-5px);opacity:1; } }

@@ -78,64 +78,81 @@ const sendMessage = async (req, res) => {
 
         await requireMembership(conversationId, userId);
 
-        const { type = 'text', content = '', attachmentId, replyToMessageId } = req.body;
+        const { type = 'text', content = '', attachmentId, replyToMessageId, forwardFromMessageId } = req.body;
 
         const ALLOWED_TYPES = ['text', 'voice', 'image', 'file'];
         if (!ALLOWED_TYPES.includes(type)) {
             return res.status(400).json({ message: `type phải là: ${ALLOWED_TYPES.join(', ')}` });
         }
 
-        // ── Validate nội dung ───────────────────────────────────────────
-        if (type === 'text' && !content.trim()) {
-            return res.status(400).json({ message: 'Nội dung tin nhắn không được trống' });
-        }
-
-        // ── Xử lý attachment cho voice / image / file ───────────────────
+        // ── Xử lý Forward (nếu có) ──────────────────────────────────────
+        let finalType = type;
+        let finalContent = content;
+        let finalPayload = {};
         let attachment = null;
-        let payload    = {};
 
-        if (type !== 'text') {
-            if (!isValidId(attachmentId)) {
-                return res.status(400).json({ message: 'attachmentId không hợp lệ' });
+        if (isValidId(forwardFromMessageId)) {
+            const originalMsg = await Message.findById(forwardFromMessageId);
+            if (!originalMsg) {
+                return res.status(404).json({ message: 'Tin nhắn gốc không tồn tại' });
             }
-            attachment = await Attachment.findById(attachmentId);
-            if (!attachment) {
-                return res.status(404).json({ message: 'Attachment không tồn tại' });
-            }
-            if (attachment.uploadedBy.toString() !== userId) {
-                return res.status(403).json({ message: 'Không có quyền dùng attachment này' });
+            finalType = originalMsg.type;
+            finalContent = originalMsg.content;
+            finalPayload = originalMsg.payload || {};
+            // Đối với forward, ta không bắt buộc check attachment ownership lại
+            // vì ta copy payload trực tiếp từ tin nhắn đã tồn tại hợp lệ.
+        } else {
+            // ── Validate nội dung thông thường ─────────────────────────────
+            if (type === 'text' && !content.trim()) {
+                return res.status(400).json({ message: 'Nội dung tin nhắn không được trống' });
             }
 
-            payload = {
-                url:      attachment.url,
-                fileName: attachment.fileName || '',
-                fileSize: attachment.fileSize || 0,
-                mimeType: attachment.mimeType || '',
-                duration: attachment.duration || null, // giây (voice)
-            };
+            // ── Xử lý attachment cho voice / image / file ───────────────────
+            if (type !== 'text') {
+                if (!isValidId(attachmentId)) {
+                    return res.status(400).json({ message: 'attachmentId không hợp lệ' });
+                }
+                attachment = await Attachment.findById(attachmentId);
+                if (!attachment) {
+                    return res.status(404).json({ message: 'Attachment không tồn tại' });
+                }
+                if (attachment.uploadedBy.toString() !== userId) {
+                    return res.status(403).json({ message: 'Không có quyền dùng attachment này' });
+                }
+
+                finalPayload = {
+                    url:      attachment.url,
+                    fileName: attachment.fileName || '',
+                    fileSize: attachment.fileSize || 0,
+                    mimeType: attachment.mimeType || '',
+                    duration: attachment.duration || null,
+                };
+            }
         }
 
         // ── Preview text hiển thị ở danh sách conversation ────────────
         const preview =
-            type === 'text'  ? content.trim() :
-            type === 'voice' ? '[Tin nhắn thoại]' :
-            type === 'image' ? '[Hình ảnh]' :
-            /* file */         (attachment?.fileName || '[File đính kèm]');
+            finalType === 'text'  ? finalContent.trim() :
+            finalType === 'voice' ? '[Tin nhắn thoại]' :
+            finalType === 'image' ? '[Hình ảnh]' :
+            /* file */         (finalPayload?.fileName || '[File đính kèm]');
 
         // ── Tạo message ────────────────────────────────────────────────
         const message = await Message.create({
             conversationId,
-            senderId:    userId,
-            content:     type === 'text' ? content.trim() : preview,
-            type,
-            payload,
+            senderId: userId,
+            content:  finalType === 'text' ? finalContent.trim() : preview,
+            type:     finalType,
+            payload:  finalPayload,
             replyToMessageId:
                 isValidId(replyToMessageId) ? replyToMessageId : null,
+            forwardFromMessageId:
+                isValidId(forwardFromMessageId) ? forwardFromMessageId : null,
         });
 
-        // ── Gắn messageId vào attachment ───────────────────────────────
+        // ── Gắn messageId vào attachment (nếu gửi mới, không phải forward) ──
         if (attachment) {
-            await Attachment.findByIdAndUpdate(attachmentId, { messageId: message._id });
+            await Attachment.findByIdAndUpdate(attachment._id, { messageId: message._id });
         }
 
         // ── Cập nhật lastMessage của conversation ─────────────────────
