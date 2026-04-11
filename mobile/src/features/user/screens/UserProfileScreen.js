@@ -23,7 +23,7 @@ const Avatar = ({ name, avatar, size = 80 }) => {
 
 export default function UserProfileScreen({ route, navigation }) {
   const { user: authUser } = useAuth();
-  const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
+  const { isUserOnline, getPresenceStatus, getLastSeen, getStatusText } = usePresence();
 
   const [profile, setProfile]         = useState(route.params?.user || null);
   const [loading, setLoading]         = useState(!route.params?.user);
@@ -83,20 +83,31 @@ export default function UserProfileScreen({ route, navigation }) {
       const outgoing = outgoingRes.data?.data  || [];
       const incoming = incomingRes.data?.data  || [];
 
-      const isFriend = friends.some(f => f.friendId?.toString() === targetId?.toString());
+      // Normalize targetId to string for safe comparison
+      const tid = String(targetId);
+
+      const isFriend = friends.some(f => String(f.friendId) === tid);
       if (isFriend) {
         setFriendStatus('friends');
         return;
       }
 
-      const sent = outgoing.find(r => r.toUserId?._id?.toString() === targetId?.toString());
+      // Outgoing: toUserId is a populated object { _id, displayName, ... }
+      const sent = outgoing.find(r => {
+        const id = r.toUserId?._id ?? r.toUserId;
+        return String(id) === tid;
+      });
       if (sent) {
         setFriendStatus('sent');
         setFriendRequestId(sent._id);
         return;
       }
 
-      const received = incoming.find(r => r.fromUserId?._id?.toString() === targetId?.toString());
+      // Incoming: fromUserId is a populated object { _id, displayName, ... }
+      const received = incoming.find(r => {
+        const id = r.fromUserId?._id ?? r.fromUserId;
+        return String(id) === tid;
+      });
       if (received) {
         setFriendStatus('received');
         setFriendRequestId(received._id);
@@ -281,6 +292,12 @@ export default function UserProfileScreen({ route, navigation }) {
             {profile.displayName}
           </Text>
           {profile.username && <Text style={s.handle}>@{profile.username}</Text>}
+          {(() => {
+            const cst = getStatusText(profile._id) || profile.statusText;
+            return cst ? (
+              <Text style={s.statusTextLine} numberOfLines={2}>{cst}</Text>
+            ) : null;
+          })()}
         </View>
 
         {/* Action buttons */}
@@ -487,6 +504,7 @@ const s = StyleSheet.create({
   nameBlock: { paddingHorizontal: 16, marginBottom: 16 },
   displayName: { fontSize: 22, fontWeight: '800', letterSpacing: 0.2, marginBottom: 2 },
   handle: { fontSize: 13, color: THEME.textMuted },
+  statusTextLine: { fontSize: 12, color: THEME.textMuted, fontStyle: 'italic', marginTop: 4 },
 
   actionRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 16 },
   actionBtn: {

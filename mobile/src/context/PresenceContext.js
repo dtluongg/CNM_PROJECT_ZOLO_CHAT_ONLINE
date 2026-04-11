@@ -23,9 +23,10 @@ const PresenceContext = createContext();
 
 export const PresenceProvider = ({ children }) => {
   const { user, token } = useAuth();
-  const [onlineSet, setOnlineSet]     = useState(new Set());
-  const [statusMap, setStatusMap]     = useState({}); // userId → 'online'|'idle'|'dnd'
-  const [lastSeenMap, setLastSeenMap] = useState({}); // userId → ISO timestamp
+  const [onlineSet, setOnlineSet]         = useState(new Set());
+  const [statusMap, setStatusMap]         = useState({}); // userId → 'online'|'idle'|'dnd'
+  const [statusTextMap, setStatusTextMap] = useState({}); // userId → custom status text
+  const [lastSeenMap, setLastSeenMap]     = useState({}); // userId → ISO timestamp
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -47,8 +48,8 @@ export const PresenceProvider = ({ children }) => {
       socket.emit('presence:subscribe');
     });
 
-    // Nhận snapshot danh sách online (có kèm statusMap)
-    socket.on('presence:online-list', ({ userIds, statusMap: sm }) => {
+    // Nhận snapshot danh sách online (có kèm statusMap + statusTextMap)
+    socket.on('presence:online-list', ({ userIds, statusMap: sm, statusTextMap: stm }) => {
       const ids = Array.isArray(userIds) ? userIds.map(String) : [];
       setOnlineSet(new Set(ids));
       if (sm && typeof sm === 'object') {
@@ -56,13 +57,19 @@ export const PresenceProvider = ({ children }) => {
         Object.entries(sm).forEach(([k, v]) => { normalized[String(k)] = v; });
         setStatusMap(normalized);
       }
+      if (stm && typeof stm === 'object') {
+        const norm = {};
+        Object.entries(stm).forEach(([k, v]) => { norm[String(k)] = v; });
+        setStatusTextMap(norm);
+      }
     });
 
-    // User vừa online: cập nhật status, xóa khỏi lastSeenMap
-    socket.on('presence:online', ({ userId, status }) => {
+    // User vừa online: cập nhật status + statusText, xóa khỏi lastSeenMap
+    socket.on('presence:online', ({ userId, status, statusText }) => {
       const uid = String(userId);
       setOnlineSet(prev => new Set([...prev, uid]));
       setStatusMap(prev => ({ ...prev, [uid]: status || 'online' }));
+      setStatusTextMap(prev => ({ ...prev, [uid]: statusText || '' }));
       setLastSeenMap(prev => {
         if (!prev[uid]) return prev;
         const next = { ...prev };
@@ -71,22 +78,29 @@ export const PresenceProvider = ({ children }) => {
       });
     });
 
-    // User vừa offline: lưu lastSeen, xóa khỏi onlineSet & statusMap
+    // User vừa offline: lưu lastSeen, xóa khỏi onlineSet & maps
     socket.on('presence:offline', ({ userId, lastSeen }) => {
       const uid = String(userId);
       setOnlineSet(prev => {
-        const next = new Set(prev);
-        next.delete(uid);
-        return next;
+        const next = new Set(prev); next.delete(uid); return next;
       });
-      setStatusMap(prev => {
-        const next = { ...prev };
-        delete next[uid];
-        return next;
-      });
+      setStatusMap(prev => { const n = { ...prev }; delete n[uid]; return n; });
+      setStatusTextMap(prev => { const n = { ...prev }; delete n[uid]; return n; });
       if (lastSeen) {
         setLastSeenMap(prev => ({ ...prev, [uid]: lastSeen }));
       }
+    });
+
+    // User thay đổi trạng thái hoặc statusText
+    socket.on('presence:status-changed', ({ userId, status, statusText }) => {
+      const uid = String(userId);
+      setOnlineSet(prev => new Set([...prev, uid]));
+      setStatusMap(prev => ({ ...prev, [uid]: status || 'online' }));
+      setStatusTextMap(prev => ({ ...prev, [uid]: statusText ?? prev[uid] ?? '' }));
+      setLastSeenMap(prev => {
+        if (!prev[uid]) return prev;
+        const next = { ...prev }; delete next[uid]; return next;
+      });
     });
 
     // Reconnect khi app vào foreground
@@ -128,8 +142,14 @@ export const PresenceProvider = ({ children }) => {
     [onlineSet, lastSeenMap],
   );
 
+  // Trả về custom status text (Discord-style)
+  const getStatusText = useCallback(
+    (userId) => statusTextMap[String(userId)] || '',
+    [statusTextMap],
+  );
+
   return (
-    <PresenceContext.Provider value={{ isUserOnline, getPresenceStatus, getLastSeen }}>
+    <PresenceContext.Provider value={{ isUserOnline, getPresenceStatus, getLastSeen, getStatusText }}>
       {children}
     </PresenceContext.Provider>
   );

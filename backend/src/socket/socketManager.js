@@ -80,8 +80,13 @@ const initSocket = (httpServer) => {
         if (isFirstSocket) {
             const chosenStatus = socket.user.status || 'online';
             const broadcastStatus = chosenStatus === 'invisible' ? 'offline' : chosenStatus;
+            const chosenStatusText = socket.user.statusText || '';
             if (chosenStatus !== 'invisible') {
-                socket.broadcast.emit('presence:online', { userId, status: broadcastStatus });
+                socket.broadcast.emit('presence:online', {
+                    userId,
+                    status: broadcastStatus,
+                    statusText: chosenStatusText,
+                });
             }
             // Lưu trạng thái online vào DB (fire-and-forget)
             Presence.findOneAndUpdate(
@@ -99,7 +104,7 @@ const initSocket = (httpServer) => {
             try {
                 const users = await userModel.find(
                     { _id: { $in: onlineIds } },
-                    { _id: 1, status: 1 }
+                    { _id: 1, status: 1, statusText: 1 }
                 ).lean();
                 users.forEach(u => {
                     const st = u.status || 'online';
@@ -112,9 +117,19 @@ const initSocket = (httpServer) => {
                 // fallback: tất cả là online
                 onlineIds.forEach(id => { statusMap[id] = 'online'; });
             }
+            // Lấy statusText riêng (cho những user visible)
+            const statusTextMap = {};
+            try {
+                const users2 = await userModel.find(
+                    { _id: { $in: Object.keys(statusMap) } },
+                    { _id: 1, statusText: 1 }
+                ).lean();
+                users2.forEach(u => { statusTextMap[u._id.toString()] = u.statusText || ''; });
+            } catch (_) {}
             socket.emit('presence:online-list', {
                 userIds: Object.keys(statusMap),
                 statusMap,
+                statusTextMap,
             });
         });
 

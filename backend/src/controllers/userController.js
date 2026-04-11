@@ -1,4 +1,5 @@
 const userModel = require('../models/userModel');
+const { getIO }  = require('../socket/socketManager');
 
 // ════════════════════════════════════════════════════════════════
 //  CẬP NHẬT PROFILE (avatar, displayName, and extended settings)
@@ -39,6 +40,26 @@ const updateProfile = async (req, res) => {
             updates,
             { new: true, select: '-passwordHash' }
         );
+
+        // ── Broadcast status change via socket ──────────────────────────────
+        if (updates.status !== undefined || updates.statusText !== undefined) {
+            try {
+                const io  = getIO();
+                const uid = userId.toString();
+                const newStatus     = updatedUser.status     || 'online';
+                const newStatusText = updatedUser.statusText || '';
+                if (newStatus === 'invisible') {
+                    // Appear offline to everyone else (no lastSeen = user is just hidden)
+                    io.emit('presence:offline', { userId: uid });
+                } else {
+                    io.emit('presence:status-changed', {
+                        userId:     uid,
+                        status:     newStatus,
+                        statusText: newStatusText,
+                    });
+                }
+            } catch (_) { /* socket may not be ready in test environments */ }
+        }
 
         return res.status(200).json({
             message: 'Cập nhật profile thành công',

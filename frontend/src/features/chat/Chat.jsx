@@ -161,6 +161,8 @@ const Chat = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [mobileView, setMobileView] = useState('list');   // 'list' | 'chat'
   const [mobileTab, setMobileTab] = useState('messages'); // for bottom nav highlight
+  const [sendBlockError, setSendBlockError] = useState(''); // thông báo khi bị chặn
+  const blockErrorTimerRef = useRef(null);
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -509,6 +511,13 @@ const Chat = () => {
           [convId]: (prev[convId] || []).filter(m => !m._id?.startsWith('temp_')),
         }));
       }
+      // Hiển thị thông báo nếu bị chặn (403)
+      if (err?.response?.status === 403) {
+        const msg = err.response?.data?.message || 'Không thể gửi tin nhắn vì một trong hai người đã chặn nhau.';
+        setSendBlockError(msg);
+        clearTimeout(blockErrorTimerRef.current);
+        blockErrorTimerRef.current = setTimeout(() => setSendBlockError(''), 5000);
+      }
     }
   }, [activeConversation, currentUser]);
 
@@ -692,7 +701,7 @@ const Chat = () => {
               showRight={showRightSidebar}
               onBack={handleMobileBack}
               socket={socketRef.current}
-              onViewProfile={handleViewProfile}
+              sendBlockError={sendBlockError}
               isMobile
             />
           </div>
@@ -766,7 +775,7 @@ const Chat = () => {
           onToggleRight={() => setShowRightSidebar(v => !v)}
           showRight={showRightSidebar}
           socket={socketRef.current}
-          onViewProfile={handleViewProfile}
+          sendBlockError={sendBlockError}
         />
       </div>
 

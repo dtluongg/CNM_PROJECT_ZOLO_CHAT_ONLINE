@@ -8,7 +8,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { Linking } from 'react-native';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../../context/AuthContext';
 import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
@@ -16,7 +15,11 @@ import messageApi from '../api/messageApi';
 import friendApi from '../../friends/api/friendApi';
 import { getAvatarColor, getInitials } from '../../../theme';
 import { useTheme } from '../../../context/ThemeContext';
-import { SOCKET_URL } from '../../../config/env';
+
+const SOCKET_URL =
+  process.env.EXPO_PUBLIC_SOCKET_URL ||
+  (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.88.135:2026/backend/api')
+    .replace('/backend/api', '');
 
 const fmtTime = (iso) => {
   const d = new Date(iso);
@@ -919,18 +922,12 @@ export default function MessageScreen({ route, navigation }) {
                   {!loadingMedia && mediaData.images.length > 0 && (
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
                       {mediaData.images.map((item) => (
-                        <TouchableOpacity
+                        <Image
                           key={item._id}
-                          activeOpacity={0.85}
-                          style={{ width: '32%', aspectRatio: 1 }}
-                          onPress={() => item.url && Linking.openURL(item.url).catch(() => {})}
-                        >
-                          <Image
-                            source={{ uri: item.url }}
-                            style={{ width: '100%', height: '100%', borderRadius: 6 }}
-                            resizeMode="cover"
-                          />
-                        </TouchableOpacity>
+                          source={{ uri: item.url }}
+                          style={{ width: '32%', aspectRatio: 1, borderRadius: 6 }}
+                          resizeMode="cover"
+                        />
                       ))}
                     </View>
                   )}
@@ -947,10 +944,8 @@ export default function MessageScreen({ route, navigation }) {
                     <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Chưa có file nào được chia sẻ</Text>
                   )}
                   {!loadingMedia && mediaData.files.map((file) => (
-                    <TouchableOpacity
+                    <View
                       key={file._id}
-                      onPress={() => file.url && Linking.openURL(file.url).catch(() => Alert.alert('Lỗi', 'Không thể mở file.'))}
-                      activeOpacity={0.75}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, backgroundColor: THEME.bgPrimary, borderRadius: 10, marginBottom: 6 }}
                     >
                       <Text style={{ fontSize: 24 }}>📄</Text>
@@ -958,16 +953,13 @@ export default function MessageScreen({ route, navigation }) {
                         <Text style={{ fontSize: 13, fontWeight: '600', color: THEME.textPrimary }} numberOfLines={1}>
                           {file.fileName}
                         </Text>
-                        {file.fileSize ? (
+                        {file.fileSize && (
                           <Text style={{ fontSize: 11, color: THEME.textMuted }}>
-                            {file.fileSize >= 1024 * 1024
-                              ? `${(file.fileSize / 1024 / 1024).toFixed(1)} MB`
-                              : `${(file.fileSize / 1024).toFixed(0)} KB`}
+                            {(file.fileSize / 1024).toFixed(0)} KB
                           </Text>
-                        ) : null}
+                        )}
                       </View>
-                      <Text style={{ fontSize: 18, opacity: 0.5 }}>↗</Text>
-                    </TouchableOpacity>
+                    </View>
                   ))}
                 </View>
               )}
