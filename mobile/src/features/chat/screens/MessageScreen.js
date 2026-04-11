@@ -1743,12 +1743,29 @@ export default function MessageScreen({ route, navigation }) {
                   {!loadingMedia && mediaData.images.length > 0 && (
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
                       {mediaData.images.map((item) => (
-                        <Image
+                        <TouchableOpacity
                           key={item._id}
-                          source={{ uri: item.url }}
-                          style={{ width: '32%', aspectRatio: 1, borderRadius: 6 }}
-                          resizeMode="cover"
-                        />
+                          onPress={() => {
+                            setShowInfoPanel(false);
+                            setTimeout(() => setPreviewImage(item.url), 300);
+                          }}
+                          activeOpacity={0.85}
+                          style={{ width: '32%', aspectRatio: 1, borderRadius: 6, overflow: 'hidden' }}
+                        >
+                          <Image
+                            source={{ uri: item.url }}
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode="cover"
+                          />
+                          {/* Icon zoom */}
+                          <View style={{
+                            position: 'absolute', bottom: 4, right: 4,
+                            backgroundColor: 'rgba(0,0,0,0.45)',
+                            borderRadius: 8, padding: 3,
+                          }}>
+                            <Feather name="zoom-in" size={10} color="#fff" />
+                          </View>
+                        </TouchableOpacity>
                       ))}
                     </View>
                   )}
@@ -1765,22 +1782,55 @@ export default function MessageScreen({ route, navigation }) {
                     <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Chưa có file nào được chia sẻ</Text>
                   )}
                   {!loadingMedia && mediaData.files.map((file) => (
-                    <View
+                    <TouchableOpacity
                       key={file._id}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, backgroundColor: THEME.bgPrimary, borderRadius: 10, marginBottom: 6 }}
+                      onPress={() => handleOpenFile(file.url, file.fileName)}
+                      activeOpacity={0.75}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 12,
+                        padding: 12, backgroundColor: THEME.bgPrimary,
+                        borderRadius: 10, marginBottom: 6,
+                        borderWidth: 1, borderColor: THEME.border,
+                      }}
                     >
-                      <Text style={{ fontSize: 24 }}>📄</Text>
+                      {/* Icon theo loại file */}
+                      <View style={{
+                        width: 40, height: 40, borderRadius: 10,
+                        backgroundColor: THEME.accent + '18',
+                        justifyContent: 'center', alignItems: 'center',
+                      }}>
+                        <Feather
+                          name={
+                            /\.(jpg|jpeg|png|gif|webp)$/i.test(file.fileName) ? 'image' :
+                            /\.(mp4|mov|avi|mkv)$/i.test(file.fileName) ? 'film' :
+                            /\.(mp3|m4a|wav)$/i.test(file.fileName) ? 'music' :
+                            /\.(pdf)$/i.test(file.fileName) ? 'file-text' :
+                            /\.(zip|rar|7z)$/i.test(file.fileName) ? 'archive' :
+                            'file'
+                          }
+                          size={20}
+                          color={THEME.accent}
+                        />
+                      </View>
+
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={{ fontSize: 13, fontWeight: '600', color: THEME.textPrimary }} numberOfLines={1}>
                           {file.fileName}
                         </Text>
-                        {file.fileSize && (
-                          <Text style={{ fontSize: 11, color: THEME.textMuted }}>
-                            {(file.fileSize / 1024).toFixed(0)} KB
-                          </Text>
-                        )}
+                        <Text style={{ fontSize: 11, color: THEME.textMuted, marginTop: 2 }}>
+                          {file.fileSize ? `${(file.fileSize / 1024).toFixed(0)} KB` : ''} · Nhấn để tải
+                        </Text>
                       </View>
-                    </View>
+
+                      {/* Nút download */}
+                      <View style={{
+                        width: 32, height: 32, borderRadius: 16,
+                        backgroundColor: THEME.accent + '18',
+                        justifyContent: 'center', alignItems: 'center',
+                      }}>
+                        <Feather name="download" size={16} color={THEME.accent} />
+                      </View>
+                    </TouchableOpacity>
                   ))}
                 </View>
               )}
