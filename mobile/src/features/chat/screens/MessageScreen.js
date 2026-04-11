@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
   FlatList, TextInput, Platform, Keyboard,
-  Modal, StatusBar, Pressable, Alert, ScrollView,
+  Modal, StatusBar, Pressable, Alert, ScrollView,Animated
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Audio } from 'expo-av';
@@ -16,7 +17,9 @@ import conversationApi from '../api/conversationApi';
 import friendApi from '../../friends/api/friendApi';
 import { getAvatarColor, getInitials } from '../../../theme';
 import { useTheme } from '../../../context/ThemeContext';
-
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as WebBrowser from 'expo-web-browser';
 const SOCKET_URL =
   process.env.EXPO_PUBLIC_SOCKET_URL ||
   (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.88.135:2026/backend/api')
@@ -76,15 +79,36 @@ const DateDivider = ({ label, styles }) => (
 const VoicePlayer = ({ url, duration, isMine, THEME }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const soundRef = useRef(null);
+  const animValues = useRef([...Array(12)].map(() => new Animated.Value(0.3))).current;
+  const animRef = useRef(null);
+
+  const startWaveAnim = () => {
+    const animations = animValues.map((val, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 60),
+          Animated.timing(val, { toValue: 1, duration: 350, useNativeDriver: true }),
+          Animated.timing(val, { toValue: 0.3, duration: 350, useNativeDriver: true }),
+        ])
+      )
+    );
+    animRef.current = Animated.parallel(animations);
+    animRef.current.start();
+  };
+
+  const stopWaveAnim = () => {
+    animRef.current?.stop();
+    animValues.forEach(v => v.setValue(0.3));
+  };
 
   const togglePlay = async () => {
     try {
       if (isPlaying) {
         await soundRef.current?.pauseAsync();
         setIsPlaying(false);
+        stopWaveAnim();
       } else {
         if (!soundRef.current) {
-          // setAudioModeAsync is iOS/Android only; skip on web
           if (Platform.OS !== 'web') {
             await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false });
           }
@@ -93,6 +117,7 @@ const VoicePlayer = ({ url, duration, isMine, THEME }) => {
           sound.setOnPlaybackStatusUpdate((status) => {
             if (status.didJustFinish) {
               setIsPlaying(false);
+              stopWaveAnim();
               soundRef.current?.unloadAsync();
               soundRef.current = null;
             }
@@ -100,6 +125,7 @@ const VoicePlayer = ({ url, duration, isMine, THEME }) => {
         }
         await soundRef.current.playAsync();
         setIsPlaying(true);
+        startWaveAnim();
       }
     } catch (err) {
       console.error('VoicePlayer error:', err);
@@ -107,14 +133,48 @@ const VoicePlayer = ({ url, duration, isMine, THEME }) => {
   };
 
   useEffect(() => {
-    return () => { soundRef.current?.unloadAsync(); };
+    return () => {
+      stopWaveAnim();
+      soundRef.current?.unloadAsync();
+    };
   }, []);
 
+  const barColor = isMine ? 'rgba(255,255,255,0.9)' : THEME.accent;
+
   return (
-    <TouchableOpacity onPress={togglePlay} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 140 }}>
-      <Text style={{ fontSize: 20 }}>{isPlaying ? '⏸' : '▶️'}</Text>
-      <View style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: isMine ? 'rgba(255,255,255,0.4)' : THEME.border }} />
-      <Text style={{ fontSize: 12, color: isMine ? 'rgba(255,255,255,0.8)' : THEME.textMuted }}>
+    <TouchableOpacity onPress={togglePlay}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 160, paddingVertical: 2 }}>
+      {/* Play / Pause button */}
+      <View style={{
+        width: 34, height: 34, borderRadius: 17,
+        backgroundColor: isMine ? 'rgba(255,255,255,0.2)' : THEME.accent + '22',
+        justifyContent: 'center', alignItems: 'center',
+      }}>
+        <Ionicons
+          name={isPlaying ? 'pause' : 'play'}
+          size={16}
+          color={isMine ? '#fff' : THEME.accent}
+        />
+      </View>
+
+      {/* Waveform bars */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, flex: 1, height: 28 }}>
+        {animValues.map((val, i) => (
+          <Animated.View
+            key={i}
+            style={{
+              width: 3,
+              height: 28,
+              borderRadius: 2,
+              backgroundColor: barColor,
+              transform: [{ scaleY: val }],
+            }}
+          />
+        ))}
+      </View>
+
+      {/* Duration */}
+      <Text style={{ fontSize: 12, color: isMine ? 'rgba(255,255,255,0.75)' : THEME.textMuted, minWidth: 32 }}>
         {fmtDur(duration)}
       </Text>
     </TouchableOpacity>
@@ -128,7 +188,7 @@ const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#
 const getSenderColor = (name, THEME) =>
   name ? SENDER_COLORS[name.charCodeAt(0) % SENDER_COLORS.length] : THEME.accent;
 
-const MessageBubble = ({ msg, isMine, showHeader, onLongPress, onShowReadBy, currentUserId, conversation, onAvatarPress, THEME, styles }) => {
+const MessageBubble = ({ msg, isMine, showHeader, onLongPress, onShowReadBy, currentUserId, conversation, onAvatarPress, THEME, styles, onImagePress, onFilePress }) => {
   const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName, THEME);
   const bubbleBg = isMine ? THEME.bubbleSelf : THEME.bubbleOther;
   const bubbleText = isMine ? '#ffffff' : THEME.textPrimary;
@@ -144,17 +204,37 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress, onShowReadBy, cur
 
   const renderContent = () => {
     if (msg.revoked || msg.recalled) {
-      return <Text style={[styles.bubbleText, { color: bubbleText, fontStyle: 'italic', opacity: 0.7 }]}>Tin nhắn đã được thu hồi</Text>;
-    }
-    if (msg.type === 'image') {
       return (
-        <Image
-          source={{ uri: msg.payload?.url || msg.content }}
-          style={styles.imgAttachment}
-          resizeMode="cover"
-        />
+        <Text style={[styles.bubbleText, { color: bubbleText, fontStyle: 'italic', opacity: 0.7 }]}>
+          Tin nhắn đã được thu hồi
+        </Text>
       );
     }
+
+    if (msg.type === 'image') {
+      const imgUrl = msg.payload?.url || msg.content;
+      return (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => onImagePress && onImagePress(imgUrl)}
+        >
+          <Image
+            source={{ uri: imgUrl }}
+            style={styles.imgAttachment}
+            resizeMode="cover"
+          />
+          {/* Icon zoom nhỏ góc phải */}
+          <View style={{
+            position: 'absolute', bottom: 6, right: 6,
+            backgroundColor: 'rgba(0,0,0,0.45)',
+            borderRadius: 10, padding: 3,
+          }}>
+            <Text style={{ fontSize: 11, color: '#fff' }}>🔍</Text>
+          </View>
+        </TouchableOpacity>
+      );
+    }
+
     if (msg.type === 'voice') {
       return (
         <VoicePlayer
@@ -165,16 +245,33 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress, onShowReadBy, cur
         />
       );
     }
+
     if (msg.type === 'file') {
+      const fileUrl = msg.payload?.url;
+      const fileName = msg.payload?.fileName || msg.content;
       return (
-        <View style={styles.fileRow}>
-          <Text style={{ fontSize: 20 }}>📎</Text>
-          <Text style={[styles.bubbleText, { color: bubbleText, textDecorationLine: 'underline' }]}>
-            {msg.payload?.fileName || msg.content}
-          </Text>
-        </View>
+        <TouchableOpacity
+          onPress={() => onFilePress && onFilePress(fileUrl, fileName)}
+          style={styles.fileRow}
+          activeOpacity={0.75}
+        >
+          <Text style={{ fontSize: 22 }}>📄</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              style={[styles.bubbleText, { color: bubbleText, fontWeight: '600' }]}
+              numberOfLines={2}
+            >
+              {fileName}
+            </Text>
+            <Text style={{ fontSize: 11, color: isMine ? 'rgba(255,255,255,0.65)' : THEME.textMuted, marginTop: 2 }}>
+              Nhấn để tải xuống
+            </Text>
+          </View>
+          <Text style={{ fontSize: 18 }}>⬇️</Text>
+        </TouchableOpacity>
       );
     }
+
     return (
       <Text style={[styles.bubbleText, { color: bubbleText }]}>
         {msg.content}
@@ -439,7 +536,8 @@ export default function MessageScreen({ route, navigation }) {
   const { theme: THEME } = useTheme();
   const { isUserOnline, getLastSeen } = usePresence();
   const msgStyles = useStyles(THEME);
-
+  const [previewImage, setPreviewImage] = useState(null);
+  const [fileAction, setFileAction] = useState(null); // { url, fileName }
   const currentUserId = user?._id?.toString() || null;
 
   const [messages, setMessages] = useState([]);
@@ -991,7 +1089,35 @@ export default function MessageScreen({ route, navigation }) {
     setShowReadByModal(true);
   };
 
-
+    const handleOpenFile = async (url, fileName) => {
+      if (!url) return;
+      try {
+        if (Platform.OS === 'web') {
+          // Web: mở tab mới hoặc trigger download
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName || 'file';
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          return;
+        }
+        // Native: download về cache rồi share
+        const localUri = FileSystem.cacheDirectory + (fileName || 'file');
+        const { uri } = await FileSystem.downloadAsync(url, localUri);
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(uri);
+        } else {
+          // fallback: mở trong trình duyệt
+          await WebBrowser.openBrowserAsync(url);
+        }
+      } catch (err) {
+        console.error('handleOpenFile error:', err);
+        Alert.alert('Lỗi', 'Không thể mở file. Vui lòng thử lại.');
+      }
+    };
   // ── Build display list ─────────────────────────────────────────────────
   const displayItems = [];
   const seenIds = new Set();
@@ -1037,7 +1163,7 @@ export default function MessageScreen({ route, navigation }) {
       {/* ── Header ── */}
       <View style={msgStyles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={msgStyles.backBtn}>
-          <Text style={msgStyles.backArrow}>←</Text>
+          <Ionicons name="chevron-back" size={26} color={THEME.accent} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -1066,13 +1192,13 @@ export default function MessageScreen({ route, navigation }) {
 
         <View style={msgStyles.headerActions}>
           <TouchableOpacity style={msgStyles.headerBtn}>
-            <Text style={{ fontSize: 18 }}>📞</Text>
+            <Feather name="phone" size={20} color={THEME.textMuted} />
           </TouchableOpacity>
           <TouchableOpacity style={msgStyles.headerBtn}>
-            <Text style={{ fontSize: 18 }}>📹</Text>
+            <Feather name="video" size={20} color={THEME.textMuted} />
           </TouchableOpacity>
           <TouchableOpacity style={msgStyles.headerBtn} onPress={() => { setInfoTab('info'); setShowInfoPanel(true); }}>
-            <Text style={{ fontSize: 18 }}>⋯</Text>
+            <Feather name="more-horizontal" size={22} color={THEME.textMuted} />
           </TouchableOpacity>
         </View>
       </View>
@@ -1126,6 +1252,8 @@ export default function MessageScreen({ route, navigation }) {
                 conversation={conversation}
                 THEME={THEME}
                 styles={msgStyles}
+                onImagePress={(url) => setPreviewImage(url)}
+                onFilePress={(url, fileName) => handleOpenFile(url, fileName)}
               />
           }
         />
@@ -1193,17 +1321,18 @@ export default function MessageScreen({ route, navigation }) {
               <Text style={msgStyles.recordingTimer}>{fmtDur(recordingSec)}</Text>
               <Text style={{ flex: 1, fontSize: 13, color: THEME.textMuted }}>Đang ghi âm...</Text>
               <TouchableOpacity onPress={cancelRecording} style={msgStyles.inputBtn}>
-                <Text style={{ fontSize: 20 }}>✕</Text>
+                <Feather name="x" size={22} color={THEME.textMuted} />
               </TouchableOpacity>
               <TouchableOpacity onPress={stopRecording} style={[msgStyles.sendBtn, { backgroundColor: '#ed4245' }]}>
-                <Text style={msgStyles.sendIcon}>↑</Text>
+                <Feather name="send" size={18} color="#fff" />
               </TouchableOpacity>
             </View>
           ) : (
             /* ── Input bar ── */
             <View style={msgStyles.inputBar}>
+              {/* File picker */}
               <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickFile}>
-                <Text style={msgStyles.inputBtnIcon}>📎</Text>
+                <Feather name="paperclip" size={22} color={THEME.textMuted} />
               </TouchableOpacity>
 
               <View style={msgStyles.inputWrap}>
@@ -1218,23 +1347,22 @@ export default function MessageScreen({ route, navigation }) {
                   selectionColor={THEME.accent}
                 />
                 <TouchableOpacity onPress={() => setShowEmoji(v => !v)} style={msgStyles.emojiToggle}>
-                  <Text style={{ fontSize: 20 }}>😊</Text>
+                  <Feather name="smile" size={22} color={THEME.textMuted} />
                 </TouchableOpacity>
               </View>
 
               {text.trim().length > 0 ? (
                 <TouchableOpacity style={msgStyles.sendBtn} onPress={handleSend}>
-                  <Text style={msgStyles.sendIcon}>↑</Text>
+                  <Ionicons name="send" size={18} color="#fff" />
                 </TouchableOpacity>
               ) : (
                 <>
                   <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickImage}>
-                    <Text style={msgStyles.inputBtnIcon}>🖼️</Text>
+                    <Feather name="image" size={22} color={THEME.textMuted} />
                   </TouchableOpacity>
-                  {/* expo-av Recording is not supported on Expo Web */}
                   {Platform.OS !== 'web' && (
                     <TouchableOpacity style={msgStyles.inputBtn} onPress={startRecording}>
-                      <Text style={msgStyles.inputBtnIcon}>🎤</Text>
+                      <Feather name="mic" size={22} color={THEME.textMuted} />
                     </TouchableOpacity>
                   )}
                 </>
@@ -1447,13 +1575,13 @@ export default function MessageScreen({ route, navigation }) {
             )}
 
             {[
-              { icon: '↩️', label: 'Trả lời', action: 'reply' },
-              { icon: '➡️', label: 'Chuyển tiếp', action: 'forward' },
-              { icon: '📋', label: 'Sao chép tin nhắn', action: 'copy' },
-              { icon: '📌', label: 'Ghim tin nhắn', action: 'pin' },
-              { icon: '🛡️', label: 'Thu hồi', action: 'revoke', danger: true },
-              { icon: '✏️', label: 'Chỉnh sửa tin nhắn', action: 'edit' },
-              { icon: '🗑️', label: 'Xóa tin nhắn', action: 'delete', danger: true },
+              { icon: <Ionicons name="arrow-undo" size={20} color={THEME.textPrimary} />, label: 'Trả lời', action: 'reply' },
+              { icon: <Feather name="corner-up-right" size={20} color={THEME.textPrimary} />, label: 'Chuyển tiếp', action: 'forward' },
+              { icon: <Feather name="copy" size={20} color={THEME.textPrimary} />, label: 'Sao chép tin nhắn', action: 'copy' },
+              { icon: <Feather name="bookmark" size={20} color={THEME.textPrimary} />, label: 'Ghim tin nhắn', action: 'pin' },
+              { icon: <MaterialCommunityIcons name="cancel" size={20} color="#ed4245" />, label: 'Thu hồi', action: 'revoke', danger: true },
+              { icon: <Feather name="edit-2" size={20} color={THEME.textPrimary} />, label: 'Chỉnh sửa', action: 'edit' },
+              { icon: <Feather name="trash-2" size={20} color="#ed4245" />, label: 'Xóa tin nhắn', action: 'delete', danger: true },
             ].map(a => {
               // Logic hiển thị:
               const isMe = actionMsg?.senderId === currentUserId;
@@ -1478,7 +1606,7 @@ export default function MessageScreen({ route, navigation }) {
                   }}
                   style={msgStyles.sheetAction}
                 >
-                  <Text style={msgStyles.sheetActionIcon}>{a.icon}</Text>
+                  {a.icon}
                   <Text style={[msgStyles.sheetActionLabel, a.danger && { color: THEME.danger }]}>
                     {a.label}
                   </Text>
@@ -1524,7 +1652,50 @@ export default function MessageScreen({ route, navigation }) {
         THEME={THEME}
         styles={msgStyles}
       />
+    {/* ── Image Preview Modal ── */}
+    <Modal
+      visible={!!previewImage}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setPreviewImage(null)}
+    >
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' }}>
+        {/* Nút đóng */}
+        <TouchableOpacity
+          onPress={() => setPreviewImage(null)}
+          style={{
+            position: 'absolute', top: Platform.OS === 'ios' ? 54 : 20, right: 20,
+            zIndex: 10, backgroundColor: 'rgba(255,255,255,0.15)',
+            borderRadius: 20, width: 40, height: 40,
+            justifyContent: 'center', alignItems: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 20, color: '#fff' }}>✕</Text>
+        </TouchableOpacity>
 
+        {/* Ảnh */}
+        {previewImage && (
+          <Image
+            source={{ uri: previewImage }}
+            style={{ width: '100%', height: '75%' }}
+            resizeMode="contain"
+          />
+        )}
+
+        {/* Nút tải ảnh */}
+        <TouchableOpacity
+          onPress={() => handleOpenFile(previewImage, 'image.jpg')}
+          style={{
+            marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 8,
+            backgroundColor: THEME.accent, borderRadius: 12,
+            paddingHorizontal: 24, paddingVertical: 12,
+          }}
+        >
+          <Text style={{ fontSize: 18 }}>⬇️</Text>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Tải ảnh về</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
     </View>
   );
 }
