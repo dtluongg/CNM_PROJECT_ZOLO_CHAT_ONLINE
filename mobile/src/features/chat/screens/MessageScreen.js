@@ -372,6 +372,20 @@ export default function MessageScreen({ route, navigation }) {
       }));
     });
 
+    socket.on('chat:message-revoked', ({ conversationId: cid, messageId }) => {
+      if (cid !== conversation.id) return;
+      setMessages(prev => prev.map(m => 
+        (m._id?.toString() === messageId?.toString()) ? { ...m, revoked: true } : m
+      ));
+    });
+
+    socket.on('chat:message-edited', ({ conversationId: cid, message }) => {
+      if (cid !== conversation.id) return;
+      setMessages(prev => prev.map(m => 
+        (m._id?.toString() === message._id?.toString()) ? normalizeMsg(message) : m
+      ));
+    });
+
     return () => {
       socket.emit('chat:leave', { conversationId: conversation.id });
       socket.disconnect();
@@ -594,7 +608,6 @@ export default function MessageScreen({ route, navigation }) {
     inputRef.current?.focus();
   };
 
-
   const handleReact = async (msg, emoji) => {
     try {
       const mId = msg._id || msg.id;
@@ -602,6 +615,21 @@ export default function MessageScreen({ route, navigation }) {
       await messageApi.toggleReaction(mId.toString(), emoji);
     } catch (err) {
       console.error('handleReact error:', err);
+    }
+  };
+
+  const handleRevoke = async (msg) => {
+    try {
+      const mId = msg._id || msg.id;
+      if (!mId) return;
+      await messageApi.revokeMessage(mId.toString());
+      // Optimistic update
+      setMessages(prev => prev.map(m => 
+        (m._id?.toString() === mId.toString()) ? { ...m, revoked: true } : m
+      ));
+    } catch (err) {
+      console.error('handleRevoke error:', err);
+      Alert.alert('Lỗi', 'Không thể thu hồi tin nhắn');
     }
   };
 
@@ -824,18 +852,30 @@ export default function MessageScreen({ route, navigation }) {
             </View>
 
             {[
-              { icon: '↩️', label: 'Trả lời' },
-              { icon: '📋', label: 'Sao chép tin nhắn' },
-              { icon: '📌', label: 'Ghim tin nhắn' },
-              ...(actionMsg?.senderId === currentUserId ? [{ icon: '🗑️', label: 'Xóa tin nhắn', danger: true }] : []),
-            ].map(a => (
-              <TouchableOpacity key={a.label} onPress={() => setActionMsg(null)} style={msgStyles.sheetAction}>
-                <Text style={msgStyles.sheetActionIcon}>{a.icon}</Text>
-                <Text style={[msgStyles.sheetActionLabel, a.danger && { color: THEME.danger }]}>
-                  {a.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+              { icon: '↩️', label: 'Thu hồi', action: 'revoke' },
+              { icon: '✏️', label: 'Chỉnh sửa tin nhắn', action: 'edit' },
+              { icon: '🗑️', label: 'Xóa tin nhắn', action: 'delete', danger: true },
+            ].map(a => {
+              if (a.action === 'revoke' && (actionMsg?.senderId !== currentUserId || actionMsg?.revoked)) return null;
+              if (a.action === 'edit' && (actionMsg?.senderId !== currentUserId || actionMsg?.revoked || actionMsg?.type !== 'text')) return null;
+              if (a.action === 'delete' && (actionMsg?.senderId !== currentUserId)) return null;
+
+              return (
+                <TouchableOpacity
+                  key={a.label}
+                  onPress={() => {
+                    if (a.action === 'revoke') handleRevoke(actionMsg);
+                    setActionMsg(null);
+                  }}
+                  style={msgStyles.sheetAction}
+                >
+                  <Text style={msgStyles.sheetActionIcon}>{a.icon}</Text>
+                  <Text style={[msgStyles.sheetActionLabel, a.danger && { color: THEME.danger }]}>
+                    {a.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </Pressable>
       </Modal>

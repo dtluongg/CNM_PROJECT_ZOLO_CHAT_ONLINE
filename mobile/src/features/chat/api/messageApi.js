@@ -52,6 +52,8 @@ const messageApi = {
   getMessageReactions: (messageId) =>
     apiClient.get(`/reactions/${messageId}`),
 
+  revokeMessage: (messageId) =>
+    apiClient.patch(`/messages/${messageId}/revoke`),
 };
 
 export default messageApi;
