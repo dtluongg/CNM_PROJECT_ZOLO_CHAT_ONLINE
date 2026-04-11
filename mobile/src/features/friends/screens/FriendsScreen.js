@@ -577,4 +577,3 @@ const useStyles = (THEME) => StyleSheet.create({
   permBtn: { backgroundColor: THEME.accent, borderRadius: 24, paddingHorizontal: 28, paddingVertical: 13 },
   permBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });
-N
