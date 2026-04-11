@@ -586,6 +586,11 @@ export default function MessageScreen({ route, navigation }) {
       }));
     });
 
+    socket.on('chat:message-deleted-for-me', ({ conversationId: cid, messageId }) => {
+      if (cid !== conversation.id) return;
+      setMessages(prev => prev.filter(m => (m._id || m.id)?.toString() !== messageId?.toString()));
+    });
+
     return () => {
       socket.emit('chat:leave', { conversationId: conversation.id });
       socket.disconnect();
@@ -869,6 +874,22 @@ export default function MessageScreen({ route, navigation }) {
     }
   };
 
+  const handleDeleteForMe = async (msg) => {
+    try {
+      const mId = msg._id || msg.id;
+      if (!mId) return;
+
+      // Optimistic update: Xóa ngay lập tức trên UI
+      setMessages(prev => prev.filter(m => (m._id || m.id) !== mId));
+
+      // Gọi API xóa phía tôi
+      await messageApi.deleteForMe(mId.toString());
+    } catch (err) {
+      console.error('handleDeleteForMe error:', err);
+      Alert.alert('Lỗi', 'Không thể xóa tin nhắn');
+    }
+  };
+
   const handleStartEdit = (msg) => {
     setEditingMessage(msg);
     setText(msg.content || '');
@@ -1141,6 +1162,7 @@ export default function MessageScreen({ route, navigation }) {
                   onPress={() => {
                     if (a.action === 'revoke') handleRevoke(actionMsg);
                     if (a.action === 'edit') handleStartEdit(actionMsg);
+                    if (a.action === 'delete') handleDeleteForMe(actionMsg);
                     if (a.action === 'forward') {
                       setForwardingMsg(actionMsg);
                       setShowForwardModal(true);

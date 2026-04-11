@@ -218,7 +218,11 @@ const getMessages = async (req, res) => {
         const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit)  || 30));
         const before = req.query.before;
 
-        const filter = { conversationId, deleted: false };
+        const filter = { 
+            conversationId, 
+            deleted: false,
+            deletedBy: { $ne: new mongoose.Types.ObjectId(userId) }
+        };
         if (isValidId(before)) {
             filter._id = { $lt: new mongoose.Types.ObjectId(before) };
         }
@@ -531,4 +535,61 @@ const markAsRead = async (req, res) => {
     }
 };
 
-module.exports = { sendMessage, getMessages, getAttachments, revokeMessage, editMessage, markAsRead };
+// ═════════════════════════════════════════════════════════════════════════
+//  PATCH /backend/api/messages/:messageId/delete-for-me
+//  Xóa tin nhắn ở phía người dùng hiện tại (ẩn đi).
+// ═════════════════════════════════════════════════════════════════════════
+const deleteMessageForMe = async (req, res) => {
+    try {
+        const userId = req.user._id.toString();
+        const { messageId } = req.params;
+
+        if (!isValidId(messageId)) {
+            return res.status(400).json({ message: 'messageId không hợp lệ' });
+        }
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            return res.status(404).json({ message: 'Tin nhắn không tồn tại' });
+        }
+
+        // Kiểm tra membership của người xóa
+        await requireMembership(message.conversationId, userId);
+
+        // Đảm bảo deletedBy là một mảng (đối với tin nhắn cũ)
+        if (!message.deletedBy) {
+            message.deletedBy = [];
+        }
+
+        // Kiểm tra xem userId đã có trong danh sách xóa chưa
+        const isAlreadyDeleted = message.deletedBy.some(id => id.toString() === userId);
+
+        if (!isAlreadyDeleted) {
+            message.deletedBy.push(userId);
+            await message.save();
+
+            // ── Phát Socket đồng bộ tới tất cả các kết nối của chính người dùng này ──
+            const io = getIO();
+            io.to(`user:${userId}`).emit('chat:message-deleted-for-me', {
+                conversationId: message.conversationId,
+                messageId: message._id.toString()
+            });
+        }
+
+        return res.status(200).json({ message: 'Đã xóa tin nhắn cho bạn' });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ message: err.message });
+        console.error('deleteMessageForMe error:', err);
+        return res.status(500).json({ message: 'Lỗi server khi xóa tin nhắn' });
+    }
+};
+
+module.exports = { 
+    sendMessage, 
+    getMessages, 
+    getAttachments, 
+    revokeMessage, 
+    editMessage, 
+    markAsRead, 
+    deleteMessageForMe 
+};

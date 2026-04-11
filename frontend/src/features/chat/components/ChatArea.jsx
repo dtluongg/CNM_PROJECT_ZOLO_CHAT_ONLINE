@@ -779,9 +779,22 @@ export default function ChatArea({
 
     socket.on('chat:message-read', handleRead);
 
+    // 4. Socket listener for "Delete for me" sync
+    const handleDeleteForMeSync = (data) => {
+      const { conversationId: cid, messageId } = data;
+      const convId = conversation?.id || conversation?._id;
+
+      if (convId && cid !== convId.toString()) return;
+
+      setMessages(prev => prev.filter(m => (m._id || m.id)?.toString() !== messageId));
+    };
+
+    socket.on('chat:message-deleted-for-me', handleDeleteForMeSync);
+
     return () => {
       socket.off('chat:message-reaction', handleReaction);
       socket.off('chat:message-read', handleRead);
+      socket.off('chat:message-deleted-for-me', handleDeleteForMeSync);
     };
   }, [socket, conversation?.id, conversation?._id, currentUserId, setMessages]);
 
@@ -1062,10 +1075,17 @@ export default function ChatArea({
                   console.error('Revoke message error:', err);
                 }
               }}
-              onDelete={(msg) => {
-                setMessages(prev =>
-                  prev.filter(m => (m.id || m._id) !== (msg.id || msg._id))
-                );
+              onDelete={async (msg) => {
+                try {
+                  // Optimistic update: Xóa ngay lập tức trên UI
+                  setMessages(prev =>
+                    prev.filter(m => (m.id || m._id) !== (msg.id || msg._id))
+                  );
+                  // Gọi API để Backend ghi nhớ việc xóa này
+                  await messageApi.deleteForMe(msg._id || msg.id);
+                } catch (err) {
+                  console.error('Delete for me error:', err);
+                }
               }}
               onEdit={(msg) => setEditingMessage(msg)}
               onRead={handleMarkAsRead}

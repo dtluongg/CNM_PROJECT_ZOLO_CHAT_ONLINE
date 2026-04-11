@@ -63,6 +63,9 @@ const messageApi = {
 
   forwardMessage: (conversationId, forwardFromMessageId) =>
     apiClient.post(`/messages/${conversationId}`, { forwardFromMessageId }),
+
+  deleteForMe: (messageId) =>
+    apiClient.patch(`/messages/${messageId}/delete-for-me`),
 };
 
 export default messageApi;
