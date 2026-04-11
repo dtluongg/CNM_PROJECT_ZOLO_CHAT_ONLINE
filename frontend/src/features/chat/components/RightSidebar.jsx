@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { usePresence } from '../../../context/PresenceContext';
+import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 import {
   X, Image, FileText, MessageCircle, BellOff, Ban, LogOut, Download, Phone,
   Shield, UserPlus, Crown, UserCog, Trash2,
@@ -12,10 +12,10 @@ import messageApi from '../api/messageApi';
 const AVATAR_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#fee75c', '#ed4245', '#9b59b6', '#e67e22'];
 
 const STATUS_CONFIG = {
-  online: { color: '#3ba55c', label: 'Dang hoat dong', dot: '#3ba55c' },
-  idle: { color: '#faa61a', label: 'Vang mat', dot: '#faa61a' },
-  dnd: { color: '#ed4245', label: 'Khong lam phien', dot: '#ed4245' },
-  invisible: { color: '#80848e', label: 'An', dot: '#80848e' },
+  online: { color: '#3ba55c', label: 'Đang hoạt động', dot: '#3ba55c' },
+  idle: { color: '#faa61a', label: 'Vắng mặt', dot: '#faa61a' },
+  dnd: { color: '#ed4245', label: 'Không làm phiền', dot: '#ed4245' },
+  invisible: { color: '#80848e', label: 'Ẩn', dot: '#80848e' },
 };
 
 
@@ -119,9 +119,10 @@ export default function RightSidebar({
   onViewProfile,
   onLeaveGroup,
   onGroupUpdated,
+  onDeleteConversation,
 }) {
   const [tab, setTab] = useState('info');
-  const { isUserOnline, getPresenceStatus } = usePresence();
+  const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
   const { user } = useAuth();
 
   const [members, setMembers] = useState([]);
@@ -131,6 +132,7 @@ export default function RightSidebar({
   const [friendPool, setFriendPool] = useState([]);
   const [selectedAddIds, setSelectedAddIds] = useState([]);
   const [loadingFriendPool, setLoadingFriendPool] = useState(false);
+  const [dmFriendState, setDmFriendState] = useState(null);
 
   const [editingMemberId, setEditingMemberId] = useState(null);
   const [editRole, setEditRole] = useState('member');
@@ -142,6 +144,11 @@ export default function RightSidebar({
 
   const [mediaData, setMediaData]     = useState({ images: [], files: [] });
   const [loadingMedia, setLoadingMedia] = useState(false);
+
+  // Nickname modal (DM only)
+  const [showNickname, setShowNickname]         = useState(false);
+  const [nicknameInput, setNicknameInput]       = useState('');
+  const [nicknameBusy, setNicknameBusy]         = useState(false);
 
   const myUserId = (user?._id || user?.id || '').toString();
 
@@ -196,6 +203,22 @@ export default function RightSidebar({
     }
   }, [canInviteMembers, conversation?.id, conversation?.type, members]);
 
+  const loadDmFriendState = useCallback(async () => {
+    if (!conversation?.otherUserId) {
+      setDmFriendState(null);
+      return;
+    }
+
+    try {
+      const res = await friendApi.getFriendList(true);
+      const list = res?.data?.success ? (res.data.data || []) : [];
+      const state = list.find((item) => (item.friendId || '').toString() === conversation.otherUserId);
+      setDmFriendState(state || null);
+    } catch {
+      setDmFriendState(null);
+    }
+  }, [conversation?.otherUserId]);
+
   useEffect(() => {
     setEditingMemberId(null);
     setSelectedAddIds([]);
@@ -214,6 +237,14 @@ export default function RightSidebar({
   useEffect(() => {
     loadMembers();
   }, [loadMembers]);
+
+  useEffect(() => {
+    if (conversation?.type === 'dm') {
+      loadDmFriendState();
+    } else {
+      setDmFriendState(null);
+    }
+  }, [conversation?.type, loadDmFriendState]);
 
   useEffect(() => {
     loadFriendPool();
@@ -307,16 +338,49 @@ export default function RightSidebar({
 
   const handleDisbandGroup = async () => {
     if (!conversation.id) return;
-    if (!window.confirm('Ban chac chan muon giai tan nhom?')) return;
+    if (!window.confirm('Bạn chắc chắn muốn giải tán nhóm?')) return;
 
     try {
       setBusyAction('disband');
       await conversationApi.disbandConversation(conversation.id);
       if (onGroupUpdated) await onGroupUpdated();
     } catch (error) {
-      window.alert(error.response?.data?.message || 'Khong the giai tan nhom');
+      window.alert(error.response?.data?.message || 'Không thể giải tán nhóm');
     } finally {
       setBusyAction('');
+    }
+  };
+
+  const handleBlockUser = async () => {
+    const targetUserId = conversation?.otherUserId;
+    if (!targetUserId) return;
+
+    const confirmed = window.confirm(dmFriendState?.iBlocked ? 'Bạn muốn bỏ chặn người dùng này?' : 'Bạn muốn chặn người dùng này?');
+    if (!confirmed) return;
+
+    try {
+      setBusyAction('block-user');
+      const res = await friendApi.blockFriend(targetUserId);
+      window.alert(res?.data?.message || 'Đã cập nhật trạng thái chặn người dùng');
+      await loadDmFriendState();
+    } catch (error) {
+      window.alert(error.response?.data?.message || 'Không thể chặn người dùng');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const handleSaveNickname = async () => {
+    if (!conversation.otherUserId) return;
+    setNicknameBusy(true);
+    try {
+      await friendApi.updateNickname(conversation.otherUserId, nicknameInput.trim());
+      setShowNickname(false);
+      if (onGroupUpdated) onGroupUpdated();
+    } catch (error) {
+      window.alert(error.response?.data?.message || 'Không thể lưu biệt danh');
+    } finally {
+      setNicknameBusy(false);
     }
   };
 
@@ -341,7 +405,7 @@ export default function RightSidebar({
         flexShrink: 0,
       }}>
         <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-          {conversation.type === 'dm' ? 'Thong tin nguoi dung' : 'Thong tin nhom'}
+          {conversation.type === 'dm' ? 'Thông tin người dùng' : 'Thông tin nhóm'}
         </span>
         <button
           onClick={onClose}
@@ -454,6 +518,15 @@ export default function RightSidebar({
                     }} />
                     {statusConfig ? statusConfig.label : 'Offline'}
                   </div>
+                  {/* Last seen khi offline */}
+                  {!isOnline && conversation?.otherUserId && (() => {
+                    const ls = getLastSeen(conversation.otherUserId);
+                    return ls ? (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        Hoạt động {formatLastSeen(ls)}
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               ) : (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -688,10 +761,79 @@ export default function RightSidebar({
                   <ActionButton icon={<Shield size={15} />} label="Xem ho so" onClick={() => onViewProfile(conversation.otherUserId)} />
                 )}
                 <ActionButton icon={<Phone size={15} />} label="Goi dien" />
-                <ActionButton icon={<BellOff size={15} />} label="Tat thong bao" />
+                <ActionButton icon={<BellOff size={15} />} label="Tắt thông báo" />
 
                 {conversation.type === 'dm' && (
-                  <ActionButton icon={<Ban size={15} />} label="Chan nguoi dung" variant="danger" />
+                  <ActionButton
+                    icon={<Trash2 size={15} />}
+                    label="Xoa cuoc tro chuyen"
+                    variant="danger"
+                    onClick={() => onDeleteConversation?.(conversation.id)}
+                  />
+                )}
+
+                {conversation.type === 'dm' && (
+                  <ActionButton
+                    icon={<Ban size={15} />}
+                    label={dmFriendState?.iBlocked ? 'Bo chan nguoi dung' : 'Chan nguoi dung'}
+                    variant="danger"
+                    onClick={handleBlockUser}
+                    disabled={busyAction === 'block-user' || !conversation.otherUserId}
+                  />
+                )}
+
+                {conversation.type === 'dm' && conversation.otherUserId && (
+                  <ActionButton
+                    icon={<Shield size={15} />}
+                    label="Đặt biệt danh"
+                    onClick={() => { setNicknameInput(''); setShowNickname(true); }}
+                  />
+                )}
+
+                {conversation.type === 'dm' && conversation.otherUserId && (
+                  <ActionButton
+                    icon={<Ban size={15} />}
+                    label="Chặn người dùng"
+                    variant="danger"
+                    onClick={handleBlockUser}
+                    disabled={busyAction === 'block-user'}
+                  />
+                )}
+
+                {showNickname && conversation.type === 'dm' && (
+                  <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginTop: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                      Biệt danh cho {conversation.name}
+                    </div>
+                    <input
+                      value={nicknameInput}
+                      onChange={(e) => setNicknameInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveNickname()}
+                      placeholder="Nhập biệt danh..."
+                      maxLength={50}
+                      style={{
+                        width: '100%', border: '1px solid var(--border)', borderRadius: 8,
+                        background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                        padding: '8px 10px', fontSize: 13, outline: 'none', marginBottom: 8,
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => setShowNickname(false)}
+                        style={{ flex: 1, padding: '7px 0', border: 'none', borderRadius: 7, background: 'var(--bg-hover)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        onClick={handleSaveNickname}
+                        disabled={nicknameBusy}
+                        style={{ flex: 1, padding: '7px 0', border: 'none', borderRadius: 7, background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, opacity: nicknameBusy ? 0.6 : 1 }}
+                      >
+                        {nicknameBusy ? 'Đang lưu...' : 'Lưu'}
+                      </button>
+                    </div>
+                  </div>
                 )}
 
                 {conversation.type === 'group' && (

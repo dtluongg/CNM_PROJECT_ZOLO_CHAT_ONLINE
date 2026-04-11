@@ -1,5 +1,5 @@
-const express     = require('express');
-const router      = express.Router();
+const express = require('express');
+const router = express.Router();
 const verifyToken = require('../middlewares/verifytoken');
 const { sendMessage, getMessages, getAttachments, revokeMessage, editMessage, markAsRead, deleteMessageForMe } = require('../controllers/messageController');
 
@@ -13,12 +13,12 @@ const { sendMessage, getMessages, getAttachments, revokeMessage, editMessage, ma
 //
 //  Tất cả đều yêu cầu Authorization: Bearer <token>
 // ════════════════════════════════════════════════════════════════
-router.get( '/:conversationId/attachments', verifyToken, getAttachments);
-router.get( '/:conversationId',             verifyToken, getMessages);
-router.post('/:conversationId',             verifyToken, sendMessage);
+router.get('/:conversationId/attachments', verifyToken, getAttachments);
+router.get('/:conversationId', verifyToken, getMessages);
+router.post('/:conversationId', verifyToken, sendMessage);
 router.post('/:conversationId/read/:messageId', verifyToken, markAsRead);
-router.patch('/:messageId/delete-for-me',  verifyToken, deleteMessageForMe);
-router.patch('/:messageId/revoke',         verifyToken, revokeMessage);
-router.patch('/:messageId',                verifyToken, editMessage);
+router.patch('/:messageId/delete-for-me', verifyToken, deleteMessageForMe);
+router.patch('/:messageId/revoke', verifyToken, revokeMessage);
+router.patch('/:messageId', verifyToken, editMessage);
 
 module.exports = router;

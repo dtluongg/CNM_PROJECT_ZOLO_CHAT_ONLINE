@@ -7,14 +7,11 @@ import { io } from 'socket.io-client';
 import { STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { usePresence } from '../context/PresenceContext';
 import ProfileScreen from '../features/user/screens/ProfileScreen';
 import FriendsScreen from '../features/friends/screens/FriendsScreen';
 import conversationApi from '../features/chat/api/conversationApi';
-
-const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL ||
-  (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.88.135:2026/backend/api')
-    .replace('/backend/api', '');
+import { SOCKET_URL } from '../config/env';
 
 
 const formatTime = (iso) => {
@@ -104,6 +101,10 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, THEME, sty
 
   const ConvItem = ({ item }) => {
     const [pressed, setPressed] = useState(false);
+    const { isUserOnline } = usePresence();
+    const liveOnline = item.type === 'dm' && item.otherUserId
+      ? isUserOnline(item.otherUserId)
+      : false;
     return (
       <TouchableOpacity
         onPress={() => openConversation(item)}
@@ -116,8 +117,8 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, THEME, sty
           name={item.name}
           avatar={item.avatar}
           size={48}
-          status={item.status}
-          online={item.type === 'dm' ? item.online : null}
+          status={liveOnline ? 'online' : null}
+          online={item.type === 'dm' ? liveOnline : null}
           THEME={THEME}
           styles={styles}
         />

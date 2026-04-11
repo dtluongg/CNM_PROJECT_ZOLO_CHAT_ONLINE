@@ -1,0 +1,684 @@
+{
+  "info": {
+    "_postman_id": "c3ef9db0-4773-4f6d-83d3-1749824f8156",
+    "name": "ZoloChat - Friends API",
+    "description": "Collection test full luong Friends API (sau khi hardening): validate user, reverse-request auto-handle, accept transaction/upsert, cancel pending-only.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Auth",
+      "item": [
+        {
+          "name": "Signin User A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "if (json.accessToken) pm.collectionVariables.set('accessTokenA', json.accessToken);",
+                  "if (json.refreshToken) pm.collectionVariables.set('refreshTokenA', json.refreshToken);",
+                  "if (json.user && json.user._id) pm.collectionVariables.set('userIdA', json.user._id);",
+                  "",
+                  "pm.collectionVariables.set('activeAccessToken', json.accessToken || '');",
+                  "pm.collectionVariables.set('activeUserId', (json.user && json.user._id) || '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{loginUsernameA}}\",\n  \"password\": \"{{loginPasswordA}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/auth/signin",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "auth", "signin"]
+            },
+            "description": "Dang nhap User A. Tu dong luu accessTokenA/userIdA va set activeAccessToken = accessTokenA."
+          },
+          "response": []
+        },
+        {
+          "name": "Signin User B",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "if (json.accessToken) pm.collectionVariables.set('accessTokenB', json.accessToken);",
+                  "if (json.refreshToken) pm.collectionVariables.set('refreshTokenB', json.refreshToken);",
+                  "if (json.user && json.user._id) pm.collectionVariables.set('userIdB', json.user._id);",
+                  "",
+                  "pm.collectionVariables.set('activeAccessToken', json.accessToken || '');",
+                  "pm.collectionVariables.set('activeUserId', (json.user && json.user._id) || '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{loginUsernameB}}\",\n  \"password\": \"{{loginPasswordB}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/auth/signin",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "auth", "signin"]
+            },
+            "description": "Dang nhap User B. Tu dong luu accessTokenB/userIdB va set activeAccessToken = accessTokenB."
+          },
+          "response": []
+        },
+        {
+          "name": "Signin User C",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "if (json.accessToken) pm.collectionVariables.set('accessTokenC', json.accessToken);",
+                  "if (json.refreshToken) pm.collectionVariables.set('refreshTokenC', json.refreshToken);",
+                  "if (json.user && json.user._id) pm.collectionVariables.set('userIdC', json.user._id);",
+                  "",
+                  "pm.collectionVariables.set('activeAccessToken', json.accessToken || '');",
+                  "pm.collectionVariables.set('activeUserId', (json.user && json.user._id) || '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{loginUsernameC}}\",\n  \"password\": \"{{loginPasswordC}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/auth/signin",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "auth", "signin"]
+            },
+            "description": "Dang nhap User C. Tu dong luu accessTokenC/userIdC va set activeAccessToken = accessTokenC."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "1. Basic Friend Flow (A <-> B)",
+      "item": [
+        {
+          "name": "A Send Friend Request to B",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "  pm.expect(pm.response.code).to.eql(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data._id) pm.collectionVariables.set('requestIdAB', json.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenA}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"toUserId\": \"{{userIdB}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "A Outgoing Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenA}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests/outgoing",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests", "outgoing"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "B Incoming Requests",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.length > 0) {",
+                  "  pm.collectionVariables.set('requestIdAB', json.data[0]._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenB}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests/incoming",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests", "incoming"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "B Accept Request from A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Accept success', function () {",
+                  "  pm.expect(json.success).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenB}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests/{{requestIdAB}}/accept",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests", "{{requestIdAB}}", "accept"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "A Friend List",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenA}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "list"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "B Friend List",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenB}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "list"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Nickname / Block / Unfriend",
+      "item": [
+        {
+          "name": "A Update Nickname for B",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenA}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nickname\": \"Best Friend B\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/{{userIdB}}/nickname",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "{{userIdB}}", "nickname"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "A Block B (toggle)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenA}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/{{userIdB}}/block",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "{{userIdB}}", "block"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "A Unblock B (toggle again)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenA}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/{{userIdB}}/block",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "{{userIdB}}", "block"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "A Unfriend B",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenA}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/{{userIdB}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "{{userIdB}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Reject Flow (A -> C)",
+      "item": [
+        {
+          "name": "A Send Friend Request to C",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "  pm.expect(pm.response.code).to.eql(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data._id) pm.collectionVariables.set('requestIdAC', json.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenA}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"toUserId\": \"{{userIdC}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "C Reject Request from A",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenC}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests/{{requestIdAC}}/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests", "{{requestIdAC}}", "reject"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Cancel Pending Only Flow (B -> C)",
+      "item": [
+        {
+          "name": "B Send Friend Request to C (for cancel)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "  pm.expect(pm.response.code).to.eql(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data._id) pm.collectionVariables.set('requestIdCancel', json.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenB}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"toUserId\": \"{{userIdC}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "B Cancel Pending Request",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenB}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests/{{requestIdCancel}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests", "{{requestIdCancel}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "B Cancel Again (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "  pm.expect(pm.response.code).to.eql(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenB}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests/{{requestIdCancel}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests", "{{requestIdCancel}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Reverse Request Auto-Handle",
+      "item": [
+        {
+          "name": "B Send Friend Request to A",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenB}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"toUserId\": \"{{userIdA}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "A Send Friend Request to B (should auto-accept)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Auto accept message', function () {",
+                  "  const msg = (json.message || '').toLowerCase();",
+                  "  pm.expect(msg.includes('tu dong') || msg.includes('tự động')).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessTokenA}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"toUserId\": \"{{userIdB}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Quick Manual Requests (use activeAccessToken)",
+      "item": [
+        {
+          "name": "My Friend List (active token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{activeAccessToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "list"]
+            },
+            "description": "Chay 1 trong 3 request signin o folder Auth de doi active token nhanh."
+          },
+          "response": []
+        },
+        {
+          "name": "My Friend List (include blocked)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{activeAccessToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/list?includeBlocked=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "list"],
+              "query": [
+                { "key": "includeBlocked", "value": "true" }
+              ]
+            },
+            "description": "Lay danh sach ban be bao gom ca cac quan he dang block."
+          },
+          "response": []
+        },
+        {
+          "name": "My Blocked List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Blocked list response has array data', function () {",
+                  "  pm.expect(Array.isArray(json.data)).to.eql(true);",
+                  "});",
+                  "pm.collectionVariables.set('blockedList', JSON.stringify(json.data || [], null, 2));",
+                  "console.log('Blocked list:', json.data || []);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{activeAccessToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/blocked",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "blocked"]
+            },
+            "description": "Lấy danh sách những người tôi đã chặn từ endpoint /friends/blocked."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Request (active token -> manual target)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{activeAccessToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"toUserId\": \"{{manualTargetUserId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backend/api/friends/requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["backend", "api", "friends", "requests"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:2026" },
+
+    { "key": "loginUsernameA", "value": "" },
+    { "key": "loginPasswordA", "value": "" },
+    { "key": "loginUsernameB", "value": "" },
+    { "key": "loginPasswordB", "value": "" },
+    { "key": "loginUsernameC", "value": "" },
+    { "key": "loginPasswordC", "value": "" },
+
+    { "key": "accessTokenA", "value": "" },
+    { "key": "refreshTokenA", "value": "" },
+    { "key": "userIdA", "value": "" },
+
+    { "key": "accessTokenB", "value": "" },
+    { "key": "refreshTokenB", "value": "" },
+    { "key": "userIdB", "value": "" },
+
+    { "key": "accessTokenC", "value": "" },
+    { "key": "refreshTokenC", "value": "" },
+    { "key": "userIdC", "value": "" },
+
+    { "key": "activeAccessToken", "value": "" },
+    { "key": "activeUserId", "value": "" },
+
+    { "key": "requestIdAB", "value": "" },
+    { "key": "requestIdAC", "value": "" },
+    { "key": "requestIdCancel", "value": "" },
+
+    { "key": "manualTargetUserId", "value": "" }
+  ]
+}

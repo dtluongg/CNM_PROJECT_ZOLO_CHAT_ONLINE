@@ -10,6 +10,7 @@ const {
     updateConversationInfo,
     setConversationLock,
     setConversationArchived,
+    deleteConversationForMe,
 } = require('../controllers/conversationController');
 
 const {
@@ -46,6 +47,9 @@ router.patch('/:id/lock', setConversationLock);
 
 // Archive/unarchive conversation theo từng user
 router.patch('/:id/archive', setConversationArchived);
+
+// Xóa cuộc trò chuyện phía tôi (không ảnh hưởng thành viên khác)
+router.delete('/:id', deleteConversationForMe);
 
 // Lấy danh sách thành viên trong group (includeLeft=true để lấy cả thành viên đã rời)
 router.get('/:id/members', listConversationMembers);

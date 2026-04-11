@@ -66,6 +66,9 @@ const messageApi = {
 
   deleteForMe: (messageId) =>
     apiClient.patch(`/messages/${messageId}/delete-for-me`),
+  // Lấy ảnh & file đã chia sẻ trong conversation
+  getAttachments: (conversationId) =>
+    apiClient.get(`/messages/${conversationId}/attachments`),
 };
 
 export default messageApi;

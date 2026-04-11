@@ -342,7 +342,7 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
             borderRadius: 12,
             padding: 12,
             display: 'grid',
-            gridTemplateColumns: 'repeat(8, 1fr)',
+            gridTemplateColumns: 'repeat(7, 1fr)',
             gap: isMobile ? 4 : 3,
             zIndex: 200,
             boxShadow: '0 8px 32px rgba(0,0,0,0.35)',

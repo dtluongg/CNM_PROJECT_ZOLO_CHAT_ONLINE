@@ -6,12 +6,13 @@ import conversationApi from '../chat/api/conversationApi';
 const FriendsPage = () => {
     const navigate = useNavigate();
     // ---- State ----
-    const [activeTab, setActiveTab] = useState('friends_list'); // 'friends_list', 'friend_requests'
+    const [activeTab, setActiveTab] = useState('friends_list'); // 'friends_list', 'friend_requests', 'blocked_list'
     const [subTab, setSubTab] = useState('received'); // 'received', 'sent' (for friend_requests)
 
     const [friends, setFriends] = useState([]);
     const [incomingReqs, setIncomingReqs] = useState([]);
     const [outgoingReqs, setOutgoingReqs] = useState([]);
+    const [blockedList, setBlockedList] = useState([]);
     const [loading, setLoading] = useState(true);
 
     // Search state
@@ -28,15 +29,17 @@ const FriendsPage = () => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [friendRes, inReqRes, outReqRes] = await Promise.all([
-                friendApi.getFriendList().catch(() => ({ data: { success: false } })),
+            const [friendRes, inReqRes, outReqRes, blockedRes] = await Promise.all([
+                friendApi.getFriendList(true).catch(() => ({ data: { success: false } })), // includeBlocked=true để có thông tin blocked
                 friendApi.getIncomingRequests().catch(() => ({ data: { success: false } })),
-                friendApi.getOutgoingRequests().catch(() => ({ data: { success: false } }))
+                friendApi.getOutgoingRequests().catch(() => ({ data: { success: false } })),
+                friendApi.getBlockedList().catch(() => ({ data: { success: false } }))
             ]);
 
             if (friendRes.data?.success) setFriends(friendRes.data.data || []);
             if (inReqRes.data?.success) setIncomingReqs(inReqRes.data.data || []);
             if (outReqRes.data?.success) setOutgoingReqs(outReqRes.data.data || []);
+            if (blockedRes.data?.success) setBlockedList(blockedRes.data.data || []);
         } catch (error) {
             console.error('Failed to fetch data:', error);
         } finally {
@@ -139,17 +142,9 @@ const FriendsPage = () => {
     const handleCreateDmFromFriend = async (friend) => {
         try {
             setCreatingChat(true);
-            const res = await conversationApi.createDmConversation(friend.friendId);
-            const conversationId = res?.data?.data?._id;
-
-            if (!conversationId) {
-                throw new Error('Không nhận được conversationId từ server');
-            }
-
             navigate('/chat', {
                 state: {
-                    openConversationId: conversationId,
-                    peer: {
+                    pendingPeer: {
                         id: friend.friendId,
                         name: friend.displayName || friend.originalName || 'Đoạn chat trực tiếp',
                         avatar: friend.avatar || '',
@@ -212,7 +207,8 @@ const FriendsPage = () => {
 
     // ---- Grouping Alphabetically ----
     const filteredFriends = friends.filter(f => 
-        (f.displayName || '').toLowerCase().includes(friendFilterText.toLowerCase())
+        (f.displayName || '').toLowerCase().includes(friendFilterText.toLowerCase()) &&
+        !f.iBlocked && !f.theyBlockedMe // Loại bỏ bạn bè bị chặn
     );
 
     const groupedFriends = filteredFriends.reduce((acc, f) => {
@@ -276,6 +272,26 @@ const FriendsPage = () => {
                     {incomingReqs.length > 0 && (
                         <span className="text-white text-xs px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: '#ef4444' }}>
                             {incomingReqs.length}
+                        </span>
+                    )}
+                </button>
+
+                {/* Menu Danh sách chặn */}
+                <button 
+                    onClick={() => setActiveTab('blocked_list')}
+                    className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${activeTab === 'blocked_list' ? 'font-semibold' : ''}`}
+                    style={{ 
+                        backgroundColor: activeTab === 'blocked_list' ? 'var(--bg-hover)' : 'transparent', 
+                        color: activeTab === 'blocked_list' ? 'var(--accent)' : 'var(--text-primary)' 
+                    }}
+                >
+                    <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full flex items-center justify-center text-lg" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--accent)' }}>🚫</span>
+                        <span>Danh sách chặn</span>
+                    </div>
+                    {blockedList.length > 0 && (
+                        <span className="text-white text-xs px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: '#f97316' }}>
+                            {blockedList.length}
                         </span>
                     )}
                 </button>
@@ -382,7 +398,7 @@ const FriendsPage = () => {
                     <div className="space-y-3 max-w-lg mb-4">
                          <p className="text-xs font-bold" style={{ color: 'var(--text-muted)' }}>KẾT QUẢ TÌM KIẾM</p>
                          {searchResults.map(u => {
-                             const isFriend = friends.some(f => f.friendId === u._id);
+                             const isFriend = friends.some(f => f.friendId === u._id && !f.theyBlockedMe);
                              const friendData = friends.find(f => f.friendId === u._id);
                              const incomingReq = incomingReqs.find(req => req.fromUserId?._id === u._id);
                              const outgoingReq = outgoingReqs.find(req => req.toUserId?._id === u._id);
@@ -391,7 +407,11 @@ const FriendsPage = () => {
                              let btnAction = () => handleSendRequestGlobal(u._id);
                              let btnStyle = { backgroundColor: 'var(--bg-hover)', color: 'var(--accent)' };
 
-                             if (isFriend) {
+                             if (friendData?.theyBlockedMe) {
+                                 btnText = 'Không thể kết bạn';
+                                 btnAction = null;
+                                 btnStyle = { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', cursor: 'not-allowed' };
+                             } else if (isFriend) {
                                  btnText = 'Nhắn tin';
                                  btnAction = () => handleCreateDmFromFriend(
                                      friendData || {
@@ -423,7 +443,12 @@ const FriendsPage = () => {
                                         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{u.email}</p>
                                     </div>
                                 </div>
-                                <button onClick={btnAction} className="px-4 py-1.5 rounded text-sm font-medium" style={btnStyle}>
+                                <button 
+                                    onClick={btnAction} 
+                                    disabled={!btnAction}
+                                    className="px-4 py-1.5 rounded text-sm font-medium" 
+                                    style={btnStyle}
+                                >
                                     {btnText}
                                 </button>
                              </div>
@@ -511,6 +536,45 @@ const FriendsPage = () => {
         </div>
     );
 
+    const renderBlockedList = () => (
+        <div className="flex-1 flex flex-col h-full" style={{ backgroundColor: 'var(--bg-primary)' }}>
+            <div className="px-6 py-4 border-b flex items-center gap-4 flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
+                <span className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Danh sách chặn ({blockedList.length})</span>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto px-6 py-4" style={{ backgroundColor: 'var(--bg-primary)' }}>
+                {blockedList.length === 0 && (
+                    <p className="text-center py-10" style={{ color: 'var(--text-muted)' }}>Bạn chưa chặn ai.</p>
+                )}
+
+                {blockedList.length > 0 && (
+                    <div className="space-y-4 max-w-3xl">
+                        {blockedList.map((user) => (
+                            <div key={user.userId} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-xl shadow-sm gap-4" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+                                        {user.displayName?.[0] || 'N'}
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{user.displayName || 'Người lạ'}</p>
+                                        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{user.email}</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => handleBlockFriend(user.userId, true)}
+                                    className="px-5 py-2 text-sm font-semibold rounded-lg self-end sm:self-auto"
+                                    style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+                                >
+                                    Bỏ chặn
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
     if (loading && friends.length === 0) return <div className="h-screen flex items-center justify-center font-semibold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-muted)' }}>Đang tải kết nối...</div>;
 
     return (
@@ -518,6 +582,7 @@ const FriendsPage = () => {
             {renderSidebar()}
             {activeTab === 'friends_list' && renderFriendsList()}
             {activeTab === 'friend_requests' && renderFriendRequests()}
+            {activeTab === 'blocked_list' && renderBlockedList()}
 
             {showCreateGroup && (
                 <div

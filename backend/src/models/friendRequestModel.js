@@ -13,4 +13,17 @@ const friendRequestSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Tối ưu list incoming/outgoing theo trạng thái.
+friendRequestSchema.index({ toUserId: 1, status: 1, createdAt: -1 });
+friendRequestSchema.index({ fromUserId: 1, status: 1, createdAt: -1 });
+
+// Chặn trùng lời mời đang chờ theo cùng một chiều gửi.
+friendRequestSchema.index(
+  { fromUserId: 1, toUserId: 1, status: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: 'pending' },
+  }
+);
+
 module.exports = mongoose.model('FriendRequest', friendRequestSchema);

@@ -4,13 +4,16 @@ import {
   FlatList, TextInput, Platform, Keyboard,
   Modal, StatusBar, Pressable, Alert, ScrollView,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../../context/AuthContext';
+import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 import messageApi from '../api/messageApi';
 import conversationApi from '../api/conversationApi';
+import friendApi from '../../friends/api/friendApi';
 import { getAvatarColor, getInitials } from '../../../theme';
 import { useTheme } from '../../../context/ThemeContext';
 
@@ -125,7 +128,7 @@ const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#
 const getSenderColor = (name, THEME) =>
   name ? SENDER_COLORS[name.charCodeAt(0) % SENDER_COLORS.length] : THEME.accent;
 
-const MessageBubble = ({ msg, isMine, showHeader, onLongPress, onShowReadBy, currentUserId, conversation, THEME, styles }) => {
+const MessageBubble = ({ msg, isMine, showHeader, onLongPress, onShowReadBy, currentUserId, conversation, onAvatarPress, THEME, styles }) => {
   const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName, THEME);
   const bubbleBg = isMine ? THEME.bubbleSelf : THEME.bubbleOther;
   const bubbleText = isMine ? '#ffffff' : THEME.textPrimary;
@@ -225,7 +228,12 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress, onShowReadBy, cur
     <View style={[styles.msgRow, { flexDirection: isMine ? 'row-reverse' : 'row' }]}>
       <View style={{ width: 38, alignItems: 'center', marginTop: showHeader ? 2 : 0 }}>
         {showHeader && !isMine && (
-          <Avatar name={msg.senderName} avatar={msg.avatar} size={36} THEME={THEME} styles={styles} />
+          <TouchableOpacity
+            onPress={() => onAvatarPress && onAvatarPress(msg.senderId)}
+            activeOpacity={onAvatarPress ? 0.7 : 1}
+          >
+            <Avatar name={msg.senderName} avatar={msg.avatar} size={36} THEME={THEME} styles={styles} />
+          </TouchableOpacity>
         )}
       </View>
 
@@ -420,6 +428,7 @@ export default function MessageScreen({ route, navigation }) {
   const { conversation } = route.params;
   const { user, token } = useAuth();
   const { theme: THEME } = useTheme();
+  const { isUserOnline, getLastSeen } = usePresence();
   const msgStyles = useStyles(THEME);
 
   const currentUserId = user?._id?.toString() || null;
@@ -438,6 +447,14 @@ export default function MessageScreen({ route, navigation }) {
   const [currentReadByList, setCurrentReadByList] = useState([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [forwardingMsg, setForwardingMsg] = useState(null);
+
+  // Info panel state (from demo)
+  const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [infoTab, setInfoTab] = useState('info'); // 'info' | 'media' | 'files'
+  const [mediaData, setMediaData] = useState({ images: [], files: [] });
+  const [loadingMedia, setLoadingMedia] = useState(false);
+  const [blockConfirm, setBlockConfirm] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
 
   const flatRef = useRef(null);
   const inputRef = useRef(null);
@@ -474,26 +491,64 @@ export default function MessageScreen({ route, navigation }) {
     };
   }, []);
 
-
-  // ── Load messages from API ─────────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await messageApi.getMessages(conversation.id);
-        const raw = (res.data.messages || []).map(normalizeMsg);
-        const seen = new Set();
-        const msgs = raw.filter(m => {
-          const k = m._id?.toString();
-          if (!k || seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        });
-        setMessages(msgs);
-      } catch (err) {
-        console.error('Load messages error:', err);
-      }
-    })();
+  // ── Load messages from API (với cơ chế cache và lọc trùng lặp) ────────
+  const loadMessages = useCallback(async () => {
+    try {
+      const res = await messageApi.getMessages(conversation.id);
+      const raw = (res.data.messages || []).map(normalizeMsg);
+      const seen = new Set();
+      const msgs = raw.filter(m => {
+        const k = m._id?.toString();
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      setMessages(msgs);
+    } catch (err) {
+      console.error('Load messages error:', err);
+    }
   }, [conversation.id]);
+
+  useEffect(() => { loadMessages(); }, [loadMessages]);
+
+  // Reload khi screen gain focus (back từ profile, v.v.)
+  useFocusEffect(useCallback(() => { loadMessages(); }, [loadMessages]));
+
+  // ── Load media/files khi mở info panel tab media/files ────────────────
+  const loadMediaData = useCallback(async () => {
+    if (!conversation.id) return;
+    setLoadingMedia(true);
+    try {
+      const res = await messageApi.getAttachments(conversation.id);
+      setMediaData(res.data || { images: [], files: [] });
+    } catch {
+      setMediaData({ images: [], files: [] });
+    } finally {
+      setLoadingMedia(false);
+    }
+  }, [conversation.id]);
+
+  useEffect(() => {
+    if (showInfoPanel && (infoTab === 'media' || infoTab === 'files')) {
+      loadMediaData();
+    }
+  }, [showInfoPanel, infoTab, loadMediaData]);
+
+  // ── Block user ─────────────────────────────────────────────────────────
+  const handleBlockUser = async () => {
+    if (!conversation.otherUserId) return;
+    setBlockBusy(true);
+    try {
+      await friendApi.blockFriend(conversation.otherUserId);
+      setBlockConfirm(false);
+      setShowInfoPanel(false);
+      Alert.alert('Đã chặn', `Bạn đã chặn ${conversation.name}.`);
+    } catch (err) {
+      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể chặn người dùng.');
+    } finally {
+      setBlockBusy(false);
+    }
+  };
 
   // ── Socket.io connection ───────────────────────────────────────────────
   useEffect(() => {
@@ -928,9 +983,17 @@ export default function MessageScreen({ route, navigation }) {
     });
   });
 
-  const isOnline = conversation.type === 'dm' ? (conversation.online ?? false) : null;
+  // Live presence — không dùng conversation.online (static, luôn false)
+  const isOnline = conversation.type === 'dm' && conversation.otherUserId
+    ? isUserOnline(conversation.otherUserId)
+    : null;
   const statusText = conversation.type === 'dm'
-    ? (conversation.online ? 'Đang hoạt động' : 'Ngoại tuyến')
+    ? (isOnline
+        ? 'Đang hoạt động'
+        : (() => {
+            const ls = conversation.otherUserId ? getLastSeen(conversation.otherUserId) : null;
+            return ls ? `Hoạt động ${formatLastSeen(ls)}` : 'Ngoại tuyến';
+          })())
     : `${conversation.memberCount || conversation.members || 0} thành viên`;
 
   return (
@@ -943,7 +1006,11 @@ export default function MessageScreen({ route, navigation }) {
           <Text style={msgStyles.backArrow}>←</Text>
         </TouchableOpacity>
 
-        <View style={{ marginRight: 10 }}>
+        <TouchableOpacity
+          style={{ marginRight: 10 }}
+          onPress={() => conversation.otherUserId && navigation.push('UserProfile', { userId: conversation.otherUserId })}
+          activeOpacity={conversation.otherUserId ? 0.7 : 1}
+        >
           <Avatar
             name={conversation.name}
             avatar={conversation.avatar}
@@ -952,13 +1019,13 @@ export default function MessageScreen({ route, navigation }) {
             THEME={THEME}
             styles={msgStyles}
           />
-        </View>
+        </TouchableOpacity>
 
         <View style={{ flex: 1 }}>
           <Text style={msgStyles.headerName} numberOfLines={1}>
             {conversation.type === 'group' ? `# ${conversation.name}` : conversation.name}
           </Text>
-          <Text style={[msgStyles.headerStatus, { color: conversation.online ? THEME.statusOnline : THEME.textMuted }]}>
+          <Text style={[msgStyles.headerStatus, { color: isOnline ? THEME.statusOnline : THEME.textMuted }]}>
             {statusText}
           </Text>
         </View>
@@ -970,7 +1037,7 @@ export default function MessageScreen({ route, navigation }) {
           <TouchableOpacity style={msgStyles.headerBtn}>
             <Text style={{ fontSize: 18 }}>📹</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={msgStyles.headerBtn}>
+          <TouchableOpacity style={msgStyles.headerBtn} onPress={() => { setInfoTab('info'); setShowInfoPanel(true); }}>
             <Text style={{ fontSize: 18 }}>⋯</Text>
           </TouchableOpacity>
         </View>
@@ -1020,6 +1087,7 @@ export default function MessageScreen({ route, navigation }) {
                 showHeader={item.showHeader}
                 onLongPress={setActionMsg}
                 onShowReadBy={handleShowReadBy}
+                onAvatarPress={(senderId) => senderId && navigation.push('UserProfile', { userId: senderId })}
                 currentUserId={currentUserId}
                 conversation={conversation}
                 THEME={THEME}
@@ -1116,6 +1184,175 @@ export default function MessageScreen({ route, navigation }) {
           )}
         </View>
       </View>
+
+      {/* ── Conversation Info Panel ── */}
+      <Modal visible={showInfoPanel} transparent animationType="slide" onRequestClose={() => setShowInfoPanel(false)}>
+        <Pressable style={msgStyles.sheetOverlay} onPress={() => setShowInfoPanel(false)}>
+          <View style={[msgStyles.sheet, { maxHeight: '85%' }]} onStartShouldSetResponder={() => true}>
+            <View style={msgStyles.sheetHandle} />
+
+            {/* Avatar + Name */}
+            <View style={{ alignItems: 'center', paddingVertical: 16, paddingHorizontal: 20 }}>
+              <Avatar
+                name={conversation.name}
+                avatar={conversation.avatar}
+                size={72}
+                online={isOnline}
+                THEME={THEME}
+                styles={msgStyles}
+              />
+              <Text style={{ fontSize: 18, fontWeight: '800', color: THEME.textPrimary, marginTop: 10 }}>
+                {conversation.name}
+              </Text>
+              {conversation.type === 'dm' && (
+                <Text style={{ fontSize: 12, color: isOnline ? THEME.statusOnline : THEME.textMuted, marginTop: 2 }}>
+                  {isOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}
+                </Text>
+              )}
+            </View>
+
+            {/* Tab bar */}
+            <View style={{ flexDirection: 'row', marginHorizontal: 16, backgroundColor: THEME.bgPrimary, borderRadius: 8, padding: 3, marginBottom: 12 }}>
+              {[
+                { key: 'info', label: 'Thông tin' },
+                { key: 'media', label: 'Ảnh' },
+                { key: 'files', label: 'File' },
+              ].map(t => (
+                <TouchableOpacity
+                  key={t.key}
+                  onPress={() => setInfoTab(t.key)}
+                  style={{
+                    flex: 1, paddingVertical: 7, borderRadius: 6, alignItems: 'center',
+                    backgroundColor: infoTab === t.key ? THEME.bgSecondary : 'transparent',
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: infoTab === t.key ? '700' : '500', color: infoTab === t.key ? THEME.textPrimary : THEME.textMuted }}>
+                    {t.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+              {/* Info tab */}
+              {infoTab === 'info' && (
+                <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
+                  <View style={{ backgroundColor: THEME.bgPrimary, borderRadius: 12, overflow: 'hidden', marginBottom: 12 }}>
+                    <View style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: THEME.border, flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 13, color: THEME.textMuted }}>Loại</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: THEME.textPrimary }}>
+                        {conversation.type === 'dm' ? 'Tin nhắn trực tiếp' : 'Nhóm chat'}
+                      </Text>
+                    </View>
+                    {conversation.type === 'dm' && conversation.otherUserId && (
+                      <TouchableOpacity
+                        style={{ padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                        onPress={() => { setShowInfoPanel(false); navigation.push('UserProfile', { userId: conversation.otherUserId }); }}
+                      >
+                        <Text style={{ fontSize: 13, color: THEME.textMuted }}>Xem hồ sơ</Text>
+                        <Text style={{ fontSize: 13, color: THEME.accent, fontWeight: '600' }}>→</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Actions */}
+                  {conversation.type === 'dm' && conversation.otherUserId && (
+                    <>
+                      {!blockConfirm ? (
+                        <TouchableOpacity
+                          onPress={() => setBlockConfirm(true)}
+                          style={{ backgroundColor: 'rgba(237,66,69,0.12)', borderRadius: 12, padding: 14, alignItems: 'center', flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: 'rgba(237,66,69,0.3)' }}
+                        >
+                          <Text style={{ fontSize: 18 }}>🚫</Text>
+                          <Text style={{ color: '#ed4245', fontWeight: '700', fontSize: 15 }}>Chặn {conversation.name}</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={{ backgroundColor: 'rgba(237,66,69,0.12)', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: 'rgba(237,66,69,0.4)' }}>
+                          <Text style={{ color: THEME.textPrimary, fontWeight: '700', fontSize: 14, marginBottom: 6 }}>
+                            Xác nhận chặn {conversation.name}?
+                          </Text>
+                          <Text style={{ color: THEME.textMuted, fontSize: 12, marginBottom: 14 }}>
+                            Người này sẽ không thể nhắn tin cho bạn nữa.
+                          </Text>
+                          <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <TouchableOpacity
+                              onPress={() => setBlockConfirm(false)}
+                              style={{ flex: 1, padding: 10, borderRadius: 8, backgroundColor: THEME.bgHover, alignItems: 'center' }}
+                            >
+                              <Text style={{ color: THEME.textPrimary, fontWeight: '600' }}>Hủy</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={handleBlockUser}
+                              disabled={blockBusy}
+                              style={{ flex: 1, padding: 10, borderRadius: 8, backgroundColor: '#ed4245', alignItems: 'center', opacity: blockBusy ? 0.6 : 1 }}
+                            >
+                              <Text style={{ color: '#fff', fontWeight: '700' }}>{blockBusy ? 'Đang chặn...' : 'Chặn'}</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </>
+                  )}
+                </View>
+              )}
+
+              {/* Media tab */}
+              {infoTab === 'media' && (
+                <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
+                  {loadingMedia && (
+                    <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Đang tải...</Text>
+                  )}
+                  {!loadingMedia && mediaData.images.length === 0 && (
+                    <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Chưa có ảnh nào được chia sẻ</Text>
+                  )}
+                  {!loadingMedia && mediaData.images.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
+                      {mediaData.images.map((item) => (
+                        <Image
+                          key={item._id}
+                          source={{ uri: item.url }}
+                          style={{ width: '32%', aspectRatio: 1, borderRadius: 6 }}
+                          resizeMode="cover"
+                        />
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Files tab */}
+              {infoTab === 'files' && (
+                <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
+                  {loadingMedia && (
+                    <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Đang tải...</Text>
+                  )}
+                  {!loadingMedia && mediaData.files.length === 0 && (
+                    <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Chưa có file nào được chia sẻ</Text>
+                  )}
+                  {!loadingMedia && mediaData.files.map((file) => (
+                    <View
+                      key={file._id}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, backgroundColor: THEME.bgPrimary, borderRadius: 10, marginBottom: 6 }}
+                    >
+                      <Text style={{ fontSize: 24 }}>📄</Text>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: THEME.textPrimary }} numberOfLines={1}>
+                          {file.fileName}
+                        </Text>
+                        {file.fileSize && (
+                          <Text style={{ fontSize: 11, color: THEME.textMuted }}>
+                            {(file.fileSize / 1024).toFixed(0)} KB
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* ── Long press action sheet ── */}
       <Modal visible={!!actionMsg} transparent animationType="slide">

@@ -1,10 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabase';
-
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ||
-  'http://192.168.88.135:2026/backend/api';
+import { API_BASE_URL } from '../config/env';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

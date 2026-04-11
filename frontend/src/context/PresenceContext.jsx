@@ -1,156 +1,167 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { supabase } from '../config/supabase';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 
-const PresenceContext = createContext({ onlineUsers: new Set(), isUserOnline: () => false, getPresenceStatus: () => null });
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
+
+// ─── Utility: "X phút trước" ────────────────────────────────────────────────
+export const formatLastSeen = (dateOrIso) => {
+  if (!dateOrIso) return 'Ngoại tuyến';
+  const d = new Date(dateOrIso);
+  if (isNaN(d.getTime())) return 'Ngoại tuyến';
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (mins < 1) return 'Vừa mới hoạt động';
+  if (mins < 60) return `${mins} phút trước`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} giờ trước`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Hôm qua';
+  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+};
+
+const PresenceContext = createContext({
+  onlineUsers: new Set(),
+  isUserOnline: () => false,
+  getPresenceStatus: () => null,
+  getLastSeen: () => null,
+});
 
 export const PresenceProvider = ({ children }) => {
-  const { user } = useAuth();
-  const [onlineUsers, setOnlineUsers] = useState(new Set());
-  const [presenceMeta, setPresenceMeta] = useState({});
-  const channelRef = useRef(null);
-  const heartbeatRef = useRef(null);
+  const { token } = useAuth();
+  const [onlineSet, setOnlineSet]         = useState(new Set());
+  const [statusMap, setStatusMap]         = useState({}); // userId → 'online'|'idle'|'dnd'
+  const [statusTextMap, setStatusTextMap] = useState({}); // userId → custom status text
+  const [lastSeenMap, setLastSeenMap]     = useState({}); // userId → ISO timestamp
+  const socketRef = useRef(null);
 
   useEffect(() => {
-    if (!user?._id) {
-      setOnlineUsers(new Set());
-      setPresenceMeta({});
+    const accessToken = token || localStorage.getItem('accessToken');
+    if (!accessToken) {
+      setOnlineSet(new Set());
       return;
     }
 
-    // Cleanup cũ
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
+    // Ngắt kết nối cũ nếu có
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
     }
 
-    const channel = supabase.channel('presence:global');
+    const socket = io(SOCKET_URL, {
+      auth: { token: accessToken },
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+    });
+    socketRef.current = socket;
 
-    const syncState = () => {
-      const state = channel.presenceState();
-      const ids = new Set();
-      const meta = {};
-
-      Object.entries(state).forEach(([key, presences]) => {
-        if (presences?.length > 0) {
-          const data = presences[0];
-          const lastSeen = new Date(data.online_at || 0).getTime();
-
-          // 🔥 STRICT CLEANUP: chỉ giữ presence < 60s
-          if (Date.now() - lastSeen > 60000) {
-            console.log('🧹 CLEANED STALE:', key, 'age:', Math.round((Date.now() - lastSeen)/1000) + 's');
-            return;
-          }
-
-          ids.add(key);
-          meta[key] = data;
-        }
-      });
-
-      console.log('🔥 SYNC:', { online: ids.size, total: Object.keys(state).length });
-      setOnlineUsers(ids);
-      setPresenceMeta(meta);
-    };
-
-    channel
-      .on('presence', { event: 'sync' }, syncState)
-      .on('presence', { event: 'join' }, ({ key }) => {
-        console.log('➕ JOIN:', key);
-        syncState(); // Force sync
-      })
-      .on('presence', { event: 'leave' }, ({ key }) => {
-        console.log('➖ LEAVE:', key);
-        syncState();
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ CONNECTED:', user._id);
-          // Track KHÔNG dùng config key ở đây
-          await channel.track({
-            userId: String(user._id),
-            status: user.status || 'online',
-            online_at: new Date().toISOString(),
-          });
-        }
-      });
-
-    channelRef.current = channel;
-
-    // 🔥 AGGRESSIVE HEARTBEAT: mỗi 15s
-    heartbeatRef.current = setInterval(async () => {
-      if (channelRef.current && document.visibilityState === 'visible') {
-        console.log('💓 HEARTBEAT:', user._id);
-        await channelRef.current.track({
-          userId: String(user._id),
-          status: user.status || 'online',
-          online_at: new Date().toISOString(),
-        });
-      }
-    }, 15000); // 15s thay vì 30s
-
-    // 🔥 BEFOREUNLOAD - Force track lần cuối
-    const handleBeforeUnload = () => {
-      console.log('🚪 BEFORE UNLOAD');
-      if (channelRef.current) {
-        channelRef.current.track({
-          userId: String(user._id),
-          status: 'offline',
-          online_at: new Date().toISOString(),
-        });
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('pagehide', handleBeforeUnload);
-
-    return () => {
-      console.log('🧹 FULL CLEANUP');
-      clearInterval(heartbeatRef.current);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('pagehide', handleBeforeUnload);
-
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-      }
-      channelRef.current = null;
-    };
-  }, [user?._id, user?.status]);
-
-  // 🔥 ULTRA STRICT ONLINE CHECK
-  const isUserOnline = (userId) => {
-    const key = String(userId);
-    const hasPresence = onlineUsers.has(key);
-    const meta = presenceMeta[key];
-
-    if (!hasPresence || !meta) return false;
-    if (meta.status === 'invisible') return false;
-
-    const age = Date.now() - new Date(meta.online_at || 0).getTime();
-    const isRecent = age < 30000; // 30s MAX
-
-    console.log('🔍 ONLINE CHECK:', userId, {
-      age: Math.round(age/1000) + 's',
-      status: meta.status,
-      recent: isRecent
+    // Khi kết nối, yêu cầu danh sách online hiện tại
+    socket.on('connect', () => {
+      socket.emit('presence:subscribe');
     });
 
-    return isRecent;
-  };
+    // Nhận snapshot toàn bộ danh sách online (có kèm statusMap + statusTextMap)
+    socket.on('presence:online-list', ({ userIds, statusMap: sm, statusTextMap: stm }) => {
+      const ids = Array.isArray(userIds) ? userIds.map(String) : [];
+      setOnlineSet(new Set(ids));
+      if (sm && typeof sm === 'object') {
+        const normalized = {};
+        Object.entries(sm).forEach(([k, v]) => { normalized[String(k)] = v; });
+        setStatusMap(normalized);
+      }
+      if (stm && typeof stm === 'object') {
+        const norm = {};
+        Object.entries(stm).forEach(([k, v]) => { norm[String(k)] = v; });
+        setStatusTextMap(norm);
+      }
+    });
 
-  const getPresenceStatus = (userId) => {
-    const key = String(userId);
-    if (!onlineUsers.has(key)) return null;
-    const meta = presenceMeta[key];
-    if (meta?.status === 'invisible') return null;
-    return meta?.status || 'online';
-  };
+    // Một user vừa online → cập nhật status + statusText, xóa khỏi lastSeenMap
+    socket.on('presence:online', ({ userId, status, statusText }) => {
+      const uid = String(userId);
+      setOnlineSet(prev => new Set([...prev, uid]));
+      setStatusMap(prev => ({ ...prev, [uid]: status || 'online' }));
+      setStatusTextMap(prev => ({ ...prev, [uid]: statusText || '' }));
+      setLastSeenMap(prev => {
+        if (!prev[uid]) return prev;
+        const next = { ...prev };
+        delete next[uid];
+        return next;
+      });
+    });
+
+    // Một user vừa offline → lưu lastSeen, xóa khỏi onlineSet & statusMap
+    socket.on('presence:offline', ({ userId, lastSeen }) => {
+      const uid = String(userId);
+      setOnlineSet(prev => {
+        const next = new Set(prev);
+        next.delete(uid);
+        return next;
+      });
+      setStatusMap(prev => { const n = { ...prev }; delete n[uid]; return n; });
+      setStatusTextMap(prev => { const n = { ...prev }; delete n[uid]; return n; });
+      if (lastSeen) {
+        setLastSeenMap(prev => ({ ...prev, [uid]: lastSeen }));
+      }
+    });
+
+    // User thay đổi trạng thái hoặc statusText (online ↔ idle ↔ dnd, hoặc đổi status text)
+    socket.on('presence:status-changed', ({ userId, status, statusText }) => {
+      const uid = String(userId);
+      setOnlineSet(prev => new Set([...prev, uid]));
+      setStatusMap(prev => ({ ...prev, [uid]: status || 'online' }));
+      setStatusTextMap(prev => ({ ...prev, [uid]: statusText ?? prev[uid] ?? '' }));
+      setLastSeenMap(prev => {
+        if (!prev[uid]) return prev;
+        const next = { ...prev }; delete next[uid]; return next;
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [token]);
+
+  const isUserOnline = useCallback(
+    (userId) => onlineSet.has(String(userId)),
+    [onlineSet],
+  );
+
+  // Trả về trạng thái thực: 'online' | 'idle' | 'dnd' | null (offline)
+  const getPresenceStatus = useCallback(
+    (userId) => {
+      const uid = String(userId);
+      if (!onlineSet.has(uid)) return null;
+      return statusMap[uid] || 'online';
+    },
+    [onlineSet, statusMap],
+  );
+
+  // Trả về ISO timestamp lần cuối hoạt động (null nếu đang online)
+  const getLastSeen = useCallback(
+    (userId) => {
+      const uid = String(userId);
+      if (onlineSet.has(uid)) return null;
+      return lastSeenMap[uid] || null;
+    },
+    [onlineSet, lastSeenMap],
+  );
+
+  // Trả về status text (Discord-style custom status)
+  const getStatusText = useCallback(
+    (userId) => statusTextMap[String(userId)] || '',
+    [statusTextMap],
+  );
 
   return (
     <PresenceContext.Provider value={{
-      onlineUsers,
+      onlineUsers: onlineSet,
       isUserOnline,
       getPresenceStatus,
-      presenceMeta,
-      totalOnline: onlineUsers.size
+      getLastSeen,
+      getStatusText,
+      totalOnline: onlineSet.size,
     }}>
       {children}
     </PresenceContext.Provider>

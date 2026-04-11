@@ -10,6 +10,51 @@ const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 // Lấy userId hiện tại từ middleware auth (hỗ trợ cả _id và id).
 const getCurrentUserId = (req) => (req.user?._id || req.user?.id || '').toString();
 
+const normalizeFriendPair = (userA, userB) => {
+    const a = userA.toString();
+    const b = userB.toString();
+    return a < b ? { u1: a, u2: b } : { u1: b, u2: a };
+};
+
+const getDmBlockStatus = async (currentUserId, targetUserId) => {
+    const { u1, u2 } = normalizeFriendPair(currentUserId, targetUserId);
+    const friendship = await Friendship.findOne({ userId1: u1, userId2: u2 })
+        .select('isBlockedBy')
+        .lean();
+
+    if (!friendship?.isBlockedBy) {
+        return { iBlocked: false, blockedByOther: false };
+    }
+
+    const blockerId = friendship.isBlockedBy.toString();
+    return {
+        iBlocked: blockerId === currentUserId,
+        blockedByOther: blockerId !== currentUserId,
+    };
+};
+
+const getUsersWhoBlockedMeSet = async (currentUserId) => {
+    const friendships = await Friendship.find({
+        isBlockedBy: { $ne: null },
+        $or: [{ userId1: currentUserId }, { userId2: currentUserId }],
+    })
+        .select('userId1 userId2 isBlockedBy')
+        .lean();
+
+    const blockedByOthers = new Set();
+    for (const friendship of friendships) {
+        const blockerId = friendship.isBlockedBy?.toString();
+        if (!blockerId || blockerId === currentUserId) continue;
+
+        const id1 = friendship.userId1.toString();
+        const id2 = friendship.userId2.toString();
+        const otherUserId = id1 === currentUserId ? id2 : id1;
+        blockedByOthers.add(otherUserId);
+    }
+
+    return blockedByOthers;
+};
+
 // Chuẩn hóa dữ liệu conversation trả về client, tránh lộ field không cần thiết.
 const pickConversationFields = (conversation) => ({
     _id: conversation._id,
@@ -25,20 +70,65 @@ const pickConversationFields = (conversation) => ({
     updatedAt: conversation.updatedAt,
 });
 
+const getDmDisplayInfo = async (conversationIds, currentUserId) => {
+    if (!conversationIds.length) return new Map();
+
+    const members = await ConversationMember.find({
+        conversationId: { $in: conversationIds },
+        leftAt: null,
+        isDeleted: { $ne: true },
+    })
+        .populate('userId', '_id displayName avatar status')
+        .lean();
+
+    const map = new Map();
+    for (const conversationId of conversationIds) {
+        const convoMembers = members.filter((member) => member.conversationId.toString() === conversationId.toString());
+        const otherMember = convoMembers.find((member) => member.userId && member.userId._id.toString() !== currentUserId) || null;
+
+        if (otherMember?.userId) {
+            map.set(conversationId.toString(), {
+                otherUserId: otherMember.userId._id.toString(),
+                name: otherMember.userId.displayName || 'Đoạn chat trực tiếp',
+                avatar: otherMember.userId.avatar || '',
+                otherUser: {
+                    _id: otherMember.userId._id,
+                    displayName: otherMember.userId.displayName || 'Đoạn chat trực tiếp',
+                    avatar: otherMember.userId.avatar || '',
+                    status: otherMember.userId.status || 'online',
+                },
+            });
+        }
+    }
+
+    return map;
+};
+
 // Gắn thông tin membership của chính user vào item conversation để frontend render nhanh.
-const buildConversationItem = (conversation, myMember) => ({
-    ...pickConversationFields(conversation),
-    myMembership: {
-        role: myMember.role,
-        unreadCount: myMember.unreadCount,
-        canSendMessages: myMember.canSendMessages,
-        canInviteMembers: myMember.canInviteMembers,
-        canManageMembers: myMember.canManageMembers,
-        isArchived: myMember.isArchived,
-        joinedAt: myMember.joinedAt,
-        leftAt: myMember.leftAt,
-    },
-});
+const buildConversationItem = (conversation, myMember, dmDisplayInfo = null) => {
+    const base = pickConversationFields(conversation);
+
+    if (conversation.type === 'dm' && dmDisplayInfo) {
+        base.name = dmDisplayInfo.name || base.name;
+        base.avatar = dmDisplayInfo.avatar || base.avatar;
+        base.otherUserId = dmDisplayInfo.otherUserId;
+        base.otherUser = dmDisplayInfo.otherUser;
+    }
+
+    return {
+        ...base,
+        myMembership: {
+            role: myMember.role,
+            unreadCount: myMember.unreadCount,
+            canSendMessages: myMember.canSendMessages,
+            canInviteMembers: myMember.canInviteMembers,
+            canManageMembers: myMember.canManageMembers,
+            isArchived: myMember.isArchived,
+            joinedAt: myMember.joinedAt,
+            leftAt: myMember.leftAt,
+        },
+    };
+};
 
 // Validate ObjectId đầu vào, ném lỗi chuẩn để middleware errorHandler xử lý.
 const ensureValidObjectId = (value, fieldName) => {
@@ -55,6 +145,7 @@ const requireConversationMember = async (conversationId, userId) => {
         conversationId,
         userId,
         leftAt: null,
+        isDeleted: { $ne: true },
     });
 
     if (!member) {
@@ -67,47 +158,43 @@ const requireConversationMember = async (conversationId, userId) => {
 };
 
 // Tìm DM đã tồn tại giữa 2 user để tránh tạo conversation trùng.
-// Logic: gom member theo conversationId, chỉ lấy conversation có đúng 2 người này.
+// Dùng approach đơn giản: tìm DM conversation mà cả 2 user đều là member.
 const findExistingDmConversation = async (userId, targetUserId) => {
-    const pairs = await ConversationMember.aggregate([
-        {
-            $match: {
-                userId: { $in: [toObjectId(userId), toObjectId(targetUserId)] },
-                leftAt: null,
-            },
-        },
-        {
-            $group: {
-                _id: '$conversationId',
-                members: { $addToSet: '$userId' },
-                count: { $sum: 1 },
-            },
-        },
-        {
-            $match: {
-                count: 2,
-                $expr: { $eq: [{ $size: '$members' }, 2] },
-            },
-        },
-    ]);
+    // Bước 1: Lấy tất cả conversationId của userId
+    const myMemberships = await ConversationMember.find({
+        userId: toObjectId(userId.toString()),
+    }).select('conversationId').lean();
 
-    if (!pairs.length) return null;
+    if (!myMemberships.length) return null;
 
-    const conversationIds = pairs.map((item) => item._id);
-    const conversation = await Conversation.findOne({
-        _id: { $in: conversationIds },
+    const myConvObjectIds = myMemberships.map((m) => m.conversationId);
+
+    // Bước 2: Trong các conversation trên, tìm conversation mà targetUser cũng là member
+    const sharedMemberships = await ConversationMember.find({
+        conversationId: { $in: myConvObjectIds },
+        userId: toObjectId(targetUserId.toString()),
+    }).select('conversationId').lean();
+
+    if (!sharedMemberships.length) return null;
+
+    const sharedConvIds = sharedMemberships.map((m) => m.conversationId);
+
+    // Bước 3: Lấy conversation type='dm' đầu tiên trong danh sách chung
+    const dmConversation = await Conversation.findOne({
+        _id: { $in: sharedConvIds },
         type: 'dm',
     });
 
-    return conversation;
+    return dmConversation || null;
 };
 
 // Tạo mới DM trong transaction: 1 conversation + 2 bản ghi member.
-const createDmConversation = async (userId, targetUserId) => {
+const createDmConversation = async (userId, targetUserId, initialMessage = '') => {
     const session = await mongoose.startSession();
 
     try {
         let createdConversation = null;
+        const normalizedInitialMessage = (initialMessage || '').toString().trim();
 
         await session.withTransaction(async () => {
             const conversation = await Conversation.create(
@@ -117,6 +204,8 @@ const createDmConversation = async (userId, targetUserId) => {
                         name: '',
                         avatar: '',
                         createdBy: toObjectId(userId),
+                        lastMessagePreview: normalizedInitialMessage,
+                        lastMessageTime: normalizedInitialMessage ? new Date() : null,
                     },
                 ],
                 { session }
@@ -220,7 +309,7 @@ const createGroupConversation = async (userId, payload) => {
 const createConversation = async (req, res, next) => {
     try {
         const userId = getCurrentUserId(req);
-        const { type, name, avatar, targetUserId, memberIds } = req.body;
+        const { type, name, avatar, targetUserId, memberIds, initialMessage } = req.body;
 
         if (!userId) {
             return res.status(401).json({ message: 'Chưa xác thực người dùng' });
@@ -233,8 +322,22 @@ const createConversation = async (req, res, next) => {
         if (type === 'dm') {
             ensureValidObjectId(targetUserId, 'targetUserId');
 
+            const normalizedInitialMessage = (initialMessage || '').toString().trim();
+            if (!normalizedInitialMessage) {
+                return res.status(400).json({
+                    message: 'DM mới chỉ được tạo khi có tin nhắn đầu tiên (initialMessage)',
+                });
+            }
+
             if (targetUserId.toString() === userId) {
                 return res.status(400).json({ message: 'Không thể tạo DM với chính mình' });
+            }
+
+            const blockStatus = await getDmBlockStatus(userId, targetUserId.toString());
+            if (blockStatus.blockedByOther) {
+                return res.status(403).json({
+                    message: 'Bạn đã bị người dùng này chặn, không thể tạo hoặc tiếp tục cuộc trò chuyện',
+                });
             }
 
             const targetUser = await User.findById(targetUserId).select('_id');
@@ -244,13 +347,32 @@ const createConversation = async (req, res, next) => {
 
             const existingDm = await findExistingDmConversation(userId, targetUserId);
             if (existingDm) {
+                await ConversationMember.updateOne(
+                    {
+                        conversationId: existingDm._id,
+                        userId: toObjectId(userId),
+                        leftAt: null,
+                    },
+                    {
+                        $set: {
+                            isDeleted: false,
+                            deletedAt: null,
+                            isArchived: false,
+                        },
+                    }
+                );
+
+                existingDm.lastMessagePreview = normalizedInitialMessage;
+                existingDm.lastMessageTime = new Date();
+                await existingDm.save();
+
                 return res.status(200).json({
                     message: 'Đã tồn tại cuộc trò chuyện DM',
                     data: pickConversationFields(existingDm),
                 });
             }
 
-            const newConversation = await createDmConversation(userId, targetUserId);
+            const newConversation = await createDmConversation(userId, targetUserId, normalizedInitialMessage);
             return res.status(201).json({
                 message: 'Tạo cuộc trò chuyện DM thành công',
                 data: pickConversationFields(newConversation),
@@ -352,6 +474,7 @@ const listMyConversations = async (req, res, next) => {
         const memberFilter = {
             userId,
             leftAt: null,
+            isDeleted: { $ne: true },
         };
 
         if (archiveMode === 'exclude') {
@@ -383,6 +506,12 @@ const listMyConversations = async (req, res, next) => {
             .populate('lastMessageId', '_id senderId content type createdAt')
             .lean();
 
+        const dmDisplayMap = await getDmDisplayInfo(
+            conversations.filter((conversation) => conversation.type === 'dm').map((conversation) => conversation._id),
+            userId
+        );
+        const blockedByOthersSet = await getUsersWhoBlockedMeSet(userId);
+
         const memberCounts = await ConversationMember.aggregate([
             {
                 $match: {
@@ -402,46 +531,21 @@ const listMyConversations = async (req, res, next) => {
             memberCounts.map((item) => [item._id.toString(), item.totalMembers])
         );
 
-        // For DM conversations: populate the other user's info so frontend can show their name/avatar
-        const otherUserMap = new Map();
-        const dmConvIds = conversations
-            .filter((c) => c.type === 'dm')
-            .map((c) => c._id);
-
-        if (dmConvIds.length > 0) {
-            const otherMembers = await ConversationMember.find({
-                conversationId: { $in: dmConvIds },
-                userId:         { $ne: toObjectId(userId) },
-                leftAt:         null,
+        const data = conversations
+            .filter((conversation) => {
+                if (conversation.type !== 'dm') return true;
+                const dmDisplayInfo = dmDisplayMap.get(conversation._id.toString());
+                if (!dmDisplayInfo?.otherUserId) return true;
+                return !blockedByOthersSet.has(dmDisplayInfo.otherUserId);
             })
-                .populate('userId', '_id displayName avatar status')
-                .lean();
-
-            for (const member of otherMembers) {
-                const cid = member.conversationId.toString();
-                if (!otherUserMap.has(cid) && member.userId) {
-                    const u = member.userId;
-                    otherUserMap.set(cid, {
-                        _id:         u._id,
-                        displayName: u.displayName,
-                        avatar:      u.avatar || null,
-                        status:      u.status || 'online',
-                    });
-                }
-            }
-        }
-
-        const data = conversations.map((conversation) => {
+            .map((conversation) => {
             const myMember = memberMap.get(conversation._id.toString());
-            const item = {
-                ...buildConversationItem(conversation, myMember),
+            const dmDisplayInfo = dmDisplayMap.get(conversation._id.toString()) || null;
+            return {
+                ...buildConversationItem(conversation, myMember, dmDisplayInfo),
                 totalMembers: memberCountMap.get(conversation._id.toString()) || 0,
             };
-            if (conversation.type === 'dm') {
-                item.otherUser = otherUserMap.get(conversation._id.toString()) || null;
-            }
-            return item;
-        });
+            });
 
         return res.status(200).json({
             data,
@@ -478,9 +582,23 @@ const getConversationById = async (req, res, next) => {
             leftAt: null,
         });
 
+        const dmDisplayMap = conversation.type === 'dm'
+            ? await getDmDisplayInfo([conversation._id], userId)
+            : new Map();
+
+        if (conversation.type === 'dm') {
+            const dmDisplayInfo = dmDisplayMap.get(conversation._id.toString());
+            if (dmDisplayInfo?.otherUserId) {
+                const blockedByOthersSet = await getUsersWhoBlockedMeSet(userId);
+                if (blockedByOthersSet.has(dmDisplayInfo.otherUserId)) {
+                    return res.status(403).json({ message: 'Bạn không thể xem cuộc trò chuyện này' });
+                }
+            }
+        }
+
         return res.status(200).json({
             data: {
-                ...buildConversationItem(conversation, myMember),
+                ...buildConversationItem(conversation, myMember, dmDisplayMap.get(conversation._id.toString()) || null),
                 totalMembers,
             },
         });
@@ -623,6 +741,51 @@ const setConversationArchived = async (req, res, next) => {
     }
 };
 
+// API xóa cuộc trò chuyện phía tôi.
+// Chỉ ảnh hưởng membership của người thao tác, không ảnh hưởng phía còn lại.
+const deleteConversationForMe = async (req, res, next) => {
+    try {
+        const userId = getCurrentUserId(req);
+        const { id } = req.params;
+        const conversationId = id;
+
+        ensureValidObjectId(conversationId, 'conversationId');
+
+        const conversation = await Conversation.findById(conversationId).select('_id type');
+        if (!conversation) {
+            return res.status(404).json({ message: 'Không tìm thấy cuộc trò chuyện' });
+        }
+
+        if (conversation.type !== 'dm') {
+            return res.status(400).json({
+                message: 'Chỉ hỗ trợ xóa phía tôi cho cuộc trò chuyện trực tiếp (DM)',
+            });
+        }
+
+        const member = await ConversationMember.findOne({
+            conversationId,
+            userId,
+            leftAt: null,
+        });
+
+        if (!member) {
+            return res.status(404).json({ message: 'Không tìm thấy cuộc trò chuyện để xóa' });
+        }
+
+        member.isDeleted = true;
+        member.deletedAt = new Date();
+        member.isArchived = false;
+        member.unreadCount = 0;
+        await member.save();
+
+        return res.status(200).json({
+            message: 'Đã xóa cuộc trò chuyện khỏi danh sách của bạn',
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createDmConversationEndpoint,
     createGroupConversationEndpoint,
@@ -632,4 +795,5 @@ module.exports = {
     updateConversationInfo,
     setConversationLock,
     setConversationArchived,
+    deleteConversationForMe,
 };

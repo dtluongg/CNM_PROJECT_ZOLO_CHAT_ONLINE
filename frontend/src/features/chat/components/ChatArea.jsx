@@ -4,6 +4,7 @@ import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
 import conversationApi from '../api/conversationApi';
 import { X, Check } from 'lucide-react'; // Dùng cho modal
+import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 
 
 const AVATAR_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#fee75c', '#ed4245', '#9b59b6', '#e67e22'];
@@ -52,7 +53,8 @@ const MessageBubble = ({
   onShowReadDetails,
   onForward,
   conversationType,
-  currentUserId
+  currentUserId,
+  onAvatarClick,
 }) => {
   const observerRef = useRef(null);
 
@@ -113,7 +115,7 @@ const MessageBubble = ({
   useEffect(() => {
     if (isMine || msg.revoked || !onRead) return;
 
-    // Nếu chính mình đã đọc rồi thì không cần observe nữa 
+    // Nếu chính mình đã đọc rồi thì không cần observe nữa
     // (Kiểm tra xem currentUserId có trong readBy không)
     const iReadIt = msg.readBy?.some(r => r.userId === currentUserId);
     if (iReadIt) return;
@@ -189,9 +191,17 @@ const MessageBubble = ({
       onTouchEnd={handleTouchEnd}
       ref={observerRef}
     >
-      {/* Avatar */}
+      {/* Avatar — clickable to view profile */}
       <div style={{ width: isMobile ? 34 : 36, flexShrink: 0, marginTop: showHeader ? 2 : 0 }}>
-        {showHeader && !isMine && <Avatar name={msg.senderName} avatar={msg.avatar} size={isMobile ? 34 : 36} />}
+        {showHeader && !isMine && (
+          <div
+            onClick={() => onAvatarClick && onAvatarClick(msg.senderId)}
+            style={{ cursor: onAvatarClick ? 'pointer' : 'default' }}
+            title={onAvatarClick ? `Xem hồ sơ ${msg.senderName}` : undefined}
+          >
+            <Avatar name={msg.senderName} avatar={msg.avatar} size={isMobile ? 34 : 36} />
+          </div>
+        )}
       </div>
 
       <div style={{
@@ -706,8 +716,10 @@ export default function ChatArea({
   showRight,
   onBack,
   isMobile,
-  setMessages
+  setMessages,
+  onViewProfile,
 }) {
+  const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
   const [openMenuId, setOpenMenuId] = useState(null);
   const [reactionTypes, setReactionTypes] = useState([]);
   const [showReactionList, setShowReactionList] = useState(null); // msgId
@@ -898,9 +910,38 @@ export default function ChatArea({
     });
   });
 
+  // Live presence cho DM — không dùng conversation.online (static)
+  const dmOnline = conversation.type === 'dm' && conversation.otherUserId
+    ? isUserOnline(conversation.otherUserId)
+    : (conversation.online ?? false);
+
+  const dmStatus = conversation.type === 'dm' && conversation.otherUserId
+    ? getPresenceStatus(conversation.otherUserId)
+    : null;
+
+  const STATUS_LABEL = {
+    online: 'Đang hoạt động',
+    idle: 'Vắng mặt',
+    dnd: 'Không làm phiền',
+  };
+  const STATUS_COLOR_MAP = {
+    online: '#3ba55c',
+    idle: '#faa61a',
+    dnd: '#ed4245',
+  };
+
   const onlineStatus = conversation.type === 'dm'
-    ? (conversation.online ? 'Online' : 'Offline')
+    ? (dmOnline
+      ? (STATUS_LABEL[dmStatus] || 'Đang hoạt động')
+      : (() => {
+        const ls = conversation.otherUserId ? getLastSeen(conversation.otherUserId) : null;
+        return ls ? formatLastSeen(ls) : 'Ngoại tuyến';
+      })())
     : `${conversation.memberCount || conversation.members || 0} thành viên`;
+
+  const headerDotColor = conversation.type === 'dm'
+    ? (dmOnline ? (STATUS_COLOR_MAP[dmStatus] || '#3ba55c') : '#80848e')
+    : null;
 
   return (
     <div style={{
@@ -939,7 +980,7 @@ export default function ChatArea({
                 position: 'absolute', bottom: 0, right: 0,
                 width: isMobile ? 11 : 10, height: isMobile ? 11 : 10,
                 borderRadius: '50%',
-                background: conversation.online ? '#3ba55c' : '#80848e',
+                background: headerDotColor || '#80848e',
                 border: '2px solid var(--bg-secondary)',
               }} />
             )}
@@ -950,7 +991,7 @@ export default function ChatArea({
               {conversation.type === 'group' && <span style={{ color: 'var(--text-muted)', marginRight: 2 }}>#</span>}
               {conversation.name}
             </div>
-            <div style={{ fontSize: 11, color: conversation.online ? '#3ba55c' : 'var(--text-muted)', lineHeight: 1 }}>
+            <div style={{ fontSize: 11, color: dmOnline ? (STATUS_COLOR_MAP[dmStatus] || '#3ba55c') : 'var(--text-muted)', lineHeight: 1 }}>
               {onlineStatus}
             </div>
           </div>
@@ -1093,6 +1134,7 @@ export default function ChatArea({
               onForward={item.onForward}
               conversationType={conversation.type}
               currentUserId={currentUserId}
+              onAvatarClick={onViewProfile}
             />
         )}
 

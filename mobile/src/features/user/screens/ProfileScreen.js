@@ -82,7 +82,7 @@ const Avatar = ({ name, avatar, size = 48, status }) => {
 
 export default function ProfileScreen({ navigation }) {
   const { user, logout, updateUser } = useAuth();
-  const { updateMyStatus, isUserOnline, getPresenceStatus, presenceMap } = usePresence();
+  const { isUserOnline, getPresenceStatus } = usePresence();
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -98,6 +98,7 @@ export default function ProfileScreen({ navigation }) {
   const [copiedLink, setCopiedLink] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
+  const [statusText, setStatusText] = useState('');
   const [selStatus, setSelStatus] = useState('online');
 
   // ==================== LẤY STATUS REALTIME ====================
@@ -144,6 +145,7 @@ export default function ProfileScreen({ navigation }) {
       setProfile(u);
       setDisplayName(u.displayName || '');
       setBio(u.bio || '');
+      setStatusText(u.statusText || '');
       setSelStatus(u.status || 'online');
       await updateUser(u);
     } catch (e) {
@@ -152,6 +154,7 @@ export default function ProfileScreen({ navigation }) {
         setProfile(user);
         setDisplayName(user.displayName || '');
         setBio(user.bio || '');
+        setStatusText(user.statusText || '');
         setSelStatus(user.status || 'online');
       }
     } finally {
@@ -223,18 +226,15 @@ export default function ProfileScreen({ navigation }) {
     setSaving(true);
 
     try {
-      const res = await apiClient.patch('/auth/update-profile', data);
+      const res = await apiClient.patch('/users/update-profile', data);
       const u = res.data.user;
 
       setProfile(u);
       setDisplayName(u.displayName || '');
       setBio(u.bio || '');
+      setStatusText(u.statusText || '');
       setSelStatus(u.status || 'online');
       await updateUser(u);
-
-      if (data.status) {
-        await updateMyStatus(data.status);
-      }
 
       setEditModal(false);
       setColorModal(false);
@@ -387,6 +387,9 @@ export default function ProfileScreen({ navigation }) {
                 {d.displayName || 'Tên hiển thị'}
               </Text>
               {d.username && <Text style={s.handle}>@{d.username}</Text>}
+              {d.statusText ? (
+                <Text style={s.statusTextLine} numberOfLines={1}>{d.statusText}</Text>
+              ) : null}
             </View>
 
             <TouchableOpacity
@@ -586,6 +589,17 @@ export default function ProfileScreen({ navigation }) {
               selectionColor={THEME.accent}
             />
 
+            <Text style={s.fieldLabel}>TRẠNG THÁI TÙY CHỈNH</Text>
+            <TextInput
+              style={s.fieldInput}
+              value={statusText}
+              onChangeText={setStatusText}
+              placeholder="Đang làm gì đó... (giống Discord)"
+              placeholderTextColor={THEME.textMuted}
+              maxLength={128}
+              selectionColor={THEME.accent}
+            />
+
             <View style={s.sheetBtns}>
               <TouchableOpacity style={s.cancelBtn} onPress={() => setEditModal(false)}>
                 <Text style={s.cancelBtnText}>Hủy</Text>
@@ -593,7 +607,7 @@ export default function ProfileScreen({ navigation }) {
               <TouchableOpacity
                 style={[s.saveBtn, saving && { opacity: 0.65 }]}
                 disabled={saving}
-                onPress={() => saveProfile({ displayName: displayName.trim(), bio: bio.trim() })}
+                onPress={() => saveProfile({ displayName: displayName.trim(), bio: bio.trim(), statusText: statusText.trim() })}
               >
                 {saving ? (
                   <ActivityIndicator color="#fff" size="small" />
@@ -820,6 +834,7 @@ const s = StyleSheet.create({
   nameBlock: { marginBottom: 8 },
   displayName: { fontSize: 22, fontWeight: '800', letterSpacing: 0.2 },
   handle: { fontSize: 13, color: THEME.textMuted, marginTop: 1 },
+  statusTextLine: { fontSize: 12, color: THEME.textMuted, fontStyle: 'italic', marginTop: 3 },
 
   statusChip: {
     flexDirection: 'row',
