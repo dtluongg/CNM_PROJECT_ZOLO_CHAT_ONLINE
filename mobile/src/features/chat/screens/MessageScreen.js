@@ -242,7 +242,7 @@ export default function MessageScreen({ route, navigation }) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSec, setRecordingSec] = useState(0);
   const [typingUser, setTypingUser] = useState(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0); 
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [reactionTypes, setReactionTypes] = useState([]);
 
   const flatRef = useRef(null);
@@ -258,6 +258,26 @@ export default function MessageScreen({ route, navigation }) {
     messageApi.getReactionTypes()
       .then(res => setReactionTypes(res.data.data))
       .catch(err => console.error('getReactionTypes error:', err));
+  }, []);
+
+  // ── Keyboard listener (fixes Android keyboard overlap) ─────────────────
+  useEffect(() => {
+    const showEvent = Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow';
+    const hideEvent = Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide';
+
+    const onShow = (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      setShowEmoji(false); // ẩn emoji picker khi bàn phím hiện
+    };
+    const onHide = () => setKeyboardHeight(0);
+
+    const subShow = Keyboard.addListener(showEvent, onShow);
+    const subHide = Keyboard.addListener(hideEvent, onHide);
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
   }, []);
 
   // ── Keyboard listener (fixes Android keyboard overlap) ─────────────────
@@ -574,6 +594,7 @@ export default function MessageScreen({ route, navigation }) {
     inputRef.current?.focus();
   };
 
+
   const handleReact = async (msg, emoji) => {
     try {
       const mId = msg._id || msg.id;
@@ -583,6 +604,7 @@ export default function MessageScreen({ route, navigation }) {
       console.error('handleReact error:', err);
     }
   };
+
 
   // ── Build display list ─────────────────────────────────────────────────
   const displayItems = [];

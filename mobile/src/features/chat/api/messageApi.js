@@ -11,9 +11,9 @@ import apiClient from '../../../services/apiClient';
 // Content-Type without boundary breaks browser multipart encoding).
 const rnUploadConfig = Platform.OS !== 'web'
   ? {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      transformRequest: [(data) => data],
-    }
+    headers: { 'Content-Type': 'multipart/form-data' },
+    transformRequest: [(data) => data],
+  }
   : {};
 
 const messageApi = {
@@ -40,7 +40,7 @@ const messageApi = {
     apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId }),
 
   uploadVoice: (formData) => apiClient.post('/voice/upload', formData, rnUploadConfig),
-  uploadFile:  (formData) => apiClient.post('/uploads/file',  formData, rnUploadConfig),
+  uploadFile: (formData) => apiClient.post('/uploads/file', formData, rnUploadConfig),
   uploadImage: (formData) => apiClient.post('/uploads/image', formData, rnUploadConfig),
 
   // REACTION API
@@ -51,6 +51,7 @@ const messageApi = {
 
   getMessageReactions: (messageId) =>
     apiClient.get(`/reactions/${messageId}`),
+
 };
 
 export default messageApi;
