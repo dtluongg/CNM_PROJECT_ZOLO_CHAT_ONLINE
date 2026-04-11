@@ -3,6 +3,7 @@ import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCir
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
 import { X } from 'lucide-react'; // Dùng cho modal
+import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 
 
 const AVATAR_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#fee75c', '#ed4245', '#9b59b6', '#e67e22'];
@@ -561,6 +562,7 @@ export default function ChatArea({
   setMessages,
   onViewProfile,
 }) {
+  const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
   const [openMenuId, setOpenMenuId] = useState(null);
   const [reactionTypes, setReactionTypes] = useState([]);
   const [showReactionList, setShowReactionList] = useState(null); // msgId
@@ -715,9 +717,38 @@ export default function ChatArea({
     });
   });
 
+  // Live presence cho DM — không dùng conversation.online (static)
+  const dmOnline = conversation.type === 'dm' && conversation.otherUserId
+    ? isUserOnline(conversation.otherUserId)
+    : (conversation.online ?? false);
+
+  const dmStatus = conversation.type === 'dm' && conversation.otherUserId
+    ? getPresenceStatus(conversation.otherUserId)
+    : null;
+
+  const STATUS_LABEL = {
+    online: 'Đang hoạt động',
+    idle:   'Vắng mặt',
+    dnd:    'Không làm phiền',
+  };
+  const STATUS_COLOR_MAP = {
+    online: '#3ba55c',
+    idle:   '#faa61a',
+    dnd:    '#ed4245',
+  };
+
   const onlineStatus = conversation.type === 'dm'
-    ? (conversation.online ? 'Online' : 'Offline')
+    ? (dmOnline
+        ? (STATUS_LABEL[dmStatus] || 'Đang hoạt động')
+        : (() => {
+            const ls = conversation.otherUserId ? getLastSeen(conversation.otherUserId) : null;
+            return ls ? formatLastSeen(ls) : 'Ngoại tuyến';
+          })())
     : `${conversation.memberCount || conversation.members || 0} thành viên`;
+
+  const headerDotColor = conversation.type === 'dm'
+    ? (dmOnline ? (STATUS_COLOR_MAP[dmStatus] || '#3ba55c') : '#80848e')
+    : null;
 
   return (
     <div style={{
@@ -756,7 +787,7 @@ export default function ChatArea({
                 position: 'absolute', bottom: 0, right: 0,
                 width: isMobile ? 11 : 10, height: isMobile ? 11 : 10,
                 borderRadius: '50%',
-                background: conversation.online ? '#3ba55c' : '#80848e',
+                background: headerDotColor || '#80848e',
                 border: '2px solid var(--bg-secondary)',
               }} />
             )}
@@ -767,7 +798,7 @@ export default function ChatArea({
               {conversation.type === 'group' && <span style={{ color: 'var(--text-muted)', marginRight: 2 }}>#</span>}
               {conversation.name}
             </div>
-            <div style={{ fontSize: 11, color: conversation.online ? '#3ba55c' : 'var(--text-muted)', lineHeight: 1 }}>
+            <div style={{ fontSize: 11, color: dmOnline ? (STATUS_COLOR_MAP[dmStatus] || '#3ba55c') : 'var(--text-muted)', lineHeight: 1 }}>
               {onlineStatus}
             </div>
           </div>

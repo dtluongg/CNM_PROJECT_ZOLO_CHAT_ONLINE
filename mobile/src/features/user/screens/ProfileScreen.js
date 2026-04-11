@@ -223,7 +223,7 @@ export default function ProfileScreen({ navigation }) {
     setSaving(true);
 
     try {
-      const res = await apiClient.patch('/auth/update-profile', data);
+      const res = await apiClient.patch('/users/update-profile', data);
       const u = res.data.user;
 
       setProfile(u);

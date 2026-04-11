@@ -13,8 +13,8 @@ const Conversation           = require('../models/conversationModel');
 const ConversationMember     = require('../models/conversationMemberModel');
 const MessageReaction        = require('../models/messageReactionModel');
 const MessageRead            = require('../models/messageReadModel');
+const Friendship             = require('../models/friendshipModel');
 const { getIO }              = require('../socket/socketManager');
-
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -77,6 +77,28 @@ const sendMessage = async (req, res) => {
         }
 
         await requireMembership(conversationId, userId);
+
+        // ── Block check cho DM: nếu một trong hai đã chặn nhau → từ chối ──
+        const conv = await Conversation.findById(conversationId).select('type');
+        if (conv?.type === 'dm') {
+            // Tìm thành viên còn lại của DM
+            const otherMember = await ConversationMember.findOne({
+                conversationId,
+                userId: { $ne: userId },
+                leftAt: null,
+            }).select('userId');
+
+            if (otherMember) {
+                const otherId = otherMember.userId.toString();
+                const [id1, id2] = [userId, otherId].sort();
+                const friendship = await Friendship.findOne({ userId1: id1, userId2: id2 });
+                if (friendship?.isBlockedBy) {
+                    return res.status(403).json({
+                        message: 'Không thể gửi tin nhắn vì một trong hai người đã chặn nhau.',
+                    });
+                }
+            }
+        }
 
         const { type = 'text', content = '', attachmentId, replyToMessageId } = req.body;
 
@@ -201,7 +223,7 @@ const getMessages = async (req, res) => {
         const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit)  || 30));
         const before = req.query.before;
 
-        const filter = { conversationId, deleted: false };
+        const filter = { conversationId, deleted: false, revoked: false };
         if (isValidId(before)) {
             filter._id = { $lt: new mongoose.Types.ObjectId(before) };
         }
@@ -212,55 +234,20 @@ const getMessages = async (req, res) => {
             .populate('senderId', 'displayName avatar')
             .lean();
 
-        const msgIds = raw.map(m => m._id);
-        const [allReactions, allReads] = await Promise.all([
-            MessageReaction.find({ messageId: { $in: msgIds } }).lean(),
-            MessageRead.find({ messageId: { $in: msgIds } }).populate('userId', 'displayName avatar').lean()
-        ]);
-
         // Đảo ngược để hiển thị theo chiều thời gian (cũ → mới)
-        const messages = raw.reverse().map(msg => {
-            // Lọc reaction của tin nhắn này
-            const reactions = allReactions.filter(r => r.messageId.toString() === msg._id.toString());
-            
-            // Lọc danh sách người đã đọc
-            const readBy = allReads
-                .filter(r => r.messageId.toString() === msg._id.toString())
-                .map(r => ({
-                    userId: r.userId?._id || r.userId,
-                    displayName: r.userId?.displayName || 'Unknown',
-                    avatar: r.userId?.avatar || null,
-                    readAt: r.createdAt
-                }));
-
-            // Gom nhóm reaction: { "❤️": 2, "👍": 5 }
-            const reactionCounts = reactions.reduce((acc, curr) => {
-                acc[curr.emoji] = (acc[curr.emoji] || 0) + 1;
-                return acc;
-            }, {});
-
-            // Reaction của chính user đang gọi API
-            const myReaction = reactions.find(r => r.userId.toString() === userId)?.emoji || null;
-
-            return {
-                _id:              msg._id,
-                conversationId:   msg.conversationId,
-                senderId:         msg.senderId?._id    || msg.senderId,
-                senderName:       msg.senderId?.displayName || 'Unknown',
-                avatar:           msg.senderId?.avatar  || null,
-                type:             msg.type,
-                content:          msg.content,
-                payload:          msg.payload || {},
-                replyToMessageId: msg.replyToMessageId || null,
-                edited:           msg.edited,
-                revoked:          msg.revoked, 
-                createdAt:        msg.createdAt,
-                reactions:        reactionCounts,
-                myReaction:       myReaction,
-                readBy:           readBy // Trả về danh sách người đã đọc
-            };
-        });
-
+        const messages = raw.reverse().map(msg => ({
+            _id:              msg._id,
+            conversationId:   msg.conversationId,
+            senderId:         msg.senderId?._id    || msg.senderId,
+            senderName:       msg.senderId?.displayName || 'Unknown',
+            avatar:           msg.senderId?.avatar  || null,
+            type:             msg.type,
+            content:          msg.content,
+            payload:          msg.payload || {},
+            replyToMessageId: msg.replyToMessageId || null,
+            edited:           msg.edited,
+            createdAt:        msg.createdAt,
+        }));
 
         return res.status(200).json({ messages, hasMore: raw.length === limit });
     } catch (err) {
@@ -323,195 +310,4 @@ const getAttachments = async (req, res) => {
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════
-//  PATCH /backend/api/messages/:messageId/revoke
-//  Thu hồi tin nhắn của chính mình.
-// ═════════════════════════════════════════════════════════════════════════
-const revokeMessage = async (req, res) => {
-    try {
-        const userId = req.user._id.toString();
-        const { messageId } = req.params;
-
-        if (!isValidId(messageId)) {
-            return res.status(400).json({ message: 'messageId không hợp lệ' });
-        }
-
-        const message = await Message.findById(messageId);
-        if (!message) {
-            return res.status(404).json({ message: 'Tin nhắn không tồn tại' });
-        }
-
-        // Chỉ chủ nhân tin nhắn mới được thu hồi
-        if (message.senderId.toString() !== userId) {
-            return res.status(403).json({ message: 'Bạn không có quyền thu hồi tin nhắn này' });
-        }
-
-        if (message.revoked) {
-            return res.status(400).json({ message: 'Tin nhắn đã được thu hồi trước đó' });
-        }
-
-        // Cập nhật trạng thái thu hồi
-        message.revoked = true;
-        message.revokedAt = new Date();
-        message.revokedBy = userId;
-        await message.save();
-
-        // ── Cập nhật lastMessage của conversation nếu cần ─────────────
-        const conversation = await Conversation.findById(message.conversationId);
-        if (conversation && conversation.lastMessageId?.toString() === messageId) {
-            await Conversation.findByIdAndUpdate(message.conversationId, {
-                lastMessagePreview: '[Tin nhắn đã được thu hồi]'
-            });
-        }
-
-        // ── Phát real-time tới tất cả thành viên ─────────────────────
-        const allMembers = await ConversationMember.find(
-            { conversationId: message.conversationId, leftAt: null },
-            { userId: 1 }
-        );
-
-        const io = getIO();
-        allMembers.forEach(({ userId: memberId }) => {
-            io.to(`user:${memberId.toString()}`).emit('chat:message-revoked', {
-                conversationId: message.conversationId,
-                messageId: message._id,
-            });
-        });
-
-        return res.status(200).json({ message: 'Thu hồi tin nhắn thành công', data: { _id: message._id, revoked: true } });
-    } catch (err) {
-        console.error('revokeMessage error:', err);
-        return res.status(500).json({ message: 'Lỗi server khi thu hồi tin nhắn' });
-    }
-};
-
-// ═════════════════════════════════════════════════════════════════════════
-//  PATCH /backend/api/messages/:messageId
-//  Chỉnh sửa nội dung tin nhắn văn bản.
-// ═════════════════════════════════════════════════════════════════════════
-const editMessage = async (req, res) => {
-    try {
-        const userId = req.user._id.toString();
-        const { messageId } = req.params;
-        const { content } = req.body;
-
-        if (!isValidId(messageId)) {
-            return res.status(400).json({ message: 'messageId không hợp lệ' });
-        }
-
-        if (!content || !content.trim()) {
-            return res.status(400).json({ message: 'Nội dung tin nhắn không được để trống' });
-        }
-
-        const message = await Message.findById(messageId);
-        if (!message) {
-            return res.status(404).json({ message: 'Tin nhắn không tồn tại' });
-        }
-
-        // Chỉ chủ nhân tin nhắn mới được sửa
-        if (message.senderId.toString() !== userId) {
-            return res.status(403).json({ message: 'Bạn không có quyền chỉnh sửa tin nhắn này' });
-        }
-
-        if (message.revoked || message.deleted) {
-            return res.status(400).json({ message: 'Không thể chỉnh sửa tin nhắn đã bị thu hồi hoặc xóa' });
-        }
-
-        if (message.type !== 'text') {
-            return res.status(400).json({ message: 'Chỉ hỗ trợ chỉnh sửa tin nhắn văn bản' });
-        }
-
-        // Cập nhật
-        message.content = content.trim();
-        message.edited  = true;
-        message.editedAt = new Date();
-        await message.save();
-
-        // ── Cập nhật lastMessage của conversation nếu cần ─────────────
-        const conversation = await Conversation.findById(message.conversationId);
-        if (conversation && conversation.lastMessageId?.toString() === messageId) {
-            const shortPreview = message.content.length > 60 ? message.content.slice(0, 60) + '…' : message.content;
-            await Conversation.findByIdAndUpdate(message.conversationId, {
-                lastMessagePreview: shortPreview
-            });
-        }
-
-        // ── Phát real-time tới tất cả thành viên ─────────────────────
-        const allMembers = await ConversationMember.find(
-            { conversationId: message.conversationId, leftAt: null },
-            { userId: 1 }
-        );
-
-        const io = getIO();
-        const formatted = formatMsg(message, req.user);
-
-        allMembers.forEach(({ userId: memberId }) => {
-            io.to(`user:${memberId.toString()}`).emit('chat:message-edited', {
-                conversationId: message.conversationId,
-                message: formatted,
-            });
-        });
-
-        return res.status(200).json({ message: 'Chỉnh sửa tin nhắn thành công', data: formatted });
-    } catch (err) {
-        console.error('editMessage error:', err);
-        return res.status(500).json({ message: 'Lỗi server khi chỉnh sửa tin nhắn' });
-    }
-};
-
-// ═════════════════════════════════════════════════════════════════════════
-//  POST /backend/api/messages/:conversationId/read/:messageId
-//  Đánh dấu tin nhắn là đã đọc.
-// ═════════════════════════════════════════════════════════════════════════
-const markAsRead = async (req, res) => {
-    try {
-        const userId = req.user._id.toString();
-        const { conversationId, messageId } = req.params;
-
-        if (!isValidId(conversationId) || !isValidId(messageId)) {
-            return res.status(400).json({ message: 'ID không hợp lệ' });
-        }
-
-        await requireMembership(conversationId, userId);
-
-        // 1. Lưu trạng thái đã đọc (upsert để tránh duplicate)
-        await MessageRead.findOneAndUpdate(
-            { messageId, userId },
-            { conversationId, messageId, userId },
-            { upsert: true, new: true }
-        );
-
-        // 2. Kiểm tra nếu tin nhắn này là cuối cùng thì reset unreadCount
-        const conv = await Conversation.findById(conversationId);
-        if (conv && conv.lastMessageId?.toString() === messageId) {
-            await ConversationMember.findOneAndUpdate(
-                { conversationId, userId },
-                { unreadCount: 0 }
-            );
-        }
-
-        // 3. Phát socket thông báo cho mọi người trong conversation room
-        const io = getIO();
-        io.to(`user:${userId}`).emit('chat:unread-reset', { conversationId }); // Riêng cho mình để update unread ở sidebar
-        
-        // Broadcast tới những người khác
-        const allMembers = await ConversationMember.find({ conversationId, leftAt: null }, { userId: 1 });
-        allMembers.forEach(({ userId: memberId }) => {
-            io.to(`user:${memberId.toString()}`).emit('chat:message-read', {
-                conversationId,
-                messageId,
-                userId,
-                displayName: req.user.displayName,
-                avatar: req.user.avatar,
-                readAt: new Date()
-            });
-        });
-
-        return res.status(200).json({ message: 'Đã đánh dấu đã đọc' });
-    } catch (err) {
-        console.error('markAsRead error:', err);
-        return res.status(500).json({ message: 'Lỗi server khi đánh dấu đã đọc' });
-    }
-};
-
-module.exports = { sendMessage, getMessages, getAttachments, revokeMessage, editMessage, markAsRead };
+module.exports = { sendMessage, getMessages, getAttachments };

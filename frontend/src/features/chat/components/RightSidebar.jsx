@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { usePresence } from '../../../context/PresenceContext';
+import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 import {
   X, Image, FileText, MessageCircle, BellOff, Ban, LogOut, Download, Phone,
   Shield, UserPlus, Crown, UserCog, Trash2,
@@ -121,7 +121,7 @@ export default function RightSidebar({
   onGroupUpdated,
 }) {
   const [tab, setTab] = useState('info');
-  const { isUserOnline, getPresenceStatus } = usePresence();
+  const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
   const { user } = useAuth();
 
   const [members, setMembers] = useState([]);
@@ -489,6 +489,15 @@ export default function RightSidebar({
                     }} />
                     {statusConfig ? statusConfig.label : 'Offline'}
                   </div>
+                  {/* Last seen khi offline */}
+                  {!isOnline && conversation?.otherUserId && (() => {
+                    const ls = getLastSeen(conversation.otherUserId);
+                    return ls ? (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        Hoạt động {formatLastSeen(ls)}
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               ) : (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>

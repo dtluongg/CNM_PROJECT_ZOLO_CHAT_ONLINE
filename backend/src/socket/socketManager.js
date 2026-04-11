@@ -2,6 +2,8 @@ const { Server } = require('socket.io');
 const jwt         = require('jsonwebtoken');
 const { supabase } = require('../config/supabase');
 const userModel   = require('../models/userModel');
+const Presence    = require('../models/presenceModel');
+const mongoose    = require('mongoose');
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Singleton io instance
@@ -74,14 +76,45 @@ const initSocket = (httpServer) => {
         socket.join(`user:${userId}`);
 
         // Thông báo user vừa online cho tất cả clients khác
+        // invisible → hiện như offline với người khác
         if (isFirstSocket) {
-            socket.broadcast.emit('presence:online', { userId });
+            const chosenStatus = socket.user.status || 'online';
+            const broadcastStatus = chosenStatus === 'invisible' ? 'offline' : chosenStatus;
+            if (chosenStatus !== 'invisible') {
+                socket.broadcast.emit('presence:online', { userId, status: broadcastStatus });
+            }
+            // Lưu trạng thái online vào DB (fire-and-forget)
+            Presence.findOneAndUpdate(
+                { userId: new mongoose.Types.ObjectId(userId) },
+                { status: chosenStatus, lastActiveAt: new Date() },
+                { upsert: true, new: true }
+            ).catch(e => console.error('[Presence] update online error:', e));
         }
 
         // Client yêu cầu danh sách online hiện tại (gọi 1 lần khi kết nối)
-        socket.on('presence:subscribe', () => {
+        socket.on('presence:subscribe', async () => {
+            // Lấy status của từng user đang online từ DB (hoặc User model)
+            const onlineIds = [...onlineUsers.keys()];
+            let statusMap = {};
+            try {
+                const users = await userModel.find(
+                    { _id: { $in: onlineIds } },
+                    { _id: 1, status: 1 }
+                ).lean();
+                users.forEach(u => {
+                    const st = u.status || 'online';
+                    // invisible users không xuất hiện trong danh sách online của người khác
+                    if (st !== 'invisible') {
+                        statusMap[u._id.toString()] = st;
+                    }
+                });
+            } catch (_) {
+                // fallback: tất cả là online
+                onlineIds.forEach(id => { statusMap[id] = 'online'; });
+            }
             socket.emit('presence:online-list', {
-                userIds: [...onlineUsers.keys()],
+                userIds: Object.keys(statusMap),
+                statusMap,
             });
         });
 
@@ -96,8 +129,13 @@ const initSocket = (httpServer) => {
                 sockets.delete(socket.id);
                 if (sockets.size === 0) {
                     onlineUsers.delete(userId);
-                    // Thông báo user vừa offline cho tất cả clients
-                    io.emit('presence:offline', { userId });
+                    const lastSeen = new Date().toISOString();
+                    io.emit('presence:offline', { userId, lastSeen });
+                    Presence.findOneAndUpdate(
+                        { userId: new mongoose.Types.ObjectId(userId) },
+                        { status: 'offline', lastActiveAt: new Date() },
+                        { upsert: true }
+                    ).catch(e => console.error('[Presence] update offline error:', e));
                 }
             }
         });
