@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  FlatList, TextInput, KeyboardAvoidingView, Platform,
+  FlatList, TextInput, Platform, Keyboard,
   Modal, StatusBar, Pressable, Alert,
 } from 'react-native';
 import { Audio } from 'expo-av';
@@ -42,8 +42,8 @@ const Avatar = ({ name, avatar, size = 36, online = null, THEME, styles }) => {
       {avatar
         ? <Image source={{ uri: avatar }} style={{ width: size, height: size, borderRadius: size / 2 }} />
         : <View style={[styles.avatarCircle, { width: size, height: size, borderRadius: size / 2, backgroundColor: bg }]}>
-            <Text style={[styles.avatarText, { fontSize: size * 0.38 }]}>{getInitials(name)}</Text>
-          </View>
+          <Text style={[styles.avatarText, { fontSize: size * 0.38 }]}>{getInitials(name)}</Text>
+        </View>
       }
       {online !== null && (
         <View style={[styles.onlineDot, {
@@ -80,7 +80,10 @@ const VoicePlayer = ({ url, duration, isMine, THEME }) => {
         setIsPlaying(false);
       } else {
         if (!soundRef.current) {
-          await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false });
+          // setAudioModeAsync is iOS/Android only; skip on web
+          if (Platform.OS !== 'web') {
+            await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false });
+          }
           const { sound } = await Audio.Sound.createAsync({ uri: url });
           soundRef.current = sound;
           sound.setOnPlaybackStatusUpdate((status) => {
@@ -100,9 +103,7 @@ const VoicePlayer = ({ url, duration, isMine, THEME }) => {
   };
 
   useEffect(() => {
-    return () => {
-      soundRef.current?.unloadAsync();
-    };
+    return () => { soundRef.current?.unloadAsync(); };
   }, []);
 
   return (
@@ -119,25 +120,28 @@ const VoicePlayer = ({ url, duration, isMine, THEME }) => {
 // ─────────────────────────────────────────────
 // Message bubble
 // ─────────────────────────────────────────────
-const SENDER_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245'];
+const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245'];
 const getSenderColor = (name, THEME) =>
   name ? SENDER_COLORS[name.charCodeAt(0) % SENDER_COLORS.length] : THEME.accent;
 
-const MessageBubble = ({ msg, isMine, showHeader, onLongPress, THEME, styles }) => {
+const MessageBubble = ({ msg, isMine, showHeader, onLongPress, currentUserId, THEME, styles }) => {
   const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName, THEME);
-  const bubbleBg    = isMine ? THEME.bubbleSelf : THEME.bubbleOther;
-  const bubbleText  = isMine ? '#ffffff' : THEME.textPrimary;
+  const bubbleBg = isMine ? THEME.bubbleSelf : THEME.bubbleOther;
+  const bubbleText = isMine ? '#ffffff' : THEME.textPrimary;
 
   const borderRadius = { borderRadius: 18 };
   if (isMine) {
-    borderRadius.borderTopRightRadius    = showHeader ? 4 : 18;
+    borderRadius.borderTopRightRadius = showHeader ? 4 : 18;
     borderRadius.borderBottomRightRadius = 4;
   } else {
-    borderRadius.borderTopLeftRadius    = showHeader ? 4 : 18;
+    borderRadius.borderTopLeftRadius = showHeader ? 4 : 18;
     borderRadius.borderBottomLeftRadius = 4;
   }
 
   const renderContent = () => {
+    if (msg.revoked || msg.recalled) {
+      return <Text style={[styles.bubbleText, { color: bubbleText, fontStyle: 'italic', opacity: 0.7 }]}>Tin nhắn đã được thu hồi</Text>;
+    }
     if (msg.type === 'image') {
       return (
         <Image
@@ -191,6 +195,21 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress, THEME, styles }) 
             {renderContent()}
           </View>
         </Pressable>
+
+        {/* Reactions Summary */}
+        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+          <View style={[
+            styles.reactionSummary,
+            isMine ? { right: 12 } : { left: 12 }
+          ]}>
+            {Object.entries(msg.reactions).map(([emoji, count], idx) => (
+              <View key={idx} style={styles.reactionItem}>
+                <Text style={styles.reactionEmoji}>{emoji}</Text>
+                {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -200,9 +219,9 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress, THEME, styles }) 
 // Emoji list
 // ─────────────────────────────────────────────
 const EMOJIS = [
-  '😀','😂','😍','🥺','😭','😊','😎','🤔',
-  '😅','🥰','😢','😡','😴','🤗','😏','🙄',
-  '❤️','🔥','✨','🎉','👍','👏','🙏','💯',
+  '😀', '😂', '😍', '🥺', '😭', '😊', '😎', '🤔',
+  '😅', '🥰', '😢', '😡', '😴', '🤗', '😏', '🙄',
+  '❤️', '🔥', '✨', '🎉', '👍', '👏', '🙏', '💯',
 ];
 
 // ─────────────────────────────────────────────
@@ -216,23 +235,49 @@ export default function MessageScreen({ route, navigation }) {
 
   const currentUserId = user?._id?.toString() || null;
 
-  const [messages, setMessages]     = useState([]);
-  const [text, setText]             = useState('');
-  const [showEmoji, setShowEmoji]   = useState(false);
-  const [actionMsg, setActionMsg]   = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState('');
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [actionMsg, setActionMsg] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSec, setRecordingSec] = useState(0);
   const [typingUser, setTypingUser] = useState(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0); 
+  const [reactionTypes, setReactionTypes] = useState([]);
 
-  const flatRef          = useRef(null);
-  const inputRef         = useRef(null);
-  const socketRef        = useRef(null);
-  const recordingRef     = useRef(null);
+  const flatRef = useRef(null);
+  const inputRef = useRef(null);
+  const socketRef = useRef(null);
+  const recordingRef = useRef(null);
   const recordingTimerRef = useRef(null);
-  const typingTimerRef   = useRef(null);
+  const typingTimerRef = useRef(null);
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
+    // Load reaction types
+    messageApi.getReactionTypes()
+      .then(res => setReactionTypes(res.data.data))
+      .catch(err => console.error('getReactionTypes error:', err));
+  }, []);
+
+  // ── Keyboard listener (fixes Android keyboard overlap) ─────────────────
+  useEffect(() => {
+    const showEvent = Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow';
+    const hideEvent = Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide';
+
+    const onShow = (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      setShowEmoji(false); // ẩn emoji picker khi bàn phím hiện
+    };
+    const onHide = () => setKeyboardHeight(0);
+
+    const subShow = Keyboard.addListener(showEvent, onShow);
+    const subHide = Keyboard.addListener(hideEvent, onHide);
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
   }, []);
 
   // ── Load messages from API ─────────────────────────────────────────────
@@ -240,7 +285,14 @@ export default function MessageScreen({ route, navigation }) {
     (async () => {
       try {
         const res = await messageApi.getMessages(conversation.id);
-        const msgs = (res.data.messages || []).map(normalizeMsg);
+        const raw = (res.data.messages || []).map(normalizeMsg);
+        const seen = new Set();
+        const msgs = raw.filter(m => {
+          const k = m._id?.toString();
+          if (!k || seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
         setMessages(msgs);
       } catch (err) {
         console.error('Load messages error:', err);
@@ -282,6 +334,24 @@ export default function MessageScreen({ route, navigation }) {
       setTypingUser(null);
     });
 
+    socket.on('chat:message-reaction', (data) => {
+      const { conversationId: cid, messageId, userId, emoji, action, reactions: serverReactions } = data;
+      if (cid !== conversation.id) return;
+
+      setMessages(prev => prev.map(m => {
+        const mId = m._id?.toString();
+        if (mId !== messageId) return m;
+
+        const newReactions = serverReactions || m.reactions || {};
+        let newMyReaction = m.myReaction;
+        if (userId === currentUserId) {
+          newMyReaction = (action === 'removed') ? null : emoji;
+        }
+
+        return { ...m, reactions: newReactions, myReaction: newMyReaction };
+      }));
+    });
+
     return () => {
       socket.emit('chat:leave', { conversationId: conversation.id });
       socket.disconnect();
@@ -300,6 +370,14 @@ export default function MessageScreen({ route, navigation }) {
     return () => clearTimeout(t);
   }, [messages]);
 
+  // scroll khi keyboard hiện để tin nhắn cuối không bị che
+  useEffect(() => {
+    if (keyboardHeight > 0) {
+      const t = setTimeout(scrollToBottom, 80);
+      return () => clearTimeout(t);
+    }
+  }, [keyboardHeight]);
+
   // ── Typing indicator ───────────────────────────────────────────────────
   const emitTyping = useCallback(() => {
     if (!socketRef.current) return;
@@ -316,7 +394,7 @@ export default function MessageScreen({ route, navigation }) {
     if (!trimmed) return;
 
     const tempId = `temp_${Date.now()}`;
-    const now    = new Date().toISOString();
+    const now = new Date().toISOString();
     const tempMsg = {
       _id: tempId, senderId: currentUserId,
       senderName: user?.displayName || 'Tôi',
@@ -334,10 +412,9 @@ export default function MessageScreen({ route, navigation }) {
     }
 
     try {
-      const res    = await messageApi.sendText(conversation.id, trimmed);
-      const real   = normalizeMsg(res.data.data);
+      const res = await messageApi.sendText(conversation.id, trimmed);
+      const real = normalizeMsg(res.data.data);
       const realId = real._id?.toString();
-      // Remove any socket-delivered copy, then replace temp → prevent duplicate keys
       setMessages(prev => {
         const cleaned = prev.filter(m => m._id?.toString() !== realId);
         return cleaned.map(m => m._id === tempId ? real : m);
@@ -348,8 +425,12 @@ export default function MessageScreen({ route, navigation }) {
     }
   };
 
-  // ── Voice recording ───────────────────────────────────────────────────
+  // ── Voice recording (native only — expo-av Recording not supported on web) ──
   const startRecording = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Thông báo', 'Ghi âm chưa được hỗ trợ trên web.');
+      return;
+    }
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
@@ -382,7 +463,9 @@ export default function MessageScreen({ route, navigation }) {
       const recording = recordingRef.current;
       if (!recording) return;
       await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      if (Platform.OS !== 'web') {
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      }
 
       const uri = recording.getURI();
       recordingRef.current = null;
@@ -391,10 +474,11 @@ export default function MessageScreen({ route, navigation }) {
       fd.append('voice', { uri, name: 'voice.m4a', type: 'audio/mp4' });
       fd.append('duration', String(duration));
 
-      const up  = await messageApi.uploadVoice(fd);
+      const up = await messageApi.uploadVoice(fd);
       const res = await messageApi.sendVoice(conversation.id, up.data.voice.fileId);
       const msg = normalizeMsg(res.data.data);
-      setMessages(prev => [...prev, msg]);
+      const id = msg._id?.toString();
+      setMessages(prev => prev.some(m => m._id?.toString() === id) ? prev : [...prev, msg]);
     } catch (err) {
       console.error('stopRecording error:', err);
     }
@@ -408,35 +492,51 @@ export default function MessageScreen({ route, navigation }) {
       recordingRef.current = null;
       if (recording) {
         await recording.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        if (Platform.OS !== 'web') {
+          await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        }
       }
-    } catch {}
+    } catch { }
   };
 
   // ── Send image ────────────────────────────────────────────────────────
   const handlePickImage = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh.');
-        return;
+      // On web, permissions are not required (browser file picker handles it)
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        // 'limited' = iOS user granted access to selected photos only – still allow picker
+        if (status !== 'granted' && status !== 'limited') {
+          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh trong Cài đặt.');
+          return;
+        }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         quality: 0.8,
       });
-      if (result.canceled) return;
+      if (result.canceled || !result.assets?.length) return;
 
       const asset = result.assets[0];
       const fd = new FormData();
-      fd.append('file', { uri: asset.uri, name: asset.fileName || 'image.jpg', type: asset.mimeType || 'image/jpeg' });
+      if (Platform.OS === 'web') {
+        // On web, asset.uri is a blob: or data: URL – convert to Blob for browser FormData
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        fd.append('file', blob, asset.fileName || 'image.jpg');
+      } else {
+        // React Native FormData accepts { uri, name, type } objects
+        fd.append('file', { uri: asset.uri, name: asset.fileName || 'image.jpg', type: asset.mimeType || 'image/jpeg' });
+      }
 
-      const up  = await messageApi.uploadImage(fd);
+      const up = await messageApi.uploadImage(fd);
       const res = await messageApi.sendImage(conversation.id, up.data.file.fileId);
       const msg = normalizeMsg(res.data.data);
-      setMessages(prev => [...prev, msg]);
+      const id = msg._id?.toString();
+      setMessages(prev => prev.some(m => m._id?.toString() === id) ? prev : [...prev, msg]);
     } catch (err) {
       console.error('handlePickImage error:', err);
+      Alert.alert('Lỗi', 'Không thể gửi ảnh. Vui lòng thử lại.');
     }
   };
 
@@ -444,18 +544,27 @@ export default function MessageScreen({ route, navigation }) {
   const handlePickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
-      if (result.canceled) return;
+      if (result.canceled || !result.assets?.length) return;
 
       const asset = result.assets[0];
       const fd = new FormData();
-      fd.append('file', { uri: asset.uri, name: asset.name, type: asset.mimeType || 'application/octet-stream' });
+      if (Platform.OS === 'web') {
+        // On web, asset.uri is a blob: URL – convert to Blob for browser FormData
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        fd.append('file', blob, asset.name);
+      } else {
+        fd.append('file', { uri: asset.uri, name: asset.name, type: asset.mimeType || 'application/octet-stream' });
+      }
 
-      const up  = await messageApi.uploadFile(fd);
+      const up = await messageApi.uploadFile(fd);
       const res = await messageApi.sendFile(conversation.id, up.data.file.fileId);
       const msg = normalizeMsg(res.data.data);
-      setMessages(prev => [...prev, msg]);
+      const id = msg._id?.toString();
+      setMessages(prev => prev.some(m => m._id?.toString() === id) ? prev : [...prev, msg]);
     } catch (err) {
       console.error('handlePickFile error:', err);
+      Alert.alert('Lỗi', 'Không thể gửi file. Vui lòng thử lại.');
     }
   };
 
@@ -465,27 +574,42 @@ export default function MessageScreen({ route, navigation }) {
     inputRef.current?.focus();
   };
 
-  // ── Build display list ────────────────────────────────────────────────
+  const handleReact = async (msg, emoji) => {
+    try {
+      const mId = msg._id || msg.id;
+      if (!mId) return;
+      await messageApi.toggleReaction(mId.toString(), emoji);
+    } catch (err) {
+      console.error('handleReact error:', err);
+    }
+  };
+
+  // ── Build display list ─────────────────────────────────────────────────
   const displayItems = [];
+  const seenIds = new Set();
   messages.forEach((msg, i) => {
+    const msgKey = msg._id?.toString() || msg.id?.toString();
+    if (msgKey && seenIds.has(msgKey)) return;
+    if (msgKey) seenIds.add(msgKey);
+
     const prev = messages[i - 1];
-    const msgDate  = msg.time?.split(' ')[0];
+    const msgDate = msg.time?.split(' ')[0];
     const prevDate = prev?.time?.split(' ')[0];
     if (i === 0 || (msgDate && prevDate && msgDate !== prevDate && msg.time?.includes(' '))) {
       if (msg.time?.includes(' ')) {
-        displayItems.push({ type: 'date', label: msgDate, key: `date-${i}` });
+        displayItems.push({ type: 'date', label: msgDate, key: `date-${msgKey || i}` });
       }
     }
     const sameGroup = prev && prev.senderId === msg.senderId
       && !msg.time?.includes(' ') && !prev.time?.includes(' ');
     displayItems.push({
-      type: 'msg', msg, key: String(msg._id || msg.id || i),
+      type: 'msg', msg, key: `msg-${msgKey || i}`,
       isMine: msg.senderId === currentUserId,
       showHeader: !sameGroup,
     });
   });
 
-  const isOnline  = conversation.type === 'dm' ? (conversation.online ?? false) : null;
+  const isOnline = conversation.type === 'dm' ? (conversation.online ?? false) : null;
   const statusText = conversation.type === 'dm'
     ? (conversation.online ? 'Đang hoạt động' : 'Ngoại tuyến')
     : `${conversation.memberCount || conversation.members || 0} thành viên`;
@@ -533,20 +657,17 @@ export default function MessageScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* ── Messages ── */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
+      {/* ── Body: messages + input — dùng View thường, padding theo keyboardHeight ── */}
+      <View style={{ flex: 1 }}>
         <FlatList
           ref={flatRef}
           data={displayItems}
           keyExtractor={item => item.key}
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 8 }}
+          contentContainerStyle={{ paddingBottom: 8, flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={scrollToBottom}
+          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
           ListHeaderComponent={() => (
             <View style={msgStyles.introBox}>
               <View style={[msgStyles.introAvatar, { backgroundColor: getAvatarColor(conversation.name) }]}>
@@ -575,84 +696,90 @@ export default function MessageScreen({ route, navigation }) {
             item.type === 'date'
               ? <DateDivider label={item.label} styles={msgStyles} />
               : <MessageBubble
-                  msg={item.msg}
-                  isMine={item.isMine}
-                  showHeader={item.showHeader}
-                  onLongPress={setActionMsg}
-                  THEME={THEME}
-                  styles={msgStyles}
-                />
+                msg={item.msg}
+                isMine={item.isMine}
+                showHeader={item.showHeader}
+                onLongPress={setActionMsg}
+                currentUserId={currentUserId}
+                THEME={THEME}
+                styles={msgStyles}
+              />
           }
         />
 
-        {/* ── Emoji picker ── */}
-        {showEmoji && (
-          <View style={msgStyles.emojiPicker}>
-            <View style={msgStyles.emojiGrid}>
-              {EMOJIS.map(e => (
-                <TouchableOpacity key={e} onPress={() => insertEmoji(e)} style={msgStyles.emojiBtn}>
-                  <Text style={msgStyles.emojiChar}>{e}</Text>
-                </TouchableOpacity>
-              ))}
+        {/* ── Wrapper bọc emoji + input/recording, đẩy lên theo keyboardHeight ── */}
+        <View style={{ paddingBottom: keyboardHeight }}>
+
+          {/* ── Emoji picker ── */}
+          {showEmoji && (
+            <View style={msgStyles.emojiPicker}>
+              <View style={msgStyles.emojiGrid}>
+                {EMOJIS.map(e => (
+                  <TouchableOpacity key={e} onPress={() => insertEmoji(e)} style={msgStyles.emojiBtn}>
+                    <Text style={msgStyles.emojiChar}>{e}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* ── Recording bar ── */}
-        {isRecording ? (
-          <View style={msgStyles.recordingBar}>
-            <View style={msgStyles.recordingDot} />
-            <Text style={msgStyles.recordingTimer}>
-              {fmtDur(recordingSec)}
-            </Text>
-            <Text style={{ flex: 1, fontSize: 13, color: THEME.textMuted }}>Đang ghi âm...</Text>
-            <TouchableOpacity onPress={cancelRecording} style={msgStyles.inputBtn}>
-              <Text style={{ fontSize: 20 }}>✕</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={stopRecording} style={[msgStyles.sendBtn, { backgroundColor: '#ed4245' }]}>
-              <Text style={msgStyles.sendIcon}>↑</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          /* ── Input bar ── */
-          <View style={msgStyles.inputBar}>
-            <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickFile}>
-              <Text style={msgStyles.inputBtnIcon}>📎</Text>
-            </TouchableOpacity>
-
-            <View style={msgStyles.inputWrap}>
-              <TextInput
-                ref={inputRef}
-                style={msgStyles.textInput}
-                value={text}
-                onChangeText={(v) => { setText(v); if (v.trim()) emitTyping(); }}
-                placeholder={`Nhắn tin ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
-                placeholderTextColor={THEME.textMuted}
-                multiline
-                selectionColor={THEME.accent}
-              />
-              <TouchableOpacity onPress={() => setShowEmoji(v => !v)} style={msgStyles.emojiToggle}>
-                <Text style={{ fontSize: 20 }}>😊</Text>
+          {/* ── Recording bar ── */}
+          {isRecording ? (
+            <View style={msgStyles.recordingBar}>
+              <View style={msgStyles.recordingDot} />
+              <Text style={msgStyles.recordingTimer}>{fmtDur(recordingSec)}</Text>
+              <Text style={{ flex: 1, fontSize: 13, color: THEME.textMuted }}>Đang ghi âm...</Text>
+              <TouchableOpacity onPress={cancelRecording} style={msgStyles.inputBtn}>
+                <Text style={{ fontSize: 20 }}>✕</Text>
               </TouchableOpacity>
-            </View>
-
-            {text.trim().length > 0 ? (
-              <TouchableOpacity style={msgStyles.sendBtn} onPress={handleSend}>
+              <TouchableOpacity onPress={stopRecording} style={[msgStyles.sendBtn, { backgroundColor: '#ed4245' }]}>
                 <Text style={msgStyles.sendIcon}>↑</Text>
               </TouchableOpacity>
-            ) : (
-              <>
-                <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickImage}>
-                  <Text style={msgStyles.inputBtnIcon}>🖼️</Text>
+            </View>
+          ) : (
+            /* ── Input bar ── */
+            <View style={msgStyles.inputBar}>
+              <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickFile}>
+                <Text style={msgStyles.inputBtnIcon}>📎</Text>
+              </TouchableOpacity>
+
+              <View style={msgStyles.inputWrap}>
+                <TextInput
+                  ref={inputRef}
+                  style={msgStyles.textInput}
+                  value={text}
+                  onChangeText={(v) => { setText(v); if (v.trim()) emitTyping(); }}
+                  placeholder={`Nhắn tin ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
+                  placeholderTextColor={THEME.textMuted}
+                  multiline
+                  selectionColor={THEME.accent}
+                />
+                <TouchableOpacity onPress={() => setShowEmoji(v => !v)} style={msgStyles.emojiToggle}>
+                  <Text style={{ fontSize: 20 }}>😊</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={msgStyles.inputBtn} onPress={startRecording}>
-                  <Text style={msgStyles.inputBtnIcon}>🎤</Text>
+              </View>
+
+              {text.trim().length > 0 ? (
+                <TouchableOpacity style={msgStyles.sendBtn} onPress={handleSend}>
+                  <Text style={msgStyles.sendIcon}>↑</Text>
                 </TouchableOpacity>
-              </>
-            )}
-          </View>
-        )}
-      </KeyboardAvoidingView>
+              ) : (
+                <>
+                  <TouchableOpacity style={msgStyles.inputBtn} onPress={handlePickImage}>
+                    <Text style={msgStyles.inputBtnIcon}>🖼️</Text>
+                  </TouchableOpacity>
+                  {/* expo-av Recording is not supported on Expo Web */}
+                  {Platform.OS !== 'web' && (
+                    <TouchableOpacity style={msgStyles.inputBtn} onPress={startRecording}>
+                      <Text style={msgStyles.inputBtnIcon}>🎤</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
+          )}
+        </View>
+      </View>
 
       {/* ── Long press action sheet ── */}
       <Modal visible={!!actionMsg} transparent animationType="slide">
@@ -661,9 +788,15 @@ export default function MessageScreen({ route, navigation }) {
             <View style={msgStyles.sheetHandle} />
 
             <View style={msgStyles.reactRow}>
-              {['👍','❤️','😂','😮','😢','🔥'].map(emoji => (
-                <TouchableOpacity key={emoji} onPress={() => setActionMsg(null)} style={msgStyles.reactBtn}>
-                  <Text style={msgStyles.reactEmoji}>{emoji}</Text>
+              {(reactionTypes.length > 0 ? reactionTypes : [
+                { emoji: '👍' }, { emoji: '❤️' }, { emoji: '😂' }, { emoji: '😮' }, { emoji: '😢' }, { emoji: '🔥' }
+              ]).map(r => (
+                <TouchableOpacity
+                  key={r.emoji}
+                  onPress={() => { handleReact(actionMsg, r.emoji); setActionMsg(null); }}
+                  style={msgStyles.reactBtn}
+                >
+                  <Text style={msgStyles.reactEmoji}>{r.emoji}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -690,7 +823,7 @@ export default function MessageScreen({ route, navigation }) {
 
 const useStyles = (THEME) => StyleSheet.create({
   avatarCircle: { justifyContent: 'center', alignItems: 'center' },
-  avatarText:   { color: '#fff', fontWeight: '700' },
+  avatarText: { color: '#fff', fontWeight: '700' },
   onlineDot: {
     position: 'absolute', bottom: -1, right: -1,
     borderWidth: 2, borderColor: THEME.bgSecondary,
@@ -703,12 +836,12 @@ const useStyles = (THEME) => StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: THEME.border,
     paddingHorizontal: 4,
   },
-  backBtn:     { padding: 12 },
-  backArrow:   { fontSize: 22, color: THEME.accent, fontWeight: '700' },
-  headerName:  { fontSize: 15, fontWeight: '700', color: THEME.textPrimary },
+  backBtn: { padding: 12 },
+  backArrow: { fontSize: 22, color: THEME.accent, fontWeight: '700' },
+  headerName: { fontSize: 15, fontWeight: '700', color: THEME.textPrimary },
   headerStatus: { fontSize: 11 },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
-  headerBtn:   { padding: 10 },
+  headerBtn: { padding: 10 },
 
   // Intro
   introBox: { padding: 20, borderBottomWidth: 1, borderBottomColor: THEME.border, marginBottom: 8 },
@@ -717,28 +850,47 @@ const useStyles = (THEME) => StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginBottom: 12,
   },
   introInitials: { color: '#fff', fontWeight: '800', fontSize: 22 },
-  introName:  { fontSize: 20, fontWeight: '800', color: THEME.textPrimary, marginBottom: 4 },
-  introDesc:  { fontSize: 14, color: THEME.textMuted, lineHeight: 20 },
+  introName: { fontSize: 20, fontWeight: '800', color: THEME.textPrimary, marginBottom: 4 },
+  introDesc: { fontSize: 14, color: THEME.textMuted, lineHeight: 20 },
 
   // Date divider
   dateDivider: { flexDirection: 'row', alignItems: 'center', marginVertical: 12, paddingHorizontal: 16 },
-  dateLine:    { flex: 1, height: 1, backgroundColor: THEME.border },
-  dateLabel:   { fontSize: 11, color: THEME.textMuted, fontWeight: '600', paddingHorizontal: 8 },
+  dateLine: { flex: 1, height: 1, backgroundColor: THEME.border },
+  dateLabel: { fontSize: 11, color: THEME.textMuted, fontWeight: '600', paddingHorizontal: 8 },
 
   // Message
-  msgRow:    { paddingHorizontal: 12, paddingVertical: 2, alignItems: 'flex-start' },
+  msgRow: { paddingHorizontal: 12, paddingVertical: 2, alignItems: 'flex-start' },
   msgContent: { maxWidth: '80%', flex: 1 },
-  msgHeader:  { gap: 6, alignItems: 'baseline', marginBottom: 3 },
+  msgHeader: { gap: 6, alignItems: 'baseline', marginBottom: 3 },
   senderName: { fontSize: 13, fontWeight: '700' },
-  msgTime:    { fontSize: 10, color: THEME.textMuted },
+  msgTime: { fontSize: 10, color: THEME.textMuted },
   bubble: {
     paddingHorizontal: 14, paddingVertical: 9,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.12, shadowRadius: 2, elevation: 1,
   },
-  bubbleText:    { fontSize: 15, lineHeight: 22 },
+  bubbleText: { fontSize: 15, lineHeight: 22 },
+  reactionSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: THEME.bgSecondary,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    position: 'absolute',
+    bottom: -12,
+    zIndex: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1, shadowRadius: 1, elevation: 2,
+  },
+  reactionItem: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  reactionEmoji: { fontSize: 13 },
+  reactionCount: { fontSize: 11, fontWeight: '700', color: THEME.textMuted },
   imgAttachment: { width: 220, height: 160, borderRadius: 8 },
-  fileRow:       { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  fileRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 
   // Emoji picker
   emojiPicker: {
@@ -746,7 +898,7 @@ const useStyles = (THEME) => StyleSheet.create({
     padding: 10,
   },
   emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
-  emojiBtn:  { width: '11.5%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 6 },
+  emojiBtn: { width: '11.5%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 6 },
   emojiChar: { fontSize: 22 },
 
   // Input bar
@@ -808,12 +960,12 @@ const useStyles = (THEME) => StyleSheet.create({
     paddingHorizontal: 20, paddingBottom: 16,
     borderBottomWidth: 1, borderBottomColor: THEME.border,
   },
-  reactBtn:          { padding: 8, borderRadius: 10 },
-  reactEmoji:        { fontSize: 30 },
+  reactBtn: { padding: 8, borderRadius: 10 },
+  reactEmoji: { fontSize: 30 },
   sheetAction: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     paddingHorizontal: 20, paddingVertical: 15,
   },
-  sheetActionIcon:  { fontSize: 20 },
+  sheetActionIcon: { fontSize: 20 },
   sheetActionLabel: { fontSize: 16, color: THEME.textPrimary, fontWeight: '500' },
 });
