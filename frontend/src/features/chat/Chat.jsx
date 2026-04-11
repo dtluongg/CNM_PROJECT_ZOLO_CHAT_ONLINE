@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import { MessageCircle, Search, User } from 'lucide-react';
 import LeftSidebar from './components/LeftSidebar';
 import ChatArea from './components/ChatArea';
@@ -7,7 +8,11 @@ import RightSidebar from './components/RightSidebar';
 import ProfileSettings from '../user/components/ProfileSettings';
 import UserSearchModal from '../user/components/UserSearchModal';
 import conversationApi from './api/conversationApi';
+import messageApi from './api/messageApi';
 import friendApi from '../friends/api/friendApi';
+import { useAuth } from '../../context/AuthContext';
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
 
 const formatConversationTime = (isoString) => {
   if (!isoString) return '';
@@ -30,22 +35,26 @@ const formatConversationTime = (isoString) => {
 
 const mapConversationItem = (item, dmOverrides) => {
   const override = dmOverrides[item._id] || null;
-  const isDm = item.type === 'dm';
+  const isDm     = item.type === 'dm';
+  const other    = isDm ? item.otherUser : null;
 
   return {
-    id: item._id,
-    name: isDm
-      ? (override?.name || item.name || 'Đoạn chat trực tiếp')
+    id:          item._id,
+    name:        isDm
+      ? (override?.name    || other?.displayName || item.name || 'Đoạn chat trực tiếp')
       : (item.name || 'Nhóm chưa đặt tên'),
-    avatar: isDm ? (override?.avatar || item.avatar || null) : (item.avatar || null),
+    avatar:      isDm
+      ? (override?.avatar  || other?.avatar      || item.avatar || null)
+      : (item.avatar || null),
+    otherUserId: isDm ? (other?._id?.toString() || null) : null,
     lastMessage: item.lastMessagePreview || 'Chưa có tin nhắn',
-    time: formatConversationTime(item.lastMessageTime || item.updatedAt || item.createdAt),
-    unread: item.myMembership?.unreadCount || 0,
-    type: item.type,
-    online: false,
+    time:        formatConversationTime(item.lastMessageTime || item.updatedAt || item.createdAt),
+    unread:      item.myMembership?.unreadCount || 0,
+    type:        item.type,
+    online:      false,
     memberCount: item.totalMembers,
-    otherUserId: item.otherUserId || null,
-    raw: item,
+    otherUserId: isDm ? (item.otherUserId || other?._id?.toString() || null) : null,
+    raw:         item,
   };
 };
 
@@ -68,8 +77,8 @@ const buildPendingDmConversation = (peer) => ({
 
 const BOTTOM_TABS = [
   { key: 'messages', icon: MessageCircle, label: 'Tin nhắn' },
-  { key: 'search',   icon: Search,        label: 'Tìm kiếm' },
-  { key: 'profile',  icon: User,          label: 'Hồ sơ'    },
+  { key: 'search', icon: Search, label: 'Tìm kiếm' },
+  { key: 'profile', icon: User, label: 'Hồ sơ' },
 ];
 
 function BottomTabBar({ activeTab, onTabChange, unreadTotal }) {
@@ -135,7 +144,16 @@ function BottomTabBar({ activeTab, onTabChange, unreadTotal }) {
   );
 }
 
+// ── Normalize message từ API → format UI ────────────────────────────────────
+const fmtTime = (iso) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+};
+const normalizeMsg = (msg) => ({ ...msg, time: fmtTime(msg.createdAt) });
+
 const Chat = () => {
+  const { user: currentUser, token } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [activeConversation, setActiveConversation] = useState(null);
@@ -144,7 +162,14 @@ const Chat = () => {
   const [showUserSearch, setShowUserSearch] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState({});
+  const [typingUsers, setTypingUsers] = useState({}); // convId → { userId, displayName }
   const [dmOverrides, setDmOverrides] = useState({});
+
+  // Socket ref
+  const socketRef = useRef(null);
+  // Keep active conversation accessible inside socket callbacks
+  const activeConvRef = useRef(null);
+  useEffect(() => { activeConvRef.current = activeConversation; }, [activeConversation]);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [friendsForGroup, setFriendsForGroup] = useState([]);
   const [groupName, setGroupName] = useState('');
@@ -154,6 +179,8 @@ const Chat = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [mobileView, setMobileView] = useState('list');   // 'list' | 'chat'
   const [mobileTab, setMobileTab] = useState('messages'); // for bottom nav highlight
+  const [sendBlockError, setSendBlockError] = useState(''); // thông báo khi bị chặn
+  const blockErrorTimerRef = useRef(null);
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -188,6 +215,133 @@ const Chat = () => {
     return () => window.removeEventListener('resize', check);
   }, []);
 
+  // ── Socket.io connection ──────────────────────────────────────────────────
+  useEffect(() => {
+    const accessToken = token || localStorage.getItem('accessToken');
+    if (!accessToken) return;
+
+    const socket = io(SOCKET_URL, {
+      auth: { token: accessToken },
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
+
+    socketRef.current = socket;
+
+    // Nhận tin nhắn mới
+    socket.on('chat:new-message', ({ conversationId, message }) => {
+      const msg = normalizeMsg(message);
+
+      setMessages(prev => {
+        const list = prev[conversationId] || [];
+        // Tránh duplicate nếu người gửi đã optimistic update
+        if (list.some(m => m._id?.toString() === msg._id?.toString())) return prev;
+        return { ...prev, [conversationId]: [...list, msg] };
+      });
+
+      // Cập nhật preview + unread ở sidebar
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        const isActive = activeConvRef.current?.id === conversationId;
+        return {
+          ...c,
+          lastMessage: msg.content,
+          time: msg.time,
+          unread: isActive ? 0 : (c.unread || 0) + 1,
+        };
+      }));
+    });
+
+    // Typing indicator
+    socket.on('chat:typing', ({ conversationId, userId, displayName }) => {
+      if (userId === currentUser?._id?.toString()) return;
+      setTypingUsers(prev => ({
+        ...prev,
+        [conversationId]: { userId, displayName },
+      }));
+    });
+
+    socket.on('chat:stop-typing', ({ conversationId }) => {
+      setTypingUsers(prev => {
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
+      });
+    });
+
+    // Thu hồi tin nhắn
+    socket.on('chat:message-revoked', ({ conversationId, messageId }) => {
+      // 1. Cập nhật list tin nhắn nếu đang mở conv này
+      setMessages(prev => {
+        const list = prev[conversationId] || [];
+        if (list.length === 0) return prev;
+        return {
+          ...prev,
+          [conversationId]: list.map(m =>
+            (m._id || m.id)?.toString() === messageId?.toString()
+              ? { ...m, revoked: true }
+              : m
+          )
+        };
+      });
+
+      // 2. Cập nhật preview ở sidebar
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        // Nếu tin nhắn bị thu hồi chính là tin nhắn cuối cùng hiển thị ở sidebar
+        // (Đây là một ước lượng đơn giản, DB đã cập nhật rồi nhưng socket này giúp update UI nhanh)
+        // Lưu ý: Nếu muốn chính xác 100% thì BE nên gửi kèm preview mới hoặc client tự check.
+        // Ở đây ta đơn giản là đổi preview thành "[Tin nhắn đã được thu hồi]"
+        return {
+          ...c,
+          lastMessage: '[Tin nhắn đã được thu hồi]'
+        };
+      }));
+    });
+
+    // Chỉnh sửa tin nhắn
+    socket.on('chat:message-edited', ({ conversationId, message }) => {
+      const msg = normalizeMsg(message);
+
+      // 1. Cập nhật list tin nhắn - Sử dụng MERGE logic
+      setMessages(prev => {
+        const list = prev[conversationId] || [];
+        if (list.length === 0) return prev;
+        return {
+          ...prev,
+          [conversationId]: list.map(m =>
+            (m._id || m.id)?.toString() === msg._id?.toString()
+              ? { ...m, ...msg } // Merge để giữ lại reactions/myReaction
+              : m
+          )
+        };
+      });
+
+      // 2. Cập nhật preview ở sidebar
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        return {
+          ...c,
+          lastMessage: msg.content,
+        };
+      }));
+    });
+
+    // Reset unread count khi bản thân đọc tin ở thiết bị khác hoặc qua API
+    socket.on('chat:unread-reset', ({ conversationId }) => {
+      setConversations(prev => prev.map(c =>
+        c.id === conversationId ? { ...c, unread: 0 } : c
+      ));
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
   useEffect(() => {
     const peer = location.state?.peer;
     const openConversationId = location.state?.openConversationId;
@@ -219,28 +373,56 @@ const Chat = () => {
     fetchConversations();
   }, [fetchConversations]);
 
-  const handleSelectConversation = useCallback((conv) => {
+  const handleSelectConversation = useCallback(async (conv) => {
+    // Rời conversation cũ khỏi socket room
+    if (activeConvRef.current?.id && socketRef.current) {
+      socketRef.current.emit('chat:leave', { conversationId: activeConvRef.current.id });
+    }
+
     setActiveConversation(conv);
     setConversations(prev =>
       prev.map(c => c.id === conv.id ? { ...c, unread: 0 } : c)
     );
+
+    // Tham gia conversation room mới (typing indicators)
+    if (socketRef.current) {
+      socketRef.current.emit('chat:join', { conversationId: conv.id });
+    }
+
     if (isMobile) {
       setMobileView('chat');
       setMobileTab('messages');
     }
-  }, [isMobile]);
 
-  const handleSendMessage = useCallback(async (text) => {
-    if (!activeConversation || !text.trim()) return;
+    // Load messages nếu chưa có
+    if (messages[conv.id]) return;
+    try {
+      const res = await messageApi.getMessages(conv.id);
+      const msgs = (res.data.messages || []).map(normalizeMsg);
+      setMessages(prev => ({ ...prev, [conv.id]: msgs }));
+    } catch (err) {
+      console.error('Load messages error:', err);
+      setMessages(prev => ({ ...prev, [conv.id]: [] }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile, messages]);
 
-    const trimmedText = text.trim();
+  // ── Gửi tin nhắn (text | voice | file | image) ──────────────────────────
+  // payload: { type: 'text', content } | { type: 'voice', blob, duration }
+  //          | { type: 'file', file } | { type: 'image', file }
+  const handleSendMessage = useCallback(async (payload) => {
+    if (!activeConversation) return;
+
     let resolvedConversation = activeConversation;
-    let resolvedConversationId = activeConversation.id;
+    let convId = activeConversation.id;
 
-    if (activeConversation.raw?.pendingDm && activeConversation.raw?.targetUserId) {
+    if (payload.type === 'text' && !payload.isEdit && activeConversation.raw?.pendingDm && activeConversation.raw?.targetUserId) {
+      const content = payload.content?.trim();
+      if (!content) return;
+
       try {
         const targetUserId = activeConversation.raw.targetUserId;
-        const res = await conversationApi.createDmConversation(targetUserId, trimmedText);
+        const res = await conversationApi.createDmConversation(targetUserId, content);
         const createdConversation = res?.data?.data;
         const createdConversationId = createdConversation?._id;
 
@@ -286,45 +468,161 @@ const Chat = () => {
 
         setActiveConversation(mappedCreated);
         resolvedConversation = mappedCreated;
-        resolvedConversationId = createdConversationId;
+        convId = createdConversationId;
       } catch (error) {
         window.alert(error.response?.data?.message || error.message || 'Không thể tạo cuộc trò chuyện');
         return;
       }
     }
 
-    const newMsg = {
-      id: Date.now(),
-      senderId: 'me',
-      senderName: 'Tôi',
-      content: trimmedText,
-      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      type: 'text',
-    };
-    setMessages(prev => ({
-      ...prev,
-      [resolvedConversationId]: [...(prev[resolvedConversationId] || []), newMsg],
-    }));
-    setConversations((prev) => {
-      const existingIndex = prev.findIndex((c) => c.id === resolvedConversationId);
+    const myId   = currentUser?._id?.toString() || 'me';
+    const myName = currentUser?.displayName || 'Tôi';
+    const myAvatar = currentUser?.avatar || null;
 
-      if (existingIndex === -1) {
-        return [{ ...resolvedConversation, lastMessage: trimmedText, time: newMsg.time }, ...prev];
+    try {
+      if (payload.type === 'text' && !payload.isEdit) {
+        const { content } = payload;
+        if (!content?.trim()) return;
+
+        // Optimistic UI
+        const tempId = `temp_${Date.now()}`;
+        const now = new Date().toISOString();
+        const tempMsg = {
+          _id: tempId, senderId: myId, senderName: myName, avatar: myAvatar,
+          type: 'text', content: content.trim(), payload: {},
+          time: fmtTime(now), createdAt: now,
+        };
+        setMessages(prev => ({ ...prev, [convId]: [...(prev[convId] || []), tempMsg] }));
+
+        const res    = await messageApi.sendText(convId, content.trim());
+        const real   = normalizeMsg(res.data.data);
+        const realId = real._id?.toString();
+
+        // Replace temp with real; also remove any socket-delivered copy to prevent duplicate keys
+        setMessages(prev => {
+          const list    = prev[convId] || [];
+          const cleaned = list.filter(m => m._id?.toString() !== realId); // remove socket copy if any
+          return {
+            ...prev,
+            [convId]: cleaned.map(m => m._id === tempId ? real : m),
+          };
+        });
+
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: content.trim(), time: real.time } : c
+        ));
+        setActiveConversation((prev) => (
+          prev?.id === convId ? { ...resolvedConversation, ...prev, lastMessage: content.trim(), time: real.time } : prev
+        ));
+
+      } else if (payload.isEdit && payload.type === 'text') {
+        const { content, messageId } = payload;
+        if (!content?.trim()) return;
+
+        // Gọi API sửa
+        const res = await messageApi.editMessage(messageId, content.trim());
+        const real = normalizeMsg(res.data.data);
+
+        // Cập nhật messages state - Sử dụng MERGE logic
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          return {
+            ...prev,
+            [convId]: list.map(m =>
+              (m._id || m.id)?.toString() === messageId?.toString()
+                ? { ...m, ...real } // Merge để giữ lại reactions
+                : m
+            )
+          };
+        });
+
+        // Cập nhật preview sidebar
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: content.trim() } : c
+        ));
+      } else if (payload.type === 'voice') {
+        const { blob, duration } = payload;
+        const fd = new FormData();
+        fd.append('voice', blob, 'voice.webm');
+        if (duration) fd.append('duration', String(Math.round(duration)));
+
+        const up  = await messageApi.uploadVoice(fd);
+        const res = await messageApi.sendVoice(convId, up.data.voice.fileId);
+        const msg = normalizeMsg(res.data.data);
+        const voiceId = msg._id?.toString();
+
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          if (list.some(m => m._id?.toString() === voiceId)) return prev;
+          return { ...prev, [convId]: [...list, msg] };
+        });
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: msg.content, time: msg.time } : c
+        ));
+        setActiveConversation((prev) => (
+          prev?.id === convId ? { ...prev, lastMessage: msg.content, time: msg.time } : prev
+        ));
+
+      } else if (payload.type === 'image') {
+        const fd = new FormData();
+        fd.append('file', payload.file);
+
+        const up  = await messageApi.uploadImage(fd);
+        const res = await messageApi.sendImage(convId, up.data.file.fileId);
+        const msg = normalizeMsg(res.data.data);
+        const imgId = msg._id?.toString();
+
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          if (list.some(m => m._id?.toString() === imgId)) return prev;
+          return { ...prev, [convId]: [...list, msg] };
+        });
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: '[Hình ảnh]', time: msg.time } : c
+        ));
+        setActiveConversation((prev) => (
+          prev?.id === convId ? { ...prev, lastMessage: '[Hình ảnh]', time: msg.time } : prev
+        ));
+
+      } else if (payload.type === 'file') {
+        const fd = new FormData();
+        fd.append('file', payload.file);
+
+        const up  = await messageApi.uploadFile(fd);
+        const res = await messageApi.sendFile(convId, up.data.file.fileId);
+        const msg = normalizeMsg(res.data.data);
+        const fileId = msg._id?.toString();
+
+        setMessages(prev => {
+          const list = prev[convId] || [];
+          if (list.some(m => m._id?.toString() === fileId)) return prev;
+          return { ...prev, [convId]: [...list, msg] };
+        });
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, lastMessage: msg.content, time: msg.time } : c
+        ));
+        setActiveConversation((prev) => (
+          prev?.id === convId ? { ...prev, lastMessage: msg.content, time: msg.time } : prev
+        ));
       }
-
-      return prev.map((c) => (
-        c.id === resolvedConversationId
-          ? { ...c, lastMessage: trimmedText, time: newMsg.time }
-          : c
-      ));
-    });
-
-    setActiveConversation((prev) => (
-      prev?.id === resolvedConversationId
-        ? { ...prev, lastMessage: trimmedText, time: newMsg.time }
-        : prev
-    ));
-  }, [activeConversation]);
+    } catch (err) {
+      console.error('handleSendMessage error:', err);
+      // Xóa optimistic message nếu lỗi (chỉ áp dụng cho text)
+      if (payload.type === 'text') {
+        setMessages(prev => ({
+          ...prev,
+          [convId]: (prev[convId] || []).filter(m => !m._id?.startsWith('temp_')),
+        }));
+      }
+      // Hiển thị thông báo nếu bị chặn (403)
+      if (err?.response?.status === 403) {
+        const msg = err.response?.data?.message || 'Không thể gửi tin nhắn vì một trong hai người đã chặn nhau.';
+        setSendBlockError(msg);
+        clearTimeout(blockErrorTimerRef.current);
+        blockErrorTimerRef.current = setTimeout(() => setSendBlockError(''), 5000);
+      }
+    }
+  }, [activeConversation, currentUser]);
 
   const handleViewProfile = useCallback((userId) => {
     navigate(`/user/${userId}`);
@@ -486,7 +784,9 @@ const Chat = () => {
   }, [activeConversation?.id, isMobile]);
 
   const unreadTotal = conversations.reduce((s, c) => s + (c.unread || 0), 0);
-  const activeMessages = activeConversation ? messages[activeConversation.id] || [] : [];
+  const activeMessages     = activeConversation ? messages[activeConversation.id] || [] : [];
+  const activeTypingUser   = activeConversation ? typingUsers[activeConversation.id] || null : null;
+  const currentUserId      = currentUser?._id?.toString() || null;
 
   /* ── MOBILE LAYOUT ── */
   if (isMobile) {
@@ -531,10 +831,18 @@ const Chat = () => {
             <ChatArea
               conversation={activeConversation}
               messages={activeMessages}
+              setMessages={(updater) => setMessages(prev => ({
+                ...prev,
+                [activeConversation?.id]: updater(prev[activeConversation?.id] || [])
+              }))}
+              currentUserId={currentUserId}
+              typingUser={activeTypingUser}
               onSendMessage={handleSendMessage}
               onToggleRight={() => setShowRightSidebar(v => !v)}
               showRight={showRightSidebar}
               onBack={handleMobileBack}
+              socket={socketRef.current}
+              sendBlockError={sendBlockError}
               isMobile
             />
           </div>
@@ -599,9 +907,17 @@ const Chat = () => {
         <ChatArea
           conversation={activeConversation}
           messages={activeMessages}
+          setMessages={(updater) => setMessages(prev => ({
+            ...prev,
+            [activeConversation?.id]: updater(prev[activeConversation?.id] || [])
+          }))}
+          currentUserId={currentUserId}
+          typingUser={activeTypingUser}
           onSendMessage={handleSendMessage}
           onToggleRight={() => setShowRightSidebar(v => !v)}
           showRight={showRightSidebar}
+          socket={socketRef.current}
+          sendBlockError={sendBlockError}
         />
       </div>
 

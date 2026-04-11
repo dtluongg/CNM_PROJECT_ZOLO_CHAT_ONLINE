@@ -1,13 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
   TextInput, ScrollView, StatusBar,
 } from 'react-native';
-import { MOCK_CONVERSATIONS } from '../data/mockData';
+import { io } from 'socket.io-client';
 import { STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { usePresence } from '../context/PresenceContext';
 import ProfileScreen from '../features/user/screens/ProfileScreen';
 import FriendsScreen from '../features/friends/screens/FriendsScreen';
+import conversationApi from '../features/chat/api/conversationApi';
+import { SOCKET_URL } from '../config/env';
+
+const formatTime = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const sameDay = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  return sameDay
+    ? d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+};
+
+const mapConv = (item) => {
+  const isDm  = item.type === 'dm';
+  const other = isDm ? item.otherUser : null;
+  return {
+    id:          item._id,
+    name:        isDm ? (other?.displayName || item.name || 'Đoạn chat trực tiếp') : (item.name || 'Nhóm'),
+    avatar:      isDm ? (other?.avatar || null) : (item.avatar || null),
+    otherUserId: isDm ? (other?._id?.toString() || null) : null,
+    lastMessage: item.lastMessagePreview || 'Chưa có tin nhắn',
+    time:        formatTime(item.lastMessageTime || item.updatedAt || item.createdAt),
+    unread:      item.myMembership?.unreadCount || 0,
+    type:        item.type,
+    online:      false,
+    memberCount: item.totalMembers || 0,
+  };
+};
 
 // ─────────────────────────────────────────────
 // Shared components
@@ -68,6 +100,10 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, THEME, sty
 
   const ConvItem = ({ item }) => {
     const [pressed, setPressed] = useState(false);
+    const { isUserOnline } = usePresence();
+    const liveOnline = item.type === 'dm' && item.otherUserId
+      ? isUserOnline(item.otherUserId)
+      : false;
     return (
       <TouchableOpacity
         onPress={() => openConversation(item)}
@@ -80,8 +116,8 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, THEME, sty
           name={item.name}
           avatar={item.avatar}
           size={48}
-          status={item.status}
-          online={item.type === 'dm' ? item.online : null}
+          status={liveOnline ? 'online' : null}
+          online={item.type === 'dm' ? liveOnline : null}
           THEME={THEME}
           styles={styles}
         />
@@ -204,11 +240,60 @@ function BottomTabBar({ activeTab, onTabChange, unreadTotal, THEME, styles }) {
 // ─────────────────────────────────────────────
 export default function MainTabScreen({ navigation, route }) {
   const { theme: THEME } = useTheme();
+  const { token } = useAuth();
   const styles = useStyles(THEME);
 
-  // Tab State
-  const [activeTab, setActiveTab] = useState('chats');
-  const [conversations, setConversations] = useState(MOCK_CONVERSATIONS);
+  const [activeTab, setActiveTab]         = useState('chats');
+  const [conversations, setConversations] = useState([]);
+  const socketRef = useRef(null);
+
+  const fetchConversations = useCallback(async () => {
+    try {
+      const res  = await conversationApi.listMyConversations('exclude');
+      const list = Array.isArray(res?.data?.data) ? res.data.data : [];
+      setConversations(list.map(mapConv));
+    } catch (err) {
+      console.error('fetchConversations error:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchConversations();
+  }, [fetchConversations]);
+
+  // Socket: live preview + unread count in conversation list
+  useEffect(() => {
+    if (!token) return;
+    const socket = io(SOCKET_URL, {
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
+    socketRef.current = socket;
+
+    socket.on('chat:new-message', ({ conversationId, message }) => {
+      setConversations(prev => prev.map(c => {
+        if (c.id !== conversationId) return c;
+        const fmtTime = (iso) => {
+          const d = new Date(iso);
+          if (Number.isNaN(d.getTime())) return '';
+          return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        };
+        return {
+          ...c,
+          lastMessage: message.content || c.lastMessage,
+          time:        fmtTime(message.createdAt),
+          unread:      (c.unread || 0) + 1,
+        };
+      }));
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [token]);
 
   const unreadTotal = conversations.reduce((s, c) => s + (c.unread || 0), 0);
 

@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Search, Upload, Camera, User, CameraOff, SwitchCamera, QrCode, ChevronRight } from 'lucide-react';
+import { X, Search, Upload, Camera, User, CameraOff, SwitchCamera, QrCode, ChevronRight, UserPlus, UserCheck, UserX, Clock } from 'lucide-react';
 import jsQR from 'jsqr';
 import userApi from '../api/userApi';
-import { usePresence } from '../../../context/PresenceContext';  // ✅ THÊM DÒNG NÀY
+import friendApi from '../../friends/api/friendApi';
+import { usePresence } from '../../../context/PresenceContext';
 
 const AVATAR_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245','#9b59b6','#e67e22'];
 const getAvatarColor = (name) => AVATAR_COLORS[(name || '?').charCodeAt(0) % AVATAR_COLORS.length];
@@ -15,14 +16,65 @@ const getInitials = (name) => {
 
 const STATUS_COLOR = { online: '#3ba55c', idle: '#faa61a', dnd: '#ed4245', offline: '#80848e', invisible: '#80848e' };
 
-function UserCard({ user, onClick, isOnline, presStatus }) {
+// friendStatus: null | 'friends' | 'sent' | 'received' | 'blocked'
+function UserCard({ user, onClick, isOnline, presStatus, friendStatus, requestId, onFriendAction, actionBusy }) {
   const [hovered, setHovered] = useState(false);
   const accentColor = user.usernameColor || getAvatarColor(user.displayName);
-   const displayStatus = isOnline
-      ? (presStatus || 'online')
-      : 'offline';  // Offline = luôn XÁM
+  const displayStatus = isOnline ? (presStatus || 'online') : 'offline';
+  const statusColor = STATUS_COLOR[displayStatus] || '#80848e';
 
-    const statusColor = STATUS_COLOR[displayStatus] || '#80848e';
+  const renderFriendBtn = () => {
+    if (friendStatus === 'friends') return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onFriendAction('unfriend', user._id); }}
+        disabled={actionBusy}
+        style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-hover)', color: 'var(--text-secondary)', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
+      >
+        <UserCheck size={13} /> Bạn bè
+      </button>
+    );
+    if (friendStatus === 'sent') return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onFriendAction('cancel', requestId); }}
+        disabled={actionBusy}
+        style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(250,166,26,0.4)', background: 'rgba(250,166,26,0.12)', color: '#faa61a', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
+      >
+        <Clock size={13} /> Đã gửi
+      </button>
+    );
+    if (friendStatus === 'received') return (
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onFriendAction('accept', requestId); }}
+          disabled={actionBusy}
+          style={{ fontSize: 12, fontWeight: 700, padding: '5px 8px', borderRadius: 7, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
+        >
+          Chấp nhận
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onFriendAction('reject', requestId); }}
+          disabled={actionBusy}
+          style={{ fontSize: 12, fontWeight: 600, padding: '5px 8px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-hover)', color: 'var(--text-muted)', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
+        >
+          Từ chối
+        </button>
+      </div>
+    );
+    if (friendStatus === 'blocked') return (
+      <span style={{ fontSize: 11, color: '#ed4245', fontWeight: 600 }}>Đã chặn</span>
+    );
+    // Not friends yet
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onFriendAction('send', user._id); }}
+        disabled={actionBusy}
+        style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, padding: '5px 10px', borderRadius: 7, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
+      >
+        <UserPlus size={13} /> Kết bạn
+      </button>
+    );
+  };
+
   return (
     <div
       onClick={() => onClick(user)}
@@ -52,7 +104,7 @@ function UserCard({ user, onClick, isOnline, presStatus }) {
         <span style={{
           position: 'absolute', bottom: 1, right: 1,
           width: 11, height: 11, borderRadius: '50%',
-          background: statusColor || '#80848e',
+          background: statusColor,
           border: '2px solid var(--bg-secondary)',
         }} />
       </div>
@@ -69,9 +121,8 @@ function UserCard({ user, onClick, isOnline, presStatus }) {
           </div>
         )}
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span>Xem hồ sơ</span>
-        <ChevronRight size={14} />
+      <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+        {renderFriendBtn()}
       </div>
     </div>
   );
@@ -79,9 +130,13 @@ function UserCard({ user, onClick, isOnline, presStatus }) {
 
 export default function UserSearchModal({ onClose }) {
   const navigate = useNavigate();
-  const { isUserOnline, getPresenceStatus } = usePresence();  // ✅ THÊM DÒNG NÀY
+  const { isUserOnline, getPresenceStatus } = usePresence();
   const [tab, setTab] = useState('search'); // 'search' | 'qr'
   const [qrMode, setQrMode] = useState('upload'); // 'upload' | 'camera'
+
+  // Friend status state
+  const [friendStatusMap, setFriendStatusMap] = useState({}); // userId → { status, requestId }
+  const [actionBusy, setActionBusy] = useState(''); // userId or requestId currently processing
 
   // Search state
   const [query, setQuery] = useState('');
@@ -107,6 +162,102 @@ export default function UserSearchModal({ onClose }) {
   const [cameraResult, setCameraResult] = useState(null);
   const [facingMode, setFacingMode] = useState('environment'); // 'environment' | 'user'
   const [scanning, setScanning] = useState(false);
+
+  // Build a map of friend statuses for the current search results
+  const buildFriendStatusMap = useCallback(async () => {
+    try {
+      const [friendsRes, outgoingRes, incomingRes] = await Promise.all([
+        friendApi.getFriendList(),
+        friendApi.getOutgoingRequests(),
+        friendApi.getIncomingRequests(),
+      ]);
+      const friends = friendsRes.data.friends || [];
+      const outgoing = outgoingRes.data.requests || [];
+      const incoming = incomingRes.data.requests || [];
+
+      const map = {};
+      friends.forEach(f => {
+        const uid = f.userId?._id?.toString() || f.userId?.toString() || f._id?.toString();
+        if (uid) map[uid] = { status: 'friends', requestId: null };
+      });
+      outgoing.forEach(r => {
+        const uid = r.toUserId?._id?.toString() || r.toUserId?.toString();
+        if (uid) map[uid] = { status: 'sent', requestId: r._id };
+      });
+      incoming.forEach(r => {
+        const uid = r.fromUserId?._id?.toString() || r.fromUserId?.toString();
+        if (uid) map[uid] = { status: 'received', requestId: r._id };
+      });
+      setFriendStatusMap(map);
+    } catch (err) {
+      console.error('Failed to build friend status map', err);
+    }
+  }, []);
+
+  // Refresh statuses whenever search results change
+  useEffect(() => {
+    if (results.length > 0) {
+      buildFriendStatusMap();
+    } else {
+      setFriendStatusMap({});
+    }
+  }, [results, buildFriendStatusMap]);
+
+  // Handle friend actions from UserCard buttons
+  const handleFriendAction = useCallback(async (action, idParam) => {
+    setActionBusy(idParam);
+    try {
+      if (action === 'send') {
+        const res = await friendApi.sendRequest(idParam);
+        const newRequestId = res.data.request?._id || res.data._id || null;
+        setFriendStatusMap(prev => ({ ...prev, [idParam]: { status: 'sent', requestId: newRequestId } }));
+      } else if (action === 'cancel') {
+        await friendApi.cancelRequest(idParam);
+        setFriendStatusMap(prev => {
+          const next = { ...prev };
+          for (const [uid, info] of Object.entries(next)) {
+            if (info.requestId === idParam || info.requestId?.toString() === idParam?.toString()) {
+              delete next[uid]; break;
+            }
+          }
+          return next;
+        });
+      } else if (action === 'accept') {
+        await friendApi.acceptRequest(idParam);
+        setFriendStatusMap(prev => {
+          const next = { ...prev };
+          for (const [uid, info] of Object.entries(next)) {
+            if (info.requestId === idParam || info.requestId?.toString() === idParam?.toString()) {
+              next[uid] = { status: 'friends', requestId: null }; break;
+            }
+          }
+          return next;
+        });
+      } else if (action === 'reject') {
+        await friendApi.rejectRequest(idParam);
+        setFriendStatusMap(prev => {
+          const next = { ...prev };
+          for (const [uid, info] of Object.entries(next)) {
+            if (info.requestId === idParam || info.requestId?.toString() === idParam?.toString()) {
+              delete next[uid]; break;
+            }
+          }
+          return next;
+        });
+      } else if (action === 'unfriend') {
+        await friendApi.unfriend(idParam);
+        setFriendStatusMap(prev => {
+          const next = { ...prev };
+          delete next[idParam];
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error('Friend action failed', err);
+    } finally {
+      setActionBusy('');
+    }
+  }, []);
 
   // Stop camera stream
   const stopCamera = useCallback(() => {
@@ -366,6 +517,10 @@ export default function UserSearchModal({ onClose }) {
                       onClick={handleViewUser}
                       isOnline={isUserOnline(u._id)}
                       presStatus={getPresenceStatus(u._id)}
+                      friendStatus={friendStatusMap[u._id]?.status || null}
+                      requestId={friendStatusMap[u._id]?.requestId}
+                      onFriendAction={handleFriendAction}
+                      actionBusy={actionBusy === u._id || actionBusy === friendStatusMap[u._id]?.requestId?.toString()}
                     />
                   ))}
                 </div>

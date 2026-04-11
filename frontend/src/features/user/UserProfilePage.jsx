@@ -5,7 +5,7 @@ import { ArrowLeft, Copy, Check, MessageCircle, Mail, AtSign, Calendar, UserPlus
 import userApi from './api/userApi';
 import friendApi from '../friends/api/friendApi';
 import conversationApi from '../chat/api/conversationApi';
-import { usePresence } from '../../context/PresenceContext';
+import { usePresence, formatLastSeen } from '../../context/PresenceContext';
 import { useAuth } from '../../context/AuthContext';
 
 const STATUS_CONFIG = {
@@ -71,7 +71,7 @@ export default function UserProfilePage() {
   const { userId } = useParams();
   const navigate = useNavigate();
   const { user: me } = useAuth();
-  const { isUserOnline, getPresenceStatus } = usePresence();
+  const { isUserOnline, getPresenceStatus, getStatusText } = usePresence();
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -357,6 +357,14 @@ export default function UserProfilePage() {
                   @{profile.username}
                 </div>
               )}
+              {(() => {
+                const cst = getStatusText(userId) || profile.statusText;
+                return cst ? (
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {cst}
+                  </div>
+                ) : null;
+              })()}
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5,
                 marginTop: 6, padding: '4px 10px',

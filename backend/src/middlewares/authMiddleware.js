@@ -13,7 +13,7 @@ const authMiddleware = async (req, res, next) => {
                 return res.status(401).json({message: 'Unauthorized, token khong hop le'});
             }
 
-            // loại bỏ passwordHash 
+            // loại bỏ passwordHash
             const userFind = await userModel.findById(decodedUserPayload.user_id)
                 .select('-passwordHash'); // hoặc bỏ .select() nếu muốn lấy tất cả trừ password
 
