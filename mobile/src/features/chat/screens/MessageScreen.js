@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Audio, Video, ResizeMode } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
@@ -6,7 +7,6 @@ import {
   Modal, StatusBar, Pressable, Alert, ScrollView,Animated
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { io } from 'socket.io-client';
@@ -180,7 +180,142 @@ const VoicePlayer = ({ url, duration, isMine, THEME }) => {
     </TouchableOpacity>
   );
 };
+// ─────────────────────────────────────────────
+// Video Player
+// ─────────────────────────────────────────────
+const VideoPlayer = ({ url, isMine, THEME }) => {
+  const videoRef = useRef(null);
+  const [status, setStatus] = useState({});
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimer = useRef(null);
 
+  const isPlaying = status.isPlaying;
+
+  const togglePlay = async () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      await videoRef.current.pauseAsync();
+    } else {
+      // Nếu đã xem xong thì replay
+      if (status.didJustFinish || status.positionMillis >= status.durationMillis - 200) {
+        await videoRef.current.replayAsync();
+      } else {
+        await videoRef.current.playAsync();
+      }
+    }
+    // Hiện controls rồi tự ẩn sau 3s
+    setShowControls(true);
+    clearTimeout(controlsTimer.current);
+    if (!isPlaying) {
+      controlsTimer.current = setTimeout(() => setShowControls(false), 3000);
+    }
+  };
+
+  const handleTap = () => {
+    setShowControls(v => {
+      if (!v) {
+        clearTimeout(controlsTimer.current);
+        controlsTimer.current = setTimeout(() => setShowControls(false), 3000);
+      }
+      return !v;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(controlsTimer.current);
+      videoRef.current?.unloadAsync();
+    };
+  }, []);
+
+  // Tính progress %
+  const progress = status.durationMillis > 0
+    ? (status.positionMillis || 0) / status.durationMillis
+    : 0;
+
+  const remaining = status.durationMillis > 0
+    ? fmtDur(Math.max(0, (status.durationMillis - (status.positionMillis || 0)) / 1000))
+    : '0:00';
+
+  return (
+    <TouchableOpacity
+      activeOpacity={1}
+      onPress={handleTap}
+      style={{ borderRadius: 12, overflow: 'hidden', width: 240 }}
+    >
+      <Video
+        ref={videoRef}
+        source={{ uri: url }}
+        style={{ width: 240, height: 160 }}
+        resizeMode={ResizeMode.COVER}
+        onPlaybackStatusUpdate={setStatus}
+        shouldPlay={false}
+        isLooping={false}
+        useNativeControls={false}
+      />
+
+      {/* Overlay controls */}
+      {showControls && (
+        <View style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.35)',
+          justifyContent: 'center', alignItems: 'center',
+        }}>
+          {/* Play/Pause center button */}
+          <TouchableOpacity
+            onPress={togglePlay}
+            style={{
+              width: 48, height: 48, borderRadius: 24,
+              backgroundColor: 'rgba(255,255,255,0.25)',
+              justifyContent: 'center', alignItems: 'center',
+              borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)',
+            }}
+          >
+            <Ionicons
+              name={isPlaying ? 'pause' : 'play'}
+              size={22}
+              color="#fff"
+            />
+          </TouchableOpacity>
+
+          {/* Bottom bar: progress + time */}
+          <View style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            paddingHorizontal: 10, paddingBottom: 8,
+          }}>
+            {/* Progress bar */}
+            <View style={{
+              height: 3, backgroundColor: 'rgba(255,255,255,0.3)',
+              borderRadius: 2, marginBottom: 4,
+            }}>
+              <View style={{
+                height: 3, borderRadius: 2,
+                backgroundColor: '#fff',
+                width: `${Math.round(progress * 100)}%`,
+              }} />
+            </View>
+
+            {/* Time remaining */}
+            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', fontWeight: '600' }}>
+              {isPlaying ? `-${remaining}` : fmtDur((status.durationMillis || 0) / 1000)}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Loading indicator */}
+      {status.isBuffering && !status.isPlaying && (
+        <View style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          justifyContent: 'center', alignItems: 'center',
+          backgroundColor: 'rgba(0,0,0,0.4)',
+        }}>
+          <Text style={{ color: '#fff', fontSize: 12 }}>Đang tải...</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
 // ─────────────────────────────────────────────
 // Message bubble
 // ─────────────────────────────────────────────
@@ -245,7 +380,75 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress, onShowReadBy, cur
         />
       );
     }
+    if (msg.type === 'video') {
+      return (
+        <VideoPlayer
+          url={msg.payload?.url || msg.content}
+          isMine={isMine}
+          THEME={THEME}
+        />
+      );
+    }
+    if (msg.type === 'file' || msg.type === 'video') {
+      const fileUrl = msg.payload?.url;
+      const fileName = msg.payload?.fileName || msg.content || '';
 
+      // Detect video theo đuôi file
+      const isVideo = msg.type === 'video' ||
+        /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(fileName);
+
+      if (isVideo) {
+        // Web dùng thẻ <video> native của browser
+        if (Platform.OS === 'web') {
+          return (
+            <View style={{ borderRadius: 12, overflow: 'hidden', width: 240 }}>
+              <video
+                src={fileUrl}
+                controls
+                style={{ width: 240, height: 160, objectFit: 'cover', display: 'block' }}
+              />
+            </View>
+          );
+        }
+        // Native (iOS/Android) dùng expo-av Video
+        return (
+          <VideoPlayer
+            url={fileUrl}
+            isMine={isMine}
+            THEME={THEME}
+          />
+        );
+      }
+
+      // Còn lại là file thường
+      return (
+        <TouchableOpacity
+          onPress={() => onFilePress && onFilePress(fileUrl, fileName)}
+          style={styles.fileRow}
+          activeOpacity={0.75}
+        >
+          <Feather name="file-text" size={22}
+            color={isMine ? 'rgba(255,255,255,0.85)' : THEME.textMuted} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              style={[styles.bubbleText, { color: bubbleText, fontWeight: '600' }]}
+              numberOfLines={2}
+            >
+              {fileName}
+            </Text>
+            <Text style={{
+              fontSize: 11,
+              color: isMine ? 'rgba(255,255,255,0.65)' : THEME.textMuted,
+              marginTop: 2,
+            }}>
+              Nhấn để tải xuống
+            </Text>
+          </View>
+          <Feather name="download" size={18}
+            color={isMine ? 'rgba(255,255,255,0.7)' : THEME.accent} />
+        </TouchableOpacity>
+      );
+    }
     if (msg.type === 'file') {
       const fileUrl = msg.payload?.url;
       const fileName = msg.payload?.fileName || msg.content;
@@ -352,7 +555,20 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress, onShowReadBy, cur
         )}
 
         <Pressable onLongPress={() => onLongPress && onLongPress(msg)} delayLongPress={400}>
-          <View style={[styles.bubble, { backgroundColor: bubbleBg }, borderRadius]}>
+          <View style={[
+            styles.bubble,
+            { backgroundColor: bubbleBg },
+            borderRadius,
+            // Bỏ padding + background khi là video/image
+            (msg.type === 'video' || msg.type === 'image' ||
+             /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(msg.payload?.fileName || '')) && {
+              padding: 0,
+              overflow: 'hidden',
+              backgroundColor: 'transparent',
+              shadowOpacity: 0,
+              elevation: 0,
+            },
+          ]}>
             {renderContent()}
           </View>
         </Pressable>
