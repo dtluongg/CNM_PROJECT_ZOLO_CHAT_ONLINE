@@ -98,7 +98,7 @@ const sendFriendRequest = async (req, res, next) => {
         // Kiểm tra xem có bị chặn hay chặn đối phương không (2 chiều)
         const blockStatus = await getBlockStatus(fromUserId, toUserId);
         if (blockStatus.heBlockedMe) {
-            return res.status(403).json({ success: false, message: "Người dùng này đã chặn bạn, không thể gửi lời mời." });
+            return res.status(403).json({ success: false, message: "Không thể kết bạn tới người này" });
         }
         if (blockStatus.iBlocked) {
             return res.status(403).json({ success: false, message: "Bạn đã chặn người dùng này, không thể gửi lời mời." });
@@ -480,15 +480,19 @@ const blockFriend = async (req, res, next) => {
             return res.status(404).json({ success: false, message: "Hai bạn chưa kết bạn." });
         }
 
-        // Logic: chỉ lưu ID người chặn cuối cùng
-        // Nếu hiện tại người khác chặn tôi, tôi chặn lại thì thay thế
+        // Logic 1 chiều: nếu người kia đã chặn mình thì mình không được ghi đè trạng thái block.
         let message = '';
         if (friendship.isBlockedBy && friendship.isBlockedBy.toString() === currentUserId) {
             // Tôi đã chặn, bây giờ bỏ chặn
             friendship.isBlockedBy = null;
             message = 'Đã bỏ chặn người dùng.';
+        } else if (friendship.isBlockedBy && friendship.isBlockedBy.toString() !== currentUserId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Bạn đang bị người dùng này chặn và không thể thay đổi trạng thái chặn.',
+            });
         } else {
-            // Tôi chặn (hoặc họ chặn tôi, tôi chặn lại)
+            // Tôi chặn người kia.
             friendship.isBlockedBy = currentUserId;
             message = 'Đã chặn người dùng.';
         }
@@ -498,6 +502,45 @@ const blockFriend = async (req, res, next) => {
             success: true,
             message: message,
             data: friendship
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// 11. Lấy danh sách người bị chặn (Blocked List)
+const getBlockedList = async (req, res, next) => {
+    try {
+        const userId = getCurrentUserId(req);
+
+        // Tìm tất cả friendship record có blockedBy là current user (chỉ những người tôi chặn)
+        const friendships = await Friendship.find({
+            $or: [{ userId1: userId }, { userId2: userId }],
+            isBlockedBy: userId  // Chỉ trả về những người tôi chặn
+        })
+            .populate('userId1', 'displayName avatar email')
+            .populate('userId2', 'displayName avatar email')
+            .sort({ updatedAt: -1 });
+
+        // Bóc tách dữ liệu để trả về danh sách những người tôi chặn
+        const blockedList = friendships.map(f => {
+            const isUser1 = f.userId1._id.toString() === userId;
+            const blockedUser = isUser1 ? f.userId2 : f.userId1;
+
+            return {
+                friendshipId: f._id,
+                userId: blockedUser._id,
+                displayName: blockedUser.displayName,
+                avatar: blockedUser.avatar,
+                email: blockedUser.email,
+                blockedAt: f.updatedAt
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            data: blockedList,
+            meta: { total: blockedList.length },
         });
     } catch (error) {
         next(error);
@@ -514,5 +557,6 @@ module.exports = {
     cancelFriendRequest,
     unfriend,
     updateNickname,
-    blockFriend
+    blockFriend,
+    getBlockedList
 }

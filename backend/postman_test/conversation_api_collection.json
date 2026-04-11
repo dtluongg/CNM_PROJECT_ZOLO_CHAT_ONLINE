@@ -151,7 +151,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"targetUserId\": \"{{targetUserId}}\"\n}"
+              "raw": "{\n  \"targetUserId\": \"{{targetUserId}}\",\n  \"initialMessage\": \"{{dmInitialMessage}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/backend/api/conversations/dm",
@@ -165,7 +165,7 @@
                 "dm"
               ]
             },
-            "description": "Táº¡o DM giá»¯a user hiá»‡n táº¡i vÃ  targetUserId theo endpoint chuáº©n /conversations/dm."
+            "description": "Tạo DM giữa user hiện tại và targetUserId theo endpoint /conversations/dm. Backend mới yêu cầu initialMessage khi tạo DM mới."
           },
           "response": []
         },
@@ -899,6 +899,10 @@
     {
       "key": "targetUserId",
       "value": ""
+    },
+    {
+      "key": "dmInitialMessage",
+      "value": "Xin chào"
     },
     {
       "key": "userId",

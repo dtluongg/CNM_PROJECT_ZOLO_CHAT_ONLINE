@@ -4,14 +4,17 @@ const conversationApi = {
   listMyConversations: (archive = 'exclude') =>
     apiClient.get(`/conversations?archive=${archive}`),
 
-  createDmConversation: (targetUserId) =>
-    apiClient.post('/conversations/dm', { targetUserId }),
+  createDmConversation: (targetUserId, initialMessage = '') =>
+    apiClient.post('/conversations/dm', { targetUserId, initialMessage }),
 
   createGroupConversation: ({ name, avatar = '', memberIds = [] }) =>
     apiClient.post('/conversations/group', { name, avatar, memberIds }),
 
   leaveConversation: (conversationId) =>
     apiClient.post(`/conversations/${conversationId}/leave`),
+
+  deleteConversationForMe: (conversationId) =>
+    apiClient.delete(`/conversations/${conversationId}`),
 
   getConversationMembers: (conversationId, includeLeft = false) =>
     apiClient.get(`/conversations/${conversationId}/members?includeLeft=${includeLeft ? 'true' : 'false'}`),

@@ -126,6 +126,7 @@ export default function RightSidebar({
   onViewProfile,
   onLeaveGroup,
   onGroupUpdated,
+  onDeleteConversation,
 }) {
   const [tab, setTab] = useState('info');
   const { isUserOnline, getPresenceStatus } = usePresence();
@@ -138,6 +139,7 @@ export default function RightSidebar({
   const [friendPool, setFriendPool] = useState([]);
   const [selectedAddIds, setSelectedAddIds] = useState([]);
   const [loadingFriendPool, setLoadingFriendPool] = useState(false);
+  const [dmFriendState, setDmFriendState] = useState(null);
 
   const [editingMemberId, setEditingMemberId] = useState(null);
   const [editRole, setEditRole] = useState('member');
@@ -200,6 +202,22 @@ export default function RightSidebar({
     }
   }, [canInviteMembers, conversation?.id, conversation?.type, members]);
 
+  const loadDmFriendState = useCallback(async () => {
+    if (!conversation?.otherUserId) {
+      setDmFriendState(null);
+      return;
+    }
+
+    try {
+      const res = await friendApi.getFriendList(true);
+      const list = res?.data?.success ? (res.data.data || []) : [];
+      const state = list.find((item) => (item.friendId || '').toString() === conversation.otherUserId);
+      setDmFriendState(state || null);
+    } catch {
+      setDmFriendState(null);
+    }
+  }, [conversation?.otherUserId]);
+
   useEffect(() => {
     setEditingMemberId(null);
     setSelectedAddIds([]);
@@ -208,6 +226,14 @@ export default function RightSidebar({
   useEffect(() => {
     loadMembers();
   }, [loadMembers]);
+
+  useEffect(() => {
+    if (conversation?.type === 'dm') {
+      loadDmFriendState();
+    } else {
+      setDmFriendState(null);
+    }
+  }, [conversation?.type, loadDmFriendState]);
 
   useEffect(() => {
     loadFriendPool();
@@ -309,6 +335,25 @@ export default function RightSidebar({
       if (onGroupUpdated) await onGroupUpdated();
     } catch (error) {
       window.alert(error.response?.data?.message || 'Khong the giai tan nhom');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const handleBlockUser = async () => {
+    const targetUserId = conversation?.otherUserId;
+    if (!targetUserId) return;
+
+    const confirmed = window.confirm(dmFriendState?.iBlocked ? 'Bạn muốn bỏ chặn người dùng này?' : 'Bạn muốn chặn người dùng này?');
+    if (!confirmed) return;
+
+    try {
+      setBusyAction('block-user');
+      const res = await friendApi.blockFriend(targetUserId);
+      window.alert(res?.data?.message || 'Đã cập nhật trạng thái chặn người dùng');
+      await loadDmFriendState();
+    } catch (error) {
+      window.alert(error.response?.data?.message || 'Không thể chặn người dùng');
     } finally {
       setBusyAction('');
     }
@@ -685,7 +730,22 @@ export default function RightSidebar({
                 <ActionButton icon={<BellOff size={15} />} label="Tat thong bao" />
 
                 {conversation.type === 'dm' && (
-                  <ActionButton icon={<Ban size={15} />} label="Chan nguoi dung" variant="danger" />
+                  <ActionButton
+                    icon={<Trash2 size={15} />}
+                    label="Xoa cuoc tro chuyen"
+                    variant="danger"
+                    onClick={() => onDeleteConversation?.(conversation.id)}
+                  />
+                )}
+
+                {conversation.type === 'dm' && (
+                  <ActionButton
+                    icon={<Ban size={15} />}
+                    label={dmFriendState?.iBlocked ? 'Bo chan nguoi dung' : 'Chan nguoi dung'}
+                    variant="danger"
+                    onClick={handleBlockUser}
+                    disabled={busyAction === 'block-user' || !conversation.otherUserId}
+                  />
                 )}
 
                 {conversation.type === 'group' && (

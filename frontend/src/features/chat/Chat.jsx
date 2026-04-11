@@ -44,9 +44,27 @@ const mapConversationItem = (item, dmOverrides) => {
     type: item.type,
     online: false,
     memberCount: item.totalMembers,
+    otherUserId: item.otherUserId || null,
     raw: item,
   };
 };
+
+const buildPendingDmConversation = (peer) => ({
+  id: `pending-dm-${peer.id}`,
+  name: peer.name || 'Đoạn chat trực tiếp',
+  avatar: peer.avatar || null,
+  lastMessage: 'Chưa có tin nhắn',
+  time: '',
+  unread: 0,
+  type: 'dm',
+  online: false,
+  memberCount: 2,
+  otherUserId: peer.id,
+  raw: {
+    pendingDm: true,
+    targetUserId: peer.id,
+  },
+});
 
 const BOTTOM_TABS = [
   { key: 'messages', icon: MessageCircle, label: 'Tin nhắn' },
@@ -155,6 +173,7 @@ const Chat = () => {
       } else {
         setActiveConversation((prevActive) => {
           if (!prevActive?.id) return prevActive;
+          if (prevActive.raw?.pendingDm) return prevActive;
           return mapped.find((c) => c.id === prevActive.id) || null;
         });
       }
@@ -186,6 +205,17 @@ const Chat = () => {
   }, [location.state]);
 
   useEffect(() => {
+    const pendingPeer = location.state?.pendingPeer;
+    if (!pendingPeer?.id) return;
+
+    setActiveConversation(buildPendingDmConversation(pendingPeer));
+    if (isMobile) {
+      setMobileView('chat');
+      setMobileTab('messages');
+    }
+  }, [isMobile, location.state]);
+
+  useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
@@ -200,26 +230,100 @@ const Chat = () => {
     }
   }, [isMobile]);
 
-  const handleSendMessage = useCallback((text) => {
+  const handleSendMessage = useCallback(async (text) => {
     if (!activeConversation || !text.trim()) return;
+
+    const trimmedText = text.trim();
+    let resolvedConversation = activeConversation;
+    let resolvedConversationId = activeConversation.id;
+
+    if (activeConversation.raw?.pendingDm && activeConversation.raw?.targetUserId) {
+      try {
+        const targetUserId = activeConversation.raw.targetUserId;
+        const res = await conversationApi.createDmConversation(targetUserId, trimmedText);
+        const createdConversation = res?.data?.data;
+        const createdConversationId = createdConversation?._id;
+
+        if (!createdConversationId) {
+          throw new Error('Không nhận được conversationId từ server');
+        }
+
+        const override = {
+          id: targetUserId,
+          name: activeConversation.name,
+          avatar: activeConversation.avatar || '',
+        };
+
+        setDmOverrides((prev) => ({
+          ...prev,
+          [createdConversationId]: override,
+        }));
+
+        const mappedCreated = mapConversationItem(createdConversation, {
+          [createdConversationId]: override,
+        });
+
+        setConversations((prev) => {
+          const withoutPending = prev.filter((c) => c.id !== activeConversation.id);
+          const existingIndex = withoutPending.findIndex((c) => c.id === mappedCreated.id);
+
+          if (existingIndex >= 0) {
+            const next = [...withoutPending];
+            next[existingIndex] = { ...next[existingIndex], ...mappedCreated };
+            return next;
+          }
+
+          return [mappedCreated, ...withoutPending];
+        });
+
+        setMessages((prev) => {
+          const next = { ...prev };
+          const pendingMessages = next[activeConversation.id] || [];
+          delete next[activeConversation.id];
+          next[createdConversationId] = pendingMessages;
+          return next;
+        });
+
+        setActiveConversation(mappedCreated);
+        resolvedConversation = mappedCreated;
+        resolvedConversationId = createdConversationId;
+      } catch (error) {
+        window.alert(error.response?.data?.message || error.message || 'Không thể tạo cuộc trò chuyện');
+        return;
+      }
+    }
+
     const newMsg = {
       id: Date.now(),
       senderId: 'me',
       senderName: 'Tôi',
-      content: text.trim(),
+      content: trimmedText,
       time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       type: 'text',
     };
     setMessages(prev => ({
       ...prev,
-      [activeConversation.id]: [...(prev[activeConversation.id] || []), newMsg],
+      [resolvedConversationId]: [...(prev[resolvedConversationId] || []), newMsg],
     }));
-    setConversations(prev =>
-      prev.map(c => c.id === activeConversation.id
-        ? { ...c, lastMessage: text.trim(), time: newMsg.time }
-        : c
-      )
-    );
+    setConversations((prev) => {
+      const existingIndex = prev.findIndex((c) => c.id === resolvedConversationId);
+
+      if (existingIndex === -1) {
+        return [{ ...resolvedConversation, lastMessage: trimmedText, time: newMsg.time }, ...prev];
+      }
+
+      return prev.map((c) => (
+        c.id === resolvedConversationId
+          ? { ...c, lastMessage: trimmedText, time: newMsg.time }
+          : c
+      ));
+    });
+
+    setActiveConversation((prev) => (
+      prev?.id === resolvedConversationId
+        ? { ...prev, lastMessage: trimmedText, time: newMsg.time }
+        : prev
+    ));
   }, [activeConversation]);
 
   const handleViewProfile = useCallback((userId) => {
@@ -343,6 +447,44 @@ const Chat = () => {
     }
   }, [fetchConversations]);
 
+  const handleDeleteConversation = useCallback(async (conversationId) => {
+    if (!conversationId) return;
+
+    const activeId = activeConversation?.id;
+
+    // Conversation tạm (chưa tạo DB) chỉ cần dọn local state.
+    if (conversationId.startsWith('pending-dm-')) {
+      setMessages((prev) => {
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
+      });
+      setActiveConversation((prev) => (prev?.id === conversationId ? null : prev));
+      return;
+    }
+
+    const ok = window.confirm('Bạn có chắc chắn muốn xóa cuộc trò chuyện này ở phía bạn?');
+    if (!ok) return;
+
+    try {
+      await conversationApi.deleteConversationForMe(conversationId);
+
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      setMessages((prev) => {
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
+      });
+      setActiveConversation((prev) => (prev?.id === conversationId ? null : prev));
+
+      if (isMobile && activeId === conversationId) {
+        setMobileView('list');
+      }
+    } catch (error) {
+      window.alert(error.response?.data?.message || 'Không thể xóa cuộc trò chuyện');
+    }
+  }, [activeConversation?.id, isMobile]);
+
   const unreadTotal = conversations.reduce((s, c) => s + (c.unread || 0), 0);
   const activeMessages = activeConversation ? messages[activeConversation.id] || [] : [];
 
@@ -425,6 +567,7 @@ const Chat = () => {
               onViewProfile={handleViewProfile}
               onLeaveGroup={handleLeaveGroup}
               onGroupUpdated={fetchConversations}
+              onDeleteConversation={handleDeleteConversation}
               isMobile
             />
           </div>
@@ -472,6 +615,7 @@ const Chat = () => {
               onViewProfile={handleViewProfile}
               onLeaveGroup={handleLeaveGroup}
               onGroupUpdated={fetchConversations}
+              onDeleteConversation={handleDeleteConversation}
             />
           ) : (
             <div style={{
