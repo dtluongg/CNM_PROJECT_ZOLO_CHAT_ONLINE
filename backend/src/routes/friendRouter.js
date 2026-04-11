@@ -11,7 +11,8 @@ const {
     cancelFriendRequest,
     unfriend,
     updateNickname,
-    blockFriend
+    blockFriend,
+    getBlockedList
 } = require('../controllers/friendController');
 
 // Mọi hoạt động Bạn bè đều phải đăng nhập
@@ -20,6 +21,7 @@ router.use(verifyToken);
 // ── Các endpoint của Bạn Bè ──────────────────────────────────────
 
 router.get('/list', getFriendList);
+router.get('/blocked', getBlockedList);
 router.post('/requests', sendFriendRequest);
 router.get('/requests/incoming', getIncomingRequests);
 router.get('/requests/outgoing', getOutgoingRequests);

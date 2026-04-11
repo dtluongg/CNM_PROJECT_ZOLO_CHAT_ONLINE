@@ -78,6 +78,7 @@ export default function UserProfilePage() {
   const [error, setError] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [activeTab, setActiveTab] = useState('info'); // 'info' | 'qr'
+  const [isBlocked, setIsBlocked] = useState(false); // Nếu mình bị người này chặn
   const [friendState, setFriendState] = useState({
     relation: 'none', // none | friend | incoming | outgoing
     incomingRequestId: null,
@@ -103,7 +104,7 @@ export default function UserProfilePage() {
 
     try {
       const [friendRes, incomingRes, outgoingRes] = await Promise.all([
-        friendApi.getFriendList().catch(() => ({ data: { success: false } })),
+        friendApi.getFriendList(true).catch(() => ({ data: { success: false } })), // includeBlocked=true để kiểm tra xem mình có bị chặn không
         friendApi.getIncomingRequests().catch(() => ({ data: { success: false } })),
         friendApi.getOutgoingRequests().catch(() => ({ data: { success: false } })),
       ]);
@@ -112,7 +113,17 @@ export default function UserProfilePage() {
       const incoming = incomingRes.data?.success ? (incomingRes.data.data || []) : [];
       const outgoing = outgoingRes.data?.success ? (outgoingRes.data.data || []) : [];
 
-      const isFriend = friends.some((f) => f.friendId === userId);
+      // Kiểm tra xem mình có bị người này chặn không
+      const friendRecord = friends.find((f) => f.friendId === userId);
+      if (friendRecord && friendRecord.theyBlockedMe) {
+        setIsBlocked(true);
+        setFriendState({ relation: 'none', incomingRequestId: null, outgoingRequestId: null });
+        return;
+      }
+
+      setIsBlocked(false);
+
+      const isFriend = friends.some((f) => f.friendId === userId && !f.theyBlockedMe);
       if (isFriend) {
         setFriendState({ relation: 'friend', incomingRequestId: null, outgoingRequestId: null });
         return;
@@ -167,17 +178,9 @@ export default function UserProfilePage() {
 
     try {
       setMessageLoading(true);
-      const res = await conversationApi.createDmConversation(userId);
-      const conversationId = res?.data?.data?._id;
-
-      if (!conversationId) {
-        throw new Error('Không nhận được conversationId từ server');
-      }
-
       navigate('/chat', {
         state: {
-          openConversationId: conversationId,
-          peer: {
+          pendingPeer: {
             id: userId,
             name: profile.displayName,
             avatar: profile.avatar || '',
@@ -185,7 +188,7 @@ export default function UserProfilePage() {
         },
       });
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Không thể tạo đoạn chat');
+      alert(err.response?.data?.message || err.message || 'Không thể mở đoạn chat');
     } finally {
       setMessageLoading(false);
     }
@@ -240,6 +243,25 @@ export default function UserProfilePage() {
       }}>
         <div style={{ fontSize: 48 }}>😕</div>
         <p style={{ color: '#ed4245', fontWeight: 700 }}>{error || 'Không tìm thấy người dùng'}</p>
+        <button onClick={() => navigate(-1)} style={{
+          background: 'var(--accent)', color: '#fff', border: 'none',
+          borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontWeight: 600,
+        }}>
+          Quay lại
+        </button>
+      </div>
+    );
+  }
+
+  if (isBlocked) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: 'var(--bg-primary)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: 12,
+      }}>
+        <div style={{ fontSize: 48 }}>🚫</div>
+        <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 16 }}>Không thể xem thông tin của người dùng này</p>
         <button onClick={() => navigate(-1)} style={{
           background: 'var(--accent)', color: '#fff', border: 'none',
           borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontWeight: 600,

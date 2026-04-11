@@ -593,7 +593,7 @@
           "response": []
         },
         {
-          "name": "My Blocked List Only (include blocked)",
+          "name": "My Blocked List",
           "event": [
             {
               "listen": "test",
@@ -604,10 +604,11 @@
                   "  pm.expect(pm.response.code).to.eql(200);",
                   "});",
                   "const json = pm.response.json();",
-                  "const data = Array.isArray(json.data) ? json.data : [];",
-                  "const blocked = data.filter(x => x && (x.iBlocked === true || x.theyBlockedMe === true));",
-                  "pm.collectionVariables.set('blockedList', JSON.stringify(blocked, null, 2));",
-                  "console.log('Blocked list:', blocked);"
+                  "pm.test('Blocked list response has array data', function () {",
+                  "  pm.expect(Array.isArray(json.data)).to.eql(true);",
+                  "});",
+                  "pm.collectionVariables.set('blockedList', JSON.stringify(json.data || [], null, 2));",
+                  "console.log('Blocked list:', json.data || []);"
                 ]
               }
             }
@@ -618,14 +619,11 @@
               { "key": "Authorization", "value": "Bearer {{activeAccessToken}}", "type": "text" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/backend/api/friends/list?includeBlocked=true",
+              "raw": "{{baseUrl}}/backend/api/friends/blocked",
               "host": ["{{baseUrl}}"],
-              "path": ["backend", "api", "friends", "list"],
-              "query": [
-                { "key": "includeBlocked", "value": "true" }
-              ]
+              "path": ["backend", "api", "friends", "blocked"]
             },
-            "description": "Loc danh sach bi chan tu response (dua vao iBlocked/theyBlockedMe) va luu vao blockedList."
+            "description": "Lấy danh sách những người tôi đã chặn từ endpoint /friends/blocked."
           },
           "response": []
         },

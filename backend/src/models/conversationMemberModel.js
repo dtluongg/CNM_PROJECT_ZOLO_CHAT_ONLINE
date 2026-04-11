@@ -19,6 +19,8 @@ const conversationMemberSchema = new mongoose.Schema(
     
     // Cài đặt cá nhân
     isArchived: { type: Boolean, default: false }, // Đã lưu trữ đối với cá nhân này
+    isDeleted: { type: Boolean, default: false }, // Đã xóa hội thoại phía tôi
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
