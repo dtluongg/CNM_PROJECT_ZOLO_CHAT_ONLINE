@@ -60,6 +60,9 @@ const messageApi = {
 
   markAsRead: (conversationId, messageId) =>
     apiClient.post(`/messages/${conversationId}/read/${messageId}`),
+
+  forwardMessage: (conversationId, forwardFromMessageId) =>
+    apiClient.post(`/messages/${conversationId}`, { forwardFromMessageId }),
 };
 
 export default messageApi;
