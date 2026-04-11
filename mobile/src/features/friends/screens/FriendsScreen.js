@@ -165,22 +165,32 @@ export default function FriendsScreen({ navigation }) {
     try {
       setOpeningChat(true);
       const conversationApi = require('../../chat/api/conversationApi').default;
-      const res = await conversationApi.createDm(friend.friendId);
+      const targetId = friend.friendId || friend._id || friend.userId;
+
+      const res = await conversationApi.createDm(targetId, 'Xin chào!');
       const conv = res?.data?.data || res?.data;
-      if (conv?._id) {
-        navigation.navigate('Message', {
-          conversation: {
-            id: conv._id,
-            name: friend.displayName || 'Đoạn chat trực tiếp',
-            avatar: friend.avatar || null,
-            type: 'dm',
-            otherUserId: friend.friendId,
-            lastMessage: conv.lastMessagePreview || '',
-            memberCount: 2,
-          },
-        });
+
+      // Lấy đúng id
+      const convId = conv?._id?.toString() || conv?.id?.toString();
+
+      if (!convId) {
+        Alert.alert('Lỗi', 'Không tạo được cuộc trò chuyện');
+        return;
       }
+
+      navigation.navigate('Message', {
+        conversation: {
+          id: convId,           // ← phải có id đúng
+          name: friend.displayName || 'Đoạn chat',
+          avatar: friend.avatar || null,
+          type: 'dm',
+          otherUserId: targetId.toString(),
+          lastMessage: '',
+          memberCount: 2,
+        },
+      });
     } catch (error) {
+      console.error('handleOpenChat error:', error.response?.data);
       Alert.alert('Lỗi', error.response?.data?.message || 'Không thể mở cuộc trò chuyện');
     } finally {
       setOpeningChat(false);
@@ -247,7 +257,9 @@ export default function FriendsScreen({ navigation }) {
         },
         {
            text: 'Xem hồ sơ',
-           onPress: () => navigation.navigate('UserProfile', { user: friendInfo }),
+           onPress: () => navigation.navigate('UserProfile', {
+               userId: friendInfo.friendId,  // 👈 tương tự
+             }),
         },
         {
            text: 'Đổi biệt danh',
@@ -345,7 +357,7 @@ export default function FriendsScreen({ navigation }) {
     return (
         <TouchableOpacity
             style={s.userCard}
-            onPress={() => navigation.navigate('UserProfile', { user: item })}
+            onPress={() => navigation.navigate('UserProfile', { userId: item.friendId, })}
             onLongPress={() => handleFriendOptions(item)}
             activeOpacity={0.7}
         >

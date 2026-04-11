@@ -34,7 +34,10 @@ export default function UserProfileScreen({ route, navigation }) {
   const [friendRequestId, setFriendRequestId] = useState(null);
   const [friendBusy, setFriendBusy]     = useState(false);
 
-  const userId = route.params?.userId || route.params?.user?._id;
+  // UserProfileScreen.js — sửa useEffect load profile
+  const userId = route.params?.userId ||
+                 route.params?.user?._id ||
+                 route.params?.user?.friendId;
 
   // Live status info — trả về { color, label, statusKey }
   const getLiveStatusInfo = (user) => {
@@ -201,29 +204,41 @@ export default function UserProfileScreen({ route, navigation }) {
     );
   };
 
+  // UserProfileScreen.js — thay handleMessage
   const handleMessage = async () => {
     if (!profile || messaging) return;
     setMessaging(true);
     try {
-      const res  = await conversationApi.createDm(profile._id);
-      const conv = res.data.data;
-      const si   = getLiveStatusInfo(profile);
+      const res = await conversationApi.createDm(profile._id, 'Xin chào!');
+      const conv = res.data.data || res.data;
+
+      // Đảm bảo lấy đúng id dù backend trả _id hay id
+      const convId = conv?._id?.toString() || conv?.id?.toString();
+
+      if (!convId) {
+        Alert.alert('Lỗi', 'Không tạo được cuộc trò chuyện');
+        return;
+      }
+
+      const si = getLiveStatusInfo(profile);
       navigation.push('Message', {
         conversation: {
-          id:           conv._id?.toString(),
-          name:         profile.displayName || profile.username || 'Người dùng',
-          avatar:       profile.avatar,
-          type:         'dm',
-          status:       si.statusKey || 'offline',
-          online:       isUserOnline(profile._id),
-          otherUserId:  profile._id?.toString(),
+          id: convId,           // ← đây là key MessageScreen dùng
+          name: profile.displayName || profile.username || 'Người dùng',
+          avatar: profile.avatar || null,
+          type: 'dm',
+          status: si.statusKey || 'offline',
+          online: isUserOnline(profile._id),
+          otherUserId: profile._id?.toString(),
           usernameColor: profile.usernameColor,
-          lastMessage: '', time: '', unread: 0,
+          lastMessage: '',
+          time: '',
+          unread: 0,
         },
       });
     } catch (err) {
-      console.error('handleMessage error:', err);
-      Alert.alert('Lỗi', 'Không thể mở cuộc trò chuyện. Vui lòng thử lại.');
+      console.error('handleMessage error:', err.response?.data);
+      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể mở cuộc trò chuyện.');
     } finally {
       setMessaging(false);
     }

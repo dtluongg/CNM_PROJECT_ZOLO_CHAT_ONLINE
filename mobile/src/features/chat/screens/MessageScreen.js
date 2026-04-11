@@ -1432,12 +1432,33 @@ export default function MessageScreen({ route, navigation }) {
           maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
           ListHeaderComponent={() => (
             <View style={msgStyles.introBox}>
-              <View style={[msgStyles.introAvatar, { backgroundColor: getAvatarColor(conversation.name) }]}>
-                <Text style={msgStyles.introInitials}>{getInitials(conversation.name)}</Text>
+              {/* Avatar — dùng đúng avatar thật thay vì chỉ initials */}
+              <View style={{ marginBottom: 12 }}>
+                <Avatar
+                  name={conversation.name}
+                  avatar={conversation.avatar}
+                  size={72}
+                  online={isOnline}
+                  THEME={THEME}
+                  styles={msgStyles}
+                />
               </View>
+
               <Text style={msgStyles.introName}>
-                {conversation.type === 'dm' ? conversation.name : `# ${conversation.name}`}
+                {conversation.type === 'group' ? `# ${conversation.name}` : conversation.name}
               </Text>
+
+              {/* Status / member count */}
+              <Text style={[msgStyles.introStatus, {
+                color: conversation.type === 'dm'
+                  ? (isOnline ? THEME.statusOnline : THEME.textMuted)
+                  : THEME.textMuted
+              }]}>
+                {conversation.type === 'dm'
+                  ? (isOnline ? 'Đang hoạt động' : 'Ngoại tuyến')
+                  : `${conversation.memberCount || conversation.members || 0} thành viên`}
+              </Text>
+
               <Text style={msgStyles.introDesc}>
                 {conversation.type === 'dm'
                   ? `Đây là bắt đầu trò chuyện với ${conversation.name}.`
@@ -2081,4 +2102,30 @@ const useStyles = (THEME) => StyleSheet.create({
   },
   editLabel: { fontSize: 12, fontWeight: '700', color: THEME.accent, marginBottom: 2 },
   editContent: { fontSize: 13, color: THEME.textMuted },
+  introStatus: {
+    fontSize: 13,
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  // Sửa lại introBox để căn giữa
+  introBox: {
+    padding: 24,
+    alignItems: 'center',        // 👈 căn giữa
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.border,
+    marginBottom: 8,
+  },
+  introName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: THEME.textPrimary,
+    marginBottom: 4,
+    marginTop: 10,
+  },
+  introDesc: {
+    fontSize: 14,
+    color: THEME.textMuted,
+    lineHeight: 20,
+    textAlign: 'center',         // 👈 căn giữa text
+  }
 });
