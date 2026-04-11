@@ -171,7 +171,14 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress, currentUserId, TH
         </View>
       );
     }
-    return <Text style={[styles.bubbleText, { color: bubbleText }]}>{msg.content}</Text>;
+    return (
+      <Text style={[styles.bubbleText, { color: bubbleText }]}>
+        {msg.content}
+        {msg.edited && (
+          <Text style={{ fontSize: 11, fontStyle: 'italic', opacity: 0.6 }}> (đã chỉnh sửa)</Text>
+        )}
+      </Text>
+    );
   };
 
   return (
@@ -244,6 +251,7 @@ export default function MessageScreen({ route, navigation }) {
   const [typingUser, setTypingUser] = useState(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [reactionTypes, setReactionTypes] = useState([]);
+  const [editingMessage, setEditingMessage] = useState(null);
 
   const flatRef = useRef(null);
   const inputRef = useRef(null);
@@ -381,9 +389,19 @@ export default function MessageScreen({ route, navigation }) {
 
     socket.on('chat:message-edited', ({ conversationId: cid, message }) => {
       if (cid !== conversation.id) return;
-      setMessages(prev => prev.map(m => 
-        (m._id?.toString() === message._id?.toString()) ? normalizeMsg(message) : m
-      ));
+      setMessages(prev => prev.map(m => {
+        if (m._id?.toString() === message._id?.toString()) {
+          const normalized = normalizeMsg(message);
+          // TRỘN DỮ LIỆU: Giữ lại reactions và myReaction cũ
+          return {
+            ...m,
+            ...normalized,
+            reactions: m.reactions,
+            myReaction: m.myReaction
+          };
+        }
+        return m;
+      }));
     });
 
     return () => {
@@ -422,11 +440,35 @@ export default function MessageScreen({ route, navigation }) {
     }, 2000);
   }, [conversation.id]);
 
-  // ── Send text ──────────────────────────────────────────────────────────
+  // ── Send text / Update edited text ──────────────────────────────────
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
+    if (editingMessage) {
+      // ── Chế độ CHỈNH SỬA ──────────────────────────────────────────
+      const mId = editingMessage._id?.toString();
+      const oldContent = editingMessage.content;
+      
+      // Optimistic update
+      setMessages(prev => prev.map(m => 
+        (m._id?.toString() === mId) ? { ...m, content: trimmed, edited: true } : m
+      ));
+      setEditingMessage(null);
+      setText('');
+      Keyboard.dismiss();
+
+      try {
+        await messageApi.editMessage(mId, trimmed);
+      } catch (err) {
+        console.error('editMessage error:', err);
+        Alert.alert('Lỗi', 'Không thể chỉnh sửa tin nhắn');
+        // Rollback nếu cần hoặc thông báo cho user
+      }
+      return;
+    }
+
+    // ── Chế độ GỬI MỚI ──────────────────────────────────────────────
     const tempId = `temp_${Date.now()}`;
     const now = new Date().toISOString();
     const tempMsg = {
@@ -633,6 +675,13 @@ export default function MessageScreen({ route, navigation }) {
     }
   };
 
+  const handleStartEdit = (msg) => {
+    setEditingMessage(msg);
+    setText(msg.content || '');
+    setShowEmoji(false);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
 
   // ── Build display list ─────────────────────────────────────────────────
   const displayItems = [];
@@ -760,6 +809,21 @@ export default function MessageScreen({ route, navigation }) {
         {/* ── Wrapper bọc emoji + input/recording, đẩy lên theo keyboardHeight ── */}
         <View style={{ paddingBottom: keyboardHeight }}>
 
+          {/* ── Editing bar ── */}
+          {editingMessage && (
+            <View style={msgStyles.editBar}>
+              <View style={{ flex: 1 }}>
+                <Text style={msgStyles.editLabel}>Đang chỉnh sửa tin nhắn</Text>
+                <Text style={msgStyles.editContent} numberOfLines={1}>
+                  {editingMessage.content}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => { setEditingMessage(null); setText(''); }} style={{ padding: 8 }}>
+                <Text style={{ fontSize: 18, color: THEME.textMuted }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* ── Emoji picker ── */}
           {showEmoji && (
             <View style={msgStyles.emojiPicker}>
@@ -852,19 +916,28 @@ export default function MessageScreen({ route, navigation }) {
             </View>
 
             {[
-              { icon: '↩️', label: 'Thu hồi', action: 'revoke' },
+              { icon: '↩️', label: 'Trả lời', action: 'reply' },
+              { icon: '➡️', label: 'Chuyển tiếp', action: 'forward' },
+              { icon: '📋', label: 'Sao chép tin nhắn', action: 'copy' },
+              { icon: '📌', label: 'Ghim tin nhắn', action: 'pin' },
+              { icon: '🛡️', label: 'Thu hồi', action: 'revoke', danger: true },
               { icon: '✏️', label: 'Chỉnh sửa tin nhắn', action: 'edit' },
               { icon: '🗑️', label: 'Xóa tin nhắn', action: 'delete', danger: true },
             ].map(a => {
-              if (a.action === 'revoke' && (actionMsg?.senderId !== currentUserId || actionMsg?.revoked)) return null;
-              if (a.action === 'edit' && (actionMsg?.senderId !== currentUserId || actionMsg?.revoked || actionMsg?.type !== 'text')) return null;
-              if (a.action === 'delete' && (actionMsg?.senderId !== currentUserId)) return null;
+              // Logic hiển thị:
+              const isMe = actionMsg?.senderId === currentUserId;
+              const isRevoked = actionMsg?.revoked;
+
+              if (a.action === 'revoke' && (!isMe || isRevoked)) return null;
+              if (a.action === 'edit' && (!isMe || isRevoked || actionMsg?.type !== 'text')) return null;
+              if (a.action === 'copy' && actionMsg?.type !== 'text') return null;
 
               return (
                 <TouchableOpacity
                   key={a.label}
                   onPress={() => {
                     if (a.action === 'revoke') handleRevoke(actionMsg);
+                    if (a.action === 'edit') handleStartEdit(actionMsg);
                     setActionMsg(null);
                   }}
                   style={msgStyles.sheetAction}
@@ -1030,4 +1103,14 @@ const useStyles = (THEME) => StyleSheet.create({
   },
   sheetActionIcon: { fontSize: 20 },
   sheetActionLabel: { fontSize: 16, color: THEME.textPrimary, fontWeight: '500' },
+
+  // Edit bar
+  editBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingVertical: 8,
+    backgroundColor: THEME.bgSecondary,
+    borderTopWidth: 1, borderTopColor: THEME.accent,
+  },
+  editLabel: { fontSize: 12, fontWeight: '700', color: THEME.accent, marginBottom: 2 },
+  editContent: { fontSize: 13, color: THEME.textMuted },
 });

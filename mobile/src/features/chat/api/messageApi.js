@@ -54,6 +54,9 @@ const messageApi = {
 
   revokeMessage: (messageId) =>
     apiClient.patch(`/messages/${messageId}/revoke`),
+
+  editMessage: (messageId, content) =>
+    apiClient.patch(`/messages/${messageId}`, { content }),
 };
 
 export default messageApi;
