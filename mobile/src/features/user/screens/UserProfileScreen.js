@@ -1,16 +1,14 @@
-/**
- * UserProfileScreen – view another user's public profile (modern UI)
- */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
   ScrollView, ActivityIndicator, StatusBar, Alert,
 } from 'react-native';
-import authApi from '../../auth/api/authApi';
-import userApi from '../api/userApi';
 import apiClient from '../../../services/apiClient';
+import conversationApi from '../../chat/api/conversationApi';
+import friendApi from '../../friends/api/friendApi';
 import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
+import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 
 const Avatar = ({ name, avatar, size = 80 }) => {
   const bg = getAvatarColor(name);
@@ -25,19 +23,45 @@ const Avatar = ({ name, avatar, size = 80 }) => {
 
 export default function UserProfileScreen({ route, navigation }) {
   const { user: authUser } = useAuth();
-  const [profile, setProfile] = useState(route.params?.user || null);
-  const [loading, setLoading] = useState(!route.params?.user);
+  const { isUserOnline, getPresenceStatus, getLastSeen, getStatusText } = usePresence();
+
+  const [profile, setProfile]         = useState(route.params?.user || null);
+  const [loading, setLoading]         = useState(!route.params?.user);
+  const [messaging, setMessaging]     = useState(false);
+
+  // Friend state: null (loading), 'none', 'friends', 'sent', 'received'
+  const [friendStatus, setFriendStatus] = useState(null);
+  const [friendRequestId, setFriendRequestId] = useState(null);
+  const [friendBusy, setFriendBusy]     = useState(false);
 
   const userId = route.params?.userId || route.params?.user?._id;
 
+  // Live status info — trả về { color, label, statusKey }
+  const getLiveStatusInfo = (user) => {
+    const online = isUserOnline(user._id);
+    const presStatus = getPresenceStatus(user._id);
+    if (online && presStatus) {
+      const cfg = STATUS_CONFIG[presStatus] || STATUS_CONFIG.online;
+      return { ...cfg, statusKey: presStatus };
+    }
+    return { ...STATUS_CONFIG.offline, statusKey: 'offline' };
+  };
+
   useEffect(() => {
     if (!profile && userId) loadProfile();
-  }, []);
+  }, [userId]);
+
+  // Load friend status once profile is known and it's not own profile
+  useEffect(() => {
+    if (profile && authUser && profile._id !== authUser._id) {
+      loadFriendStatus(profile._id);
+    }
+  }, [profile?._id]);
 
   const loadProfile = async () => {
     setLoading(true);
     try {
-      const res = await userApi.getUserProfile(userId);
+      const res = await apiClient.get(`/users/${userId}/profile`);
       setProfile(res.data.user || res.data);
     } catch {
       Alert.alert('Lỗi', 'Không thể tải hồ sơ người dùng.');
@@ -47,21 +71,162 @@ export default function UserProfileScreen({ route, navigation }) {
     }
   };
 
-  const handleMessage = () => {
-    if (!profile) return;
-    navigation.navigate('Message', {
-      conversation: {
-        id: profile._id,
-        name: profile.displayName || profile.username || 'Người dùng',
-        avatar: profile.avatar,
-        type: 'dm',
-        status: profile.status,
-        online: profile.status === 'online',
-        otherUserId: profile._id,
-        usernameColor: profile.usernameColor,
-        lastMessage: '', time: '', unread: 0,
-      },
-    });
+  const loadFriendStatus = async (targetId) => {
+    try {
+      const [friendsRes, outgoingRes, incomingRes] = await Promise.all([
+        friendApi.getFriendList(),
+        friendApi.getOutgoingRequests(),
+        friendApi.getIncomingRequests(),
+      ]);
+
+      const friends  = friendsRes.data?.data  || [];
+      const outgoing = outgoingRes.data?.data  || [];
+      const incoming = incomingRes.data?.data  || [];
+
+      // Normalize targetId to string for safe comparison
+      const tid = String(targetId);
+
+      const isFriend = friends.some(f => String(f.friendId) === tid);
+      if (isFriend) {
+        setFriendStatus('friends');
+        return;
+      }
+
+      // Outgoing: toUserId is a populated object { _id, displayName, ... }
+      const sent = outgoing.find(r => {
+        const id = r.toUserId?._id ?? r.toUserId;
+        return String(id) === tid;
+      });
+      if (sent) {
+        setFriendStatus('sent');
+        setFriendRequestId(sent._id);
+        return;
+      }
+
+      // Incoming: fromUserId is a populated object { _id, displayName, ... }
+      const received = incoming.find(r => {
+        const id = r.fromUserId?._id ?? r.fromUserId;
+        return String(id) === tid;
+      });
+      if (received) {
+        setFriendStatus('received');
+        setFriendRequestId(received._id);
+        return;
+      }
+
+      setFriendStatus('none');
+    } catch {
+      setFriendStatus('none');
+    }
+  };
+
+  const handleSendRequest = async () => {
+    if (friendBusy) return;
+    setFriendBusy(true);
+    try {
+      const res = await friendApi.sendRequest(profile._id);
+      setFriendRequestId(res.data?.data?._id || null);
+      setFriendStatus('sent');
+    } catch (err) {
+      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể gửi lời mời kết bạn.');
+    } finally {
+      setFriendBusy(false);
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    if (friendBusy || !friendRequestId) return;
+    setFriendBusy(true);
+    try {
+      await friendApi.cancelRequest(friendRequestId);
+      setFriendStatus('none');
+      setFriendRequestId(null);
+    } catch (err) {
+      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể thu hồi lời mời.');
+    } finally {
+      setFriendBusy(false);
+    }
+  };
+
+  const handleAcceptRequest = async () => {
+    if (friendBusy || !friendRequestId) return;
+    setFriendBusy(true);
+    try {
+      await friendApi.acceptRequest(friendRequestId);
+      setFriendStatus('friends');
+      setFriendRequestId(null);
+    } catch (err) {
+      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể chấp nhận lời mời.');
+    } finally {
+      setFriendBusy(false);
+    }
+  };
+
+  const handleRejectRequest = async () => {
+    if (friendBusy || !friendRequestId) return;
+    setFriendBusy(true);
+    try {
+      await friendApi.rejectRequest(friendRequestId);
+      setFriendStatus('none');
+      setFriendRequestId(null);
+    } catch (err) {
+      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể từ chối lời mời.');
+    } finally {
+      setFriendBusy(false);
+    }
+  };
+
+  const handleUnfriend = async () => {
+    Alert.alert(
+      'Hủy kết bạn',
+      `Bạn có chắc muốn hủy kết bạn với ${profile.displayName}?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xác nhận', style: 'destructive',
+          onPress: async () => {
+            if (friendBusy) return;
+            setFriendBusy(true);
+            try {
+              await friendApi.unfriend(profile._id);
+              setFriendStatus('none');
+            } catch (err) {
+              Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể hủy kết bạn.');
+            } finally {
+              setFriendBusy(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleMessage = async () => {
+    if (!profile || messaging) return;
+    setMessaging(true);
+    try {
+      const res  = await conversationApi.createDm(profile._id);
+      const conv = res.data.data;
+      const si   = getLiveStatusInfo(profile);
+      navigation.push('Message', {
+        conversation: {
+          id:           conv._id?.toString(),
+          name:         profile.displayName || profile.username || 'Người dùng',
+          avatar:       profile.avatar,
+          type:         'dm',
+          status:       si.statusKey || 'offline',
+          online:       isUserOnline(profile._id),
+          otherUserId:  profile._id?.toString(),
+          usernameColor: profile.usernameColor,
+          lastMessage: '', time: '', unread: 0,
+        },
+      });
+    } catch (err) {
+      console.error('handleMessage error:', err);
+      Alert.alert('Lỗi', 'Không thể mở cuộc trò chuyện. Vui lòng thử lại.');
+    } finally {
+      setMessaging(false);
+    }
   };
 
   if (loading) {
@@ -76,7 +241,8 @@ export default function UserProfileScreen({ route, navigation }) {
 
   if (!profile) return null;
 
-  const si = STATUS_CONFIG[profile.status || 'offline'] || STATUS_CONFIG.offline;
+  const si = getLiveStatusInfo(profile);
+  const ls = getLastSeen(profile._id);
   const isOwn = authUser?._id === profile._id;
 
   return (
@@ -98,18 +264,25 @@ export default function UserProfileScreen({ route, navigation }) {
           ? <Image source={{ uri: profile.banner }} style={s.banner} />
           : <View style={[s.banner, { backgroundColor: profile.usernameColor || THEME.accent }]} />
         }
-        {/* Banner gradient */}
         <View style={s.bannerGradient} />
 
-        {/* Avatar over banner */}
+        {/* Avatar + status */}
         <View style={s.avatarFloatRow}>
           <View style={[s.avatarRing, { borderColor: si.color }]}>
             <Avatar name={profile.displayName} avatar={profile.avatar} size={80} />
           </View>
-          {/* Status indicator */}
-          <View style={[s.statusBubble, { backgroundColor: si.color + '20', borderColor: si.color + '60' }]}>
-            <View style={[s.statusDot, { backgroundColor: si.color }]} />
-            <Text style={[s.statusBubbleText, { color: si.color }]}>{si.label}</Text>
+          <View style={{ alignItems: 'flex-start' }}>
+            <View style={[s.statusBubble, { backgroundColor: si.color + '20', borderColor: si.color + '60' }]}>
+              <View style={[s.statusDot, { backgroundColor: si.color }]} />
+              <Text style={[s.statusBubbleText, { color: si.color }]} numberOfLines={1}>
+                {si.label}
+              </Text>
+            </View>
+            {si.statusKey === 'offline' && !isOwn && ls ? (
+              <Text style={{ fontSize: 11, color: THEME.textMuted, marginTop: 3 }}>
+                Hoạt động {formatLastSeen(ls)}
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -119,13 +292,52 @@ export default function UserProfileScreen({ route, navigation }) {
             {profile.displayName}
           </Text>
           {profile.username && <Text style={s.handle}>@{profile.username}</Text>}
+          {(() => {
+            const cst = getStatusText(profile._id) || profile.statusText;
+            return cst ? (
+              <Text style={s.statusTextLine} numberOfLines={2}>{cst}</Text>
+            ) : null;
+          })()}
         </View>
 
         {/* Action buttons */}
         {!isOwn ? (
           <View style={s.actionRow}>
-            <ActionBtn icon="💬" label="Nhắn tin" onPress={handleMessage} primary />
-            <ActionBtn icon="🤝" label="Kết bạn" onPress={() => Alert.alert('Kết bạn', `Đã gửi lời mời đến ${profile.displayName}!`)} />
+            {/* Message button */}
+            <ActionBtn
+              icon={messaging ? '⏳' : '💬'}
+              label={messaging ? 'Đang mở...' : 'Nhắn tin'}
+              onPress={handleMessage}
+              primary
+            />
+
+            {/* Friend button based on relationship status */}
+            {friendStatus === null && (
+              <ActionBtn icon="⏳" label="Đang tải..." onPress={() => {}} />
+            )}
+            {friendStatus === 'none' && (
+              <ActionBtn
+                icon={friendBusy ? '⏳' : '🤝'}
+                label={friendBusy ? 'Đang gửi...' : 'Kết bạn'}
+                onPress={handleSendRequest}
+              />
+            )}
+            {friendStatus === 'sent' && (
+              <ActionBtn
+                icon={friendBusy ? '⏳' : '✉️'}
+                label={friendBusy ? 'Đang hủy...' : 'Đã gửi lời mời'}
+                onPress={handleCancelRequest}
+              />
+            )}
+            {friendStatus === 'friends' && (
+              <ActionBtn
+                icon={friendBusy ? '⏳' : '👥'}
+                label={friendBusy ? 'Đang hủy...' : 'Hủy kết bạn'}
+                onPress={handleUnfriend}
+              />
+            )}
+
+            {/* Call button */}
             <ActionBtn icon="📞" label="Gọi điện" onPress={() => Alert.alert('Gọi điện', 'Tính năng sẽ sớm ra mắt!')} />
           </View>
         ) : (
@@ -137,6 +349,31 @@ export default function UserProfileScreen({ route, navigation }) {
           </View>
         )}
 
+        {/* Incoming request row (accept / reject) */}
+        {!isOwn && friendStatus === 'received' && (
+          <View style={[s.actionRow, { marginTop: -8 }]}>
+            <TouchableOpacity
+              style={[s.actionBtn, s.actionBtnPrimary, { flex: 1 }]}
+              onPress={handleAcceptRequest}
+              activeOpacity={0.78}
+              disabled={friendBusy}
+            >
+              <Text style={s.actionBtnIcon}>✅</Text>
+              <Text style={[s.actionBtnLabel, { color: '#fff' }]}>{friendBusy ? 'Đang xử lý...' : 'Chấp nhận'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.actionBtn, { flex: 1 }]}
+              onPress={handleRejectRequest}
+              activeOpacity={0.78}
+              disabled={friendBusy}
+            >
+              <Text style={s.actionBtnIcon}>❌</Text>
+              <Text style={s.actionBtnLabel}>{friendBusy ? 'Đang xử lý...' : 'Từ chối'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Status text */}
         {profile.statusText ? (
           <View style={s.section}>
             <Text style={s.sectionLabel}>TRẠNG THÁI TÙY CHỈNH</Text>
@@ -267,6 +504,7 @@ const s = StyleSheet.create({
   nameBlock: { paddingHorizontal: 16, marginBottom: 16 },
   displayName: { fontSize: 22, fontWeight: '800', letterSpacing: 0.2, marginBottom: 2 },
   handle: { fontSize: 13, color: THEME.textMuted },
+  statusTextLine: { fontSize: 12, color: THEME.textMuted, fontStyle: 'italic', marginTop: 4 },
 
   actionRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 16 },
   actionBtn: {

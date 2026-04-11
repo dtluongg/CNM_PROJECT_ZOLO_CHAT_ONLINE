@@ -111,8 +111,10 @@ const MessageBubble = ({ text, delay, x, y, fromMe = false }) => (
       fontFamily: '"Nunito", sans-serif',
       boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
       border: fromMe ? 'none' : '1px solid rgba(200,75,138,0.2)',
-      maxWidth: '160px',
+      maxWidth: '200px',
       whiteSpace: 'nowrap',
+      // wordBreak: 'break-word',
+      // display: 'inline-block',
     }}>
       {text}
     </div>

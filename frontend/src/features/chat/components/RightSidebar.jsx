@@ -1,30 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { usePresence } from '../../../context/PresenceContext';
+import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 import {
   X, Image, FileText, MessageCircle, BellOff, Ban, LogOut, Download, Phone,
   Shield, UserPlus, Crown, UserCog, Trash2,
 } from 'lucide-react';
 import conversationApi from '../api/conversationApi';
 import friendApi from '../../friends/api/friendApi';
+import messageApi from '../api/messageApi';
 
 const AVATAR_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#fee75c', '#ed4245', '#9b59b6', '#e67e22'];
 
 const STATUS_CONFIG = {
-  online: { color: '#3ba55c', label: 'Dang hoat dong', dot: '#3ba55c' },
-  idle: { color: '#faa61a', label: 'Vang mat', dot: '#faa61a' },
-  dnd: { color: '#ed4245', label: 'Khong lam phien', dot: '#ed4245' },
-  invisible: { color: '#80848e', label: 'An', dot: '#80848e' },
+  online: { color: '#3ba55c', label: 'Đang hoạt động', dot: '#3ba55c' },
+  idle: { color: '#faa61a', label: 'Vắng mặt', dot: '#faa61a' },
+  dnd: { color: '#ed4245', label: 'Không làm phiền', dot: '#ed4245' },
+  invisible: { color: '#80848e', label: 'Ẩn', dot: '#80848e' },
 };
 
-const MOCK_MEDIA = [
-  { id: 1, color: '#5865f2' },
-  { id: 2, color: '#eb459e' },
-  { id: 3, color: '#00b4d8' },
-  { id: 4, color: '#57f287' },
-  { id: 5, color: '#faa61a' },
-  { id: 6, color: '#ed4245' },
-];
 
 const getAvatarColor = (name) => AVATAR_COLORS[(name || '?').charCodeAt(0) % AVATAR_COLORS.length];
 
@@ -129,7 +122,7 @@ export default function RightSidebar({
   onDeleteConversation,
 }) {
   const [tab, setTab] = useState('info');
-  const { isUserOnline, getPresenceStatus } = usePresence();
+  const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
   const { user } = useAuth();
 
   const [members, setMembers] = useState([]);
@@ -148,6 +141,14 @@ export default function RightSidebar({
   const [editCanManage, setEditCanManage] = useState(false);
 
   const [busyAction, setBusyAction] = useState('');
+
+  const [mediaData, setMediaData]     = useState({ images: [], files: [] });
+  const [loadingMedia, setLoadingMedia] = useState(false);
+
+  // Nickname modal (DM only)
+  const [showNickname, setShowNickname]         = useState(false);
+  const [nicknameInput, setNicknameInput]       = useState('');
+  const [nicknameBusy, setNicknameBusy]         = useState(false);
 
   const myUserId = (user?._id || user?.id || '').toString();
 
@@ -221,7 +222,17 @@ export default function RightSidebar({
   useEffect(() => {
     setEditingMemberId(null);
     setSelectedAddIds([]);
+    setMediaData({ images: [], files: [] });
   }, [conversation?.id]);
+
+  useEffect(() => {
+    if ((tab !== 'media' && tab !== 'files') || !conversation?.id) return;
+    setLoadingMedia(true);
+    messageApi.getAttachments(conversation.id)
+      .then(res => setMediaData(res.data || { images: [], files: [] }))
+      .catch(() => setMediaData({ images: [], files: [] }))
+      .finally(() => setLoadingMedia(false));
+  }, [tab, conversation?.id]);
 
   useEffect(() => {
     loadMembers();
@@ -327,14 +338,14 @@ export default function RightSidebar({
 
   const handleDisbandGroup = async () => {
     if (!conversation.id) return;
-    if (!window.confirm('Ban chac chan muon giai tan nhom?')) return;
+    if (!window.confirm('Bạn chắc chắn muốn giải tán nhóm?')) return;
 
     try {
       setBusyAction('disband');
       await conversationApi.disbandConversation(conversation.id);
       if (onGroupUpdated) await onGroupUpdated();
     } catch (error) {
-      window.alert(error.response?.data?.message || 'Khong the giai tan nhom');
+      window.alert(error.response?.data?.message || 'Không thể giải tán nhóm');
     } finally {
       setBusyAction('');
     }
@@ -359,6 +370,20 @@ export default function RightSidebar({
     }
   };
 
+  const handleSaveNickname = async () => {
+    if (!conversation.otherUserId) return;
+    setNicknameBusy(true);
+    try {
+      await friendApi.updateNickname(conversation.otherUserId, nicknameInput.trim());
+      setShowNickname(false);
+      if (onGroupUpdated) onGroupUpdated();
+    } catch (error) {
+      window.alert(error.response?.data?.message || 'Không thể lưu biệt danh');
+    } finally {
+      setNicknameBusy(false);
+    }
+  };
+
   return (
     <div style={{
       width: 280,
@@ -380,7 +405,7 @@ export default function RightSidebar({
         flexShrink: 0,
       }}>
         <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-          {conversation.type === 'dm' ? 'Thong tin nguoi dung' : 'Thong tin nhom'}
+          {conversation.type === 'dm' ? 'Thông tin người dùng' : 'Thông tin nhóm'}
         </span>
         <button
           onClick={onClose}
@@ -493,6 +518,15 @@ export default function RightSidebar({
                     }} />
                     {statusConfig ? statusConfig.label : 'Offline'}
                   </div>
+                  {/* Last seen khi offline */}
+                  {!isOnline && conversation?.otherUserId && (() => {
+                    const ls = getLastSeen(conversation.otherUserId);
+                    return ls ? (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        Hoạt động {formatLastSeen(ls)}
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               ) : (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -727,7 +761,7 @@ export default function RightSidebar({
                   <ActionButton icon={<Shield size={15} />} label="Xem ho so" onClick={() => onViewProfile(conversation.otherUserId)} />
                 )}
                 <ActionButton icon={<Phone size={15} />} label="Goi dien" />
-                <ActionButton icon={<BellOff size={15} />} label="Tat thong bao" />
+                <ActionButton icon={<BellOff size={15} />} label="Tắt thông báo" />
 
                 {conversation.type === 'dm' && (
                   <ActionButton
@@ -746,6 +780,60 @@ export default function RightSidebar({
                     onClick={handleBlockUser}
                     disabled={busyAction === 'block-user' || !conversation.otherUserId}
                   />
+                )}
+
+                {conversation.type === 'dm' && conversation.otherUserId && (
+                  <ActionButton
+                    icon={<Shield size={15} />}
+                    label="Đặt biệt danh"
+                    onClick={() => { setNicknameInput(''); setShowNickname(true); }}
+                  />
+                )}
+
+                {conversation.type === 'dm' && conversation.otherUserId && (
+                  <ActionButton
+                    icon={<Ban size={15} />}
+                    label="Chặn người dùng"
+                    variant="danger"
+                    onClick={handleBlockUser}
+                    disabled={busyAction === 'block-user'}
+                  />
+                )}
+
+                {showNickname && conversation.type === 'dm' && (
+                  <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginTop: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                      Biệt danh cho {conversation.name}
+                    </div>
+                    <input
+                      value={nicknameInput}
+                      onChange={(e) => setNicknameInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveNickname()}
+                      placeholder="Nhập biệt danh..."
+                      maxLength={50}
+                      style={{
+                        width: '100%', border: '1px solid var(--border)', borderRadius: 8,
+                        background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                        padding: '8px 10px', fontSize: 13, outline: 'none', marginBottom: 8,
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => setShowNickname(false)}
+                        style={{ flex: 1, padding: '7px 0', border: 'none', borderRadius: 7, background: 'var(--bg-hover)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        onClick={handleSaveNickname}
+                        disabled={nicknameBusy}
+                        style={{ flex: 1, padding: '7px 0', border: 'none', borderRadius: 7, background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, opacity: nicknameBusy ? 0.6 : 1 }}
+                      >
+                        {nicknameBusy ? 'Đang lưu...' : 'Lưu'}
+                      </button>
+                    </div>
+                  </div>
                 )}
 
                 {conversation.type === 'group' && (
@@ -773,58 +861,63 @@ export default function RightSidebar({
 
           {tab === 'media' && (
             <div>
-              <SectionHeader title="Anh va video" />
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-                {MOCK_MEDIA.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      aspectRatio: '1',
-                      borderRadius: 6,
-                      background: `${item.color}30`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      border: `1px solid ${item.color}40`,
-                    }}
-                  >
-                    <Image size={18} style={{ opacity: 0.6 }} />
+              <SectionHeader title="Ảnh đã chia sẻ" />
+              {loadingMedia && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Đang tải...</p>
+              )}
+              {!loadingMedia && mediaData.images.length === 0 && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Chưa có ảnh nào</p>
+              )}
+              {!loadingMedia && mediaData.images.length > 0 && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                    {mediaData.images.map((item) => (
+                      <a key={item._id} href={item.url} target="_blank" rel="noreferrer"
+                        style={{ aspectRatio: '1', borderRadius: 6, overflow: 'hidden', display: 'block', background: 'var(--bg-hover)' }}>
+                        <img src={item.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </a>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 12 }}>
-                6 anh da chia se
-              </p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 8 }}>
+                    {mediaData.images.length} ảnh đã chia sẻ
+                  </p>
+                </>
+              )}
             </div>
           )}
 
           {tab === 'files' && (
             <div>
-              <SectionHeader title="File da chia se" />
-              {[
-                { name: 'tai_lieu.pdf', size: '2.4 MB', icon: <FileText size={22} />, color: '#ed4245' },
-                { name: 'bai_tap.docx', size: '845 KB', icon: <FileText size={22} />, color: '#5865f2' },
-                { name: 'anh_nhom.zip', size: '12.1 MB', icon: <FileText size={22} />, color: '#faa61a' },
-              ].map((file, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '8px 10px',
-                    borderRadius: 8,
-                    marginBottom: 4,
-                  }}
-                >
-                  <span style={{ flexShrink: 0, color: file.color, display: 'flex', alignItems: 'center' }}>{file.icon}</span>
+              <SectionHeader title="File đã chia sẻ" />
+              {loadingMedia && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Đang tải...</p>
+              )}
+              {!loadingMedia && mediaData.files.length === 0 && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Chưa có file nào</p>
+              )}
+              {!loadingMedia && mediaData.files.map((file) => (
+                <div key={file._id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 10px', borderRadius: 8, marginBottom: 4,
+                  background: 'var(--bg-tertiary)',
+                }}>
+                  <span style={{ flexShrink: 0, color: '#5865f2', display: 'flex', alignItems: 'center' }}>
+                    <FileText size={22} />
+                  </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{file.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{file.size}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {file.fileName}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {file.fileSize ? `${(file.fileSize / 1024).toFixed(0)} KB` : ''}
+                    </div>
                   </div>
-                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: 2 }}>
-                    <Download size={14} />
-                  </button>
+                  {file.url && (
+                    <a href={file.url} target="_blank" rel="noreferrer"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex' }}>
+                      <Download size={14} />
+                    </a>
+                  )}
                 </div>
               ))}
             </div>
