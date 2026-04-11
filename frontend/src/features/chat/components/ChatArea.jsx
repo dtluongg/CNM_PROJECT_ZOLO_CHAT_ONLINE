@@ -296,7 +296,7 @@ const MessageBubble = ({
               {[
                 ...(!(msg.revoked || msg.recalled) ? [
                   { content: <ThumbsUp size={13} />, title: 'Thả cảm xúc', onClick: () => setShowEmojiBar(prev => !prev) },
-                  { content: <CornerUpLeft size={13} />, title: 'Trả lời' },
+                  // { content: <CornerUpLeft size={13} />, title: 'Trả lời' },
                   { content: <CornerUpRight size={13} />, title: 'Chuyển tiếp', onClick: () => onForward(msg) },
                 ] : []),
                 {
@@ -575,7 +575,7 @@ const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
   });
 
   const toggleSelect = (id) => {
-    setSelectedIds(prev => 
+    setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
   };
@@ -621,7 +621,7 @@ const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
         <div style={{ padding: '12px 20px' }}>
           <div style={{ position: 'relative', background: '#f3f4f6', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '0 12px' }}>
             <Search size={18} color="#888" />
-            <input 
+            <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Tìm kiếm người hoặc nhóm..."
@@ -637,21 +637,21 @@ const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
             <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Không tìm thấy kết quả</div>
           ) : (
             filtered.map(c => (
-              <div 
-                key={c.id || c._id} 
+              <div
+                key={c.id || c._id}
                 onClick={() => toggleSelect(c.id || c._id)}
-                style={{ 
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', 
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px',
                   borderRadius: 10, cursor: 'pointer', transition: 'background 0.2s',
                   background: selectedIds.includes(c.id || c._id) ? '#f0f7ff' : 'transparent'
                 }}
                 onMouseEnter={e => !selectedIds.includes(c.id || c._id) && (e.currentTarget.style.background = '#f9fafb')}
                 onMouseLeave={e => !selectedIds.includes(c.id || c._id) && (e.currentTarget.style.background = 'transparent')}
               >
-                <Avatar 
-                  name={c.type === 'dm' ? c.otherUser?.displayName : c.name} 
-                  avatar={c.type === 'dm' ? c.otherUser?.avatar : c.avatar} 
-                  size={40} 
+                <Avatar
+                  name={c.type === 'dm' ? c.otherUser?.displayName : c.name}
+                  avatar={c.type === 'dm' ? c.otherUser?.avatar : c.avatar}
+                  size={40}
                 />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>
@@ -661,7 +661,7 @@ const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
                     {c.type === 'dm' ? 'Cá nhân' : `${c.totalMembers} thành viên`}
                   </div>
                 </div>
-                <div style={{ 
+                <div style={{
                   width: 22, height: 22, borderRadius: 6, border: '2px solid',
                   borderColor: selectedIds.includes(c.id || c._id) ? 'var(--accent)' : '#ccc',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -676,12 +676,12 @@ const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
         </div>
 
         <div style={{ padding: 20, borderTop: '1px solid #eee' }}>
-          <button 
+          <button
             disabled={selectedIds.length === 0 || sending}
             onClick={handleSend}
-            style={{ 
+            style={{
               width: '100%', background: selectedIds.length > 0 ? 'var(--accent)' : '#ccc',
-              color: '#fff', border: 'none', borderRadius: 10, padding: '12px', 
+              color: '#fff', border: 'none', borderRadius: 10, padding: '12px',
               fontWeight: 700, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed',
               transition: 'opacity 0.2s',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
@@ -717,6 +717,8 @@ export default function ChatArea({
   const [forwardingMsg, setForwardingMsg] = useState(null);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const bottomRef = useRef(null);
+  const prevMsgCountRef = useRef(messages.length);
+  const prevLastMsgIdRef = useRef(null);
 
   // 1. Fetch reaction types
   useEffect(() => {
@@ -822,8 +824,23 @@ export default function ChatArea({
 
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const lastMsg = messages[messages.length - 1];
+    const lastMsgId = lastMsg?._id || lastMsg?.id;
+    const isNewMessage = lastMsgId !== prevLastMsgIdRef.current;
+    const isCountIncreased = messages.length > prevMsgCountRef.current;
+    const isMine = lastMsg?.senderId === currentUserId;
+
+    // Chỉ cuộn xuống nếu:
+    // 1. Có tin nhắn mới ở cuối danh sách (ID thay đổi và số lượng tăng)
+    // 2. HOẶC chính người dùng vừa gửi tin nhắn mới
+    if ((isNewMessage && isCountIncreased) || (isNewMessage && isMine)) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Cập nhật ref cho lần render kế tiếp
+    prevMsgCountRef.current = messages.length;
+    prevLastMsgIdRef.current = lastMsgId;
+  }, [messages, currentUserId]);
 
   if (!conversation) {
     return (
@@ -1114,7 +1131,7 @@ export default function ChatArea({
         </div>
       )}
 
-          {/* Modal Read Details List */}
+      {/* Modal Read Details List */}
       {showReadList && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 3000,
@@ -1154,7 +1171,7 @@ export default function ChatArea({
       )}
 
       {/* Modal Chuyển tiếp */}
-      <ForwardModal 
+      <ForwardModal
         isOpen={showForwardModal}
         onClose={() => setShowForwardModal(false)}
         msg={forwardingMsg}
