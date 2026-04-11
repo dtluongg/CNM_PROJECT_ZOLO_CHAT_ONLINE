@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
   FlatList, TextInput, Platform, Keyboard,
-  Modal, StatusBar, Pressable, Alert,
+  Modal, StatusBar, Pressable, Alert, ScrollView,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
@@ -124,7 +124,7 @@ const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#
 const getSenderColor = (name, THEME) =>
   name ? SENDER_COLORS[name.charCodeAt(0) % SENDER_COLORS.length] : THEME.accent;
 
-const MessageBubble = ({ msg, isMine, showHeader, onLongPress, currentUserId, THEME, styles }) => {
+const MessageBubble = ({ msg, isMine, showHeader, onLongPress, onShowReadBy, currentUserId, conversation, THEME, styles }) => {
   const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName, THEME);
   const bubbleBg = isMine ? THEME.bubbleSelf : THEME.bubbleOther;
   const bubbleText = isMine ? '#ffffff' : THEME.textPrimary;
@@ -181,6 +181,45 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress, currentUserId, TH
     );
   };
 
+  const renderSeenStatus = () => {
+    if (!isMine || msg.revoked) return null;
+    const readBy = msg.readBy || [];
+
+    if (conversation.type !== 'group') {
+      // Chat đơn: Đã xem / Đã gửi
+      const isSeen = readBy.length > 0;
+      return (
+        <Text style={styles.seenText}>
+          {isSeen ? 'Đã xem' : 'Đã gửi'}
+        </Text>
+      );
+    } else {
+      // Chat group: Avatars
+      if (readBy.length === 0) return null;
+      return (
+        <TouchableOpacity 
+          style={styles.seenAvatars} 
+          onPress={() => onShowReadBy(readBy)}
+        >
+          {readBy.slice(0, 3).map((r, i) => (
+            <View key={r.userId} style={[styles.miniAvatar, { marginLeft: i === 0 ? 0 : -6, zIndex: 10 - i }]}>
+              {r.avatar ? (
+                <Image source={{ uri: r.avatar }} style={styles.miniAvatarImg} />
+              ) : (
+                <View style={[styles.miniAvatarImg, { backgroundColor: THEME.accent, justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={{ fontSize: 6, color: '#fff' }}>{r.displayName?.charAt(0)}</Text>
+                </View>
+              )}
+            </View>
+          ))}
+          {readBy.length > 3 && (
+            <Text style={styles.seenCount}>+{readBy.length - 3}</Text>
+          )}
+        </TouchableOpacity>
+      );
+    }
+  };
+
   return (
     <View style={[styles.msgRow, { flexDirection: isMine ? 'row-reverse' : 'row' }]}>
       <View style={{ width: 38, alignItems: 'center', marginTop: showHeader ? 2 : 0 }}>
@@ -217,6 +256,7 @@ const MessageBubble = ({ msg, isMine, showHeader, onLongPress, currentUserId, TH
             ))}
           </View>
         )}
+        {renderSeenStatus()}
       </View>
     </View>
   );
@@ -252,6 +292,8 @@ export default function MessageScreen({ route, navigation }) {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [reactionTypes, setReactionTypes] = useState([]);
   const [editingMessage, setEditingMessage] = useState(null);
+  const [showReadByModal, setShowReadByModal] = useState(false);
+  const [currentReadByList, setCurrentReadByList] = useState([]);
 
   const flatRef = useRef(null);
   const inputRef = useRef(null);
@@ -288,25 +330,6 @@ export default function MessageScreen({ route, navigation }) {
     };
   }, []);
 
-  // ── Keyboard listener (fixes Android keyboard overlap) ─────────────────
-  useEffect(() => {
-    const showEvent = Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow';
-    const hideEvent = Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide';
-
-    const onShow = (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-      setShowEmoji(false); // ẩn emoji picker khi bàn phím hiện
-    };
-    const onHide = () => setKeyboardHeight(0);
-
-    const subShow = Keyboard.addListener(showEvent, onShow);
-    const subHide = Keyboard.addListener(hideEvent, onHide);
-
-    return () => {
-      subShow.remove();
-      subHide.remove();
-    };
-  }, []);
 
   // ── Load messages from API ─────────────────────────────────────────────
   useEffect(() => {
@@ -404,6 +427,21 @@ export default function MessageScreen({ route, navigation }) {
       }));
     });
 
+    socket.on('chat:message-read', (data) => {
+      const { conversationId: cid, messageId, userId, displayName, avatar, readAt } = data;
+      if (cid !== conversation.id) return;
+
+      setMessages(prev => prev.map(m => {
+        if (m._id?.toString() === messageId?.toString()) {
+          const alreadyRead = (m.readBy || []).some(r => r.userId?.toString() === userId?.toString());
+          if (alreadyRead) return m;
+          const newReadBy = [...(m.readBy || []), { userId, displayName, avatar, readAt }];
+          return { ...m, readBy: newReadBy };
+        }
+        return m;
+      }));
+    });
+
     return () => {
       socket.emit('chat:leave', { conversationId: conversation.id });
       socket.disconnect();
@@ -421,6 +459,18 @@ export default function MessageScreen({ route, navigation }) {
     const t = setTimeout(scrollToBottom, 100);
     return () => clearTimeout(t);
   }, [messages]);
+
+  // ── Auto mark as read ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.senderId !== currentUserId) {
+      const mId = lastMsg._id?.toString();
+      if (mId && !mId.startsWith('temp_')) {
+        messageApi.markAsRead(conversation.id, mId).catch(() => { });
+      }
+    }
+  }, [messages.length, conversation.id]);
 
   // scroll khi keyboard hiện để tin nhắn cuối không bị che
   useEffect(() => {
@@ -682,6 +732,11 @@ export default function MessageScreen({ route, navigation }) {
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
+  const handleShowReadBy = (readBy) => {
+    setCurrentReadByList(readBy);
+    setShowReadByModal(true);
+  };
+
 
   // ── Build display list ─────────────────────────────────────────────────
   const displayItems = [];
@@ -799,7 +854,9 @@ export default function MessageScreen({ route, navigation }) {
                 isMine={item.isMine}
                 showHeader={item.showHeader}
                 onLongPress={setActionMsg}
+                onShowReadBy={handleShowReadBy}
                 currentUserId={currentUserId}
+                conversation={conversation}
                 THEME={THEME}
                 styles={msgStyles}
               />
@@ -901,19 +958,21 @@ export default function MessageScreen({ route, navigation }) {
           <View style={msgStyles.sheet}>
             <View style={msgStyles.sheetHandle} />
 
-            <View style={msgStyles.reactRow}>
-              {(reactionTypes.length > 0 ? reactionTypes : [
-                { emoji: '👍' }, { emoji: '❤️' }, { emoji: '😂' }, { emoji: '😮' }, { emoji: '😢' }, { emoji: '🔥' }
-              ]).map(r => (
-                <TouchableOpacity
-                  key={r.emoji}
-                  onPress={() => { handleReact(actionMsg, r.emoji); setActionMsg(null); }}
-                  style={msgStyles.reactBtn}
-                >
-                  <Text style={msgStyles.reactEmoji}>{r.emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {!actionMsg?.revoked && (
+              <View style={msgStyles.reactRow}>
+                {(reactionTypes.length > 0 ? reactionTypes : [
+                  { emoji: '👍' }, { emoji: '❤️' }, { emoji: '😂' }, { emoji: '😮' }, { emoji: '😢' }, { emoji: '🔥' }
+                ]).map(r => (
+                  <TouchableOpacity
+                    key={r.emoji}
+                    onPress={() => { handleReact(actionMsg, r.emoji); setActionMsg(null); }}
+                    style={msgStyles.reactBtn}
+                  >
+                    <Text style={msgStyles.reactEmoji}>{r.emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
             {[
               { icon: '↩️', label: 'Trả lời', action: 'reply' },
@@ -952,6 +1011,34 @@ export default function MessageScreen({ route, navigation }) {
           </View>
         </Pressable>
       </Modal>
+
+      {/* ── Read By Modal ── */}
+      <Modal visible={showReadByModal} transparent animationType="fade">
+        <Pressable style={msgStyles.sheetOverlay} onPress={() => setShowReadByModal(false)}>
+          <View style={[msgStyles.sheet, { paddingBottom: 20 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: THEME.border }}>
+              <Text style={{ flex: 1, fontSize: 18, fontWeight: '700', color: THEME.textPrimary }}>Người đã xem</Text>
+              <TouchableOpacity onPress={() => setShowReadByModal(false)}>
+                <Text style={{ fontSize: 22, color: THEME.textMuted }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 400 }}>
+              {currentReadByList.map(r => (
+                <View key={r.userId} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: THEME.accent, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                    {r.avatar ? <Image source={{ uri: r.avatar }} style={{ width: '100%', height: '100%' }} /> : <Text style={{ color: '#fff', fontWeight: '700' }}>{r.displayName?.charAt(0)}</Text>}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: THEME.textPrimary }}>{r.displayName}</Text>
+                    <Text style={{ fontSize: 12, color: THEME.textMuted }}>Đã xem lúc {new Date(r.readAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+
     </View>
   );
 }
@@ -1024,6 +1111,14 @@ const useStyles = (THEME) => StyleSheet.create({
   reactionItem: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   reactionEmoji: { fontSize: 13 },
   reactionCount: { fontSize: 11, fontWeight: '700', color: THEME.textMuted },
+  
+  // Seen status
+  seenText: { fontSize: 10, color: THEME.textMuted, alignSelf: 'flex-end', marginTop: 2, marginRight: 2 },
+  seenAvatars: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4, marginRight: 2 },
+  miniAvatar: { width: 14, height: 14, borderRadius: 7, overflow: 'hidden', borderWidth: 1, borderColor: THEME.bgSecondary },
+  miniAvatarImg: { width: '100%', height: '100%' },
+  seenCount: { fontSize: 9, color: THEME.textMuted, marginLeft: 2 },
+
   imgAttachment: { width: 220, height: 160, borderRadius: 8 },
   fileRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 

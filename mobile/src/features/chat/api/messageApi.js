@@ -57,6 +57,9 @@ const messageApi = {
 
   editMessage: (messageId, content) =>
     apiClient.patch(`/messages/${messageId}`, { content }),
+
+  markAsRead: (conversationId, messageId) =>
+    apiClient.post(`/messages/${conversationId}/read/${messageId}`),
 };
 
 export default messageApi;

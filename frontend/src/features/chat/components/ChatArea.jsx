@@ -430,13 +430,15 @@ const MessageBubble = ({
         {isMine && (
           <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
             {conversationType === 'dm' ? (
-              // Chat cá nhân: Hiện chữ "Đã xem" nếu đối phương đã đọc
-              msg.readBy && msg.readBy.length > 0 && (
+              // Chat cá nhân: Hiện chữ "Đã xem" nếu đối phương đã đọc, ngược lại "Đã gửi"
+              msg.readBy && msg.readBy.length > 0 ? (
                 <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>Đã xem</span>
+              ) : (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Đã gửi</span>
               )
             ) : (
-              // Chat nhóm: Hiện avatar những người đã xem
-              msg.readBy && msg.readBy.length > 0 && (
+              // Chat nhóm: Hiện avatar những người đã xem, nếu chưa ai xem hiện "Đã gửi"
+              msg.readBy && msg.readBy.length > 0 ? (
                 <div
                   onClick={() => onShowReadDetails(msg.readBy)}
                   style={{ display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}
@@ -453,6 +455,8 @@ const MessageBubble = ({
                     <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{msg.readBy.length - 5}</span>
                   )}
                 </div>
+              ) : (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Đã gửi</span>
               )
             )}
           </div>
