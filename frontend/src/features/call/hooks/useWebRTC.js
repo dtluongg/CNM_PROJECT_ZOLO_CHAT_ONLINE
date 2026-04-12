@@ -37,12 +37,32 @@ export function useWebRTC({ onIceCandidate, onRemoteStream }) {
     };
 
     pc.ontrack = (e) => {
-      if (e.streams?.[0]) onRemoteStream(e.streams[0]);
+      console.log('[WebRTC] ontrack:', e.track.kind, 'streams:', e.streams.length);
+      if (e.streams?.[0]) {
+        onRemoteStream(e.streams[0]);
+      } else {
+        const fallback = new MediaStream([e.track]);
+        onRemoteStream(fallback);
+      }
+    };
+
+    // ← TẤT CẢ handlers phải nằm trong đây
+    pc.oniceconnectionstatechange = () => {
+      console.log('[ICE state]', pc.iceConnectionState);
+    };
+
+    pc.onicegatheringstatechange = () => {
+      console.log('[ICE gathering]', pc.iceGatheringState);
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log('[Connection state]', pc.connectionState);
     };
 
     pcRef.current = pc;
     return pc;
   }, [onIceCandidate, onRemoteStream]);
+
 
   // ── Lấy luồng media từ thiết bị người dùng ────────────────────────────────
   const getLocalStream = useCallback(async (callType) => {

@@ -276,3 +276,8 @@ Rồi trong app → quét QR hoặc nhập IP máy tính → kết nối.
 
 Còn câu hỏi trong terminal Install and run the Android build on an emulator? (Y/n) — nếu bạn dùng điện thoại thật thì nhấn n.
 ### QUAN TRỌNG NHẤT LƯU Ý NHÉ MẤY BẠN GIÁM ĐỐC TƯƠNG LAI ::: native module thay và app.json thì mới cần build lại APK NHA, còn code  thay đổi và ip thay đôir thì k cần rebuild đâu, 
+// Bên Frontend Web
+![img_5.png](Update/img_5.png)
+cập nhật .env VITE_SOCKET_URL=http://192.168.88.135:2026 thay ip thành ip mạng riêng của mn nhé
+## Còn đây là file docs lý thuyết và các lưu ý lỗi cần tránh giống ở comnmit trước
+[webRTC.md](webRTC.md)

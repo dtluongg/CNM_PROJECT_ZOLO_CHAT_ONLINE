@@ -80,9 +80,9 @@ export default function ActiveCallScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       {/* ── Video streams ── */}
-      {isVideo && RN_RTC_AVAILABLE && remoteStream && (
+      {isVideo && RN_RTC_AVAILABLE && !!remoteStream?.toURL?.() && (
         <RTCView
-          streamURL={remoteStream.toURL ? remoteStream.toURL() : ''}
+          streamURL={remoteStream.toURL()}
           style={StyleSheet.absoluteFill}
           objectFit="cover"
           mirror={false}
