@@ -10,6 +10,15 @@ const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#
 const getSenderColor = (name, THEME) =>
   name ? SENDER_COLORS[name.charCodeAt(0) % SENDER_COLORS.length] : THEME.accent;
 
+// Parse payload an toàn: xử lý cả trường hợp là string JSON (Android) lẫn object (Web)
+const parsePayload = (payload) => {
+  if (!payload) return {};
+  if (typeof payload === 'string') {
+    try { return JSON.parse(payload); } catch { return {}; }
+  }
+  return payload;
+};
+
 /**
  * Bong bóng tin nhắn hỗ trợ các loại nội dung:
  * text, image, voice, video, file và tin nhắn đã thu hồi.
@@ -66,7 +75,8 @@ const MessageBubble = ({
 
     // Ảnh
     if (msg.type === 'image') {
-      const imgUrl = msg.payload?.url || msg.content;
+      const payload = parsePayload(msg.payload);
+      const imgUrl = payload.url || msg.content;
       return (
         <TouchableOpacity activeOpacity={0.85} onPress={() => onImagePress && onImagePress(imgUrl)}>
           <Image source={{ uri: imgUrl }} style={styles.imgAttachment} resizeMode="cover" />
@@ -89,10 +99,11 @@ const MessageBubble = ({
 
     // Âm thanh
     if (msg.type === 'voice') {
+      const payload = parsePayload(msg.payload);
       return (
         <VoicePlayer
-          url={msg.payload?.url}
-          duration={msg.payload?.duration}
+          url={payload.url}
+          duration={payload.duration}
           isMine={isMine}
           THEME={THEME}
         />
@@ -101,15 +112,18 @@ const MessageBubble = ({
 
     // Video (type === 'video')
     if (msg.type === 'video') {
+      const payload = parsePayload(msg.payload);
       return (
-        <VideoPlayer url={msg.payload?.url || msg.content} isMine={isMine} THEME={THEME} />
+        <VideoPlayer url={payload.url || msg.content} isMine={isMine} THEME={THEME} />
       );
     }
 
     // File (có thể chứa video theo đuôi file)
     if (msg.type === 'file') {
-      const fileUrl = msg.payload?.url;
-      const fileName = msg.payload?.fileName || msg.content || '';
+      const payload = parsePayload(msg.payload);
+
+      const fileUrl = payload.url;
+      const fileName = payload.fileName || msg.content || '';
       const isVideo = /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(fileName);
 
       // Video trên web dùng thẻ <video> native
@@ -133,24 +147,33 @@ const MessageBubble = ({
       // File thông thường
       return (
         <TouchableOpacity
-          onPress={() => onFilePress && onFilePress(fileUrl, fileName)}
-          style={styles.fileRow}
-          activeOpacity={0.75}
-        >
-          <Feather name="file-text" size={22} color={isMine ? 'rgba(255,255,255,0.85)' : THEME.textMuted} />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text
-              style={[styles.bubbleText, { color: bubbleText, fontWeight: '600' }]}
-              numberOfLines={2}
-            >
-              {fileName}
-            </Text>
-            <Text style={{ fontSize: 11, color: isMine ? 'rgba(255,255,255,0.65)' : THEME.textMuted, marginTop: 2 }}>
-              Nhấn để tải xuống
-            </Text>
-          </View>
-          <Feather name="download" size={18} color={isMine ? 'rgba(255,255,255,0.7)' : THEME.accent} />
-        </TouchableOpacity>
+            onPress={() => onFilePress && onFilePress(fileUrl, fileName)}
+            style={[
+              styles.fileRow,
+              {
+                flexDirection: 'row',
+                alignItems: 'center',
+                minWidth: 200,
+                maxWidth: 260,
+                gap: 8,
+              },
+            ]}
+            activeOpacity={0.75}
+          >
+            <Feather name="file-text" size={22} color={isMine ? 'rgba(255,255,255,0.85)' : THEME.textMuted} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={[styles.bubbleText, { color: bubbleText, fontWeight: '600' }]}
+                numberOfLines={2}
+              >
+                {fileName}
+              </Text>
+              <Text style={{ fontSize: 11, color: isMine ? 'rgba(255,255,255,0.65)' : THEME.textMuted, marginTop: 2 }}>
+                Nhấn để mở
+              </Text>
+            </View>
+            <Feather name="download" size={18} color={isMine ? 'rgba(255,255,255,0.7)' : THEME.accent} />
+          </TouchableOpacity>
       );
     }
 
@@ -251,7 +274,7 @@ const MessageBubble = ({
               // Bỏ padding + nền khi là media (ảnh/video)
               (msg.type === 'video' ||
                 msg.type === 'image' ||
-                /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(msg.payload?.fileName || '')) && {
+                /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(parsePayload(msg.payload).fileName || '')) && {
                 padding: 0,
                 overflow: 'hidden',
                 backgroundColor: 'transparent',

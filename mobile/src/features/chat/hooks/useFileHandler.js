@@ -1,29 +1,16 @@
-import { Platform, Alert } from 'react-native';
+import { useRef } from 'react';
+import { Platform, Alert, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import * as WebBrowser from 'expo-web-browser';
 import messageApi from '../api/messageApi';
 
-/**
- * Hook cung cấp các hàm xử lý file trong chat:
- * - Chọn và gửi ảnh từ thư viện
- * - Chọn và gửi file từ thiết bị
- * - Mở / tải file nhận được về máy
- *
- * @param {string}   conversationId - ID cuộc hội thoại
- * @param {function} onMessageSent  - Callback nhận tin nhắn sau khi gửi thành công
- */
 const useFileHandler = (conversationId, onMessageSent) => {
+  const isSharingRef = useRef(false);
 
-  // Chọn ảnh từ thư viện và gửi vào chat
   const pickAndSendImage = async () => {
     try {
-      // Xin quyền (bỏ qua trên web vì trình duyệt tự xử lý)
       if (Platform.OS !== 'web') {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        // 'limited' = iOS chỉ cấp quyền ảnh đã chọn — vẫn cho phép tiếp tục
         if (status !== 'granted' && status !== 'limited') {
           Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh trong Cài đặt.');
           return;
@@ -40,12 +27,10 @@ const useFileHandler = (conversationId, onMessageSent) => {
       const fd = new FormData();
 
       if (Platform.OS === 'web') {
-        // Web: chuyển blob: URL thành Blob để append vào FormData
         const response = await fetch(asset.uri);
         const blob = await response.blob();
         fd.append('file', blob, asset.fileName || 'image.jpg');
       } else {
-        // Native: React Native FormData chấp nhận object { uri, name, type }
         fd.append('file', {
           uri: asset.uri,
           name: asset.fileName || 'image.jpg',
@@ -62,7 +47,6 @@ const useFileHandler = (conversationId, onMessageSent) => {
     }
   };
 
-  // Chọn file từ thiết bị và gửi vào chat
   const pickAndSendFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
@@ -72,7 +56,6 @@ const useFileHandler = (conversationId, onMessageSent) => {
       const fd = new FormData();
 
       if (Platform.OS === 'web') {
-        // Web: chuyển blob: URL thành Blob
         const response = await fetch(asset.uri);
         const blob = await response.blob();
         fd.append('file', blob, asset.name);
@@ -93,9 +76,12 @@ const useFileHandler = (conversationId, onMessageSent) => {
     }
   };
 
-  // Mở hoặc tải file nhận được về máy
   const openFile = async (url, fileName) => {
     if (!url) return;
+
+    if (isSharingRef.current) return;
+    isSharingRef.current = true;
+
     try {
       if (Platform.OS === 'web') {
         // Web: tạo thẻ <a> ẩn để trigger download
@@ -109,20 +95,18 @@ const useFileHandler = (conversationId, onMessageSent) => {
         return;
       }
 
-      // Native: tải về cache rồi mở share sheet
-      const localUri = FileSystem.cacheDirectory + (fileName || 'file');
-      const { uri } = await FileSystem.downloadAsync(url, localUri);
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri);
+      // Android/iOS: mở thẳng trên trình duyệt hệ thống
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
       } else {
-        // Fallback: mở trong trình duyệt hệ thống
-        await WebBrowser.openBrowserAsync(url);
+        Alert.alert('Lỗi', 'Không thể mở file này.');
       }
     } catch (err) {
       console.error('openFile error:', err);
       Alert.alert('Lỗi', 'Không thể mở file. Vui lòng thử lại.');
+    } finally {
+      isSharingRef.current = false;
     }
   };
 
