@@ -35,10 +35,15 @@ export default function ActiveCallScreen() {
   const [minimized, setMinimized] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const hideTimer = useRef(null);
+  // SAU
   useEffect(() => {
-    if (remoteAudioRef.current && remoteStream) {
-      remoteAudioRef.current.srcObject = remoteStream;
-    }
+    if (!remoteAudioRef.current || !remoteStream) return;
+    remoteAudioRef.current.srcObject = remoteStream;
+    remoteAudioRef.current.volume = 1.0;
+    remoteAudioRef.current.muted = false;
+    remoteAudioRef.current.play()
+      .then(() => console.log('[Web] Audio đang phát'))
+      .catch(err => console.error('[Web] Audio bị block:', err));
   }, [remoteStream]);
 
   /* Gán srcObject khi stream thay đổi */
@@ -120,7 +125,13 @@ export default function ActiveCallScreen() {
       onMouseMove={resetHideTimer}
       onClick={resetHideTimer}
     >
-    <audio ref={remoteAudioRef} autoPlay />
+    <audio
+          ref={remoteAudioRef}
+          autoPlay
+          playsInline
+          muted={false}
+          style={{ display: 'none' }}
+        />
       {/* ── Video streams ── */}
       {isVideo && (
         <>

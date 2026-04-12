@@ -13,8 +13,15 @@ const server = http.createServer(app);
 
 // ── MIDDLEWARE ──
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:8081'],
-    credentials: true,
+  origin: [
+    'http://localhost:5173',
+    'https://localhost:5173',        // ← thêm
+    'http://192.168.88.135:5173',
+    'https://192.168.88.135:5173',   // ← thêm
+    'http://localhost:8081',
+    'http://192.168.88.135:8081',
+  ],
+  credentials: true,
 }));
 
 app.use(express.json({ limit: '10mb' }));

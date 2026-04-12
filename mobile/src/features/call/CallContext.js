@@ -35,10 +35,15 @@ export const CallProvider = ({ children }) => {
   const callStateRef = useRef(CALL_STATE.IDLE);
   const callIdRef    = useRef(null);
   const incomingRef  = useRef(null);
+  const callTypeRef  = useRef(null);
 
   // React state
   const [callState,    _setCallState]   = useState(CALL_STATE.IDLE);
-  const [callType,     setCallType]     = useState(null);
+  const [callType, _setCallType] = useState(null);
+  const setCallType = useCallback((v) => {
+    callTypeRef.current = v;
+    _setCallType(v);
+  }, []);
   const [callId,       _setCallId]      = useState(null);
   const [remoteUser,   setRemoteUser]   = useState(null);
   const [localStream,  setLocalStream]  = useState(null);
@@ -70,6 +75,10 @@ export const CallProvider = ({ children }) => {
       const cid = callIdRef.current;
       if (cid && socketRef.current?.connected) {
         socketRef.current.emit('call:ice-candidate', { callId: cid, candidate });
+      } else {
+        // Chưa có callId → queue lại
+        pendingCandidates.current.push(candidate);
+        console.log('[ICE] queued candidate, pending:', pendingCandidates.current.length);
       }
     }, []),
     onRemoteStream: useCallback((stream) => setRemoteStream(stream), []),
@@ -122,10 +131,7 @@ export const CallProvider = ({ children }) => {
       return;
     }
     if (!RN_RTC_AVAILABLE) {
-      Alert.alert(
-        'Cần Expo Dev Build',
-        'Tính năng gọi video/thoại yêu cầu Expo Development Build.\nExpo Go không hỗ trợ WebRTC native.',
-      );
+      Alert.alert('Cần Expo Dev Build', '...');
       return;
     }
     try {
@@ -134,8 +140,10 @@ export const CallProvider = ({ children }) => {
       setLocalStream(stream);
       addLocalStream(stream);
       InCallManager.start({ media: type });
-      InCallManager.setForceSpeakerphoneOn(true);
-      const offer  = await createOffer();
+      setTimeout(() => {
+        InCallManager.setForceSpeakerphoneOn(type === 'video');
+      }, 500);
+      const offer = await createOffer();
 
       socketRef.current.emit('call:initiate', { calleeId: targetUser._id, type, offer }, (res) => {
         if (res?.error) {
@@ -149,10 +157,22 @@ export const CallProvider = ({ children }) => {
           resetAll();
           return;
         }
+
+        // Set callId ngay → các ICE candidate pending sẽ được gửi
         setCallId(res.callId);
         setCallState(CALL_STATE.CALLING);
         setCallType(type);
         setRemoteUser(targetUser);
+
+        // Flush ICE candidates đã bị queue do chưa có callId
+        const pending = [...pendingCandidates.current];
+        pendingCandidates.current = [];
+        pending.forEach(candidate => {
+          socketRef.current.emit('call:ice-candidate', {
+            callId: res.callId,
+            candidate,
+          });
+        });
       });
     } catch (err) {
       console.error('initiateCall error:', err);
@@ -166,14 +186,23 @@ export const CallProvider = ({ children }) => {
     if (!data) return;
     const { callId: cid, offer, type, callerInfo } = data;
     try {
-      const pc     = createPeer();
+      const pc = createPeer();
       const stream = await getLocalStream(type);
       setLocalStream(stream);
       addLocalStream(stream);
       InCallManager.stopRingtone();
       InCallManager.start({ media: type });
-      InCallManager.setForceSpeakerphoneOn(true);
+
+      // ← THÊM: set callId TRƯỚC khi createAnswer
+      // để onIceCandidate có callId khi gửi candidates
+      setCallId(cid);
+
       const answer = await createAnswer(offer);
+
+      setTimeout(() => {
+        InCallManager.setForceSpeakerphoneOn(type === 'video');
+        InCallManager.setSpeakerphoneOn(type === 'video');
+      }, 500);
 
       socketRef.current.emit('call:answer', { callId: cid, answer }, async (res) => {
         if (res?.error) {
@@ -181,7 +210,6 @@ export const CallProvider = ({ children }) => {
           resetAll();
           return;
         }
-        setCallId(cid);
         setCallState(CALL_STATE.ACTIVE);
         setCallType(type);
         setRemoteUser(callerInfo);
@@ -258,6 +286,16 @@ export const CallProvider = ({ children }) => {
         setCallState(CALL_STATE.ACTIVE);
         startTimer();
         await flushCandidates();
+
+        // ← THÊM: khởi động audio routing
+        const type = callTypeRef.current || 'audio';
+        InCallManager.stop();
+        InCallManager.start({ media: type });
+        setTimeout(() => {
+          InCallManager.setForceSpeakerphoneOn(type === 'video');
+          InCallManager.setSpeakerphoneOn(type === 'video');
+        }, 500);
+
       } catch (err) {
         console.error('call:answered error:', err);
         resetAll();
