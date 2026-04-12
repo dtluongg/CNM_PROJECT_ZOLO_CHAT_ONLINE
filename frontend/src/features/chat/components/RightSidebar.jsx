@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 import {
-  X, Image, FileText, MessageCircle, BellOff, Ban, LogOut, Download, Phone,
+  X, Image, FileText, MessageCircle, BellOff, Ban, LogOut, Download, Phone, Video,
   Shield, UserPlus, Crown, UserCog, Trash2,
 } from 'lucide-react';
 import conversationApi from '../api/conversationApi';
+import CallHistoryTab from '../../call/components/CallHistoryTab';
 import friendApi from '../../friends/api/friendApi';
 import messageApi from '../api/messageApi';
 
@@ -121,6 +122,8 @@ export default function RightSidebar({
   onGroupUpdated,
   onDeleteConversation,
   onBlockToggled,
+  onPhoneCall,
+  onVideoCall,
 }) {
   const [tab, setTab] = useState('info');
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
@@ -542,9 +545,10 @@ export default function RightSidebar({
 
         <div style={{ display: 'flex', gap: 2, margin: '0 12px 12px', background: 'var(--bg-primary)', borderRadius: 8, padding: 3 }}>
           {[
-            { key: 'info', label: 'Thong tin' },
+            { key: 'info',  label: 'Thông tin' },
             { key: 'media', label: 'Media' },
             { key: 'files', label: 'File' },
+            ...(conversation?.type === 'dm' ? [{ key: 'calls', label: 'Cuộc gọi' }] : []),
           ].map((t) => (
             <button
               key={t.key}
@@ -762,7 +766,8 @@ export default function RightSidebar({
                 {conversation.type === 'dm' && conversation.otherUserId && onViewProfile && (
                   <ActionButton icon={<Shield size={15} />} label="Xem ho so" onClick={() => onViewProfile(conversation.otherUserId)} />
                 )}
-                <ActionButton icon={<Phone size={15} />} label="Goi dien" />
+                <ActionButton icon={<Phone size={15} />} label="Gọi thoại" onClick={conversation?.type === 'dm' ? onPhoneCall : undefined} />
+                <ActionButton icon={<Video size={15} />} label="Gọi video" onClick={conversation?.type === 'dm' ? onVideoCall : undefined} />
                 <ActionButton icon={<BellOff size={15} />} label="Tắt thông báo" />
 
                 {conversation.type === 'dm' && (
@@ -912,6 +917,18 @@ export default function RightSidebar({
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── Tab Cuộc gọi (chỉ DM) ── */}
+          {tab === 'calls' && conversation?.type === 'dm' && (
+            <div>
+              <SectionHeader title="Lịch sử cuộc gọi" />
+              <CallHistoryTab
+                otherUserId={conversation.otherUserId}
+                otherUserName={conversation.name}
+                otherUserAvatar={conversation.avatar}
+              />
             </div>
           )}
         </div>

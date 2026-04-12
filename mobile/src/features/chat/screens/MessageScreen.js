@@ -7,6 +7,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
+import { useCall } from '../../call/CallContext';
 
 // ── Components ─────────────────────────────────────────────────────────────
 import Avatar from '../components/Avatar';
@@ -47,6 +48,7 @@ export default function MessageScreen({ route, navigation }) {
   const { user, token } = useAuth();
   const { theme: THEME } = useTheme();
   const { isUserOnline, getLastSeen } = usePresence();
+  const { initiateCall } = useCall();
   const styles = useStyles(THEME);
   const currentUserId = user?._id?.toString() || null;
 
@@ -459,10 +461,22 @@ export default function MessageScreen({ route, navigation }) {
 
         {/* Các nút action trên header */}
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerBtn}>
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={() => {
+              if (conversation.type !== 'dm' || !conversation.otherUserId) return;
+              initiateCall({ _id: conversation.otherUserId, displayName: conversation.name, avatar: conversation.avatar || null }, 'audio');
+            }}
+          >
             <Feather name="phone" size={20} color={THEME.textMuted} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn}>
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={() => {
+              if (conversation.type !== 'dm' || !conversation.otherUserId) return;
+              initiateCall({ _id: conversation.otherUserId, displayName: conversation.name, avatar: conversation.avatar || null }, 'video');
+            }}
+          >
             <Feather name="video" size={20} color={THEME.textMuted} />
           </TouchableOpacity>
           <TouchableOpacity

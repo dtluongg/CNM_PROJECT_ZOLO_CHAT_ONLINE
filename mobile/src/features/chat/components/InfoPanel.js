@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Avatar from './Avatar';
+import CallHistoryTab from '../../call/components/CallHistoryTab';
 
 /**
  * Panel thông tin cuộc trò chuyện (mở bằng nút 3 chấm trên header).
@@ -49,9 +50,11 @@ const InfoPanel = ({
   styles,
 }) => {
   const tabs = [
-    { key: 'info', label: 'Thông tin' },
+    { key: 'info',  label: 'Thông tin' },
     { key: 'media', label: 'Ảnh' },
     { key: 'files', label: 'File' },
+        ...(conversation?.type === 'dm' ? [{ key: 'calls', label: 'Cuộc gọi' }] : []),
+
   ];
 
   return (
@@ -400,6 +403,16 @@ const InfoPanel = ({
                   ))}
               </View>
             )}
+            {/* ── Tab Cuộc gọi ── */}
+                        {infoTab === 'calls' && conversation?.type === 'dm' && (
+                          <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
+                            <CallHistoryTab
+                              otherUserId={conversation.otherUserId}
+                              otherUserName={conversation.name}
+                              otherUserAvatar={conversation.avatar}
+                            />
+                          </View>
+                        )}
           </ScrollView>
         </View>
       </Pressable>

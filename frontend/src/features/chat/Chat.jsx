@@ -11,6 +11,7 @@ import conversationApi from './api/conversationApi';
 import messageApi from './api/messageApi';
 import friendApi from '../friends/api/friendApi';
 import { useAuth } from '../../context/AuthContext';
+import { useCall } from '../call/CallContext';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
 
@@ -155,6 +156,8 @@ const normalizeMsg = (msg) => ({ ...msg, time: fmtTime(msg.createdAt) });
 const Chat = () => {
   const { user: currentUser, token } = useAuth();
   const navigate = useNavigate();
+  const { initiateCall } = useCall();
+
   const location = useLocation();
   const [activeConversation, setActiveConversation] = useState(null);
   const [showRightSidebar, setShowRightSidebar] = useState(true);
@@ -432,6 +435,25 @@ const Chat = () => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile, messages, fetchDmBlockStatus]);
+
+  // ── Cuộc gọi ───────────────────────────────────────────────────────────
+  const handlePhoneCall = useCallback(() => {
+    if (!activeConversation?.otherUserId) return;
+    initiateCall({
+      _id:         activeConversation.otherUserId,
+      displayName: activeConversation.name,
+      avatar:      activeConversation.avatar || null,
+    }, 'audio');
+  }, [activeConversation, initiateCall]);
+
+  const handleVideoCall = useCallback(() => {
+    if (!activeConversation?.otherUserId) return;
+    initiateCall({
+      _id:         activeConversation.otherUserId,
+      displayName: activeConversation.name,
+      avatar:      activeConversation.avatar || null,
+    }, 'video');
+  }, [activeConversation, initiateCall]);
 
   // ── Gửi tin nhắn (text | voice | file | image) ──────────────────────────
   // payload: { type: 'text', content } | { type: 'voice', blob, duration }
@@ -877,6 +899,8 @@ const Chat = () => {
               sendBlockError={sendBlockError}
               blockStatus={dmBlockStatus}
               onBlockStatusChanged={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
+              onPhoneCall={handlePhoneCall}
+              onVideoCall={handleVideoCall}
               isMobile
             />
           </div>
@@ -911,6 +935,8 @@ const Chat = () => {
               onGroupUpdated={fetchConversations}
               onDeleteConversation={handleDeleteConversation}
               onBlockToggled={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
+              onPhoneCall={handlePhoneCall}
+              onVideoCall={handleVideoCall}
               isMobile
             />
           </div>
@@ -955,6 +981,8 @@ const Chat = () => {
           sendBlockError={sendBlockError}
           blockStatus={dmBlockStatus}
           onBlockStatusChanged={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
+          onPhoneCall={handlePhoneCall}
+          onVideoCall={handleVideoCall}
         />
       </div>
 
@@ -970,6 +998,8 @@ const Chat = () => {
               onGroupUpdated={fetchConversations}
               onDeleteConversation={handleDeleteConversation}
               onBlockToggled={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
+              onPhoneCall={handlePhoneCall}
+              onVideoCall={handleVideoCall}
             />
           ) : (
             <div style={{

@@ -774,6 +774,8 @@ export default function ChatArea({
   sendBlockError,
   blockStatus,
   onBlockStatusChanged,
+  onPhoneCall,
+  onVideoCall,
 }) {
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -1058,8 +1060,8 @@ export default function ChatArea({
           {isMobile ? (
             <>
               {[
-                { icon: <Phone size={20} />, title: 'Gọi thoại' },
-                { icon: <Video size={20} />, title: 'Gọi video' },
+                { icon: <Phone size={20} />, title: 'Gọi thoại', onClick: conversation?.type === 'dm' ? onPhoneCall : undefined },
+                { icon: <Video size={20} />, title: 'Gọi video', onClick: conversation?.type === 'dm' ? onVideoCall : undefined },
                 { icon: <Users size={20} />, title: 'Thông tin', onClick: onToggleRight, active: showRight },
               ].map((btn, i) => (
                 <button key={i} onClick={btn.onClick} title={btn.title}
@@ -1078,8 +1080,8 @@ export default function ChatArea({
           ) : (
             <>
               {[
-                { icon: <Phone size={16} />, title: 'Gọi thoại' },
-                { icon: <Video size={16} />, title: 'Gọi video' },
+                { icon: <Phone size={16} />, title: 'Gọi thoại', onClick: conversation?.type === 'dm' ? onPhoneCall : undefined },
+                { icon: <Video size={16} />, title: 'Gọi video', onClick: conversation?.type === 'dm' ? onVideoCall : undefined },
                 { icon: <Search size={16} />, title: 'Tìm kiếm' },
                 { icon: <Users size={16} />, title: 'Thành viên', onClick: onToggleRight, active: showRight },
                 { icon: <Pin size={16} />, title: 'Tin nhắn đã ghim' },
