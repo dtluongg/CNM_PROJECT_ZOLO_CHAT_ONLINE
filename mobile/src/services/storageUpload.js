@@ -4,7 +4,7 @@ import { supabase } from '../config/supabase';
 // Chỉ import expo-file-system khi KHÔNG phải web
 let FileSystem;
 if (Platform.OS !== 'web') {
-  FileSystem = require('expo-file-system');
+    FileSystem = require('expo-file-system/legacy');
 }
 
 const BUCKET = 'avatars';
