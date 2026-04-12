@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import friendApi from './api/friendApi';
 import conversationApi from '../chat/api/conversationApi';
+import { usePresence } from '../../context/PresenceContext';
+
 
 const FriendsPage = () => {
     const navigate = useNavigate();
@@ -24,6 +26,19 @@ const FriendsPage = () => {
     const [groupName, setGroupName] = useState('');
     const [selectedFriendIds, setSelectedFriendIds] = useState([]);
     const [creatingChat, setCreatingChat] = useState(false);
+    const { isUserOnline, getPresenceStatus } = usePresence();
+
+    const STATUS_CONFIG = {
+      online:  { color: '#3ba55c', label: 'Đang hoạt động' },
+      idle:    { color: '#faa61a', label: 'Vắng mặt' },
+      dnd:     { color: '#ed4245', label: 'Không làm phiền' },
+      offline: { color: '#80848e', label: 'Ngoại tuyến' },
+    };
+    const getFriendStatus = (friendId) => {
+      const isOnline = isUserOnline(friendId);
+      const presStatus = isOnline ? (getPresenceStatus(friendId) || 'online') : 'offline';
+      return STATUS_CONFIG[presStatus] || STATUS_CONFIG.offline;
+    };
 
     // ---- Fetch Data ----
     const fetchData = async () => {
@@ -324,41 +339,52 @@ const FriendsPage = () => {
                                         className="flex items-center gap-4 cursor-pointer flex-1 min-w-0"
                                         onClick={() => navigate(`/user/${f.friendId}`)}
                                     >
-                                        <div className="w-11 h-11 rounded-full flex items-center justify-center text-lg font-bold flex-shrink-0" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--accent)' }}>
-                                            {f.displayName ? f.displayName[0].toUpperCase() : '?'}
+                                        {/* Avatar */}
+                                        {/* Avatar với chấm status */}
+                                        <div className="relative flex-shrink-0">
+                                          {f.avatar ? (
+                                            <img src={f.avatar} alt={f.displayName} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
+                                          ) : (
+                                            <div style={{ width: 44, height: 44, borderRadius: '50%', backgroundColor: 'var(--bg-primary)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700 }}>
+                                              {f.displayName?.[0]?.toUpperCase() || '?'}
+                                            </div>
+                                          )}
+                                          <span style={{
+                                            position: 'absolute', bottom: 1, right: 1,
+                                            width: 11, height: 11, borderRadius: '50%',
+                                            backgroundColor: getFriendStatus(f.friendId).color,
+                                            border: '2px solid var(--bg-secondary)',
+                                          }} />
                                         </div>
+
+                                        {/* Tên + trạng thái */}
                                         <div className="min-w-0">
-                                            <p className="font-semibold text-base truncate" style={{ color: 'var(--text-primary)' }}>{f.displayName}</p>
-                                            <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{f.email}</p>
+                                          <p className="font-bold text-base truncate" style={{ color: 'var(--text-primary)' }}>
+                                            {f.displayName}
+                                          </p>
+                                          {f.originalName && f.originalName !== f.displayName && (
+                                            <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                                              {f.originalName}
+                                            </p>
+                                          )}
+                                          <p className="text-xs" style={{ color: getFriendStatus(f.friendId).color }}>
+                                            {getFriendStatus(f.friendId).label}
+                                          </p>
                                         </div>
                                     </div>
 
-                                    {/* Action Box */}
+                                    {/* Action buttons giữ nguyên */}
                                     <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleCreateDmFromFriend(f); }}
-                                            className="px-3 py-1.5 text-xs font-semibold rounded"
-                                            style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
-                                        >
+                                        <button onClick={(e) => { e.stopPropagation(); handleCreateDmFromFriend(f); }} className="px-3 py-1.5 text-xs font-semibold rounded" style={{ backgroundColor: 'var(--accent)', color: '#fff' }}>
                                             Nhắn tin
                                         </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleUpdateNickname(f.friendId); }}
-                                            className="px-3 py-1.5 text-xs font-semibold rounded"
-                                            style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)' }}
-                                        >
+                                        <button onClick={(e) => { e.stopPropagation(); handleUpdateNickname(f.friendId); }} className="px-3 py-1.5 text-xs font-semibold rounded" style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)' }}>
                                             Biệt danh
                                         </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleBlockFriend(f.friendId, f.iBlocked); }}
-                                            className={`px-3 py-1.5 text-xs font-semibold rounded ${f.iBlocked ? 'text-gray-600 bg-gray-200 hover:bg-gray-300' : 'text-orange-600 bg-orange-50 hover:bg-orange-100'}`}
-                                        >
+                                        <button onClick={(e) => { e.stopPropagation(); handleBlockFriend(f.friendId, f.iBlocked); }} className={`px-3 py-1.5 text-xs font-semibold rounded ${f.iBlocked ? 'text-gray-600 bg-gray-200' : 'text-orange-600 bg-orange-50'}`}>
                                             {f.iBlocked ? 'Bỏ chặn' : 'Chặn'}
                                         </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleUnfriend(f.friendId); }}
-                                            className="px-3 py-1.5 text-xs font-semibold bg-red-50 hover:bg-red-100 rounded text-red-600"
-                                        >
+                                        <button onClick={(e) => { e.stopPropagation(); handleUnfriend(f.friendId); }} className="px-3 py-1.5 text-xs font-semibold bg-red-50 rounded text-red-600">
                                             Xoá
                                         </button>
                                     </div>
@@ -429,23 +455,21 @@ const FriendsPage = () => {
 
                              return (
                              <div key={u._id} className="flex items-center justify-between p-3 rounded-lg border" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
-                                        {u.displayName?.[0]}
-                                    </div>
-                                    <div>
-                                        <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{u.displayName}</p>
-                                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{u.email}</p>
-                                    </div>
-                                </div>
-                                <button 
-                                    onClick={btnAction} 
-                                    disabled={!btnAction}
-                                    className="px-4 py-1.5 rounded text-sm font-medium" 
-                                    style={btnStyle}
-                                >
-                                    {btnText}
-                                </button>
+                                 <div className="flex items-center gap-3">
+                                     {u.avatar ? (
+                                         <img src={u.avatar} alt={u.displayName} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                                     ) : (
+                                         <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: 'var(--bg-primary)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                                             {u.displayName?.[0]}
+                                         </div>
+                                     )}
+                                     <div>
+                                         <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{u.displayName}</p>
+                                     </div>
+                                 </div>
+                                 <button onClick={btnAction} disabled={!btnAction} className="px-4 py-1.5 rounded text-sm font-medium" style={btnStyle}>
+                                     {btnText}
+                                 </button>
                              </div>
                              );
                          })}
@@ -485,12 +509,16 @@ const FriendsPage = () => {
                         {incomingReqs.map(req => (
                             <div key={req._id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-xl shadow-sm gap-4" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
                                 <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-                                        {req.fromUserId?.displayName?.[0] || 'N'}
-                                    </div>
+                                    {req.fromUserId?.avatar ? (
+                                        <img src={req.fromUserId.avatar} alt={req.fromUserId.displayName} style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover' }} />
+                                    ) : (
+                                        <div style={{ width: 56, height: 56, borderRadius: '50%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700 }}>
+                                            {req.fromUserId?.displayName?.[0] || 'N'}
+                                        </div>
+                                    )}
                                     <div>
                                         <p className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{req.fromUserId?.displayName || 'Người lạ'}</p>
-                                        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{req.fromUserId?.email}</p>
+                                        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Muốn kết bạn với bạn</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3 self-end sm:self-auto">
@@ -536,7 +564,7 @@ const FriendsPage = () => {
             <div className="px-6 py-4 border-b flex items-center gap-4 flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
                 <span className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Danh sách chặn ({blockedList.length})</span>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto px-6 py-4" style={{ backgroundColor: 'var(--bg-primary)' }}>
                 {blockedList.length === 0 && (
                     <p className="text-center py-10" style={{ color: 'var(--text-muted)' }}>Bạn chưa chặn ai.</p>
@@ -547,18 +575,45 @@ const FriendsPage = () => {
                         {blockedList.map((user) => (
                             <div key={user.userId} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-xl shadow-sm gap-4" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
                                 <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-                                        {user.displayName?.[0] || 'N'}
-                                    </div>
+                                    {/* Avatar */}
+                                    {user.avatar ? (
+                                        <img
+                                            src={user.avatar}
+                                            alt={user.displayName}
+                                            style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                                        />
+                                    ) : (
+                                        <div style={{
+                                            width: 56, height: 56, borderRadius: '50%', flexShrink: 0,
+                                            backgroundColor: 'var(--bg-primary)', color: 'var(--accent)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            fontSize: 22, fontWeight: 700,
+                                        }}>
+                                            {user.displayName?.[0]?.toUpperCase() || 'N'}
+                                        </div>
+                                    )}
+
                                     <div>
-                                        <p className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{user.displayName || 'Người lạ'}</p>
-                                        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{user.email}</p>
+                                        <p className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
+                                            {user.displayName || 'Người lạ'}
+                                        </p>
+                                        {/* Badge đã chặn — không hiện trạng thái online vì đã chặn */}
+                                        <span style={{
+                                            display: 'inline-block', marginTop: 4,
+                                            fontSize: 11, fontWeight: 600,
+                                            color: '#ed4245',
+                                            backgroundColor: 'rgba(237,66,69,0.12)',
+                                            borderRadius: 6, padding: '2px 8px',
+                                        }}>
+                                            Đã chặn
+                                        </span>
                                     </div>
                                 </div>
-                                <button 
+
+                                <button
                                     onClick={() => handleBlockFriend(user.userId, true)}
                                     className="px-5 py-2 text-sm font-semibold rounded-lg self-end sm:self-auto"
-                                    style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+                                    style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
                                 >
                                     Bỏ chặn
                                 </button>
