@@ -547,6 +547,32 @@ const getBlockedList = async (req, res, next) => {
     }
 };
 
+const getFriendStatus = async (req, res, next) => {
+    try {
+        const currentUserId = getCurrentUserId(req);
+        const { userId } = req.params;
+
+        ensureValidObjectId(userId, 'userId');
+
+        const { u1, u2 } = normalizeFriendPair(currentUserId, userId);
+        const friendship = await Friendship.findOne({ userId1: u1, userId2: u2 }).lean();
+
+        if (!friendship) {
+            return res.json({ success: true, data: { isFriend: false, iBlocked: false, theyBlockedMe: false } });
+        }
+
+        const iBlockedThem = friendship.isBlockedBy?.toString() === currentUserId;
+        const theyBlockedMe = !!(friendship.isBlockedBy && friendship.isBlockedBy.toString() !== currentUserId);
+
+        res.json({
+            success: true,
+            data: { isFriend: true, iBlocked: iBlockedThem, theyBlockedMe },
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     sendFriendRequest,
     acceptFriendRequest,
@@ -558,5 +584,6 @@ module.exports = {
     unfriend,
     updateNickname,
     blockFriend,
-    getBlockedList
+    getBlockedList,
+    getFriendStatus,
 }

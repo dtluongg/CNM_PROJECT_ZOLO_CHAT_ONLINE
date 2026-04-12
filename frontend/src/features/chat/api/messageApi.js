@@ -83,6 +83,14 @@ const messageApi = {
   // ── Đánh dấu đã đọc ────────────────────────────────────────────────
   markAsRead: (conversationId, messageId) =>
     apiClient.post(`/messages/${conversationId}/read/${messageId}`),
+
+  // ── Chuyển tiếp tin nhắn ───────────────────────────────────────────
+  forwardMessage: (conversationId, forwardFromMessageId) =>
+    apiClient.post(`/messages/${conversationId}`, { forwardFromMessageId }),
+
+  // ── Xóa tin nhắn ở phía tôi ────────────────────────────────────────
+  deleteForMe: (messageId) =>
+    apiClient.patch(`/messages/${messageId}/delete-for-me`),
 };
 
 

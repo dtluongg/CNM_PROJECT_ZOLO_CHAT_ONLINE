@@ -6,13 +6,14 @@
  * Sau khi lưu DB → emit socket event tới mọi thành viên.
  */
 
-const mongoose               = require('mongoose');
-const Message                = require('../models/messageModel');
-const Attachment             = require('../models/attachmentModel');
-const Conversation           = require('../models/conversationModel');
-const ConversationMember     = require('../models/conversationMemberModel');
-const MessageReaction        = require('../models/messageReactionModel');
-const { getIO }              = require('../socket/socketManager');
+const mongoose = require('mongoose');
+const Message = require('../models/messageModel');
+const Attachment = require('../models/attachmentModel');
+const Conversation = require('../models/conversationModel');
+const ConversationMember = require('../models/conversationMemberModel');
+const MessageReaction = require('../models/messageReactionModel');
+const MessageRead = require('../models/messageReadModel');
+const { getIO } = require('../socket/socketManager');
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -38,19 +39,19 @@ const requireMembership = async (conversationId, userId) => {
 
 /** Chuẩn hóa message document thành object trả về client. */
 const formatMsg = (msg, sender) => ({
-    _id:              msg._id,
-    conversationId:   msg.conversationId,
-    senderId:         sender?._id  || msg.senderId,
-    senderName:       sender?.displayName || 'Unknown',
-    avatar:           sender?.avatar || null,
-    type:             msg.type,
-    content:          msg.content,
-    payload:          msg.payload || {},
+    _id: msg._id,
+    conversationId: msg.conversationId,
+    senderId: sender?._id || msg.senderId,
+    senderName: sender?.displayName || 'Unknown',
+    avatar: sender?.avatar || null,
+    type: msg.type,
+    content: msg.content,
+    payload: msg.payload || {},
     replyToMessageId: msg.replyToMessageId || null,
-    edited:           msg.edited,
-    deleted:          msg.deleted,
-    revoked:          msg.revoked,
-    createdAt:        msg.createdAt,
+    edited: msg.edited,
+    deleted: msg.deleted,
+    revoked: msg.revoked,
+    createdAt: msg.createdAt,
 });
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -68,7 +69,7 @@ const formatMsg = (msg, sender) => ({
 // ═════════════════════════════════════════════════════════════════════════
 const sendMessage = async (req, res) => {
     try {
-        const userId         = req.user._id.toString();
+        const userId = req.user._id.toString();
         const { conversationId } = req.params;
 
         if (!isValidId(conversationId)) {
@@ -77,72 +78,89 @@ const sendMessage = async (req, res) => {
 
         await requireMembership(conversationId, userId);
 
-        const { type = 'text', content = '', attachmentId, replyToMessageId } = req.body;
+        const { type = 'text', content = '', attachmentId, replyToMessageId, forwardFromMessageId } = req.body;
 
         const ALLOWED_TYPES = ['text', 'voice', 'image', 'file'];
         if (!ALLOWED_TYPES.includes(type)) {
             return res.status(400).json({ message: `type phải là: ${ALLOWED_TYPES.join(', ')}` });
         }
 
-        // ── Validate nội dung ───────────────────────────────────────────
-        if (type === 'text' && !content.trim()) {
-            return res.status(400).json({ message: 'Nội dung tin nhắn không được trống' });
-        }
-
-        // ── Xử lý attachment cho voice / image / file ───────────────────
+        // ── Xử lý Forward (nếu có) ──────────────────────────────────────
+        let finalType = type;
+        let finalContent = content;
+        let finalPayload = {};
         let attachment = null;
-        let payload    = {};
 
-        if (type !== 'text') {
-            if (!isValidId(attachmentId)) {
-                return res.status(400).json({ message: 'attachmentId không hợp lệ' });
+        if (isValidId(forwardFromMessageId)) {
+            const originalMsg = await Message.findById(forwardFromMessageId);
+            if (!originalMsg) {
+                return res.status(404).json({ message: 'Tin nhắn gốc không tồn tại' });
             }
-            attachment = await Attachment.findById(attachmentId);
-            if (!attachment) {
-                return res.status(404).json({ message: 'Attachment không tồn tại' });
-            }
-            if (attachment.uploadedBy.toString() !== userId) {
-                return res.status(403).json({ message: 'Không có quyền dùng attachment này' });
+            finalType = originalMsg.type;
+            finalContent = originalMsg.content;
+            finalPayload = originalMsg.payload || {};
+            // Đối với forward, ta không bắt buộc check attachment ownership lại
+            // vì ta copy payload trực tiếp từ tin nhắn đã tồn tại hợp lệ.
+        } else {
+            // ── Validate nội dung thông thường ─────────────────────────────
+            if (type === 'text' && !content.trim()) {
+                return res.status(400).json({ message: 'Nội dung tin nhắn không được trống' });
             }
 
-            payload = {
-                url:      attachment.url,
-                fileName: attachment.fileName || '',
-                fileSize: attachment.fileSize || 0,
-                mimeType: attachment.mimeType || '',
-                duration: attachment.duration || null, // giây (voice)
-            };
+            // ── Xử lý attachment cho voice / image / file ───────────────────
+            if (type !== 'text') {
+                if (!isValidId(attachmentId)) {
+                    return res.status(400).json({ message: 'attachmentId không hợp lệ' });
+                }
+                attachment = await Attachment.findById(attachmentId);
+                if (!attachment) {
+                    return res.status(404).json({ message: 'Attachment không tồn tại' });
+                }
+                if (attachment.uploadedBy.toString() !== userId) {
+                    return res.status(403).json({ message: 'Không có quyền dùng attachment này' });
+                }
+
+                finalPayload = {
+                    url: attachment.url,
+                    fileName: attachment.fileName || '',
+                    fileSize: attachment.fileSize || 0,
+                    mimeType: attachment.mimeType || '',
+                    duration: attachment.duration || null,
+                };
+            }
         }
 
         // ── Preview text hiển thị ở danh sách conversation ────────────
         const preview =
-            type === 'text'  ? content.trim() :
-            type === 'voice' ? '[Tin nhắn thoại]' :
-            type === 'image' ? '[Hình ảnh]' :
-            /* file */         (attachment?.fileName || '[File đính kèm]');
+            finalType === 'text' ? finalContent.trim() :
+                finalType === 'voice' ? '[Tin nhắn thoại]' :
+                    finalType === 'image' ? '[Hình ảnh]' :
+            /* file */         (finalPayload?.fileName || '[File đính kèm]');
 
         // ── Tạo message ────────────────────────────────────────────────
         const message = await Message.create({
             conversationId,
-            senderId:    userId,
-            content:     type === 'text' ? content.trim() : preview,
-            type,
-            payload,
+            senderId: userId,
+            content: finalType === 'text' ? finalContent.trim() : preview,
+            type: finalType,
+            payload: finalPayload,
             replyToMessageId:
                 isValidId(replyToMessageId) ? replyToMessageId : null,
+            forwardFromMessageId:
+                isValidId(forwardFromMessageId) ? forwardFromMessageId : null,
         });
 
-        // ── Gắn messageId vào attachment ───────────────────────────────
+        // ── Gắn messageId vào attachment (nếu gửi mới, không phải forward) ──
         if (attachment) {
-            await Attachment.findByIdAndUpdate(attachmentId, { messageId: message._id });
+            await Attachment.findByIdAndUpdate(attachment._id, { messageId: message._id });
         }
 
         // ── Cập nhật lastMessage của conversation ─────────────────────
         const shortPreview = preview.length > 60 ? preview.slice(0, 60) + '…' : preview;
         await Conversation.findByIdAndUpdate(conversationId, {
-            lastMessageId:      message._id,
+            lastMessageId: message._id,
             lastMessagePreview: shortPreview,
-            lastMessageTime:    message.createdAt,
+            lastMessageTime: message.createdAt,
         });
 
         // ── Tăng unreadCount cho tất cả thành viên khác ───────────────
@@ -157,8 +175,8 @@ const sendMessage = async (req, res) => {
             { userId: 1 }
         );
 
-        const io         = getIO();
-        const formatted  = formatMsg(message, req.user);
+        const io = getIO();
+        const formatted = formatMsg(message, req.user);
 
         allMembers.forEach(({ userId: memberId }) => {
             io.to(`user:${memberId.toString()}`).emit('chat:new-message', {
@@ -188,7 +206,7 @@ const sendMessage = async (req, res) => {
 // ═════════════════════════════════════════════════════════════════════════
 const getMessages = async (req, res) => {
     try {
-        const userId         = req.user._id.toString();
+        const userId = req.user._id.toString();
         const { conversationId } = req.params;
 
         if (!isValidId(conversationId)) {
@@ -197,10 +215,14 @@ const getMessages = async (req, res) => {
 
         await requireMembership(conversationId, userId);
 
-        const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit)  || 30));
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 30));
         const before = req.query.before;
 
-        const filter = { conversationId, deleted: false };
+        const filter = {
+            conversationId,
+            deleted: false,
+            deletedBy: { $ne: new mongoose.Types.ObjectId(userId) }
+        };
         if (isValidId(before)) {
             filter._id = { $lt: new mongoose.Types.ObjectId(before) };
         }
@@ -212,7 +234,12 @@ const getMessages = async (req, res) => {
             .lean();
 
         const msgIds = raw.map(m => m._id);
-        const allReactions = await MessageReaction.find({ messageId: { $in: msgIds } }).lean();
+        const [allReactions, allReads] = await Promise.all([
+            MessageReaction.find({ messageId: { $in: msgIds } }).lean(),
+            MessageRead.find({ messageId: { $in: msgIds } })
+                .populate('userId', 'displayName avatar')
+                .lean()
+        ]);
 
         // Đảo ngược để hiển thị theo chiều thời gian (cũ → mới)
         const messages = raw.reverse().map(msg => {
@@ -228,21 +255,32 @@ const getMessages = async (req, res) => {
             // Reaction của chính user đang gọi API
             const myReaction = reactions.find(r => r.userId.toString() === userId)?.emoji || null;
 
+            // Lọc và chuẩn hóa dữ liệu người đã đọc (ReadBy)
+            const reads = allReads.filter(r => r.messageId.toString() === msg._id.toString());
+            const readBy = reads.map(r => ({
+                userId: r.userId?._id,
+                displayName: r.userId?.displayName || 'Unknown',
+                avatar: r.userId?.avatar || null,
+                readAt: r.createdAt
+            }));
+
+            // Trả về object tin nhắn đã được chuẩn hóa
             return {
-                _id:              msg._id,
-                conversationId:   msg.conversationId,
-                senderId:         msg.senderId?._id    || msg.senderId,
-                senderName:       msg.senderId?.displayName || 'Unknown',
-                avatar:           msg.senderId?.avatar  || null,
-                type:             msg.type,
-                content:          msg.content,
-                payload:          msg.payload || {},
+                _id: msg._id,
+                conversationId: msg.conversationId,
+                senderId: msg.senderId?._id || msg.senderId,
+                senderName: msg.senderId?.displayName || 'Unknown',
+                avatar: msg.senderId?.avatar || null,
+                type: msg.type,
+                content: msg.content,
+                payload: msg.payload || {},
                 replyToMessageId: msg.replyToMessageId || null,
-                edited:           msg.edited,
-                revoked:          msg.revoked, // Thêm revoked vào để FE xử lý UI
-                createdAt:        msg.createdAt,
-                reactions:        reactionCounts,
-                myReaction:       myReaction
+                edited: msg.edited,
+                revoked: msg.revoked, // Thêm revoked vào để FE xử lý UI
+                createdAt: msg.createdAt,
+                reactions: reactionCounts,
+                myReaction: myReaction,
+                readBy: readBy
             };
         });
 
@@ -264,7 +302,7 @@ const getMessages = async (req, res) => {
 // ═════════════════════════════════════════════════════════════════════════
 const getAttachments = async (req, res) => {
     try {
-        const userId             = req.user._id.toString();
+        const userId = req.user._id.toString();
         const { conversationId } = req.params;
 
         if (!isValidId(conversationId)) {
@@ -275,7 +313,7 @@ const getAttachments = async (req, res) => {
 
         const msgs = await Message.find({
             conversationId,
-            type:    { $in: ['image', 'file'] },
+            type: { $in: ['image', 'file'] },
             deleted: false,
             revoked: false,
         })
@@ -284,20 +322,20 @@ const getAttachments = async (req, res) => {
             .lean();
 
         const images = [];
-        const files  = [];
+        const files = [];
 
         for (const msg of msgs) {
             const item = {
-                _id:       msg._id,
-                type:      msg.type,
-                url:       msg.payload?.url     || '',
-                fileName:  msg.payload?.fileName || msg.content || '',
-                fileSize:  msg.payload?.fileSize || 0,
-                mimeType:  msg.payload?.mimeType || '',
+                _id: msg._id,
+                type: msg.type,
+                url: msg.payload?.url || '',
+                fileName: msg.payload?.fileName || msg.content || '',
+                fileSize: msg.payload?.fileSize || 0,
+                mimeType: msg.payload?.mimeType || '',
                 createdAt: msg.createdAt,
             };
             if (msg.type === 'image') images.push(item);
-            else                      files.push(item);
+            else files.push(item);
         }
 
         return res.status(200).json({ images, files });
@@ -408,7 +446,7 @@ const editMessage = async (req, res) => {
 
         // Cập nhật
         message.content = content.trim();
-        message.edited  = true;
+        message.edited = true;
         message.editedAt = new Date();
         await message.save();
 
@@ -444,4 +482,116 @@ const editMessage = async (req, res) => {
     }
 };
 
-module.exports = { sendMessage, getMessages, getAttachments, revokeMessage, editMessage };
+// ═════════════════════════════════════════════════════════════════════════
+//  POST /backend/api/messages/:conversationId/read/:messageId
+//  Đánh dấu tin nhắn là đã đọc.
+// ═════════════════════════════════════════════════════════════════════════
+const markAsRead = async (req, res) => {
+    try {
+        const userId = req.user._id.toString();
+        const { conversationId, messageId } = req.params;
+
+        if (!isValidId(conversationId) || !isValidId(messageId)) {
+            return res.status(400).json({ message: 'ID không hợp lệ' });
+        }
+
+        await requireMembership(conversationId, userId);
+
+        // 1. Lưu trạng thái đã đọc (upsert để tránh duplicate)
+        await MessageRead.findOneAndUpdate(
+            { messageId, userId },
+            { conversationId, messageId, userId },
+            { upsert: true, new: true }
+        );
+
+        // 2. Kiểm tra nếu tin nhắn này là cuối cùng thì reset unreadCount
+        const conv = await Conversation.findById(conversationId);
+        if (conv && conv.lastMessageId?.toString() === messageId) {
+            await ConversationMember.findOneAndUpdate(
+                { conversationId, userId },
+                { unreadCount: 0 }
+            );
+        }
+
+        // 3. Phát socket thông báo cho mọi người trong conversation room
+        const io = getIO();
+        io.to(`user:${userId}`).emit('chat:unread-reset', { conversationId }); // Riêng cho mình để update unread ở sidebar
+
+        // Broadcast tới những người khác
+        const allMembers = await ConversationMember.find({ conversationId, leftAt: null }, { userId: 1 });
+        allMembers.forEach(({ userId: memberId }) => {
+            io.to(`user:${memberId.toString()}`).emit('chat:message-read', {
+                conversationId,
+                messageId,
+                userId,
+                displayName: req.user.displayName,
+                avatar: req.user.avatar,
+                readAt: new Date()
+            });
+        });
+
+        return res.status(200).json({ message: 'Đã đánh dấu đã đọc' });
+    } catch (err) {
+        console.error('markAsRead error:', err);
+        return res.status(500).json({ message: 'Lỗi server khi đánh dấu đã đọc' });
+    }
+};
+
+// ═════════════════════════════════════════════════════════════════════════
+//  PATCH /backend/api/messages/:messageId/delete-for-me
+//  Xóa tin nhắn ở phía người dùng hiện tại (ẩn đi).
+// ═════════════════════════════════════════════════════════════════════════
+const deleteMessageForMe = async (req, res) => {
+    try {
+        const userId = req.user._id.toString();
+        const { messageId } = req.params;
+
+        if (!isValidId(messageId)) {
+            return res.status(400).json({ message: 'messageId không hợp lệ' });
+        }
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            return res.status(404).json({ message: 'Tin nhắn không tồn tại' });
+        }
+
+        // Kiểm tra membership của người xóa
+        await requireMembership(message.conversationId, userId);
+
+        // Đảm bảo deletedBy là một mảng (đối với tin nhắn cũ)
+        if (!message.deletedBy) {
+            message.deletedBy = [];
+        }
+
+        // Kiểm tra xem userId đã có trong danh sách xóa chưa
+        const isAlreadyDeleted = message.deletedBy.some(id => id.toString() === userId);
+
+        if (!isAlreadyDeleted) {
+            message.deletedBy.push(userId);
+            await message.save();
+
+            // ── Phát Socket đồng bộ tới tất cả các kết nối của chính người dùng này ──
+            const io = getIO();
+            io.to(`user:${userId}`).emit('chat:message-deleted-for-me', {
+                conversationId: message.conversationId,
+                messageId: message._id.toString()
+            });
+        }
+
+        return res.status(200).json({ message: 'Đã xóa tin nhắn cho bạn' });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ message: err.message });
+        console.error('deleteMessageForMe error:', err);
+        return res.status(500).json({ message: 'Lỗi server khi xóa tin nhắn' });
+    }
+};
+
+module.exports = {
+    sendMessage,
+    getMessages,
+    getAttachments,
+    revokeMessage,
+    editMessage,
+    markAsRead,
+    deleteMessageForMe
+};

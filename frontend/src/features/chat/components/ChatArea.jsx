@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, Paperclip, ThumbsUp, Reply, Copy, Trash2 } from 'lucide-react';
+import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2 } from 'lucide-react';
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
-import { X } from 'lucide-react'; // Dùng cho modal
+import conversationApi from '../api/conversationApi';
+import { X, Check } from 'lucide-react'; // Dùng cho modal
 import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 
 
@@ -50,6 +51,7 @@ const MessageBubble = ({
   onEdit,
   onRead,
   onShowReadDetails,
+  onForward,
   conversationType,
   currentUserId,
   onAvatarClick,
@@ -304,7 +306,8 @@ const MessageBubble = ({
               {[
                 ...(!(msg.revoked || msg.recalled) ? [
                   { content: <ThumbsUp size={13} />, title: 'Thả cảm xúc', onClick: () => setShowEmojiBar(prev => !prev) },
-                  { content: <CornerUpLeft size={13} />, title: 'Trả lời' },
+                  // { content: <CornerUpLeft size={13} />, title: 'Trả lời' },
+                  { content: <CornerUpRight size={13} />, title: 'Chuyển tiếp', onClick: () => onForward(msg) },
                 ] : []),
                 {
                   content: <MoreHorizontal size={14} />,
@@ -436,17 +439,21 @@ const MessageBubble = ({
           </span>
         )} */}
 
-        {/* --- Phần hiển thị "Đã xem" --- */}
+        {/* --- Phần hiển thị "Đã xem" / "Bị chặn" --- */}
         {isMine && (
           <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-            {conversationType === 'dm' ? (
-              // Chat cá nhân: Hiện chữ "Đã xem" nếu đối phương đã đọc
-              msg.readBy && msg.readBy.length > 0 && (
+            {msg.blocked ? (
+              <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 600 }}>Bị chặn bởi người dùng này</span>
+            ) : conversationType === 'dm' ? (
+              // Chat cá nhân: Hiện chữ "Đã xem" nếu đối phương đã đọc, ngược lại "Đã gửi"
+              msg.readBy && msg.readBy.length > 0 ? (
                 <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>Đã xem</span>
+              ) : (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Đã gửi</span>
               )
             ) : (
-              // Chat nhóm: Hiện avatar những người đã xem
-              msg.readBy && msg.readBy.length > 0 && (
+              // Chat nhóm: Hiện avatar những người đã xem, nếu chưa ai xem hiện "Đã gửi"
+              msg.readBy && msg.readBy.length > 0 ? (
                 <div
                   onClick={() => onShowReadDetails(msg.readBy)}
                   style={{ display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}
@@ -463,6 +470,8 @@ const MessageBubble = ({
                     <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{msg.readBy.length - 5}</span>
                   )}
                 </div>
+              ) : (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Đã gửi</span>
               )
             )}
           </div>
@@ -506,13 +515,14 @@ const MessageBubble = ({
             {/* Actions */}
             {[
               { icon: <Reply size={20} />, label: 'Trả lời' },
+              { icon: <CornerUpRight size={20} />, label: 'Chuyển tiếp', onClick: () => { onForward(msg); setShowActions(false); } },
               { icon: <Copy size={20} />, label: 'Sao chép' },
               { icon: <Pin size={20} />, label: 'Ghim tin nhắn' },
               { icon: <Trash2 size={20} />, label: 'Xóa tin nhắn', danger: true },
             ].map(action => (
               <button
                 key={action.label}
-                onClick={() => setShowActions(false)}
+                onClick={action.onClick || (() => setShowActions(false))}
                 style={{
                   width: '100%', background: 'none', border: 'none',
                   padding: '14px 20px', cursor: 'pointer', textAlign: 'left',
@@ -548,6 +558,155 @@ const TypingIndicator = ({ name }) => (
   </div>
 );
 
+const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
+  const [conversations, setConversations] = useState([]);
+  const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLoading(true);
+      conversationApi.listMyConversations()
+        .then(res => {
+          setConversations(res.data.data || []);
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    } else {
+      setSearch('');
+      setSelectedIds([]);
+      setSending(false);
+    }
+  }, [isOpen]);
+
+  const filtered = conversations.filter(c => {
+    const displayName = c.type === 'dm' ? c.otherUser?.displayName : c.name;
+    return displayName?.toLowerCase().includes(search.toLowerCase());
+  });
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSend = async () => {
+    if (selectedIds.length === 0) return;
+    setSending(true);
+    try {
+      // Gửi lần lượt tới các hội thoại đã chọn
+      for (const convId of selectedIds) {
+        await messageApi.forwardMessage(convId, msg._id || msg.id);
+      }
+      onForward(); // callback thông báo thành công
+      onClose();
+    } catch (err) {
+      console.error('Forward error:', err);
+      alert('Có lỗi xảy ra khi chuyển tiếp tin nhắn');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 3000,
+      background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+    }}>
+      <div style={{
+        width: '100%', maxWidth: 440, background: '#fff', borderRadius: 16,
+        boxShadow: '0 10px 40px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column',
+        maxHeight: '80vh', animation: 'modalIn 0.25s ease-out'
+      }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontWeight: 700, fontSize: 18 }}>Chuyển tiếp</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666' }}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div style={{ padding: '12px 20px' }}>
+          <div style={{ position: 'relative', background: '#f3f4f6', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '0 12px' }}>
+            <Search size={18} color="#888" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Tìm kiếm người hoặc nhóm..."
+              style={{ flex: 1, border: 'none', background: 'none', padding: '10px 8px', outline: 'none', fontSize: 14 }}
+            />
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Đang tải...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Không tìm thấy kết quả</div>
+          ) : (
+            filtered.map(c => (
+              <div
+                key={c.id || c._id}
+                onClick={() => toggleSelect(c.id || c._id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px',
+                  borderRadius: 10, cursor: 'pointer', transition: 'background 0.2s',
+                  background: selectedIds.includes(c.id || c._id) ? '#f0f7ff' : 'transparent'
+                }}
+                onMouseEnter={e => !selectedIds.includes(c.id || c._id) && (e.currentTarget.style.background = '#f9fafb')}
+                onMouseLeave={e => !selectedIds.includes(c.id || c._id) && (e.currentTarget.style.background = 'transparent')}
+              >
+                <Avatar
+                  name={c.type === 'dm' ? c.otherUser?.displayName : c.name}
+                  avatar={c.type === 'dm' ? c.otherUser?.avatar : c.avatar}
+                  size={40}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>
+                    {c.type === 'dm' ? c.otherUser?.displayName : c.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#666' }}>
+                    {c.type === 'dm' ? 'Cá nhân' : `${c.totalMembers} thành viên`}
+                  </div>
+                </div>
+                <div style={{
+                  width: 22, height: 22, borderRadius: 6, border: '2px solid',
+                  borderColor: selectedIds.includes(c.id || c._id) ? 'var(--accent)' : '#ccc',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: selectedIds.includes(c.id || c._id) ? 'var(--accent)' : 'transparent',
+                  transition: 'all 0.2s'
+                }}>
+                  {selectedIds.includes(c.id || c._id) && <Check size={14} color="#fff" strokeWidth={4} />}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div style={{ padding: 20, borderTop: '1px solid #eee' }}>
+          <button
+            disabled={selectedIds.length === 0 || sending}
+            onClick={handleSend}
+            style={{
+              width: '100%', background: selectedIds.length > 0 ? 'var(--accent)' : '#ccc',
+              color: '#fff', border: 'none', borderRadius: 10, padding: '12px',
+              fontWeight: 700, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed',
+              transition: 'opacity 0.2s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+            }}
+          >
+            {sending ? 'Đang gửi...' : `Chuyển tiếp ${selectedIds.length > 0 ? `(${selectedIds.length})` : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function ChatArea({
   conversation,
   messages,
@@ -561,6 +720,9 @@ export default function ChatArea({
   isMobile,
   setMessages,
   onViewProfile,
+  sendBlockError,
+  blockStatus,
+  onBlockStatusChanged,
 }) {
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -569,7 +731,11 @@ export default function ChatArea({
   const [reactionDetails, setReactionDetails] = useState([]);
   const [showReadList, setShowReadList] = useState(null); // stores readBy array
   const [editingMessage, setEditingMessage] = useState(null);
+  const [forwardingMsg, setForwardingMsg] = useState(null);
+  const [showForwardModal, setShowForwardModal] = useState(false);
   const bottomRef = useRef(null);
+  const prevMsgCountRef = useRef(messages.length);
+  const prevLastMsgIdRef = useRef(null);
 
   // 1. Fetch reaction types
   useEffect(() => {
@@ -630,9 +796,22 @@ export default function ChatArea({
 
     socket.on('chat:message-read', handleRead);
 
+    // 4. Socket listener for "Delete for me" sync
+    const handleDeleteForMeSync = (data) => {
+      const { conversationId: cid, messageId } = data;
+      const convId = conversation?.id || conversation?._id;
+
+      if (convId && cid !== convId.toString()) return;
+
+      setMessages(prev => prev.filter(m => (m._id || m.id)?.toString() !== messageId));
+    };
+
+    socket.on('chat:message-deleted-for-me', handleDeleteForMeSync);
+
     return () => {
       socket.off('chat:message-reaction', handleReaction);
       socket.off('chat:message-read', handleRead);
+      socket.off('chat:message-deleted-for-me', handleDeleteForMeSync);
     };
   }, [socket, conversation?.id, conversation?._id, currentUserId, setMessages]);
 
@@ -675,8 +854,23 @@ export default function ChatArea({
 
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const lastMsg = messages[messages.length - 1];
+    const lastMsgId = lastMsg?._id || lastMsg?.id;
+    const isNewMessage = lastMsgId !== prevLastMsgIdRef.current;
+    const isCountIncreased = messages.length > prevMsgCountRef.current;
+    const isMine = lastMsg?.senderId === currentUserId;
+
+    // Chỉ cuộn xuống nếu:
+    // 1. Có tin nhắn mới ở cuối danh sách (ID thay đổi và số lượng tăng)
+    // 2. HOẶC chính người dùng vừa gửi tin nhắn mới
+    if ((isNewMessage && isCountIncreased) || (isNewMessage && isMine)) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Cập nhật ref cho lần render kế tiếp
+    prevMsgCountRef.current = messages.length;
+    prevLastMsgIdRef.current = lastMsgId;
+  }, [messages, currentUserId]);
 
   if (!conversation) {
     return (
@@ -713,6 +907,10 @@ export default function ChatArea({
       msg,
       isMine: msg.senderId === currentUserId,
       showHeader: !sameGroup,
+      onForward: (m) => {
+        setForwardingMsg(m);
+        setShowForwardModal(true);
+      },
       key: msg._id || msg.id
     });
   });
@@ -728,22 +926,22 @@ export default function ChatArea({
 
   const STATUS_LABEL = {
     online: 'Đang hoạt động',
-    idle:   'Vắng mặt',
-    dnd:    'Không làm phiền',
+    idle: 'Vắng mặt',
+    dnd: 'Không làm phiền',
   };
   const STATUS_COLOR_MAP = {
     online: '#3ba55c',
-    idle:   '#faa61a',
-    dnd:    '#ed4245',
+    idle: '#faa61a',
+    dnd: '#ed4245',
   };
 
   const onlineStatus = conversation.type === 'dm'
     ? (dmOnline
-        ? (STATUS_LABEL[dmStatus] || 'Đang hoạt động')
-        : (() => {
-            const ls = conversation.otherUserId ? getLastSeen(conversation.otherUserId) : null;
-            return ls ? formatLastSeen(ls) : 'Ngoại tuyến';
-          })())
+      ? (STATUS_LABEL[dmStatus] || 'Đang hoạt động')
+      : (() => {
+        const ls = conversation.otherUserId ? getLastSeen(conversation.otherUserId) : null;
+        return ls ? formatLastSeen(ls) : 'Ngoại tuyến';
+      })())
     : `${conversation.memberCount || conversation.members || 0} thành viên`;
 
   const headerDotColor = conversation.type === 'dm'
@@ -923,14 +1121,22 @@ export default function ChatArea({
                   console.error('Revoke message error:', err);
                 }
               }}
-              onDelete={(msg) => {
-                setMessages(prev =>
-                  prev.filter(m => (m.id || m._id) !== (msg.id || msg._id))
-                );
+              onDelete={async (msg) => {
+                try {
+                  // Optimistic update: Xóa ngay lập tức trên UI
+                  setMessages(prev =>
+                    prev.filter(m => (m.id || m._id) !== (msg.id || msg._id))
+                  );
+                  // Gọi API để Backend ghi nhớ việc xóa này
+                  await messageApi.deleteForMe(msg._id || msg.id);
+                } catch (err) {
+                  console.error('Delete for me error:', err);
+                }
               }}
               onEdit={(msg) => setEditingMessage(msg)}
               onRead={handleMarkAsRead}
               onShowReadDetails={handleShowReadDetails}
+              onForward={item.onForward}
               conversationType={conversation.type}
               currentUserId={currentUserId}
               onAvatarClick={onViewProfile}
@@ -941,7 +1147,75 @@ export default function ChatArea({
         <div ref={bottomRef} style={{ height: 8 }} />
       </div>
 
-      {/* ── Message Input ── */}
+      {/* ── Block error banner (send failed due to block) ── */}
+      {sendBlockError && (
+        <div style={{
+          padding: '8px 16px',
+          background: '#ed4245',
+          color: '#fff',
+          fontSize: 13,
+          textAlign: 'center',
+          flexShrink: 0,
+        }}>
+          {sendBlockError}
+        </div>
+      )}
+
+      {/* ── Người chặn: no input, show unblock banner ── */}
+      {conversation.type === 'dm' && blockStatus?.iBlocked && (
+        <div style={{
+          padding: '10px 16px',
+          background: 'var(--bg-secondary)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 12,
+          flexShrink: 0,
+        }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Bạn đã chặn người này. Không thể gửi tin nhắn.</span>
+          <button
+            onClick={async () => {
+              try {
+                await import('../../friends/api/friendApi').then(m => m.default.blockFriend(conversation.otherUserId));
+                onBlockStatusChanged?.();
+              } catch (err) {
+                window.alert(err?.response?.data?.message || 'Không thể bỏ chặn');
+              }
+            }}
+            style={{
+              padding: '5px 14px',
+              borderRadius: 6,
+              border: 'none',
+              cursor: 'pointer',
+              background: 'var(--accent)',
+              color: '#fff',
+              fontSize: 13,
+              fontWeight: 700,
+            }}
+          >
+            Bỏ chặn
+          </button>
+        </div>
+      )}
+
+      {/* ── Người bị chặn: vẫn có input, nhưng hiện banner cảnh báo ── */}
+      {conversation.type === 'dm' && blockStatus?.theyBlockedMe && (
+        <div style={{
+          padding: '7px 16px',
+          background: '#fef3c7',
+          borderTop: '1px solid #fcd34d',
+          textAlign: 'center',
+          flexShrink: 0,
+          color: '#92400e',
+          fontSize: 12,
+        }}>
+          Bạn đã bị người này chặn. Tin nhắn của bạn sẽ không được nhận.
+        </div>
+      )}
+
+      {/* ── Message Input (ẩn khi mình chặn người kia) ── */}
+      {!(conversation.type === 'dm' && blockStatus?.iBlocked) && (
       <MessageInput
         onSend={async (payload) => {
           await onSendMessage(payload);
@@ -954,6 +1228,7 @@ export default function ChatArea({
         editingMessage={editingMessage}
         onCancelEdit={() => setEditingMessage(null)}
       />
+      )}
 
       {/* Modal Reaction List */}
       {showReactionList && (
@@ -1030,6 +1305,18 @@ export default function ChatArea({
           </div>
         </div>
       )}
+
+      {/* Modal Chuyển tiếp */}
+      <ForwardModal
+        isOpen={showForwardModal}
+        onClose={() => setShowForwardModal(false)}
+        msg={forwardingMsg}
+        onForward={() => {
+          // Xử lý sau khi chuyển tiếp thành công
+          // Có thể hiện 1 toast notification ở đây
+          console.log('Forwarded successfully');
+        }}
+      />
 
       <style>{`
         @keyframes bounce { 0%,60%,100% { transform:translateY(0);opacity:.5; } 30% { transform:translateY(-5px);opacity:1; } }

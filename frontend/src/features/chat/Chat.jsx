@@ -181,6 +181,7 @@ const Chat = () => {
   const [mobileTab, setMobileTab] = useState('messages'); // for bottom nav highlight
   const [sendBlockError, setSendBlockError] = useState(''); // thông báo khi bị chặn
   const blockErrorTimerRef = useRef(null);
+  const [dmBlockStatus, setDmBlockStatus] = useState(null); // { iBlocked, theyBlockedMe } for active DM
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -200,6 +201,13 @@ const Chat = () => {
       } else {
         setActiveConversation((prevActive) => {
           if (!prevActive?.id) return prevActive;
+          // Nếu đang là pending DM, thử tìm conversation thực trong danh sách
+          if (prevActive.raw?.pendingDm && prevActive.otherUserId) {
+            const existing = mapped.find(
+              (c) => c.type === 'dm' && c.otherUserId === prevActive.otherUserId
+            );
+            if (existing) return existing;
+          }
           if (prevActive.raw?.pendingDm) return prevActive;
           return mapped.find((c) => c.id === prevActive.id) || null;
         });
@@ -373,6 +381,17 @@ const Chat = () => {
     fetchConversations();
   }, [fetchConversations]);
 
+  const fetchDmBlockStatus = useCallback(async (otherUserId) => {
+    if (!otherUserId) { setDmBlockStatus(null); return; }
+    try {
+      const res = await friendApi.getFriendStatus(otherUserId);
+      const d = res?.data?.data;
+      setDmBlockStatus(d ? { iBlocked: !!d.iBlocked, theyBlockedMe: !!d.theyBlockedMe } : null);
+    } catch {
+      setDmBlockStatus(null);
+    }
+  }, []);
+
   const handleSelectConversation = useCallback(async (conv) => {
     // Rời conversation cũ khỏi socket room
     if (activeConvRef.current?.id && socketRef.current) {
@@ -394,6 +413,13 @@ const Chat = () => {
       setMobileTab('messages');
     }
 
+    // Lấy trạng thái chặn cho DM
+    if (conv.type === 'dm' && conv.otherUserId) {
+      fetchDmBlockStatus(conv.otherUserId);
+    } else {
+      setDmBlockStatus(null);
+    }
+
     // Load messages nếu chưa có
     if (messages[conv.id]) return;
     try {
@@ -405,7 +431,7 @@ const Chat = () => {
       setMessages(prev => ({ ...prev, [conv.id]: [] }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMobile, messages]);
+  }, [isMobile, messages, fetchDmBlockStatus]);
 
   // ── Gửi tin nhắn (text | voice | file | image) ──────────────────────────
   // payload: { type: 'text', content } | { type: 'voice', blob, duration }
@@ -607,19 +633,25 @@ const Chat = () => {
       }
     } catch (err) {
       console.error('handleSendMessage error:', err);
-      // Xóa optimistic message nếu lỗi (chỉ áp dụng cho text)
-      if (payload.type === 'text') {
+      if (err?.response?.status === 403) {
+        // Khi bị chặn: giữ lại tin nhắn optimistic nhưng đánh dấu là blocked
+        if (payload.type === 'text') {
+          setMessages(prev => ({
+            ...prev,
+            [convId]: (prev[convId] || []).map(m =>
+              m._id?.startsWith('temp_') ? { ...m, blocked: true } : m
+            ),
+          }));
+        }
+        // Refresh block status để cập nhật UI
+        const otherUserId = resolvedConversation?.otherUserId || activeConversation?.otherUserId;
+        if (otherUserId) fetchDmBlockStatus(otherUserId);
+      } else if (payload.type === 'text') {
+        // Xóa optimistic message nếu lỗi khác
         setMessages(prev => ({
           ...prev,
           [convId]: (prev[convId] || []).filter(m => !m._id?.startsWith('temp_')),
         }));
-      }
-      // Hiển thị thông báo nếu bị chặn (403)
-      if (err?.response?.status === 403) {
-        const msg = err.response?.data?.message || 'Không thể gửi tin nhắn vì một trong hai người đã chặn nhau.';
-        setSendBlockError(msg);
-        clearTimeout(blockErrorTimerRef.current);
-        blockErrorTimerRef.current = setTimeout(() => setSendBlockError(''), 5000);
       }
     }
   }, [activeConversation, currentUser]);
@@ -843,6 +875,8 @@ const Chat = () => {
               onBack={handleMobileBack}
               socket={socketRef.current}
               sendBlockError={sendBlockError}
+              blockStatus={dmBlockStatus}
+              onBlockStatusChanged={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
               isMobile
             />
           </div>
@@ -876,6 +910,7 @@ const Chat = () => {
               onLeaveGroup={handleLeaveGroup}
               onGroupUpdated={fetchConversations}
               onDeleteConversation={handleDeleteConversation}
+              onBlockToggled={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
               isMobile
             />
           </div>
@@ -918,6 +953,8 @@ const Chat = () => {
           showRight={showRightSidebar}
           socket={socketRef.current}
           sendBlockError={sendBlockError}
+          blockStatus={dmBlockStatus}
+          onBlockStatusChanged={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
         />
       </div>
 
@@ -932,6 +969,7 @@ const Chat = () => {
               onLeaveGroup={handleLeaveGroup}
               onGroupUpdated={fetchConversations}
               onDeleteConversation={handleDeleteConversation}
+              onBlockToggled={() => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId)}
             />
           ) : (
             <div style={{

@@ -102,8 +102,8 @@ const FriendsPage = () => {
         }
     };
 
-    const handleBlockFriend = async (friendId, isBlocked) => {
-        const actionStr = isBlocked ? 'bỏ chặn' : 'chặn';
+    const handleBlockFriend = async (friendId, iBlocked) => {
+        const actionStr = iBlocked ? 'bỏ chặn' : 'chặn';
         if (!window.confirm(`Bạn có chắc chắn muốn ${actionStr} người này không?`)) return;
         try {
             await friendApi.blockFriend(friendId);
@@ -140,22 +140,15 @@ const FriendsPage = () => {
     };
 
     const handleCreateDmFromFriend = async (friend) => {
-        try {
-            setCreatingChat(true);
-            navigate('/chat', {
-                state: {
-                    pendingPeer: {
-                        id: friend.friendId,
-                        name: friend.displayName || friend.originalName || 'Đoạn chat trực tiếp',
-                        avatar: friend.avatar || '',
-                    },
+        navigate('/chat', {
+            state: {
+                pendingPeer: {
+                    id: friend.friendId,
+                    name: friend.displayName || friend.originalName || 'Đoạn chat trực tiếp',
+                    avatar: friend.avatar || '',
                 },
-            });
-        } catch (error) {
-            alert('Lỗi: ' + (error.response?.data?.message || error.message));
-        } finally {
-            setCreatingChat(false);
-        }
+            },
+        });
     };
 
     const toggleSelectFriend = (friendId) => {
@@ -206,7 +199,7 @@ const FriendsPage = () => {
     };
 
     // ---- Grouping Alphabetically ----
-    const filteredFriends = friends.filter(f => 
+    const filteredFriends = friends.filter(f =>
         (f.displayName || '').toLowerCase().includes(friendFilterText.toLowerCase()) &&
         !f.iBlocked && !f.theyBlockedMe // Loại bỏ bạn bè bị chặn
     );
@@ -231,8 +224,8 @@ const FriendsPage = () => {
             <div className="p-4 flex items-center gap-3">
                 <div className="w-full relative">
                     <span className="absolute left-3 top-2.5" style={{ color: 'var(--text-muted)' }}>🔍</span>
-                    <input 
-                        type="text" 
+                    <input
+                        type="text"
                         className="w-full border-none rounded-md py-2 pl-9 pr-3 text-sm outline-none"
                         style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)' }}
                         placeholder="Tìm bạn bè..."
@@ -241,15 +234,15 @@ const FriendsPage = () => {
                     />
                 </div>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto">
                 {/* Menu danh sách bạn bè */}
-                <button 
+                <button
                     onClick={() => setActiveTab('friends_list')}
                     className={`w-full flex items-center gap-3 px-4 py-3 transition-colors ${activeTab === 'friends_list' ? 'font-semibold' : ''}`}
-                    style={{ 
-                        backgroundColor: activeTab === 'friends_list' ? 'var(--bg-hover)' : 'transparent', 
-                        color: activeTab === 'friends_list' ? 'var(--accent)' : 'var(--text-primary)' 
+                    style={{
+                        backgroundColor: activeTab === 'friends_list' ? 'var(--bg-hover)' : 'transparent',
+                        color: activeTab === 'friends_list' ? 'var(--accent)' : 'var(--text-primary)'
                     }}
                 >
                     <span className="w-8 h-8 rounded-full flex items-center justify-center text-lg" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--accent)' }}>👥</span>
@@ -257,12 +250,12 @@ const FriendsPage = () => {
                 </button>
 
                 {/* Menu Lời mời */}
-                <button 
+                <button
                     onClick={() => setActiveTab('friend_requests')}
                     className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${activeTab === 'friend_requests' ? 'font-semibold' : ''}`}
-                    style={{ 
-                        backgroundColor: activeTab === 'friend_requests' ? 'var(--bg-hover)' : 'transparent', 
-                        color: activeTab === 'friend_requests' ? 'var(--accent)' : 'var(--text-primary)' 
+                    style={{
+                        backgroundColor: activeTab === 'friend_requests' ? 'var(--bg-hover)' : 'transparent',
+                        color: activeTab === 'friend_requests' ? 'var(--accent)' : 'var(--text-primary)'
                     }}
                 >
                     <div className="flex items-center gap-3">
@@ -277,12 +270,12 @@ const FriendsPage = () => {
                 </button>
 
                 {/* Menu Danh sách chặn */}
-                <button 
+                <button
                     onClick={() => setActiveTab('blocked_list')}
                     className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${activeTab === 'blocked_list' ? 'font-semibold' : ''}`}
-                    style={{ 
-                        backgroundColor: activeTab === 'blocked_list' ? 'var(--bg-hover)' : 'transparent', 
-                        color: activeTab === 'blocked_list' ? 'var(--accent)' : 'var(--text-primary)' 
+                    style={{
+                        backgroundColor: activeTab === 'blocked_list' ? 'var(--bg-hover)' : 'transparent',
+                        color: activeTab === 'blocked_list' ? 'var(--accent)' : 'var(--text-primary)'
                     }}
                 >
                     <div className="flex items-center gap-3">
@@ -317,50 +310,52 @@ const FriendsPage = () => {
                     Tạo nhóm chat
                 </button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto px-6 py-4" style={{ backgroundColor: 'var(--bg-primary)' }}>
                 {sortedGroups.length === 0 && <p className="text-center mt-10" style={{ color: 'var(--text-muted)' }}>Không tìm thấy bạn bè nào.</p>}
-                
+
                 {sortedGroups.map(letter => (
                     <div key={letter} className="mb-6">
                         <h3 className="text-lg font-bold mb-3 ml-2" style={{ color: 'var(--text-primary)' }}>{letter}</h3>
                         <div className="rounded-lg shadow-sm border overflow-hidden" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
                             {groupedFriends[letter].map((f, idx) => (
-                                <div key={f.friendshipId} className={`flex items-center justify-between p-3 px-5 transition cursor-pointer ${idx !== groupedFriends[letter].length - 1 ? 'border-b' : ''}`} style={{ borderColor: 'var(--border)' }}>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-11 h-11 rounded-full flex items-center justify-center text-lg font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--accent)' }}>
+                                <div key={f.friendshipId} className={`flex items-center justify-between p-3 px-5 transition ${idx !== groupedFriends[letter].length - 1 ? 'border-b' : ''}`} style={{ borderColor: 'var(--border)' }}>
+                                    <div
+                                        className="flex items-center gap-4 cursor-pointer flex-1 min-w-0"
+                                        onClick={() => navigate(`/user/${f.friendId}`)}
+                                    >
+                                        <div className="w-11 h-11 rounded-full flex items-center justify-center text-lg font-bold flex-shrink-0" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--accent)' }}>
                                             {f.displayName ? f.displayName[0].toUpperCase() : '?'}
                                         </div>
-                                        <div>
-                                            <p className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>{f.displayName}</p>
-                                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{f.email}</p>
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-base truncate" style={{ color: 'var(--text-primary)' }}>{f.displayName}</p>
+                                            <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{f.email}</p>
                                         </div>
                                     </div>
-                                    
+
                                     {/* Action Box */}
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                                         <button
                                             onClick={(e) => { e.stopPropagation(); handleCreateDmFromFriend(f); }}
-                                            disabled={creatingChat}
                                             className="px-3 py-1.5 text-xs font-semibold rounded"
-                                            style={{ backgroundColor: 'var(--accent)', color: '#fff', opacity: creatingChat ? 0.7 : 1 }}
+                                            style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
                                         >
                                             Nhắn tin
                                         </button>
-                                        <button 
+                                        <button
                                             onClick={(e) => { e.stopPropagation(); handleUpdateNickname(f.friendId); }}
                                             className="px-3 py-1.5 text-xs font-semibold rounded"
                                             style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)' }}
                                         >
                                             Biệt danh
                                         </button>
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); handleBlockFriend(f.friendId, f.isBlocked); }}
-                                            className={`px-3 py-1.5 text-xs font-semibold rounded ${f.isBlocked ? 'text-gray-600 bg-gray-200 hover:bg-gray-300' : 'text-orange-600 bg-orange-50 hover:bg-orange-100'}`}
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleBlockFriend(f.friendId, f.iBlocked); }}
+                                            className={`px-3 py-1.5 text-xs font-semibold rounded ${f.iBlocked ? 'text-gray-600 bg-gray-200 hover:bg-gray-300' : 'text-orange-600 bg-orange-50 hover:bg-orange-100'}`}
                                         >
-                                            {f.isBlocked ? 'Bỏ chặn' : 'Chặn'}
+                                            {f.iBlocked ? 'Bỏ chặn' : 'Chặn'}
                                         </button>
-                                        <button 
+                                        <button
                                             onClick={(e) => { e.stopPropagation(); handleUnfriend(f.friendId); }}
                                             className="px-3 py-1.5 text-xs font-semibold bg-red-50 hover:bg-red-100 rounded text-red-600"
                                         >
