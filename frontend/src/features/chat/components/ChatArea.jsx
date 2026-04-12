@@ -150,6 +150,57 @@ const MessageBubble = ({
     if (msg.type === 'voice') {
       return <audio controls src={msg.payload?.url || msg.content} style={{ maxWidth: isMobile ? 220 : 260, display: 'block', height: 36 }} />;
     }
+// Video (type === 'video')
+if (msg.type === 'video') {
+  const videoUrl = msg.payload?.url || msg.content;
+  return (
+    <video
+      src={videoUrl}
+      controls
+      style={{
+        maxWidth: isMobile ? 220 : 260,
+        maxHeight: 200,
+        borderRadius: 8,
+        display: 'block',
+        backgroundColor: '#000',
+      }}
+    />
+  );
+}
+
+if (msg.type === 'file') {
+  const fileName = msg.payload?.fileName || msg.content || '';
+  const fileUrl = msg.payload?.url || msg.content;
+  const isVideo = /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(fileName);
+
+  // File video → dùng thẻ <video>
+  if (isVideo) {
+    return (
+      <video
+        src={fileUrl}
+        controls
+        style={{
+          maxWidth: isMobile ? 220 : 260,
+          maxHeight: 200,
+          borderRadius: 8,
+          display: 'block',
+          backgroundColor: '#000',
+        }}
+      />
+    );
+  }
+
+  // File thông thường
+  return (
+    <a href={fileUrl} target="_blank" rel="noreferrer"
+      style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}>
+      <Paperclip size={18} />
+      <span style={{ fontSize: 13, textDecoration: 'underline' }}>
+        {fileName}
+      </span>
+    </a>
+  );
+}
     if (msg.type === 'file') {
       return (
         <a href={msg.payload?.url || msg.content} target="_blank" rel="noreferrer"
