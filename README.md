@@ -13,7 +13,7 @@ Zolo Chat - Backend
       Firefox: audio/ogg;codecs=opus (.ogg)
       Safari: audio/mp4 (.m4a)
       Fallback: .wav, .mp3, .aac, .flac...
-
+    Status realtime qua socket
 Giới hạn tối đa 25MB
 Lưu trữ trên AWS S3 + CloudFront (CDN)
 Lưu metadata vào Attachment model (tách biệt với Message)
@@ -30,12 +30,6 @@ Lấy danh sách tin nhắn (cursor-based pagination)
 Lấy danh sách ảnh & file đã gửi trong cuộc trò chuyện / Ở web thì hiển thị đc nhưng mobile chưa hiển thị đc danh sách đã upload
 Cập nhật preview tin nhắn cuối cùng
 ------
-
+## Mobile chạy trên expo go andoird và web expo
 ----LOGS Vi đang gặp:
-## chưa xong status qua socket
-## mobile bị lỗi gọi api cập nhật trong profile,..
-## mobile chưa fecth đc profile từ chat
-## bàn phím nhập từ thiết bị khuất 1 phần giao diện, config chưa oke
-## Mobile trừ việc gửi tin nhắn(chưa tải được các file hay xem file đọc trước file ) thì lỗi update liên quan tới api
-
-## web : linking tới các component cũng oke rồi
+Hết

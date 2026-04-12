@@ -57,7 +57,10 @@ const InfoPanel = ({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.sheetOverlay} onPress={onClose}>
-        <View style={[styles.sheet, { maxHeight: '85%' }]} onStartShouldSetResponder={() => true}>
+        <View
+          style={[styles.sheet, { maxHeight: '85%', flex: 1 }]}
+          onStartShouldSetResponder={() => true}
+        >
           <View style={styles.sheetHandle} />
 
           {/* Avatar + Tên */}
@@ -116,7 +119,11 @@ const InfoPanel = ({
             ))}
           </View>
 
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ flexGrow: 1 }}
+                  showsVerticalScrollIndicator={false}
+                >
 
             {/* ── Tab Thông tin ── */}
             {infoTab === 'info' && (
@@ -329,7 +336,6 @@ const InfoPanel = ({
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
-                        gap: 12,
                         padding: 12,
                         backgroundColor: THEME.bgPrimary,
                         borderRadius: 10,
@@ -347,15 +353,16 @@ const InfoPanel = ({
                           backgroundColor: THEME.accent + '18',
                           justifyContent: 'center',
                           alignItems: 'center',
+                          marginRight: 12,
                         }}
                       >
                         <Feather
                           name={
-                            /\.(jpg|jpeg|png|gif|webp)$/i.test(file.fileName) ? 'image' :
-                            /\.(mp4|mov|avi|mkv)$/i.test(file.fileName) ? 'film' :
-                            /\.(mp3|m4a|wav)$/i.test(file.fileName) ? 'music' :
-                            /\.(pdf)$/i.test(file.fileName) ? 'file-text' :
-                            /\.(zip|rar|7z)$/i.test(file.fileName) ? 'archive' :
+                            /\.(jpg|jpeg|png|gif|webp)$/i.test(file.fileName || '') ? 'image' :
+                            /\.(mp4|mov|avi|mkv)$/i.test(file.fileName || '') ? 'film' :
+                            /\.(mp3|m4a|wav)$/i.test(file.fileName || '') ? 'music' :
+                            /\.(pdf)$/i.test(file.fileName || '') ? 'file-text' :
+                            /\.(zip|rar|7z)$/i.test(file.fileName || '') ? 'archive' :
                             'file'
                           }
                           size={20}
@@ -364,12 +371,12 @@ const InfoPanel = ({
                       </View>
 
                       {/* Tên file + dung lượng */}
-                      <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
                         <Text
                           style={{ fontSize: 13, fontWeight: '600', color: THEME.textPrimary }}
                           numberOfLines={1}
                         >
-                          {file.fileName}
+                          {file.fileName || 'Không rõ tên'}
                         </Text>
                         <Text style={{ fontSize: 11, color: THEME.textMuted, marginTop: 2 }}>
                           {file.fileSize ? `${(file.fileSize / 1024).toFixed(0)} KB` : ''} · Nhấn để tải
