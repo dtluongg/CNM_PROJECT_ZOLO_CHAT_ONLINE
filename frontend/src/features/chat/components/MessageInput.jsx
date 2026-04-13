@@ -36,6 +36,7 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
   const [focused, setFocused] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSec, setRecordingSec] = useState(0);
+  const [attachments, setAttachments] = useState([]); // [{id, file, previewUrl}]
 
   // Sync text when editingMessage changes
   useEffect(() => {
@@ -88,22 +89,25 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
       if (mediaRecorderRef.current?.state !== 'inactive') {
         mediaRecorderRef.current?.stop();
       }
+      // Cleanup object URLs to avoid memory leaks
+      attachments.forEach(a => URL.revokeObjectURL(a.previewUrl));
     };
-  }, []);
+  }, [attachments]);
 
-  // ── Text send ──────────────────────────────────────────────────────────────
+  // ── Send Logic ──────────────────────────────────────────────────────────────
   const handleSend = () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    
-    if (editingMessage) {
-      onSend({ type: 'text', content: trimmed, isEdit: true, messageId: editingMessage._id || editingMessage.id });
-    } else {
-      onSend({ type: 'text', content: trimmed });
-    }
+    if (!trimmed && attachments.length === 0) return;
 
+    // 1. Capture snapshots of current content
+    const textSnapshot = trimmed;
+    const attachmentsSnapshot = [...attachments];
+
+    // 2. Clear UI immediately for instant feedback
     setText('');
+    setAttachments([]); // This will trigger the cleanup of object URLs via useEffect
     setShowEmoji(false);
+    
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.focus();
@@ -112,6 +116,31 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
       clearTimeout(typingTimerRef.current);
       socket.emit('chat:stop-typing', { conversationId });
     }
+
+    // 3. Process sending in background (async)
+    (async () => {
+      // Send text message if any
+      if (textSnapshot) {
+        try {
+          if (editingMessage) {
+            await onSend({ type: 'text', content: textSnapshot, isEdit: true, messageId: editingMessage._id || editingMessage.id });
+          } else {
+            await onSend({ type: 'text', content: textSnapshot });
+          }
+        } catch (err) {
+          console.error('Failed to send text:', err);
+        }
+      }
+
+      // Send each image attachment in parallel for maximum speed
+      await Promise.all(attachmentsSnapshot.map(async (att) => {
+        try {
+          await onSend({ type: 'image', file: att.file });
+        } catch (err) {
+          console.error('Failed to send image:', err);
+        }
+      }));
+    })();
   };
 
   const handleKeyDown = (e) => {
@@ -136,6 +165,43 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(e.target.scrollHeight, isMobile ? 100 : 128) + 'px';
     if (e.target.value.trim()) emitTyping();
+  };
+
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const files = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) files.push(file);
+      }
+    }
+
+    if (files.length > 0) {
+      const newAttachments = files.map(file => ({
+        id: Math.random().toString(36).substr(2, 9),
+        file,
+        previewUrl: URL.createObjectURL(file)
+      }));
+      setAttachments(prev => [...prev, ...newAttachments]);
+    }
+  };
+
+  const removeAttachment = (id) => {
+    setAttachments(prev => {
+      const found = prev.find(a => a.id === id);
+      if (found) URL.revokeObjectURL(found.previewUrl);
+      return prev.filter(a => a.id !== id);
+    });
+  };
+
+  const removeAllAttachments = () => {
+    setAttachments(prev => {
+      prev.forEach(a => URL.revokeObjectURL(a.previewUrl));
+      return [];
+    });
   };
 
   // ── Emoji ─────────────────────────────────────────────────────────────────
@@ -216,12 +282,20 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) onSend({ type: 'image', file });
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const newAttachments = files.map(file => ({
+      id: Math.random().toString(36).substr(2, 9),
+      file,
+      previewUrl: URL.createObjectURL(file)
+    }));
+
+    setAttachments(prev => [...prev, ...newAttachments]);
     e.target.value = '';
   };
 
-  const canSend = text.trim().length > 0;
+  const canSend = text.trim().length > 0 || attachments.length > 0;
 
   // ── Recording UI ──────────────────────────────────────────────────────────
   if (isRecording) {
@@ -326,7 +400,85 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
 
       {/* Hidden file inputs */}
       <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileChange} />
-      <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} />
+      <input ref={imageInputRef} type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} />
+
+      {/* Attachment Preview UI */}
+      {attachments.length > 0 && (
+        <div style={{
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderBottom: 'none',
+          borderRadius: isMobile ? 0 : '12px 12px 0 0',
+          padding: '12px 16px',
+          animation: 'fadeInUp 0.15s ease',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          marginBottom: -1, // collapse border with input container
+          position: 'relative',
+          zIndex: 10
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+               {attachments.length} ảnh
+             </div>
+             <button
+               onClick={removeAllAttachments}
+               style={{
+                 background: 'none',
+                 border: 'none',
+                 color: '#667085',
+                 fontSize: 12,
+                 fontWeight: 400,
+                 cursor: 'pointer',
+                 padding: '2px 4px',
+                 borderRadius: 4,
+                 transition: 'all 0.2s ease'
+               }}
+               onMouseEnter={(e) => e.target.style.color = 'var(--text-primary)'}
+               onMouseLeave={(e) => e.target.style.color = '#667085'}
+             >
+               Xoá tất cả
+             </button>
+          </div>
+          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+            {attachments.map(att => (
+              <div key={att.id} style={{ position: 'relative', flexShrink: 0 }}>
+                <img 
+                  src={att.previewUrl} 
+                  alt="preview" 
+                  style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--border)' }} 
+                />
+                <button
+                  onClick={() => removeAttachment(att.id)}
+                  style={{
+                    position: 'absolute', top: -6, right: -6,
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.6)', color: '#fff',
+                    border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            {/* Add more button */}
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              style={{
+                width: 64, height: 64, borderRadius: 8,
+                border: '2px dashed var(--border)',
+                background: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--text-muted)', flexShrink: 0
+              }}
+            >
+              <span style={{ fontSize: 24 }}>+</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Emoji Picker */}
       {showEmoji && (
@@ -429,6 +581,7 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
           value={text}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           placeholder={placeholder || 'Nhắn tin...'}

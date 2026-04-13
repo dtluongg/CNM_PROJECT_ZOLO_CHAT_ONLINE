@@ -55,6 +55,7 @@ const MessageBubble = ({
   conversationType,
   currentUserId,
   onAvatarClick,
+  onImageLoad,
 }) => {
   const observerRef = useRef(null);
 
@@ -145,7 +146,14 @@ const MessageBubble = ({
     }
 
     if (msg.type === 'image') {
-      return <img src={msg.payload?.url || msg.content} alt="attachment" style={{ maxWidth: isMobile ? 220 : 260, maxHeight: 260, borderRadius: 8, display: 'block' }} />;
+      return (
+        <img 
+          src={msg.payload?.url || msg.content} 
+          alt="attachment" 
+          onLoad={onImageLoad}
+          style={{ maxWidth: isMobile ? 220 : 260, maxHeight: 260, borderRadius: 8, display: 'block' }} 
+        />
+      );
     }
     if (msg.type === 'voice') {
       return <audio controls src={msg.payload?.url || msg.content} style={{ maxWidth: isMobile ? 220 : 260, display: 'block', height: 36 }} />;
@@ -859,13 +867,19 @@ export default function ChatArea({
     // 1. Có tin nhắn mới ở cuối danh sách (ID thay đổi và số lượng tăng)
     // 2. HOẶC chính người dùng vừa gửi tin nhắn mới
     if ((isNewMessage && isCountIncreased) || (isNewMessage && isMine)) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      bottomRef.current?.scrollIntoView({ behavior: isMine ? 'auto' : 'smooth' });
     }
 
     // Cập nhật ref cho lần render kế tiếp
     prevMsgCountRef.current = messages.length;
     prevLastMsgIdRef.current = lastMsgId;
   }, [messages, currentUserId]);
+
+  const handleImageLoad = () => {
+    // Luôn cuộn xuống khi ảnh load xong để đảm bảo vị trí chính xác
+    // Theo dõi behavior 'auto' khi chính chủ gửi để phản hồi nhanh nhất
+    bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+  };
 
   if (!conversation) {
     return (
@@ -1135,6 +1149,7 @@ export default function ChatArea({
               conversationType={conversation.type}
               currentUserId={currentUserId}
               onAvatarClick={onViewProfile}
+              onImageLoad={handleImageLoad}
             />
         )}
 
