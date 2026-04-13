@@ -12,6 +12,11 @@ const mongoose = require('mongoose');
 // ════════════════════════════════════════════════════════════════
 const callSchema = new mongoose.Schema(
     {
+        conversationId: {
+            type:    mongoose.Schema.Types.ObjectId,
+            ref:     'Conversation',
+            default: null,
+        },
         callerId: {
             type: mongoose.Schema.Types.ObjectId,
             ref:  'User',
