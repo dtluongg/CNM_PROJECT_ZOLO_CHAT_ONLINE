@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck } from 'lucide-react';
 import { useNotifications } from '../../../context/NotificationContext';
 
@@ -28,11 +29,40 @@ export default function NotificationCenter({ open, onClose }) {
     bannerEnabled,
     setBannerEnabled,
   } = useNotifications();
+  const navigate = useNavigate();
 
   const sorted = useMemo(
     () => [...items].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
     [items]
   );
+
+  const openNotification = useCallback(async (item) => {
+    if (!item?._id) return;
+    await markRead(item._id);
+
+    if (item.type === 'friend_request' || item.type === 'friend_accepted') {
+      navigate('/friends', { state: { activeTab: 'friend_requests' } });
+      onClose?.();
+      return;
+    }
+
+    if (item.type === 'message' || item.type === 'call_incoming' || item.type === 'call_rejected' || item.type === 'call_missed') {
+      if (item.conversationId) {
+        navigate('/chat', {
+          state: {
+            openConversationId: item.conversationId,
+            notificationId: item._id,
+          },
+        });
+      } else {
+        navigate('/chat');
+      }
+      onClose?.();
+      return;
+    }
+
+    onClose?.();
+  }, [markRead, navigate, onClose]);
 
   if (!open) return null;
 
@@ -141,7 +171,7 @@ export default function NotificationCenter({ open, onClose }) {
         {sorted.map((item) => (
           <button
             key={item._id}
-            onClick={() => !item.isRead && markRead(item._id)}
+            onClick={() => openNotification(item)}
             style={{
               width: '100%',
               textAlign: 'left',

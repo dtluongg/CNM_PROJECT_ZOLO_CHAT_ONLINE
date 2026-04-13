@@ -16,12 +16,14 @@ import { useConversations }  from './hooks/useConversations';
 import { useMessages }       from './hooks/useMessages';
 import { useBlockStatus }    from './hooks/useBlockStatus';
 import { useGroupActions }   from './hooks/useGroupActions';
+import { useNotifications }  from '../../context/NotificationContext';
 
 const Chat = () => {
   const { user: currentUser, token } = useAuth();
   const navigate    = useNavigate();
   const location    = useLocation();
   const { initiateCall } = useCall();
+  const { markConversationRead } = useNotifications();
 
   // ── Layout state ────────────────────────────────────────────────────────
   const [isMobile, setIsMobile]               = useState(window.innerWidth < 768);
@@ -129,6 +131,12 @@ const Chat = () => {
   }, [location.state, isMobile, applyPendingPeer]);
 
   useEffect(() => { fetchConversations(); }, [fetchConversations]);
+
+  useEffect(() => {
+    if (activeConversation?.id) {
+      markConversationRead(activeConversation.id);
+    }
+  }, [activeConversation?.id, markConversationRead]);
 
   // ── Select conversation ──────────────────────────────────────────────────
   const handleSelectConversation = useCallback(async (conv) => {

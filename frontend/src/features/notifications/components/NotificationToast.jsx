@@ -1,15 +1,44 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { useNotifications } from '../../../context/NotificationContext';
 
 export default function NotificationToast() {
-  const { toast, dismissToast } = useNotifications();
+  const { toast, dismissToast, markRead } = useNotifications();
+  const navigate = useNavigate();
 
-  if (!toast) return null;
+  const notification = toast?.notification || null;
+
+  const handleClick = async () => {
+    if (notification?._id) {
+      await markRead(notification._id);
+    }
+
+    if (notification?.type === 'friend_request' || notification?.type === 'friend_accepted') {
+      navigate('/friends', { state: { activeTab: 'friend_requests' } });
+      dismissToast();
+      return;
+    }
+
+    if ((notification?.type === 'message' || notification?.type?.startsWith('call_')) && notification?.conversationId) {
+      navigate('/chat', {
+        state: {
+          openConversationId: notification.conversationId,
+          notificationId: notification._id,
+        },
+      });
+      dismissToast();
+      return;
+    }
+
+    dismissToast();
+  };
+
+  if (!notification) return null;
 
   return (
     <button
-      onClick={dismissToast}
+      onClick={handleClick}
       style={{
         position: 'fixed',
         top: 18,
@@ -29,11 +58,11 @@ export default function NotificationToast() {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
         <Bell size={15} style={{ color: 'var(--accent)' }} />
-        <span style={{ fontSize: 13, fontWeight: 700 }}>{toast.title}</span>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>{notification.title || 'Thông báo mới'}</span>
       </div>
-      {toast.body ? (
+      {notification.body ? (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.35 }}>
-          {toast.body}
+          {notification.body}
         </div>
       ) : null}
     </button>

@@ -146,6 +146,25 @@ export const NotificationProvider = ({ children }) => {
     }
   }, []);
 
+  const markConversationRead = useCallback(async (conversationId) => {
+    if (!conversationId) return;
+
+    const targets = items.filter((item) => item.conversationId && String(item.conversationId) === String(conversationId) && !item.isRead);
+    if (!targets.length) return;
+
+    try {
+      await Promise.all(targets.map((item) => notificationApi.markRead(item._id)));
+      setItems((prev) => prev.map((item) => (
+        item.conversationId && String(item.conversationId) === String(conversationId)
+          ? { ...item, isRead: true, readAt: item.readAt || new Date().toISOString() }
+          : item
+      )));
+      setUnreadCount((prev) => Math.max(0, prev - targets.length));
+    } catch (_) {
+      // Ignore batch errors.
+    }
+  }, [items]);
+
   const getConversationSetting = useCallback(async (conversationId) => {
     const res = await notificationApi.getSetting(conversationId);
     return res?.data?.data || null;
@@ -202,9 +221,7 @@ export const NotificationProvider = ({ children }) => {
 
       if (bannerEnabled) {
         setToast({
-          id: notification._id,
-          title: notification.title || 'Thông báo mới',
-          body: notification.body || '',
+          notification,
         });
       }
     });
@@ -251,7 +268,7 @@ export const NotificationProvider = ({ children }) => {
   }, [token, fetchNotifications, showToastFromLatest]);
 
   useEffect(() => {
-    if (!toast?.id) return;
+    if (!toast?.notification?._id) return;
     clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToast(null), 3500);
     return () => clearTimeout(toastTimerRef.current);
@@ -265,6 +282,7 @@ export const NotificationProvider = ({ children }) => {
     fetchNotifications,
     markRead,
     markAllRead,
+    markConversationRead,
     toast,
     dismissToast: () => setToast(null),
     soundEnabled,
@@ -281,6 +299,7 @@ export const NotificationProvider = ({ children }) => {
     fetchNotifications,
     markRead,
     markAllRead,
+    markConversationRead,
     toast,
     soundEnabled,
     setSoundEnabled,
