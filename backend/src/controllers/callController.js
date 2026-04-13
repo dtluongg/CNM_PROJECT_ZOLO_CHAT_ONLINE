@@ -127,10 +127,12 @@ const getCallDetail = async (req, res) => {
                 isOutgoing: call.callerId._id.toString() === userId,
             },
         });
+
     } catch (err) {
         console.error('getCallDetail error:', err);
         return res.status(500).json({ message: 'Lỗi server' });
     }
+
 };
 
 module.exports = { getCallHistory, getCallDetail };
