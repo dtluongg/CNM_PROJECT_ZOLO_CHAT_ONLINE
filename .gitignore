@@ -21,7 +21,4 @@ Thumbs.db
 # Build folders
 dist/
 build/
-<<<<<<< HEAD
-=======
 .idea
->>>>>>> dab5fb4c408bee80d9f50587d3c803a4138034e7

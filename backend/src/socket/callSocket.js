@@ -31,6 +31,7 @@ const userModel  = require('../models/userModel');
 const Message = require('../models/messageModel');
 const Conversation = require('../models/conversationModel');
 const ConversationMember = require('../models/conversationMemberModel');
+const { createAndEmitNotification } = require('../services/notificationService');
 // Thời gian chờ nhấc máy: 30 giây
 const RING_TIMEOUT_MS = 30_000;
 
@@ -196,6 +197,21 @@ module.exports = (io, socket, onlineUsers) => {
                 offer,
             });
 
+            try {
+                await createAndEmitNotification({
+                    userId: calleeId,
+                    actorId: userId,
+                    type: 'call_incoming',
+                    title: `Cuộc gọi ${type === 'video' ? 'video' : 'thoại'} đến`,
+                    body: `${socket.user.displayName || 'Ai đó'} đang gọi cho bạn`,
+                    callId: call._id,
+                    conversationId: call.conversationId,
+                    data: { callType: type },
+                });
+            } catch (notifyErr) {
+                console.error('call incoming notification error:', notifyErr.message);
+            }
+
             // Auto-timeout: 30s không nhấc → missed
             const timer = setTimeout(async () => {
                 try {
@@ -205,6 +221,21 @@ module.exports = (io, socket, onlineUsers) => {
                             status:  'missed',
                             endedAt: new Date(),
                         });
+
+                        try {
+                            await createAndEmitNotification({
+                                userId,
+                                actorId: calleeId,
+                                type: 'call_missed',
+                                title: 'Cuộc gọi nhỡ',
+                                body: `Bạn đã gọi ${callee.displayName || 'người dùng'} nhưng không có phản hồi`,
+                                callId: call._id,
+                                conversationId: call.conversationId,
+                            });
+                        } catch (notifyErr) {
+                            console.error('call missed notification error:', notifyErr.message);
+                        }
+
                         // Báo cả hai bên
                         io.to(`call:${callId}`).emit('call:timeout', { callId });
                         io.to(`user:${calleeId}`).emit('call:timeout', { callId });
@@ -306,6 +337,21 @@ module.exports = (io, socket, onlineUsers) => {
                 endedAt: new Date(),
             });
             await createCallSystemMessage(io, call, 0, 'rejected');
+
+            try {
+                await createAndEmitNotification({
+                    userId: call.callerId,
+                    actorId: userId,
+                    type: 'call_rejected',
+                    title: 'Cuộc gọi bị từ chối',
+                    body: `${socket.user.displayName || 'Người dùng'} đã từ chối cuộc gọi của bạn`,
+                    callId: call._id,
+                    conversationId: call.conversationId,
+                    data: { callType: call.type },
+                });
+            } catch (notifyErr) {
+                console.error('call rejected notification error:', notifyErr.message);
+            }
 
 
             // Thông báo caller qua call room (caller đang ở đó) và personal room (backup)

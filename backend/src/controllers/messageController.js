@@ -14,6 +14,7 @@ const ConversationMember = require('../models/conversationMemberModel');
 const MessageReaction = require('../models/messageReactionModel');
 const MessageRead = require('../models/messageReadModel');
 const { getIO } = require('../socket/socketManager');
+const { notifyNewMessage } = require('../services/notificationService');
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -184,6 +185,21 @@ const sendMessage = async (req, res) => {
                 message: formatted,
             });
         });
+
+        // ── Tạo thông báo cho các thành viên khác theo notification settings ──
+        try {
+            await notifyNewMessage({
+                conversationId,
+                messageId: message._id,
+                senderId: req.user._id,
+                senderName: req.user.displayName,
+                messageType: finalType,
+                messageContent: finalType === 'text' ? finalContent : preview,
+                recipientIds: allMembers.map((m) => m.userId),
+            });
+        } catch (notifyErr) {
+            console.error('notifyNewMessage error:', notifyErr.message);
+        }
 
         return res.status(201).json({ message: 'Gửi tin nhắn thành công', data: formatted });
     } catch (err) {
