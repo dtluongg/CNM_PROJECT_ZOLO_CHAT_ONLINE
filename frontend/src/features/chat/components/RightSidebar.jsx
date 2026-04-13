@@ -1,11 +1,10 @@
-// src/features/chat/components/RightSidebar.jsx
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 import { useNotifications } from '../../../context/NotificationContext';
 import {
   X, MessageCircle, BellOff, Ban, LogOut, Download, Phone, Video,
-  Shield, Crown, UserCog, Trash2,
+  Shield, Crown, UserCog, Trash2, FileText,
 } from 'lucide-react';
 
 import conversationApi from '../api/conversationApi';
@@ -14,13 +13,11 @@ import messageApi from '../api/messageApi';
 
 import CallHistoryTab from '../../call/components/CallHistoryTab';
 
-// ── Components đã tách ─────────────────────────────────────
 import SectionHeader from './rightSidebar/ui/SectionHeader';
 import ActionButton from './rightSidebar/ui/ActionButton';
 import RoleChip from './rightSidebar/ui/RoleChip';
 import AvatarDisplay from './rightSidebar/ui/AvatarDisplay';
 
-// ── Utils ─────────────────────────────────────────────────
 import { getAvatarColor } from './rightSidebar/utils/avatarUtils';
 
 export default function RightSidebar({
@@ -148,9 +145,7 @@ export default function RightSidebar({
       .finally(() => setLoadingMedia(false));
   }, [tab, conversation?.id]);
 
-  useEffect(() => {
-    loadMembers();
-  }, [loadMembers]);
+  useEffect(() => { loadMembers(); }, [loadMembers]);
 
   useEffect(() => {
     if (conversation?.type === 'dm') {
@@ -160,9 +155,7 @@ export default function RightSidebar({
     }
   }, [conversation?.type, loadDmFriendState]);
 
-  useEffect(() => {
-    loadFriendPool();
-  }, [loadFriendPool]);
+  useEffect(() => { loadFriendPool(); }, [loadFriendPool]);
 
   useEffect(() => {
     let mounted = true;
@@ -171,7 +164,6 @@ export default function RightSidebar({
         if (mounted) setNotifSetting(null);
         return;
       }
-
       try {
         const setting = await getConversationSetting(conversation.id);
         if (mounted) setNotifSetting(setting);
@@ -179,7 +171,6 @@ export default function RightSidebar({
         if (mounted) setNotifSetting(null);
       }
     };
-
     loadSetting();
     return () => { mounted = false; };
   }, [conversation?.id, getConversationSetting]);
@@ -240,7 +231,6 @@ export default function RightSidebar({
     const memberId = (member.user?._id || '').toString();
     if (!memberId) return;
     if (!window.confirm(`Kick ${member.user?.displayName || 'thành viên'} khỏi nhóm?`)) return;
-
     try {
       setBusyAction(`kick-${memberId}`);
       await conversationApi.kickConversationMember(conversation.id, memberId);
@@ -258,7 +248,6 @@ export default function RightSidebar({
     const targetId = (member.user?._id || '').toString();
     if (!targetId) return;
     if (!window.confirm(`Chuyển owner cho ${member.user?.displayName || 'thành viên'}?`)) return;
-
     try {
       setBusyAction(`transfer-${targetId}`);
       await conversationApi.transferConversationOwner(conversation.id, targetId);
@@ -274,7 +263,6 @@ export default function RightSidebar({
   const handleDisbandGroup = async () => {
     if (!conversation.id) return;
     if (!window.confirm('Bạn chắc chắn muốn giải tán nhóm?')) return;
-
     try {
       setBusyAction('disband');
       await conversationApi.disbandConversation(conversation.id);
@@ -289,14 +277,10 @@ export default function RightSidebar({
   const handleBlockUser = async () => {
     const targetUserId = conversation?.otherUserId;
     if (!targetUserId) return;
-
     const confirmed = window.confirm(
-      dmFriendState?.iBlocked
-        ? 'Bạn muốn bỏ chặn người dùng này?'
-        : 'Bạn muốn chặn người dùng này?'
+      dmFriendState?.iBlocked ? 'Bạn muốn bỏ chặn người dùng này?' : 'Bạn muốn chặn người dùng này?'
     );
     if (!confirmed) return;
-
     try {
       setBusyAction('block-user');
       const res = await friendApi.blockFriend(targetUserId);
@@ -326,14 +310,12 @@ export default function RightSidebar({
 
   const handleToggleMuteConversation = async () => {
     if (!conversation?.id) return;
-
     const nextMuted = !(notifSetting?.isMuted === true);
-
     try {
       setNotifBusy(true);
       const updated = await updateConversationSetting(conversation.id, {
         isMuted: nextMuted,
-        muteUntil: nextMuted ? null : null,
+        muteUntil: null,
       });
       setNotifSetting(updated || { ...notifSetting, isMuted: nextMuted });
     } catch (error) {
@@ -417,9 +399,11 @@ export default function RightSidebar({
         </div>
 
         <div style={{ padding: '0 12px 12px' }}>
+
           {/* ==================== TAB INFO ==================== */}
           {tab === 'info' && (
             <div>
+              {/* Thông tin cuộc trò chuyện */}
               <div style={{ marginBottom: 16 }}>
                 <SectionHeader title="Thông tin cuộc trò chuyện" />
                 <div style={{ background: 'var(--bg-tertiary)', borderRadius: 8, padding: '10px 12px', display: 'grid', gap: 8 }}>
@@ -450,7 +434,6 @@ export default function RightSidebar({
               {conversation.type === 'group' && (
                 <div style={{ marginBottom: 16 }}>
                   <SectionHeader title="Thành viên nhóm" />
-
                   {loadingMembers && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Đang tải thành viên...</div>}
                   {!!memberError && <div style={{ fontSize: 12, color: '#ed4245', marginBottom: 8 }}>{memberError}</div>}
 
@@ -482,27 +465,75 @@ export default function RightSidebar({
 
                           <div style={{ display: 'flex', gap: 6 }}>
                             {canEditThisMember && (
-                              <button onClick={() => startEditMember(m)} style={{ background: 'var(--bg-hover)', color: 'var(--text-primary)', border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
+                              <button
+                                onClick={() => startEditMember(m)}
+                                style={{ background: 'var(--bg-hover)', color: 'var(--text-primary)', border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}
+                              >
                                 <UserCog size={12} />
                               </button>
                             )}
                             {canEditThisMember && (
-                              <button onClick={() => handleKickMember(m)} disabled={busyAction === `kick-${uid}`} style={{ background: '#ed424520', color: '#ed4245', border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
+                              <button
+                                onClick={() => handleKickMember(m)}
+                                disabled={busyAction === `kick-${uid}`}
+                                style={{ background: '#ed424520', color: '#ed4245', border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 11, fontWeight: 700, opacity: busyAction === `kick-${uid}` ? 0.6 : 1 }}
+                              >
                                 <Trash2 size={12} />
                               </button>
                             )}
                             {isOwner && !isSelf && m.role !== 'owner' && (
-                              <button onClick={() => handleTransferOwner(m)} disabled={busyAction === `transfer-${uid}`} style={{ background: 'rgba(250,166,26,0.2)', color: '#faa61a', border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
+                              <button
+                                onClick={() => handleTransferOwner(m)}
+                                disabled={busyAction === `transfer-${uid}`}
+                                style={{ background: 'rgba(250,166,26,0.2)', color: '#faa61a', border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 11, fontWeight: 700, opacity: busyAction === `transfer-${uid}` ? 0.6 : 1 }}
+                              >
                                 <Crown size={12} />
                               </button>
                             )}
                           </div>
                         </div>
 
+                        {/* ── Inline Edit Panel ── */}
                         {isEditing && (
                           <div style={{ marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-                            {/* Phần chỉnh sửa role và quyền - giữ nguyên logic cũ của bạn */}
-                            {/* ... (bạn có thể copy phần này từ code cũ vào) ... */}
+                            <div style={{ display: 'grid', gap: 8 }}>
+                              <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span>Role</span>
+                                <select
+                                  value={editRole}
+                                  onChange={(e) => setEditRole(e.target.value)}
+                                  disabled={!isOwner}
+                                  style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', fontSize: 12 }}
+                                >
+                                  <option value="member">member</option>
+                                  <option value="admin">admin</option>
+                                </select>
+                              </label>
+                              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                <input type="checkbox" checked={editCanSend} onChange={(e) => setEditCanSend(e.target.checked)} /> canSendMessages
+                              </label>
+                              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                <input type="checkbox" checked={editCanInvite} onChange={(e) => setEditCanInvite(e.target.checked)} /> canInviteMembers
+                              </label>
+                              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                <input type="checkbox" checked={editCanManage} onChange={(e) => setEditCanManage(e.target.checked)} disabled={!isOwner} /> canManageMembers
+                              </label>
+                              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                <button
+                                  onClick={() => setEditingMemberId(null)}
+                                  style={{ border: 'none', borderRadius: 6, padding: '6px 10px', background: 'var(--bg-hover)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+                                >
+                                  Hủy
+                                </button>
+                                <button
+                                  onClick={saveEditMember}
+                                  disabled={busyAction === `edit-${uid}`}
+                                  style={{ border: 'none', borderRadius: 6, padding: '6px 10px', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, opacity: busyAction === `edit-${uid}` ? 0.6 : 1 }}
+                                >
+                                  Lưu
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -511,9 +542,38 @@ export default function RightSidebar({
                 </div>
               )}
 
-              {/* Phần Thêm thành viên, Hành động... */}
-              {/* Tôi giữ ngắn gọn ở đây. Bạn có thể copy phần còn lại của tab 'info' từ code cũ vào. */}
+              {/* Thêm thành viên */}
+              {conversation.type === 'group' && canInviteMembers && (
+                <div style={{ marginBottom: 16 }}>
+                  <SectionHeader title="Thêm thành viên" />
+                  <div style={{ background: 'var(--bg-tertiary)', borderRadius: 8, padding: 10, border: '1px solid var(--border)' }}>
+                    {loadingFriendPool && (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Đang tải danh sách bạn bè...</div>
+                    )}
+                    {!loadingFriendPool && friendPool.length === 0 && (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Không còn bạn bè nào để thêm vào nhóm.</div>
+                    )}
+                    {!loadingFriendPool && friendPool.slice(0, 20).map((f) => {
+                      const fid = (f.friendId || '').toString();
+                      const checked = selectedAddIds.includes(fid);
+                      return (
+                        <label key={fid} style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                          <input type="checkbox" checked={checked} onChange={() => handleToggleAddMember(fid)} /> {f.displayName}
+                        </label>
+                      );
+                    })}
+                    <button
+                      onClick={handleAddMembers}
+                      disabled={selectedAddIds.length === 0 || busyAction === 'add-members'}
+                      style={{ border: 'none', borderRadius: 6, padding: '7px 10px', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, marginTop: 6, opacity: (selectedAddIds.length === 0 || busyAction === 'add-members') ? 0.6 : 1 }}
+                    >
+                      {busyAction === 'add-members' ? 'Đang thêm...' : `Thêm ${selectedAddIds.length} thành viên`}
+                    </button>
+                  </div>
+                </div>
+              )}
 
+              {/* Hành động */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <SectionHeader title="Hành động" />
                 <ActionButton icon={<MessageCircle size={15} />} label="Nhắn tin" variant="primary" onClick={() => {}} />
@@ -531,44 +591,165 @@ export default function RightSidebar({
 
                 {conversation.type === 'dm' && (
                   <>
-                    <ActionButton icon={<Trash2 size={15} />} label="Xóa cuộc trò chuyện" variant="danger" onClick={() => onDeleteConversation?.(conversation.id)} />
-                    <ActionButton icon={<Shield size={15} />} label="Đặt biệt danh" onClick={() => { setNicknameInput(''); setShowNickname(true); }} />
+                    <ActionButton
+                      icon={<Trash2 size={15} />}
+                      label="Xóa cuộc trò chuyện"
+                      variant="danger"
+                      onClick={() => onDeleteConversation?.(conversation.id)}
+                    />
+                    <ActionButton
+                      icon={<Shield size={15} />}
+                      label="Đặt biệt danh"
+                      onClick={() => { setNicknameInput(''); setShowNickname(true); }}
+                    />
                     <ActionButton
                       icon={<Ban size={15} />}
                       label={dmFriendState?.iBlocked ? 'Bỏ chặn người dùng' : 'Chặn người dùng'}
                       variant="danger"
                       onClick={handleBlockUser}
-                      disabled={busyAction === 'block-user'}
+                      disabled={busyAction === 'block-user' || !conversation.otherUserId}
                     />
                   </>
                 )}
 
                 {conversation.type === 'group' && (
-                  <ActionButton icon={<LogOut size={15} />} label="Rời nhóm" variant="danger" onClick={() => onLeaveGroup?.(conversation.id)} />
+                  <ActionButton
+                    icon={<LogOut size={15} />}
+                    label="Rời nhóm"
+                    variant="danger"
+                    onClick={() => onLeaveGroup?.(conversation.id)}
+                    disabled={busyAction === 'disband'}
+                  />
                 )}
-
                 {conversation.type === 'group' && isOwner && (
-                  <ActionButton icon={<Trash2 size={15} />} label="Giải tán nhóm" variant="danger" onClick={handleDisbandGroup} disabled={busyAction === 'disband'} />
+                  <ActionButton
+                    icon={<Trash2 size={15} />}
+                    label="Giải tán nhóm"
+                    variant="danger"
+                    onClick={handleDisbandGroup}
+                    disabled={busyAction === 'disband'}
+                  />
                 )}
               </div>
+
+              {/* Nickname inline panel */}
+              {showNickname && conversation.type === 'dm' && (
+                <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginTop: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                    Biệt danh cho {conversation.name}
+                  </div>
+                  <input
+                    value={nicknameInput}
+                    onChange={(e) => setNicknameInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveNickname()}
+                    placeholder="Nhập biệt danh..."
+                    maxLength={50}
+                    style={{
+                      width: '100%', border: '1px solid var(--border)', borderRadius: 8,
+                      background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                      padding: '8px 10px', fontSize: 13, outline: 'none', marginBottom: 8,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setShowNickname(false)}
+                      style={{ flex: 1, padding: '7px 0', border: 'none', borderRadius: 7, background: 'var(--bg-hover)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      onClick={handleSaveNickname}
+                      disabled={nicknameBusy}
+                      style={{ flex: 1, padding: '7px 0', border: 'none', borderRadius: 7, background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, opacity: nicknameBusy ? 0.6 : 1 }}
+                    >
+                      {nicknameBusy ? 'Đang lưu...' : 'Lưu'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Tab Media & Files */}
+          {/* ==================== TAB MEDIA ==================== */}
           {tab === 'media' && (
             <div>
               <SectionHeader title="Ảnh đã chia sẻ" />
-              {/* ... phần media cũ của bạn ... */}
+              {loadingMedia && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Đang tải...</p>
+              )}
+              {!loadingMedia && mediaData.images.length === 0 && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Chưa có ảnh nào</p>
+              )}
+              {!loadingMedia && mediaData.images.length > 0 && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                    {mediaData.images.map((item) => (
+                      <a
+                        key={item._id}
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ aspectRatio: '1', borderRadius: 6, overflow: 'hidden', display: 'block', background: 'var(--bg-hover)' }}
+                      >
+                        <img src={item.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </a>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 8 }}>
+                    {mediaData.images.length} ảnh đã chia sẻ
+                  </p>
+                </>
+              )}
             </div>
           )}
 
+          {/* ==================== TAB FILES ==================== */}
           {tab === 'files' && (
             <div>
               <SectionHeader title="File đã chia sẻ" />
-              {/* ... phần files cũ của bạn ... */}
+              {loadingMedia && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Đang tải...</p>
+              )}
+              {!loadingMedia && mediaData.files.length === 0 && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>Chưa có file nào</p>
+              )}
+              {!loadingMedia && mediaData.files.map((file) => (
+                <div
+                  key={file._id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 10px', borderRadius: 8, marginBottom: 4,
+                    background: 'var(--bg-tertiary)',
+                  }}
+                >
+                  <span style={{ flexShrink: 0, color: '#5865f2', display: 'flex', alignItems: 'center' }}>
+                    <FileText size={22} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {file.fileName}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {file.fileSize ? `${(file.fileSize / 1024).toFixed(0)} KB` : ''}
+                    </div>
+                  </div>
+                  {file.url && (
+                    <a
+                      href={file.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex' }}
+                    >
+                      <Download size={14} />
+                    </a>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
+          {/* ==================== TAB CALLS ==================== */}
           {tab === 'calls' && conversation?.type === 'dm' && (
             <div>
               <SectionHeader title="Lịch sử cuộc gọi" />
@@ -579,37 +760,9 @@ export default function RightSidebar({
               />
             </div>
           )}
+
         </div>
       </div>
-
-      {/* Nickname Modal */}
-      {showNickname && conversation.type === 'dm' && (
-        <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, margin: '0 12px 12px' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
-            Biệt danh cho {conversation.name}
-          </div>
-          <input
-            value={nicknameInput}
-            onChange={(e) => setNicknameInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSaveNickname()}
-            placeholder="Nhập biệt danh..."
-            maxLength={50}
-            style={{
-              width: '100%', border: '1px solid var(--border)', borderRadius: 8,
-              background: 'var(--bg-primary)', color: 'var(--text-primary)',
-              padding: '8px 10px', fontSize: 13, outline: 'none', marginBottom: 8,
-            }}
-          />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setShowNickname(false)} style={{ flex: 1, padding: '7px 0', border: 'none', borderRadius: 7, background: 'var(--bg-hover)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-              Hủy
-            </button>
-            <button onClick={handleSaveNickname} disabled={nicknameBusy} style={{ flex: 1, padding: '7px 0', border: 'none', borderRadius: 7, background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-              {nicknameBusy ? 'Đang lưu...' : 'Lưu'}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
