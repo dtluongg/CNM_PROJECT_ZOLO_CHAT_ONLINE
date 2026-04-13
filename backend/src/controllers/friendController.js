@@ -2,6 +2,7 @@ const FriendRequest = require('../models/friendRequestModel');
 const Friendship = require('../models/friendshipModel');
 const User = require('../models/userModel');
 const mongoose = require('mongoose');
+const { createAndEmitNotification } = require('../services/notificationService');
 
 const getCurrentUserId = (req) => (req.user?._id || req.user?.id || '').toString();
 
@@ -173,6 +174,19 @@ const sendFriendRequest = async (req, res, next) => {
 
         await newRequest.save();
 
+        try {
+            await createAndEmitNotification({
+                userId: toUserId,
+                actorId: fromUserId,
+                type: 'friend_request',
+                title: 'Bạn có lời mời kết bạn mới',
+                body: `${req.user?.displayName || 'Ai đó'} đã gửi lời mời kết bạn cho bạn`,
+                friendRequestId: newRequest._id,
+            });
+        } catch (notifyErr) {
+            console.error('friend request notification error:', notifyErr.message);
+        }
+
         res.status(201).json({
             success: true,
             message: "Gửi lời mời kết bạn thành công",
@@ -246,6 +260,22 @@ const acceptFriendRequest = async (req, res, next) => {
             message: "Chấp nhận kết bạn thành công",
             data: friendship
         });
+
+        try {
+            const requesterId = friendship.userId1.toString() === currentUserId
+                ? friendship.userId2
+                : friendship.userId1;
+
+            await createAndEmitNotification({
+                userId: requesterId,
+                actorId: currentUserId,
+                type: 'friend_accepted',
+                title: 'Lời mời kết bạn đã được chấp nhận',
+                body: `${req.user?.displayName || 'Ai đó'} đã chấp nhận lời mời kết bạn của bạn`,
+            });
+        } catch (notifyErr) {
+            console.error('friend accepted notification error:', notifyErr.message);
+        }
     } catch (error) {
         next(error);
     } finally {

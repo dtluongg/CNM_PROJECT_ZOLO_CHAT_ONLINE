@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import FriendsSidebar   from './components/FriendsSidebar';
 import FriendsList      from './components/FriendsList';
@@ -10,8 +11,16 @@ import { useFriendsData }    from './hooks/useFriendsData';
 import { filterFriends }     from './utils/friendHelpers';
 
 const FriendsPage = () => {
+  const location = useLocation();
   const [activeTab, setActiveTab]           = useState('friends_list');
   const [friendFilterText, setFriendFilterText] = useState('');
+
+  useEffect(() => {
+    const targetTab = location.state?.activeTab;
+    if (targetTab && ['friends_list', 'friend_requests', 'blocked_list'].includes(targetTab)) {
+      setActiveTab(targetTab);
+    }
+  }, [location.state]);
 
   const {
     friends, incomingReqs, outgoingReqs, blockedList, loading,

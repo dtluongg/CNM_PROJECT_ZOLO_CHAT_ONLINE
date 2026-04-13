@@ -2,6 +2,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
+import { useNotifications } from '../../../context/NotificationContext';
 import {
   X, MessageCircle, BellOff, Ban, LogOut, Download, Phone, Video,
   Shield, Crown, UserCog, Trash2,
@@ -36,6 +37,7 @@ export default function RightSidebar({
   const [tab, setTab] = useState('info');
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
   const { user } = useAuth();
+  const { getConversationSetting, updateConversationSetting } = useNotifications();
 
   const [members, setMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -59,6 +61,8 @@ export default function RightSidebar({
   const [showNickname, setShowNickname] = useState(false);
   const [nicknameInput, setNicknameInput] = useState('');
   const [nicknameBusy, setNicknameBusy] = useState(false);
+  const [notifSetting, setNotifSetting] = useState(null);
+  const [notifBusy, setNotifBusy] = useState(false);
 
   const myUserId = (user?._id || user?.id || '').toString();
   const accentColor = conversation?.usernameColor || getAvatarColor(conversation?.name);
@@ -159,6 +163,26 @@ export default function RightSidebar({
   useEffect(() => {
     loadFriendPool();
   }, [loadFriendPool]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadSetting = async () => {
+      if (!conversation?.id) {
+        if (mounted) setNotifSetting(null);
+        return;
+      }
+
+      try {
+        const setting = await getConversationSetting(conversation.id);
+        if (mounted) setNotifSetting(setting);
+      } catch {
+        if (mounted) setNotifSetting(null);
+      }
+    };
+
+    loadSetting();
+    return () => { mounted = false; };
+  }, [conversation?.id, getConversationSetting]);
 
   // ── Handlers ─────────────────────────────────────────
   const handleToggleAddMember = (userId) => {
@@ -297,6 +321,25 @@ export default function RightSidebar({
       window.alert(error.response?.data?.message || 'Không thể lưu biệt danh');
     } finally {
       setNicknameBusy(false);
+    }
+  };
+
+  const handleToggleMuteConversation = async () => {
+    if (!conversation?.id) return;
+
+    const nextMuted = !(notifSetting?.isMuted === true);
+
+    try {
+      setNotifBusy(true);
+      const updated = await updateConversationSetting(conversation.id, {
+        isMuted: nextMuted,
+        muteUntil: nextMuted ? null : null,
+      });
+      setNotifSetting(updated || { ...notifSetting, isMuted: nextMuted });
+    } catch (error) {
+      window.alert(error?.response?.data?.message || 'Không thể cập nhật cài đặt thông báo');
+    } finally {
+      setNotifBusy(false);
     }
   };
 
@@ -479,7 +522,12 @@ export default function RightSidebar({
                 )}
                 <ActionButton icon={<Phone size={15} />} label="Gọi thoại" onClick={conversation?.type === 'dm' ? onPhoneCall : undefined} />
                 <ActionButton icon={<Video size={15} />} label="Gọi video" onClick={conversation?.type === 'dm' ? onVideoCall : undefined} />
-                <ActionButton icon={<BellOff size={15} />} label="Tắt thông báo" />
+                <ActionButton
+                  icon={<BellOff size={15} />}
+                  label={notifSetting?.isMuted ? 'Bật thông báo' : 'Tắt thông báo'}
+                  onClick={handleToggleMuteConversation}
+                  disabled={notifBusy}
+                />
 
                 {conversation.type === 'dm' && (
                   <>
