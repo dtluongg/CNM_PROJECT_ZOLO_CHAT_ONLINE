@@ -19,7 +19,13 @@
  *   (một bên) ──call:end──► Server ──call:ended──► cả hai
  * ─────────────────────────────────────────────────────────────────────────────
  */
-
+const getFullAvatarUrl = (avatar) => {
+    if (!avatar) return null;
+    // Nếu bạn dùng Cloudinary / S3 signed URL có expire, nên transform về version không expire hoặc permanent URL
+    // Ví dụ Cloudinary:
+    // return avatar.replace(/\/upload\//, '/upload/q_auto,f_auto/');
+    return avatar;
+};
 const Call       = require('../models/callModel');
 const userModel  = require('../models/userModel');
 const Message = require('../models/messageModel');
@@ -42,6 +48,8 @@ async function createCallSystemMessage(io, call, duration, finalStatus) {
             userModel.findById(call.callerId).select('displayName avatar').lean(),
             userModel.findById(call.calleeId).select('displayName avatar').lean(),
         ]);
+        const callerAvatar = getFullAvatarUrl(caller?.avatar);
+        const calleeAvatar = getFullAvatarUrl(callee?.avatar);
         let content;
         if (finalStatus === 'missed') {
             content = `${icon} Cuộc gọi nhỡ`;
@@ -56,17 +64,23 @@ async function createCallSystemMessage(io, call, duration, finalStatus) {
 
         const msg = await Message.create({
             conversationId: conv._id,
-            senderId:       call.callerId,
-            type:           'system',
+            senderId: call.callerId,
+            type: 'system',
             content,
             payload: {
-                event:    'call_ended',
+                event: 'call_ended',
                 callType: call.type,
                 duration,
-                status:   finalStatus,
-                callId:   call._id,
-                callerId: call.callerId.toString(), // ← thêm
+                status: finalStatus,
+                callId: call._id,
+
+                callerId: call.callerId.toString(),
                 calleeId: call.calleeId.toString(),
+
+                callerName: caller?.displayName || '?',
+                callerAvatar,
+                calleeName: callee?.displayName || '?',
+                calleeAvatar,
             },
         });
 
@@ -77,21 +91,22 @@ async function createCallSystemMessage(io, call, duration, finalStatus) {
         });
 
         const formatted = {
-            _id:            msg._id,
+            _id: msg._id,
             conversationId: conv._id.toString(),
-            senderId:       call.callerId.toString(),
-            senderName:     caller?.displayName || '?',
-            type:           'system',
+            senderId: call.callerId.toString(),
+            type: 'system',
             content,
-            payload:        msg.payload,
-            createdAt:      msg.createdAt,
-            // ── Thêm 4 field này ──
-            callerName:     caller?.displayName || '?',
-            callerAvatar:   caller?.avatar || null,
-            calleeName:     callee?.displayName || '?',
-            calleeAvatar:   callee?.avatar || null,
+            payload: msg.payload,
+            createdAt: msg.createdAt,
+
+            callerName: msg.payload.callerName,
+            callerAvatar: msg.payload.callerAvatar,
+            calleeName: msg.payload.calleeName,
+            calleeAvatar: msg.payload.calleeAvatar,
+
             time: new Date(msg.createdAt).toLocaleTimeString('vi-VN', {
-                hour: '2-digit', minute: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
             }),
         };
 
