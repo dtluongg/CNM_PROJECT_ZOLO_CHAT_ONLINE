@@ -35,7 +35,86 @@ const DateDivider = ({ label }) => (
     <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
   </div>
 );
+const SystemMessage = ({ msg, currentUserId }) => {
+    const isVideo    = msg.payload?.callType === 'video';
+    const status     = msg.payload?.status;
+    const isMissed   = status === 'missed';
+    const isRejected = status === 'rejected';
+    const isBad      = isMissed || isRejected;
 
+    let label;
+    if (status === 'ended') {
+        const dur    = msg.payload?.duration || 0;
+        const m      = Math.floor(dur / 60);
+        const s      = dur % 60;
+        const durStr = m > 0 ? `${m} phút ${s} giây` : `${s} giây`;
+        label = `Cuộc gọi ${isVideo ? 'video' : 'thoại'} · ${durStr}`;
+    } else if (isMissed) {
+        label = 'Cuộc gọi nhỡ';
+    } else if (isRejected) {
+        label = 'Cuộc gọi bị từ chối';
+    } else {
+        label = msg.content;
+    }
+
+    const color  = isBad ? '#ed4245' : 'var(--text-muted)';
+    const bg     = isBad ? '#ed424512' : 'var(--bg-secondary)';
+    const border = isBad ? '1px solid #ed424540' : '1px solid var(--border)';
+
+    const MiniAvatar = ({ name, avatar }) => (
+        avatar
+            ? <img src={avatar} alt={name} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+            : (
+                <div style={{
+                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                    background: getAvatarColor(name),
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', fontSize: 11, fontWeight: 700,
+                }}>
+                    {(name || '?')[0].toUpperCase()}
+                </div>
+            )
+    );
+
+    return (
+        <div style={{
+            display:        'flex',
+            justifyContent: 'center',
+            margin:         '10px 16px',
+        }}>
+            {/* Khung capsule chứa cả 2 avatar + nội dung */}
+            <div style={{
+                display:       'flex',
+                alignItems:    'center',
+                gap:           10,
+                background:    bg,
+                border,
+                borderRadius:  30,
+                padding:       '8px 14px',
+                userSelect:    'none',
+            }}>
+                {/* Avatar người GỌI */}
+                <MiniAvatar name={msg.callerName} avatar={msg.callerAvatar} />
+
+                {/* Nội dung giữa */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        {isVideo ? <Video size={12} color={color} /> : <Phone size={12} color={color} />}
+                        <span style={{ fontSize: 12, fontWeight: 600, color }}>
+                            {label}
+                        </span>
+                    </div>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.7 }}>
+                        {msg.time}
+                    </span>
+                </div>
+
+                {/* Avatar người NHẬN */}
+                <MiniAvatar name={msg.calleeName} avatar={msg.calleeAvatar} />
+            </div>
+        </div>
+    );
+};
 const MessageBubble = ({
   msg,
   isMine,
@@ -956,15 +1035,12 @@ export default function ChatArea({
     }
     const sameGroup = prev && prev.senderId === msg.senderId && !prev.time?.includes(' ') && !msg.time?.includes(' ');
     displayItems.push({
-      type: 'msg',
-      msg,
-      isMine: msg.senderId === currentUserId,
-      showHeader: !sameGroup,
-      onForward: (m) => {
-        setForwardingMsg(m);
-        setShowForwardModal(true);
-      },
-      key: msg._id || msg.id
+        type:       msg.type === 'system' ? 'system' : 'msg',
+        msg,
+        isMine:     msg.senderId === currentUserId,
+        showHeader: msg.type === 'system' ? false : !sameGroup,
+        onForward:  (m) => { setForwardingMsg(m); setShowForwardModal(true); },
+        key:        msg._id || msg.id,
     });
   });
 
@@ -1149,52 +1225,52 @@ export default function ChatArea({
         </div>
 
         {/* Messages */}
-        {displayItems.map(item =>
-          item.type === 'date'
-            ? <DateDivider key={item.key} label={item.label} />
-            : <MessageBubble
-              key={item.key}
-              msg={item.msg}
-              isMine={item.isMine}
-              showHeader={item.showHeader}
-              isMobile={isMobile}
-              openMenuId={openMenuId}
-              setOpenMenuId={setOpenMenuId}
-              reactionTypes={reactionTypes}
-              onReact={handleReact}
-              onShowDetails={handleShowReactionDetails}
-
-              onRecall={async (msg) => {
-                try {
-                  await messageApi.revokeMessage(msg._id || msg.id);
-                  // Khi gọi API thành công, socket sẽ gửi về cho mình và những người khác
-                  // nên không cần setMessages thủ công ở đây để tránh bị double update hoặc conflict.
-                  // Hoặc có thể làm optimistic update nếu muốn cực nhanh.
-                } catch (err) {
-                  console.error('Revoke message error:', err);
-                }
-              }}
-              onDelete={async (msg) => {
-                try {
-                  // Optimistic update: Xóa ngay lập tức trên UI
-                  setMessages(prev =>
-                    prev.filter(m => (m.id || m._id) !== (msg.id || msg._id))
-                  );
-                  // Gọi API để Backend ghi nhớ việc xóa này
-                  await messageApi.deleteForMe(msg._id || msg.id);
-                } catch (err) {
-                  console.error('Delete for me error:', err);
-                }
-              }}
-              onEdit={(msg) => setEditingMessage(msg)}
-              onRead={handleMarkAsRead}
-              onShowReadDetails={handleShowReadDetails}
-              onForward={item.onForward}
-              conversationType={conversation.type}
-              currentUserId={currentUserId}
-              onAvatarClick={onViewProfile}
-            />
-        )}
+        {displayItems.map(item => {
+            if (item.type === 'date') {
+                return <DateDivider key={item.key} label={item.label} />;
+            }
+            if (item.type === 'system') {
+                return <SystemMessage key={item.key} msg={item.msg} currentUserId={currentUserId} />;
+            }
+            return (
+                <MessageBubble
+                    key={item.key}
+                    msg={item.msg}
+                    isMine={item.isMine}
+                    showHeader={item.showHeader}
+                    isMobile={isMobile}
+                    openMenuId={openMenuId}
+                    setOpenMenuId={setOpenMenuId}
+                    reactionTypes={reactionTypes}
+                    onReact={handleReact}
+                    onShowDetails={handleShowReactionDetails}
+                    onRecall={async (msg) => {
+                        try {
+                            await messageApi.revokeMessage(msg._id || msg.id);
+                        } catch (err) {
+                            console.error('Revoke message error:', err);
+                        }
+                    }}
+                    onDelete={async (msg) => {
+                        try {
+                            setMessages(prev =>
+                                prev.filter(m => (m.id || m._id) !== (msg.id || msg._id))
+                            );
+                            await messageApi.deleteForMe(msg._id || msg.id);
+                        } catch (err) {
+                            console.error('Delete for me error:', err);
+                        }
+                    }}
+                    onEdit={(msg) => setEditingMessage(msg)}
+                    onRead={handleMarkAsRead}
+                    onShowReadDetails={handleShowReadDetails}
+                    onForward={item.onForward}
+                    conversationType={conversation.type}
+                    currentUserId={currentUserId}
+                    onAvatarClick={onViewProfile}
+                />
+            );
+        })}
 
         {typingUser && <TypingIndicator name={typingUser.displayName} />}
         <div ref={bottomRef} style={{ height: 8 }} />

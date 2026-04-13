@@ -21,7 +21,7 @@ import InfoPanel from '../components/InfoPanel';
 import ForwardModal from '../components/ForwardModal';
 import ReadByModal from '../components/ReadByModal';
 import ImagePreviewModal from '../components/ImagePreviewModal';
-
+import SystemMessageBubble from '../components/SystemMessageBubble';
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import useMessages from '../hooks/useMessages';
 import useSocket from '../hooks/useSocket';
@@ -391,11 +391,11 @@ export default function MessageScreen({ route, navigation }) {
       !prev.time?.includes(' ');
 
     displayItems.push({
-      type: 'msg',
-      msg,
-      key: `msg-${msgKey || i}`,
-      isMine: msg.senderId === currentUserId,
-      showHeader: !sameGroup,
+        type:       msg.type === 'system' ? 'system' : 'msg',
+        msg,
+        key:        `msg-${msgKey || i}`,
+        isMine:     msg.senderId === currentUserId,
+        showHeader: msg.type === 'system' ? false : !sameGroup,
     });
   });
 
@@ -555,28 +555,38 @@ export default function MessageScreen({ route, navigation }) {
           }
 
           // Render từng item (divider ngày hoặc bong bóng tin nhắn)
-          renderItem={({ item }) =>
-            item.type === 'date' ? (
-              <DateDivider label={item.label} styles={styles} />
-            ) : (
-              <MessageBubble
-                msg={item.msg}
-                isMine={item.isMine}
-                showHeader={item.showHeader}
-                onLongPress={setActionMsg}
-                onShowReadBy={handleShowReadBy}
-                onAvatarPress={(senderId) =>
-                  senderId && navigation.push('UserProfile', { userId: senderId })
-                }
-                currentUserId={currentUserId}
-                conversation={conversation}
-                THEME={THEME}
-                styles={styles}
-                onImagePress={(url) => setPreviewImage(url)}
-                onFilePress={(url, fileName) => openFile(url, fileName)}
-              />
-            )
-          }
+          renderItem={({ item }) => {
+              if (item.type === 'date') {
+                  return <DateDivider label={item.label} styles={styles} />;
+              }
+              if (item.type === 'system') {
+                  return (
+                      <SystemMessageBubble
+                          msg={item.msg}
+                          currentUserId={currentUserId}
+                          THEME={THEME}
+                      />
+                  );
+              }
+              return (
+                  <MessageBubble
+                      msg={item.msg}
+                      isMine={item.isMine}
+                      showHeader={item.showHeader}
+                      onLongPress={setActionMsg}
+                      onShowReadBy={handleShowReadBy}
+                      onAvatarPress={(senderId) =>
+                          senderId && navigation.push('UserProfile', { userId: senderId })
+                      }
+                      currentUserId={currentUserId}
+                      conversation={conversation}
+                      THEME={THEME}
+                      styles={styles}
+                      onImagePress={(url) => setPreviewImage(url)}
+                      onFilePress={(url, fileName) => openFile(url, fileName)}
+                  />
+              );
+          }}
         />
 
         {/* ── Banner cảnh báo bị chặn ── */}
