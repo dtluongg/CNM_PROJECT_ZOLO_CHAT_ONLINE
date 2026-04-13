@@ -28,7 +28,12 @@ export default function ActiveCallScreen() {
     endCall, toggleMute, toggleCamera,
   } = useCall();
 
-  const localVideoRef  = useRef(null);
+  const setLocalVideoRef = (el) => {
+    if (el && localStream) {
+      el.srcObject = localStream;
+      el.play().catch(() => {});
+    }
+  };
   const remoteVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
 
@@ -87,10 +92,10 @@ export default function ActiveCallScreen() {
 
   // ── Gán localStream vào video ─────────────────────────────────────────────
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
+    if (setLocalVideoRef.current && localStream) {
+      setLocalVideoRef.current.srcObject = localStream;
     }
-  }, [localStream]);
+  }, [localStream, isCameraOff]); // ← thêm isCameraOff
 
   // ── Gán remoteStream vào video (video call) ───────────────────────────────
   useEffect(() => {
@@ -201,7 +206,7 @@ export default function ActiveCallScreen() {
           />
           {!isCameraOff ? (
             <video
-              ref={localVideoRef}
+              ref={setLocalVideoRef}
               autoPlay
               playsInline
               muted
