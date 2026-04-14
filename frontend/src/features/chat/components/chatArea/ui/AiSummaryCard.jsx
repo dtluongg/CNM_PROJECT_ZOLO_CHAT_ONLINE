@@ -2,53 +2,9 @@ import React, { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import messageApi from '../../../api/messageApi';
 
-/**
- * AiSummaryCard — Dòng "Tóm tắt bằng AI" ở cuối khối tin chưa đọc.
- *
- * Props:
- *   conversationId  — ID conversation để gọi API
- *   initialSummary  — { summary, summarizedAt, unreadCount } từ DB (nếu đã tóm tắt trước)
- *                     → nếu có thì hiện ngay (state=done), không cần click
- *
- * Trạng thái:
- *   idle    → hiện dòng ngang có thể click
- *   loading → spinner đang chờ AI
- *   done    → hiện text tóm tắt + nút "Làm mới"
- *   error   → thông báo lỗi + nút "Thử lại"
- */
-export default function AiSummaryCard({ conversationId, initialSummary, snapshotLastReadId }) {
-  const startState   = initialSummary?.summary ? 'done' : 'idle';
-  const startSummary = initialSummary?.summary || '';
-
-  const [status, setStatus]   = useState(startState);
-  const [summary, setSummary] = useState(startSummary);
-  const [errMsg, setErrMsg]   = useState('');
-
-  const handleSummarize = async () => {
-    if (status === 'loading') return;
-    setStatus('loading');
-    setSummary('');
-    setErrMsg('');
-    try {
-      // Truyền snapshotLastReadId để backend query đúng tin chưa đọc
-      // (tránh bị ảnh hưởng bởi markAsRead đã reset lastReadMessageId)
-      const res  = await messageApi.getAiSummary(conversationId, snapshotLastReadId || null);
-      const data = res.data;
-      if (data.reason === 'no_unread') {
-        setSummary('Không có tin nhắn nào cần tóm tắt.');
-      } else {
-        setSummary(data.summary || '');
-      }
-      setStatus('done');
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Không thể tóm tắt, vui lòng thử lại.';
-      setErrMsg(msg);
-      setStatus('error');
-    }
-  };
-
-  // ── Dòng divider ──────────────────────────────────────────────────
-  const DividerLine = ({ onClick, clickable }) => (
+// ── DividerLine khai báo NGOÀI component để tránh "Cannot create during render" ──
+function DividerLine({ onClick, clickable }) {
+  return (
     <div
       onClick={clickable ? onClick : undefined}
       style={{
@@ -76,13 +32,57 @@ export default function AiSummaryCard({ conversationId, initialSummary, snapshot
       <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
     </div>
   );
+}
 
-  // ── idle ────────────────────────────────────────────────────────────
+/**
+ * AiSummaryCard — Dòng "Tóm tắt bằng AI" ở cuối khối tin chưa đọc.
+ *
+ * Props:
+ *   conversationId    — ID conversation để gọi API
+ *   initialSummary    — { summary, ... } từ DB (nếu đã tóm tắt trước) → hiện ngay
+ *   snapshotLastReadId — lastReadMessageId lúc mở chat (trước markAsRead)
+ *
+ * Trạng thái:
+ *   idle    → hiện dòng ngang có thể click
+ *   loading → spinner đang chờ AI
+ *   done    → hiện text tóm tắt + nút "Làm mới"
+ *   error   → thông báo lỗi + nút "Thử lại"
+ */
+export default function AiSummaryCard({ conversationId, initialSummary, snapshotLastReadId }) {
+  const startState   = initialSummary?.summary ? 'done' : 'idle';
+  const startSummary = initialSummary?.summary || '';
+
+  const [status, setStatus]   = useState(startState);
+  const [summary, setSummary] = useState(startSummary);
+  const [errMsg, setErrMsg]   = useState('');
+
+  const handleSummarize = async () => {
+    if (status === 'loading') return;
+    setStatus('loading');
+    setSummary('');
+    setErrMsg('');
+    try {
+      const res  = await messageApi.getAiSummary(conversationId, snapshotLastReadId || null);
+      const data = res.data;
+      if (data.reason === 'no_unread') {
+        setSummary('Không có tin nhắn nào cần tóm tắt.');
+      } else {
+        setSummary(data.summary || '');
+      }
+      setStatus('done');
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Không thể tóm tắt, vui lòng thử lại.';
+      setErrMsg(msg);
+      setStatus('error');
+    }
+  };
+
+  // ── idle ──────────────────────────────────────────────────────────────
   if (status === 'idle') {
     return <DividerLine onClick={handleSummarize} clickable />;
   }
 
-  // ── loading ──────────────────────────────────────────────────────────
+  // ── loading ────────────────────────────────────────────────────────────
   if (status === 'loading') {
     return (
       <>
@@ -101,14 +101,14 @@ export default function AiSummaryCard({ conversationId, initialSummary, snapshot
             flexShrink: 0,
           }} />
           <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-            Gemini đang phân tích tin nhắn...
+            AI đang phân tích tin nhắn...
           </span>
         </div>
       </>
     );
   }
 
-  // ── error ─────────────────────────────────────────────────────────────
+  // ── error ──────────────────────────────────────────────────────────────
   if (status === 'error') {
     return (
       <>
@@ -135,7 +135,7 @@ export default function AiSummaryCard({ conversationId, initialSummary, snapshot
     );
   }
 
-  // ── done ─────────────────────────────────────────────────────────────
+  // ── done ────────────────────────────────────────────────────────────────
   return (
     <>
       <DividerLine clickable={false} />
