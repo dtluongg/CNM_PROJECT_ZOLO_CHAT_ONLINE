@@ -20,6 +20,9 @@ export const mapConversationItem = (item, dmOverrides) => {
     online:      false,
     memberCount: item.totalMembers,
     otherUserId: isDm ? (item.otherUserId || other?._id?.toString() || null) : null,
+    myMembership: item.myMembership || null,   // lastReadMessageId, unreadCount, aiSummary
+    // Shortcut tiện dùng trong ChatArea
+    aiSummary: item.myMembership?.aiSummary || null,
     raw:         item,
   };
 };

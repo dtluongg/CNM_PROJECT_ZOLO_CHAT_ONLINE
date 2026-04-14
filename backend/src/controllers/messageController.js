@@ -520,12 +520,19 @@ const markAsRead = async (req, res) => {
             { upsert: true, new: true }
         );
 
-        // 2. Kiểm tra nếu tin nhắn này là cuối cùng thì reset unreadCount
+        // 2. Kiểm tra nếu tin nhắn này là cuối cùng thì reset unreadCount + xóa aiSummary
         const conv = await Conversation.findById(conversationId);
         if (conv && conv.lastMessageId?.toString() === messageId) {
             await ConversationMember.findOneAndUpdate(
                 { conversationId, userId },
-                { unreadCount: 0 }
+                {
+                  unreadCount: 0,
+                  lastReadMessageId: messageId,
+                  'aiSummary.summary': null,       // Xóa summary vì đã đọc hết
+                  'aiSummary.summarizedAt': null,
+                  'aiSummary.unreadCount': 0,
+                  'aiSummary.fromMessageId': null,
+                }
             );
         }
 

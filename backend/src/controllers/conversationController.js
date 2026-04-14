@@ -120,6 +120,14 @@ const buildConversationItem = (conversation, myMember, dmDisplayInfo = null) => 
         myMembership: {
             role: myMember.role,
             unreadCount: myMember.unreadCount,
+            lastReadMessageId: myMember.lastReadMessageId ?? null,
+            aiSummary: myMember.aiSummary?.summary
+              ? {
+                  summary:      myMember.aiSummary.summary,
+                  summarizedAt: myMember.aiSummary.summarizedAt,
+                  unreadCount:  myMember.aiSummary.unreadCount,
+                }
+              : null,
             canSendMessages: myMember.canSendMessages,
             canInviteMembers: myMember.canInviteMembers,
             canManageMembers: myMember.canManageMembers,

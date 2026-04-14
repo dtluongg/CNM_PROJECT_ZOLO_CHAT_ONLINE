@@ -91,6 +91,11 @@ const messageApi = {
   // ── Xóa tin nhắn ở phía tôi ────────────────────────────────────────
   deleteForMe: (messageId) =>
     apiClient.patch(`/messages/${messageId}/delete-for-me`),
+
+  // ── AI tóm tắt tin nhắn chưa đọc ──────────────────────────────────
+  // fromMessageId: snapshot lastReadMessageId lúc user mở conversation (trước markAsRead)
+  getAiSummary: (conversationId, fromMessageId = null) =>
+    apiClient.post(`/messages/${conversationId}/aiSummary`, { fromMessageId }),
 };
 
 

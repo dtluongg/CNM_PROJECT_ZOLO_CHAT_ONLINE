@@ -12,6 +12,9 @@ import TypingIndicator from './chatArea/ui/TypingIndicator';
 import SystemMessage from './chatArea/ui/SystemMessage';
 // ── Message Bubble ─────────────────────────────────────
 import MessageBubble from './chatArea/modals/MessageBubble';
+// ── AI Summary components ──────────────────────────────────────────────
+import UnreadDivider from './chatArea/ui/UnreadDivider';
+import AiSummaryCard from './chatArea/ui/AiSummaryCard';
 
 // ── Modals ─────────────────────────────────────────────
 import ForwardModal from './chatArea/modals/ForwardModal';
@@ -65,6 +68,18 @@ export default function ChatArea({
   const [editingMessage,  setEditingMessage]  = useState(null);
   const [forwardingMsg,   setForwardingMsg]   = useState(null);
   const [showForwardModal, setShowForwardModal] = useState(false);
+
+  // ── Snapshot lastReadMessageId tại thời điểm mở conversation ────────
+  // Phải capture inline (không dùng useEffect) để lấy giá trị trước khi markAsRead chạy
+  const prevConvIdRef  = useRef(null);
+  const aiSnapshotRef  = useRef({ unreadCount: 0, lastReadId: null });
+  if (conversation?.id !== prevConvIdRef.current) {
+    prevConvIdRef.current = conversation?.id;
+    aiSnapshotRef.current = {
+      unreadCount: conversation?.unread || 0,
+      lastReadId:  conversation?.myMembership?.lastReadMessageId || null,
+    };
+  }
 
   // ── Fetch reaction types khi mount ─────────────────────────
   useState(() => {
@@ -152,6 +167,47 @@ export default function ChatArea({
       key:       msg._id || msg.id,
     });
   });
+
+  // ── Chèn UnreadDivider + AiSummaryCard nếu có tin chưa đọc ─────────────
+  // Dùng snapshot (không bị timing) thay vì live values
+  const unreadCount    = aiSnapshotRef.current.unreadCount;
+  const lastReadId     = aiSnapshotRef.current.lastReadId;
+  const savedAiSummary = conversation?.aiSummary || null;  // từ DB
+
+  if (unreadCount > 0) {
+    if (lastReadId) {
+      // Tìm vị trí của tin đã đọc cuối cùng trong displayItems
+      const insertIdx = displayItems.findIndex(
+        (item) => item.type === 'msg' && (item.msg?._id || item.msg?.id) === lastReadId
+      );
+      if (insertIdx !== -1) {
+        displayItems.splice(insertIdx + 1, 0, {
+          type: 'unread-divider',
+          key: `unread-divider-${conversation.id}`,
+        });
+      } else {
+        // lastReadId không có trong 30 tin đang load → chèn ở đầu list
+        displayItems.unshift({
+          type: 'unread-divider',
+          key: `unread-divider-${conversation.id}`,
+        });
+      }
+    } else {
+      // Chưa từng đọc tin nào → tất cả là unread, chèn ở đầu
+      displayItems.unshift({
+        type: 'unread-divider',
+        key: `unread-divider-${conversation.id}`,
+      });
+    }
+    // AiSummaryCard luôn nằm ở cuối
+    displayItems.push({
+      type: 'ai-summary',
+      key: `ai-summary-${conversation.id}`,
+      conversationId:   conversation.id,
+      initialSummary:   savedAiSummary,
+      snapshotLastReadId: lastReadId,    // snapshot trước markAsRead
+    });
+  }
 
   // ── Presence ───────────────────────────────────────────────
   const dmOnline = conversation.type === 'dm' && conversation.otherUserId
@@ -309,8 +365,17 @@ export default function ChatArea({
 
         {/* Messages */}
         {displayItems.map(item => {
-          if (item.type === 'date')   return <DateDivider   key={item.key} label={item.label} />;
-          if (item.type === 'system') return <SystemMessage key={item.key} msg={item.msg} />;
+          if (item.type === 'date')           return <DateDivider   key={item.key} label={item.label} />;
+          if (item.type === 'system')         return <SystemMessage  key={item.key} msg={item.msg} />;
+          if (item.type === 'unread-divider') return <UnreadDivider  key={item.key} />;
+          if (item.type === 'ai-summary')     return (
+            <AiSummaryCard
+              key={item.key}
+              conversationId={item.conversationId}
+              initialSummary={item.initialSummary}
+              snapshotLastReadId={item.snapshotLastReadId}
+            />
+          );
           return (
             <MessageBubble
               key={item.key}

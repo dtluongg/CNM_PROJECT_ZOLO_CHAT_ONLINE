@@ -22,6 +22,8 @@ import ForwardModal from '../components/ForwardModal';
 import ReadByModal from '../components/ReadByModal';
 import ImagePreviewModal from '../components/ImagePreviewModal';
 import SystemMessageBubble from '../components/SystemMessageBubble';
+import UnreadDivider from '../components/UnreadDivider';
+import AiSummaryCard from '../components/AiSummaryCard';
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import useMessages from '../hooks/useMessages';
 import useSocket from '../hooks/useSocket';
@@ -80,6 +82,14 @@ export default function MessageScreen({ route, navigation }) {
   const flatRef = useRef(null);
   const inputRef = useRef(null);
   const typingTimerRef = useRef(null);
+
+  // ── Snapshot unreadCount + lastReadMessageId tại thời điểm mở màn chat ───────
+  // Capture lúc mount (trước markAsRead chạy) để dùng cho AI query
+  const aiSnapshotRef = useRef({
+    unreadCount: conversation.unread || 0,
+    lastReadId:  conversation.myMembership?.lastReadMessageId || null,
+    aiSummary:   conversation.aiSummary || null,
+  });
 
   // ── Hooks quản lý tin nhắn ──────────────────────────────────────────────
   const msgHook = useMessages(conversation.id, currentUserId);
@@ -399,6 +409,31 @@ export default function MessageScreen({ route, navigation }) {
     });
   });
 
+  // ── Chèn UnreadDivider + AiSummaryCard nếu có tin chưa đọc ─────────────
+  // Chỉ hiện khi có lastReadId VÀ tìm được vị trí chính xác trong danh sách
+  const { unreadCount, lastReadId, aiSummary } = aiSnapshotRef.current;
+  if (unreadCount > 0 && lastReadId) {
+    const insertIdx = displayItems.findIndex(
+      (item) => item.type === 'msg' &&
+        (item.msg?._id?.toString() || item.msg?.id?.toString()) === lastReadId.toString()
+    );
+    if (insertIdx !== -1) {
+      // Chèn divider ngay sau tin đã đọc cuối
+      displayItems.splice(insertIdx + 1, 0, {
+        type: 'unread-divider',
+        key: `unread-divider-${conversation.id}`,
+      });
+      // AI card luôn ở cuối
+      displayItems.push({
+        type:               'ai-summary',
+        key:                `ai-summary-${conversation.id}`,
+        conversationId:     conversation.id,
+        snapshotLastReadId: lastReadId,
+        initialSummary:     aiSummary,
+      });
+    }
+  }
+
   // ── Trạng thái online & text trạng thái trên header ────────────────────
   const isOnline =
     conversation.type === 'dm' && conversation.otherUserId
@@ -564,6 +599,20 @@ export default function MessageScreen({ route, navigation }) {
                       <SystemMessageBubble
                           msg={item.msg}
                           currentUserId={currentUserId}
+                          THEME={THEME}
+                      />
+                  );
+              }
+              if (item.type === 'unread-divider') {
+                  return <UnreadDivider key={item.key} THEME={THEME} />;
+              }
+              if (item.type === 'ai-summary') {
+                  return (
+                      <AiSummaryCard
+                          key={item.key}
+                          conversationId={item.conversationId}
+                          snapshotLastReadId={item.snapshotLastReadId}
+                          initialSummary={item.initialSummary}
                           THEME={THEME}
                       />
                   );

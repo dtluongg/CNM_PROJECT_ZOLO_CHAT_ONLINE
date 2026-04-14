@@ -66,9 +66,15 @@ const messageApi = {
 
   deleteForMe: (messageId) =>
     apiClient.patch(`/messages/${messageId}/delete-for-me`),
+
   // Lấy ảnh & file đã chia sẻ trong conversation
   getAttachments: (conversationId) =>
     apiClient.get(`/messages/${conversationId}/attachments`),
+
+  // ── AI tóm tắt tin nhắn chưa đọc ──────────────────────────────────
+  // fromMessageId: snapshot lastReadMessageId lúc mở màn chat (trước markAsRead)
+  getAiSummary: (conversationId, fromMessageId = null) =>
+    apiClient.post(`/messages/${conversationId}/aiSummary`, { fromMessageId }),
 };
 
 export default messageApi;

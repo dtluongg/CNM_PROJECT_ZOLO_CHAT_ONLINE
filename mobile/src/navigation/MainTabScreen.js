@@ -39,6 +39,9 @@ const mapConv = (item) => {
     type: item.type,
     online: false,
     memberCount: item.totalMembers || 0,
+    // ── Cần cho AI Summary feature ──────────────────────────────────
+    myMembership: item.myMembership || null,   // có lastReadMessageId, unreadCount
+    aiSummary:    item.myMembership?.aiSummary || null,  // summary đã lưu trong DB
   };
 };
 

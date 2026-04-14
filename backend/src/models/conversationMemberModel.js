@@ -11,6 +11,14 @@ const conversationMemberSchema = new mongoose.Schema(
     // Seen và Chưa đọc
     unreadCount: { type: Number, default: 0 },
     lastReadMessageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' },
+
+    // AI Summary — lưu tóm tắt tin nhắn chưa đọc vào DB
+    aiSummary: {
+      summary:        { type: String, default: null },
+      summarizedAt:   { type: Date,   default: null },
+      unreadCount:    { type: Number, default: 0 },
+      fromMessageId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
+    },
     
     // Quyền đặc biệt (Fine-grained Permissions)
     canSendMessages: { type: Boolean, default: true },
