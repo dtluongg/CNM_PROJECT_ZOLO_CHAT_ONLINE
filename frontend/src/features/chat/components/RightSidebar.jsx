@@ -4,8 +4,6 @@ import { usePresence, formatLastSeen } from "../../../context/PresenceContext";
 import { useNotifications } from "../../../context/NotificationContext";
 import {
     X,
-    Image,
-    FileText,
     MessageCircle,
     BellOff,
     Ban,
@@ -14,11 +12,10 @@ import {
     Phone,
     Video,
     Shield,
-    UserPlus,
     Crown,
     UserCog,
     Trash2,
-    Sparkles,
+    FileText,
 } from "lucide-react";
 
 import conversationApi from "../api/conversationApi";
@@ -75,13 +72,6 @@ export default function RightSidebar({
     const [nicknameBusy, setNicknameBusy] = useState(false);
     const [notifSetting, setNotifSetting] = useState(null);
     const [notifBusy, setNotifBusy] = useState(false);
-    // AI Summary
-    const [aiSummary, setAiSummary] = useState(null); // { summary, unreadCount, reason, totalSummarized }
-    const [aiLoading, setAiLoading] = useState(false);
-    const [showAiModal, setShowAiModal] = useState(false);
-    const [aiError, setAiError] = useState("");
-    // Snapshot unreadCount lúc mở conversation (trước khi markAsRead reset về 0)
-    const [initialUnreadCount, setInitialUnreadCount] = useState(0);
 
     const myUserId = (user?._id || user?.id || "").toString();
     const accentColor =
@@ -186,30 +176,7 @@ export default function RightSidebar({
         setEditingMemberId(null);
         setSelectedAddIds([]);
         setMediaData({ images: [], files: [] });
-        setAiSummary(null);
-        setAiError("");
-        setShowAiModal(false);
-        // Chụp snapshot unreadCount ngay lúc mở — trước khi markAsRead reset về 0
-        setInitialUnreadCount(conversation?.myMembership?.unreadCount || 0);
     }, [conversation?.id]);
-
-    const handleAiSummary = async () => {
-        if (!conversation?.id) return;
-        setAiLoading(true);
-        setAiError("");
-        setShowAiModal(true);
-        try {
-            const res = await messageApi.getAiSummary(conversation.id);
-            setAiSummary(res.data);
-        } catch (err) {
-            const msg =
-                err.response?.data?.message || "Không thể tóm tắt, thử lại sau";
-            setAiError(msg);
-            setAiSummary(null);
-        } finally {
-            setAiLoading(false);
-        }
-    };
 
     useEffect(() => {
         if ((tab !== "media" && tab !== "files") || !conversation?.id) return;
@@ -1232,8 +1199,7 @@ export default function RightSidebar({
                                     gap: 6,
                                 }}
                             >
-                                <SectionHeader title="Hanh dong" />
-
+                                <SectionHeader title="Hành động" />
                                 <ActionButton
                                     icon={<MessageCircle size={15} />}
                                     label="Nhắn tin"
@@ -1241,7 +1207,6 @@ export default function RightSidebar({
                                     onClick={() => {}}
                                 />
                                 {conversation.type === "dm" &&
-                                    conversation.otherUserId &&
                                     onViewProfile && (
                                         <ActionButton
                                             icon={<Shield size={15} />}
@@ -1341,210 +1306,91 @@ export default function RightSidebar({
                                 )}
                             </div>
 
-                            {/* ── AI Summary Modal inline ── */}
-                            {showAiModal && (
+                            {/* Nickname inline panel */}
+                            {showNickname && conversation.type === "dm" && (
                                 <div
-                                    id="ai-summary-modal"
                                     style={{
-                                        marginTop: 12,
-                                        background:
-                                            "linear-gradient(135deg, rgba(108,99,255,0.12), rgba(167,139,250,0.08))",
-                                        border: "1px solid rgba(108,99,255,0.3)",
-                                        borderRadius: 12,
-                                        padding: 14,
-                                        position: "relative",
+                                        background: "var(--bg-tertiary)",
+                                        border: "1px solid var(--border)",
+                                        borderRadius: 10,
+                                        padding: 12,
+                                        marginTop: 8,
                                     }}
                                 >
-                                    {/* Header */}
                                     <div
                                         style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "space-between",
-                                            marginBottom: 10,
+                                            fontSize: 13,
+                                            fontWeight: 700,
+                                            color: "var(--text-primary)",
+                                            marginBottom: 8,
                                         }}
                                     >
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: 6,
-                                            }}
-                                        >
-                                            <Sparkles
-                                                size={14}
-                                                style={{ color: "#a78bfa" }}
-                                            />
-                                            <span
-                                                style={{
-                                                    fontSize: 12,
-                                                    fontWeight: 800,
-                                                    color: "#a78bfa",
-                                                    textTransform: "uppercase",
-                                                    letterSpacing: "0.6px",
-                                                }}
-                                            >
-                                                AI Tóm tắt
-                                            </span>
-                                            {aiSummary?.unreadCount > 0 && (
-                                                <span
-                                                    style={{
-                                                        fontSize: 11,
-                                                        fontWeight: 700,
-                                                        background:
-                                                            "rgba(108,99,255,0.2)",
-                                                        color: "#a78bfa",
-                                                        borderRadius: 999,
-                                                        padding: "2px 7px",
-                                                    }}
-                                                >
-                                                    {aiSummary.unreadCount} tin
-                                                </span>
-                                            )}
-                                        </div>
+                                        Biệt danh cho {conversation.name}
+                                    </div>
+                                    <input
+                                        value={nicknameInput}
+                                        onChange={(e) =>
+                                            setNicknameInput(e.target.value)
+                                        }
+                                        onKeyDown={(e) =>
+                                            e.key === "Enter" &&
+                                            handleSaveNickname()
+                                        }
+                                        placeholder="Nhập biệt danh..."
+                                        maxLength={50}
+                                        style={{
+                                            width: "100%",
+                                            border: "1px solid var(--border)",
+                                            borderRadius: 8,
+                                            background: "var(--bg-primary)",
+                                            color: "var(--text-primary)",
+                                            padding: "8px 10px",
+                                            fontSize: 13,
+                                            outline: "none",
+                                            marginBottom: 8,
+                                            boxSizing: "border-box",
+                                        }}
+                                    />
+                                    <div style={{ display: "flex", gap: 8 }}>
                                         <button
-                                            onClick={() => {
-                                                setShowAiModal(false);
-                                                setAiSummary(null);
-                                                setAiError("");
-                                            }}
+                                            onClick={() =>
+                                                setShowNickname(false)
+                                            }
                                             style={{
-                                                background: "none",
+                                                flex: 1,
+                                                padding: "7px 0",
                                                 border: "none",
+                                                borderRadius: 7,
+                                                background: "var(--bg-hover)",
+                                                color: "var(--text-primary)",
                                                 cursor: "pointer",
-                                                color: "var(--text-muted)",
-                                                padding: 2,
-                                                display: "flex",
+                                                fontSize: 12,
+                                                fontWeight: 600,
                                             }}
                                         >
-                                            <X size={14} />
+                                            Hủy
+                                        </button>
+                                        <button
+                                            onClick={handleSaveNickname}
+                                            disabled={nicknameBusy}
+                                            style={{
+                                                flex: 1,
+                                                padding: "7px 0",
+                                                border: "none",
+                                                borderRadius: 7,
+                                                background: "var(--accent)",
+                                                color: "#fff",
+                                                cursor: "pointer",
+                                                fontSize: 12,
+                                                fontWeight: 700,
+                                                opacity: nicknameBusy ? 0.6 : 1,
+                                            }}
+                                        >
+                                            {nicknameBusy
+                                                ? "Đang lưu..."
+                                                : "Lưu"}
                                         </button>
                                     </div>
-
-                                    {/* Loading */}
-                                    {aiLoading && (
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: 8,
-                                                padding: "8px 0",
-                                            }}
-                                        >
-                                            <div
-                                                style={{
-                                                    width: 16,
-                                                    height: 16,
-                                                    borderRadius: "50%",
-                                                    border: "2px solid rgba(167,139,250,0.3)",
-                                                    borderTopColor: "#a78bfa",
-                                                    animation:
-                                                        "spin 0.8s linear infinite",
-                                                    flexShrink: 0,
-                                                }}
-                                            />
-                                            <span
-                                                style={{
-                                                    fontSize: 13,
-                                                    color: "var(--text-muted)",
-                                                }}
-                                            >
-                                                Gemini đang phân tích tin
-                                                nhắn...
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    {/* Error */}
-                                    {!aiLoading && aiError && (
-                                        <div
-                                            style={{
-                                                fontSize: 13,
-                                                color: "#ed4245",
-                                                lineHeight: 1.5,
-                                            }}
-                                        >
-                                            {aiError}
-                                        </div>
-                                    )}
-
-                                    {/* No unread */}
-                                    {!aiLoading &&
-                                        !aiError &&
-                                        aiSummary?.reason === "no_unread" && (
-                                            <div
-                                                style={{
-                                                    fontSize: 13,
-                                                    color: "var(--text-muted)",
-                                                    fontStyle: "italic",
-                                                }}
-                                            >
-                                                Bạn đã đọc hết tin nhắn trong
-                                                cuộc trò chuyện này.
-                                            </div>
-                                        )}
-
-                                    {/* Summary text */}
-                                    {!aiLoading &&
-                                        !aiError &&
-                                        aiSummary?.summary && (
-                                            <>
-                                                <div
-                                                    style={{
-                                                        fontSize: 13,
-                                                        color: "var(--text-primary)",
-                                                        lineHeight: 1.65,
-                                                        whiteSpace: "pre-wrap",
-                                                    }}
-                                                >
-                                                    {aiSummary.summary}
-                                                </div>
-                                                <div
-                                                    style={{
-                                                        marginTop: 10,
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        justifyContent:
-                                                            "space-between",
-                                                        flexWrap: "wrap",
-                                                        gap: 6,
-                                                    }}
-                                                >
-                                                    <span
-                                                        style={{
-                                                            fontSize: 11,
-                                                            color: "var(--text-muted)",
-                                                        }}
-                                                    >
-                                                        {aiSummary.reason ===
-                                                        "cached"
-                                                            ? "⚡ Từ cache"
-                                                            : "🤖 Powered by Gemini 2.0 Flash"}
-                                                        {aiSummary.totalSummarized
-                                                            ? ` · ${aiSummary.totalSummarized} tin`
-                                                            : ""}
-                                                    </span>
-                                                    <button
-                                                        onClick={
-                                                            handleAiSummary
-                                                        }
-                                                        disabled={aiLoading}
-                                                        style={{
-                                                            background: "none",
-                                                            border: "1px solid rgba(108,99,255,0.3)",
-                                                            borderRadius: 6,
-                                                            padding: "3px 8px",
-                                                            cursor: "pointer",
-                                                            fontSize: 11,
-                                                            color: "#a78bfa",
-                                                            fontWeight: 600,
-                                                        }}
-                                                    >
-                                                        Làm mới
-                                                    </button>
-                                                </div>
-                                            </>
-                                        )}
                                 </div>
                             )}
                         </div>

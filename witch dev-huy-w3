@@ -1,0 +1,20 @@
+[33m5c5679e[m[33m ([m[1;36mHEAD[m[33m)[m ai sumary frontend và mobile
+[33me36c60f[m[33m ([m[1;31morigin/demo[m[33m)[m Merge pull request #26 from /tuongvi-dev
+[33m112190d[m[33m ([m[1;31morigin/tuongvi-dev[m[33m)[m feat: tab media và file
+[33mf7e4b68[m Merge branch 'luong-dev' of https://github.com/dtluongg/CNM_PROJECT_ZOLO_CHAT_ONLINE into demo
+[33m419a0cc[m[33m ([m[1;31morigin/luong-dev[m[33m)[m Update: Luong update click toast to open chat
+[33me2edf7d[m Update: Luong thêm chuc nang thong bao realtime
+[33m6771cc0[m Merge branch 'demo' of https://github.com/dtluongg/CNM_PROJECT_ZOLO_CHAT_ONLINE into demo
+[33mb215f07[m Merge branch 'tuongvi-dev' of https://github.com/dtluongg/CNM_PROJECT_ZOLO_CHAT_ONLINE into luong-dev
+[33m02b25be[m Clean: Luong clean source
+[33m6af58c5[m Update: merge Tuongvi to demo
+[33m9afe2a4[m Merge branch 'demo' of https://github.com/dtluongg/CNM_PROJECT_ZOLO_CHAT_ONLINE into demo
+[33m162bd6a[m fix : get Avatar
+[33med466f4[m Feat: tách component
+[33m858a35b[m fix : avtUrl payload
+[33m20390de[m Merge pull request #25 from dtluongg/tuongvi-dev
+[33m03938ca[m thêm event call/call video không hiển thị trong cuộc gọi
+[33m6bc40cf[m feat: thêm conversationId cho callModel và tạo system message on call end/reject/miss
+[33m472f5cd[m Merge pull request #24 from /tuongvi-dev
+[33ma3faebf[m Init Camera
+[33m073d4d3[m Merge pull request #23 from /tuongvi-dev
