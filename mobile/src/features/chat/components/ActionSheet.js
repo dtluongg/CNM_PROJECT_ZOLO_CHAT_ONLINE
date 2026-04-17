@@ -28,6 +28,7 @@ const ActionSheet = ({
   onEdit,
   onDelete,
   onForward,
+  onReply,
   THEME,
   styles,
 }) => {
@@ -126,6 +127,7 @@ const ActionSheet = ({
                 key={a.label}
                 onPress={() => {
                   if (a.action === 'revoke') onRevoke(msg);
+                  if (a.action === 'reply') onReply(msg);
                   if (a.action === 'edit') onEdit(msg);
                   if (a.action === 'delete') onDelete(msg);
                   if (a.action === 'forward') onForward(msg);

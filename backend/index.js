@@ -6,7 +6,7 @@ const dns = require('node:dns');
 const cookieParser = require('cookie-parser');
 
 dotenv.config();
-dns.setServers(['1.1.1.1']);
+// dns.setServers(['1.1.1.1']);
 
 const app = express();
 const server = http.createServer(app);
@@ -16,11 +16,11 @@ app.use(cors({
   origin: [
     'http://localhost:5173',
     'http://localhost:5174',
-    'https://localhost:5173',        // ← thêm
-    'http://192.168.88.135:5173',
-    'https://192.168.88.135:5173',   // ← thêm
+    'https://localhost:5173',
     'http://localhost:8081',
-    'http://192.168.88.135:8081',
+    'http://172.20.10.3:5173',
+    'http://172.20.10.3:8081',
+    'http://172.20.10.3:2026',
   ],
   credentials: true,
 }));

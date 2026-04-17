@@ -7,7 +7,7 @@ import messageApi from '../api/messageApi';
 const useFileHandler = (conversationId, onMessageSent) => {
   const isSharingRef = useRef(false);
 
-  const pickAndSendImage = async () => {
+  const pickAndSendImage = async (replyToMessageId = null) => {
     try {
       if (Platform.OS !== 'web') {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -39,7 +39,7 @@ const useFileHandler = (conversationId, onMessageSent) => {
       }
 
       const up = await messageApi.uploadImage(fd);
-      const res = await messageApi.sendImage(conversationId, up.data.file.fileId);
+      const res = await messageApi.sendImage(conversationId, up.data.file.fileId, replyToMessageId);
       onMessageSent?.(res.data.data);
     } catch (err) {
       console.error('pickAndSendImage error:', err);
@@ -47,7 +47,7 @@ const useFileHandler = (conversationId, onMessageSent) => {
     }
   };
 
-  const pickAndSendFile = async () => {
+  const pickAndSendFile = async (replyToMessageId = null) => {
     try {
       const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
       if (result.canceled || !result.assets?.length) return;
@@ -68,7 +68,7 @@ const useFileHandler = (conversationId, onMessageSent) => {
       }
 
       const up = await messageApi.uploadFile(fd);
-      const res = await messageApi.sendFile(conversationId, up.data.file.fileId);
+      const res = await messageApi.sendFile(conversationId, up.data.file.fileId, replyToMessageId);
       onMessageSent?.(res.data.data);
     } catch (err) {
       console.error('pickAndSendFile error:', err);

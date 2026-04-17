@@ -27,16 +27,16 @@ const messageApi = {
     }),
 
   // ── Gửi voice message (sau khi upload xong) ──────────────────────
-  sendVoice: (conversationId, attachmentId) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'voice', attachmentId }),
+  sendVoice: (conversationId, attachmentId, replyToMessageId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'voice', attachmentId, replyToMessageId }),
 
   // ── Gửi image message (sau khi upload xong) ──────────────────────
-  sendImage: (conversationId, attachmentId) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'image', attachmentId }),
+  sendImage: (conversationId, attachmentId, replyToMessageId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'image', attachmentId, replyToMessageId }),
 
   // ── Gửi file message (sau khi upload xong) ───────────────────────
-  sendFile: (conversationId, attachmentId) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId }),
+  sendFile: (conversationId, attachmentId, replyToMessageId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId, replyToMessageId }),
 
   // ── Upload voice blob lên S3 ──────────────────────────────────────
   // formData phải chứa field "voice" (blob) và "duration" (số giây, optional)

@@ -47,6 +47,7 @@ const MessageBubble = ({
   styles,
   onImagePress,
   onFilePress,
+  onJumpToMessage,
 }) => {
   const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName, THEME);
   const bubbleBg = isMine ? THEME.bubbleSelf : THEME.bubbleOther;
@@ -61,6 +62,30 @@ const MessageBubble = ({
     borderRadius.borderTopLeftRadius = showHeader ? 4 : 18;
     borderRadius.borderBottomLeftRadius = 4;
   }
+
+  // Render context tin nhắn đang trả lời
+  const renderRepliedContext = () => {
+    if (!msg.replyToMessageId || msg.revoked || msg.recalled) return null;
+    const repliedBy = msg.replyToMessageId.senderId?.displayName || 'Người dùng Zolo';
+    const repliedContent = msg.replyToMessageId.revoked 
+      ? 'Tin nhắn đã được thu hồi' 
+      : (msg.replyToMessageId.type === 'text' ? msg.replyToMessageId.content : `[${msg.replyToMessageId.type}]`);
+
+    return (
+      <TouchableOpacity 
+        activeOpacity={0.7}
+        onPress={() => onJumpToMessage && onJumpToMessage(msg.replyToMessageId._id || msg.replyToMessageId.id)}
+        style={styles.repliedContainer}
+      >
+        <Text style={styles.repliedSender} numberOfLines={1}>
+          {repliedBy}
+        </Text>
+        <Text style={styles.repliedText} numberOfLines={2}>
+          {repliedContent}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   // Render nội dung bên trong bong bóng tuỳ theo type
   const renderContent = () => {
@@ -283,6 +308,7 @@ const MessageBubble = ({
               },
             ]}
           >
+            {renderRepliedContext()}
             {renderContent()}
           </View>
         </Pressable>

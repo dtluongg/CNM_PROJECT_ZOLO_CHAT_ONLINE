@@ -74,3 +74,13 @@ body {
   animation: ripple 0.5s linear;
   pointer-events: none;
 }
+
+/* ── Jump highlight ── */
+@keyframes highlightFlash {
+  0% { background: transparent; }
+  30% { background: var(--accent); opacity: 0.15; }
+  100% { background: transparent; }
+}
+.msg-highlight {
+  animation: highlightFlash 1.5s ease;
+}

@@ -66,6 +66,8 @@ export default function ChatArea({
   const [reactionDetails, setReactionDetails] = useState([]);
   const [showReadList,    setShowReadList]    = useState(null);
   const [editingMessage,  setEditingMessage]  = useState(null);
+  const [replyingMessage, setReplyingMessage] = useState(null);
+  const [highlightedId,   setHighlightedId]   = useState(null);
   const [forwardingMsg,   setForwardingMsg]   = useState(null);
   const [showForwardModal, setShowForwardModal] = useState(false);
 
@@ -105,6 +107,18 @@ export default function ChatArea({
     }
   };
 
+  const handleJumpToMessage = (targetId) => {
+    if (!targetId) return;
+    const element = document.getElementById(`msg-${targetId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightedId(targetId);
+      setTimeout(() => setHighlightedId(null), 2000);
+    } else {
+      console.warn('Message not found in DOM');
+    }
+  };
+
   const handleReact = async (msg, emoji) => {
     try {
       await messageApi.toggleReaction(msg._id || msg.id, emoji);
@@ -121,6 +135,18 @@ export default function ChatArea({
     } catch (err) {
       console.error('Fetch reaction details error:', err);
     }
+  };
+
+  const handleRevoke = async (msg) => {
+    try { await messageApi.revokeMessage(msg._id || msg.id); }
+    catch (err) { console.error('Revoke error:', err); }
+  };
+
+  const handleDeleteForMe = async (msg) => {
+    try {
+      setMessages(prev => prev.filter(m => (m.id || m._id) !== (msg.id || msg._id)));
+      await messageApi.deleteForMe(msg._id || msg.id);
+    } catch (err) { console.error('Delete error:', err); }
   };
 
   const handleImageLoad = () => {
@@ -377,36 +403,37 @@ export default function ChatArea({
             />
           );
           return (
-            <MessageBubble
-              key={item.key}
-              msg={item.msg}
-              isMine={item.isMine}
-              showHeader={item.showHeader}
-              isMobile={isMobile}
-              openMenuId={openMenuId}
-              setOpenMenuId={setOpenMenuId}
-              reactionTypes={reactionTypes}
-              onReact={handleReact}
-              onShowDetails={handleShowReactionDetails}
-              onRecall={async (msg) => {
-                try { await messageApi.revokeMessage(msg._id || msg.id); }
-                catch (err) { console.error('Revoke error:', err); }
-              }}
-              onDelete={async (msg) => {
-                try {
-                  setMessages(prev => prev.filter(m => (m.id || m._id) !== (msg.id || msg._id)));
-                  await messageApi.deleteForMe(msg._id || msg.id);
-                } catch (err) { console.error('Delete error:', err); }
-              }}
-              onEdit={(msg) => setEditingMessage(msg)}
-              onRead={handleMarkAsRead}
-              onShowReadDetails={(readBy) => setShowReadList(readBy)}
-              onForward={item.onForward}
-              conversationType={conversation.type}
-              currentUserId={currentUserId}
-              onAvatarClick={onViewProfile}
-              onImageLoad={handleImageLoad}
-            />
+            <div 
+              key={item.key} 
+              id={item.type === 'msg' ? `msg-${item.msg?._id || item.msg?.id}` : undefined}
+              className={item.type === 'msg' && (highlightedId === item.msg?._id || highlightedId === item.msg?.id) ? 'msg-highlight' : ''}
+              style={{ padding: '0 16px' }}
+            >
+              <MessageBubble
+                msg={item.msg}
+                isMine={item.isMine}
+                showHeader={item.showHeader}
+                isMobile={isMobile}
+                openMenuId={openMenuId}
+                setOpenMenuId={setOpenMenuId}
+                reactionTypes={reactionTypes}
+                onReact={handleReact}
+                onShowDetails={handleShowReactionDetails}
+                onRecall={handleRevoke}
+                onDelete={handleDeleteForMe}
+                onEdit={(msg) => { setEditingMessage(msg); setReplyingMessage(null); }}
+                onReply={(msg) => { setReplyingMessage(msg); setEditingMessage(null); }}
+                replyingTargetId={replyingMessage?._id || replyingMessage?.id}
+                onJumpToMessage={handleJumpToMessage}
+                onRead={handleMarkAsRead}
+                onShowReadDetails={(readBy) => setShowReadList(readBy)}
+                onForward={(msg) => { setForwardingMsg(msg); setShowForwardModal(true); }}
+                conversationType={conversation.type}
+                currentUserId={currentUserId}
+                onAvatarClick={onViewProfile}
+                onImageLoad={handleImageLoad}
+              />
+            </div>
           );
         })}
 
@@ -458,13 +485,16 @@ export default function ChatArea({
           onSend={async (payload) => {
             await onSendMessage(payload);
             if (payload.isEdit) setEditingMessage(null);
+            setReplyingMessage(null); // Fix: Clear reply bar after successful send
           }}
           placeholder={`Nhắn tin tới ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
           isMobile={isMobile}
           conversationId={conversation.id}
           socket={socket}
           editingMessage={editingMessage}
+          replyingMessage={replyingMessage}
           onCancelEdit={() => setEditingMessage(null)}
+          onCancelReply={() => setReplyingMessage(null)}
         />
       )}
 

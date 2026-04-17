@@ -91,6 +91,7 @@ const useStyles = (THEME) =>
     bubble: {
       paddingHorizontal: 14,
       paddingVertical: 9,
+      borderRadius: 20, // Increased for premium feel
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.12,
@@ -296,6 +297,44 @@ const useStyles = (THEME) =>
     },
     editLabel: { fontSize: 12, fontWeight: '700', color: THEME.accent, marginBottom: 2 },
     editContent: { fontSize: 13, color: THEME.textMuted },
+
+    // ── Thanh trả lời tin nhắn ───────────────────────────────────────────
+    replyBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      backgroundColor: THEME.bgSecondary,
+      borderTopWidth: 1,
+      borderTopColor: THEME.accent,
+    },
+    replyLabel: { fontSize: 12, fontWeight: '700', color: THEME.accent, marginBottom: 2 },
+    replyContent: { fontSize: 13, color: THEME.textMuted },
+
+    // ── Hiển thị tin nhắn đang trả lời inside bubble ─────────────────────
+    repliedContainer: {
+      backgroundColor: 'rgba(255, 255, 255, 0.25)', // Lighter background as requested
+      borderLeftWidth: 4,
+      borderLeftColor: THEME.accent,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      marginBottom: 8,
+      maxWidth: '100%',
+    },
+    repliedSender: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: THEME.accent,
+      marginBottom: 2,
+    },
+    repliedText: {
+      fontSize: 12,
+      color: THEME.textPrimary, // Use primary text for better contrast on light bg
+      opacity: 0.8,
+      lineHeight: 16,
+    },
   });
 
 export default useStyles;

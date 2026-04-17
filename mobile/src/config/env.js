@@ -11,7 +11,7 @@
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
-  'http://192.168.88.135:2026/backend/api';
+  'http://172.20.10.3:2026/backend/api';
 
 const SOCKET_URL =
   process.env.EXPO_PUBLIC_SOCKET_URL ||

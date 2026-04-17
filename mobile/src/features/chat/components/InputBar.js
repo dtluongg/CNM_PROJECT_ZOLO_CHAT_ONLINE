@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TextInput, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Platform } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 
 /**
@@ -29,8 +29,26 @@ const InputBar = ({
   placeholder,
   THEME,
   styles,
+  replyingMessage,
+  onCancelReply,
 }) => (
-  <View style={styles.inputBar}>
+  <View>
+    {/* Thanh xem trước tin nhắn đang trả lời */}
+    {replyingMessage && (
+      <View style={[styles.replyBar, { borderLeftWidth: 4, borderLeftColor: THEME.accent, paddingLeft: 12, borderTopWidth: 0 }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.replyLabel}>Đang trả lời {replyingMessage.senderName}</Text>
+          <Text style={styles.replyContent} numberOfLines={1}>
+            {replyingMessage.type === 'text' ? replyingMessage.content : `[${replyingMessage.type}]`}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={onCancelReply} style={{ padding: 8 }}>
+          <Text style={{ fontSize: 18, color: THEME.textMuted }}>✕</Text>
+        </TouchableOpacity>
+      </View>
+    )}
+
+    <View style={styles.inputBar}>
     {/* Nút đính kèm file */}
     <TouchableOpacity style={styles.inputBtn} onPress={onPickFile}>
       <Feather name="paperclip" size={22} color={THEME.textMuted} />
@@ -73,6 +91,7 @@ const InputBar = ({
         )}
       </>
     )}
+    </View>
   </View>
 );
 

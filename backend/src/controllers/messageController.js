@@ -42,13 +42,14 @@ const requireMembership = async (conversationId, userId) => {
 const formatMsg = (msg, sender) => ({
     _id: msg._id,
     conversationId: msg.conversationId,
-    senderId: sender?._id || msg.senderId,
-    senderName: sender?.displayName || 'Unknown',
-    avatar: sender?.avatar || null,
+    senderId: sender?._id || msg.senderId?._id || msg.senderId,
+    senderName: sender?.displayName || msg.senderId?.displayName || 'Unknown',
+    avatar: sender?.avatar || msg.senderId?.avatar || null,
     type: msg.type,
     content: msg.content,
     payload: msg.payload || {},
     replyToMessageId: msg.replyToMessageId || null,
+    forwardFromMessageId: msg.forwardFromMessageId || null,
     edited: msg.edited,
     deleted: msg.deleted,
     revoked: msg.revoked,
@@ -151,6 +152,14 @@ const sendMessage = async (req, res) => {
                 isValidId(forwardFromMessageId) ? forwardFromMessageId : null,
         });
 
+        // Populate replyToMessageId if exists
+        if (message.replyToMessageId) {
+            await message.populate({
+                path: 'replyToMessageId',
+                populate: { path: 'senderId', select: 'displayName' }
+            });
+        }
+
         // ── Gắn messageId vào attachment (nếu gửi mới, không phải forward) ──
         if (attachment) {
             await Attachment.findByIdAndUpdate(attachment._id, { messageId: message._id });
@@ -247,6 +256,10 @@ const getMessages = async (req, res) => {
             .sort({ _id: -1 })   // newest first cho pagination
             .limit(limit)
             .populate('senderId', 'displayName avatar')
+            .populate({
+                path: 'replyToMessageId',
+                populate: { path: 'senderId', select: 'displayName' }
+            })
             .lean();
 
         const msgIds = raw.map(m => m._id);

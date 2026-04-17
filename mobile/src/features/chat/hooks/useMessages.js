@@ -68,7 +68,7 @@ const useMessages = (conversationId, currentUserId) => {
   const revokeMessage = useCallback((messageId) => {
     setMessages((prev) =>
       prev.map((m) =>
-        m._id?.toString() === messageId?.toString() ? { ...m, revoked: true } : m
+        (m._id || m.id)?.toString() === messageId?.toString() ? { ...m, revoked: true } : m
       )
     );
   }, []);
@@ -77,7 +77,7 @@ const useMessages = (conversationId, currentUserId) => {
   const editMessage = useCallback((message) => {
     setMessages((prev) =>
       prev.map((m) => {
-        if (m._id?.toString() !== message._id?.toString()) return m;
+        if ((m._id || m.id)?.toString() !== (message._id || message.id)?.toString()) return m;
         return {
           ...m,
           ...normalizeMsg(message),
@@ -92,7 +92,7 @@ const useMessages = (conversationId, currentUserId) => {
   const updateReaction = useCallback(({ messageId, userId, emoji, action, reactions: serverReactions, currentUserId: cuid }) => {
     setMessages((prev) =>
       prev.map((m) => {
-        if (m._id?.toString() !== messageId) return m;
+        if ((m._id || m.id)?.toString() !== messageId?.toString()) return m;
         const newReactions = serverReactions || m.reactions || {};
         let newMyReaction = m.myReaction;
         if (userId === cuid) {

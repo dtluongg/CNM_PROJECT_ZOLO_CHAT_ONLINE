@@ -30,7 +30,7 @@ function fmtDuration(secs) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export default function MessageInput({ onSend, placeholder, isMobile, conversationId, socket, editingMessage, onCancelEdit }) {
+export default function MessageInput({ onSend, placeholder, isMobile, conversationId, socket, editingMessage, onCancelEdit, replyingMessage, onCancelReply }) {
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -124,6 +124,10 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
         try {
           if (editingMessage) {
             await onSend({ type: 'text', content: textSnapshot, isEdit: true, messageId: editingMessage._id || editingMessage.id });
+            onCancelEdit && onCancelEdit();
+          } else if (replyingMessage) {
+            await onSend({ type: 'text', content: textSnapshot, replyToMessageId: replyingMessage._id || replyingMessage.id });
+            onCancelReply && onCancelReply();
           } else {
             await onSend({ type: 'text', content: textSnapshot });
           }
@@ -377,10 +381,10 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
       background: isMobile ? 'var(--bg-secondary)' : 'transparent',
       borderTop: isMobile ? '1px solid var(--border)' : 'none',
     }}>
-      {/* Thanh hiển thị đang chỉnh sửa */}
+      {/* Thanh hiển thị đang chỉnh sửa tin nhắn */}
       {editingMessage && (
         <div style={{
-          position: 'absolute', bottom: '100%', left: isMobile ? 0 : 16, right: isMobile ? 0 : 16,
+          position: 'absolute', bottom: replyingMessage ? 'calc(100% + 40px)' : '100%', left: isMobile ? 0 : 16, right: isMobile ? 0 : 16,
           background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderBottom: 'none',
           borderRadius: isMobile ? 0 : '12px 12px 0 0', padding: '8px 12px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -393,6 +397,27 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
             </span>
           </div>
           <button onClick={onCancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Thanh hiển thị đang trả lời tin nhắn */}
+      {replyingMessage && (
+        <div style={{
+          position: 'absolute', bottom: '100%', left: isMobile ? 0 : 16, right: isMobile ? 0 : 16,
+          background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderLeft: '4px solid var(--accent)', borderBottom: 'none',
+          borderRadius: isMobile ? 0 : (editingMessage ? 0 : '12px 12px 0 0'), padding: '8px 16px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          fontSize: 12, animation: 'fadeInUp 0.15s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: 'var(--accent)', fontWeight: 800 }}>Đang trả lời {replyingMessage.senderName}</span>
+            <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
+              {replyingMessage.type === 'text' ? replyingMessage.content : `[${replyingMessage.type}]`}
+            </span>
+          </div>
+          <button onClick={onCancelReply} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
             <X size={14} />
           </button>
         </div>

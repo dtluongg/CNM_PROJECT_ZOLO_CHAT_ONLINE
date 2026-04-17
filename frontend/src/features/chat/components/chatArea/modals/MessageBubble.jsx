@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ThumbsUp, CornerUpRight, MoreHorizontal,
-  Paperclip, Reply, Copy, Pin, Trash2,
+  Paperclip, Reply, Copy, Pin, Trash2, Quote
 } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 
@@ -20,6 +20,9 @@ const MessageBubble = ({
   setOpenMenuId,
   reactionTypes,
   onEdit,
+  onReply,
+  replyingTargetId,
+  onJumpToMessage,
   onRead,
   onShowReadDetails,
   onForward,
@@ -78,6 +81,48 @@ const MessageBubble = ({
     if (observerRef.current) observer.observe(observerRef.current);
     return () => observer.disconnect();
   }, [msg, isMine, onRead, currentUserId]);
+
+  // ── Render context tin nhắn đang trả lời ─────────────────────────
+  const renderRepliedContext = () => {
+    if (!msg.replyToMessageId || msg.revoked || msg.recalled) return null;
+    const repliedBy = msg.replyToMessageId.senderId?.displayName || 'Người dùng Zolo';
+    const repliedContent = msg.replyToMessageId.revoked 
+      ? 'Tin nhắn đã được thu hồi' 
+      : (msg.replyToMessageId.type === 'text' ? msg.replyToMessageId.content : `[${msg.replyToMessageId.type}]`);
+
+    const replyBg = isMine ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.05)';
+    const replyBorderColor = isMine ? '#fff' : 'var(--accent)';
+    const nameColor = isMine ? '#fff' : 'var(--accent)';
+    const textColor = isMine ? 'rgba(255, 255, 255, 0.8)' : 'var(--text-secondary)';
+
+    return (
+      <div 
+        onClick={(e) => { e.stopPropagation(); onJumpToMessage && onJumpToMessage(msg.replyToMessageId._id || msg.replyToMessageId.id); }}
+        style={{
+          background: replyBg,
+          borderLeft: `4px solid ${replyBorderColor}`,
+          padding: '8px 12px',
+          borderRadius: 8,
+          marginBottom: 8,
+          fontSize: 13,
+          cursor: 'pointer',
+          maxWidth: '100%',
+          transition: 'all 0.2s ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = isMine ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 0, 0, 0.08)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = replyBg;
+        }}
+      >
+        <div style={{ fontWeight: 700, color: nameColor, marginBottom: 2, fontSize: 13 }}>{repliedBy}</div>
+        <div style={{ color: textColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4, fontSize: 12 }}>
+          {repliedContent}
+        </div>
+      </div>
+    );
+  };
 
   // ── Render nội dung tin nhắn ───────────────────────────────
   const renderContent = () => {
@@ -144,105 +189,167 @@ const MessageBubble = ({
     );
   };
 
-  return (
-    <div
-      ref={observerRef}
-      style={{
-        display: 'flex',
-        flexDirection: isMine ? 'row-reverse' : 'row',
-        gap: isMobile ? 8 : 10,
-        padding: showHeader
-          ? (isMobile ? '8px 12px 2px' : '8px 16px 2px')
-          : (isMobile ? '2px 12px' : '2px 16px'),
-        alignItems: 'flex-start',
-        position: 'relative',
-      }}
-      onMouseEnter={() => { if (!isMobile) setHover(true); }}
-      onMouseLeave={() => { if (!isMobile) { setHover(false); setShowEmojiBar(false); } }}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* Avatar */}
-      <div style={{ width: isMobile ? 34 : 36, flexShrink: 0, marginTop: showHeader ? 2 : 0 }}>
-        {showHeader && !isMine && (
-          <div
-            onClick={() => onAvatarClick?.(msg.senderId)}
-            style={{ cursor: onAvatarClick ? 'pointer' : 'default' }}
-          >
-            <Avatar name={msg.senderName} avatar={msg.avatar} size={isMobile ? 34 : 36} />
-          </div>
-        )}
-      </div>
+   const isBeingRepliedTo = replyingTargetId === (msg._id || msg.id);
 
-      <div style={{
-        maxWidth, display: 'flex', flexDirection: 'column',
-        alignItems: isMine ? 'flex-end' : 'flex-start', position: 'relative',
-      }}>
-        {/* Header (tên + giờ) */}
-        {showHeader && (
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 3 }}>
-            {!isMine && (
-              <span style={{ fontSize: isMobile ? 13 : 14, fontWeight: 700, color: senderColor }}>
-                {msg.senderName}
-              </span>
-            )}
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{msg.time}</span>
-          </div>
-        )}
+   return (
+     <div
+       ref={observerRef}
+       style={{
+         display: 'flex',
+         flexDirection: isMine ? 'row-reverse' : 'row',
+         gap: isMobile ? 8 : 10,
+         padding: showHeader
+           ? (isMobile ? '8px 12px 2px' : '8px 16px 2px')
+           : (isMobile ? '2px 12px' : '2px 16px'),
+         alignItems: 'flex-start',
+         position: 'relative',
+         transition: 'all 0.3s ease',
+         background: isBeingRepliedTo ? 'rgba(var(--accent-rgb), 0.05)' : 'transparent',
+       }}
+       onMouseEnter={() => { if (!isMobile) setHover(true); }}
+       onMouseLeave={() => { if (!isMobile) { setHover(false); setShowEmojiBar(false); } }}
+       onTouchStart={handleTouchStart}
+       onTouchEnd={handleTouchEnd}
+     >
+       {/* Avatar */}
+       <div style={{ width: isMobile ? 34 : 36, flexShrink: 0, marginTop: showHeader ? 2 : 0 }}>
+         {showHeader && !isMine && (
+           <div
+             onClick={() => onAvatarClick?.(msg.senderId)}
+             style={{ cursor: onAvatarClick ? 'pointer' : 'default' }}
+           >
+             <Avatar name={msg.senderName} avatar={msg.avatar} size={isMobile ? 34 : 36} />
+           </div>
+         )}
+       </div>
 
-        {/* Emoji bar (desktop hover) */}
-        {showEmojiBar && !isMobile && !(msg.revoked || msg.recalled) && (
-          <div style={{
-            position: 'absolute', top: -45, [isMine ? 'right' : 'left']: 0,
-            background: '#ffffff', border: '1px solid #e1e4e8', borderRadius: 24,
-            padding: '6px 12px', display: 'flex', gap: 12,
-            boxShadow: '0 4px 15px rgba(0,0,0,0.15)', zIndex: 2000,
-          }}>
-            {(reactionTypes?.length > 0 ? reactionTypes : [
-              { emoji: '👍' }, { emoji: '❤️' }, { emoji: '😂' },
-              { emoji: '😮' }, { emoji: '😢' }, { emoji: '😡' },
-            ]).map(r => (
-              <span
-                key={r.emoji || r.code}
-                title={r.label}
-                style={{ fontSize: 18, cursor: 'pointer', transition: 'transform 0.1s' }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.3)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                onClick={() => { onReact(msg, r.emoji); setShowEmojiBar(false); }}
-              >
-                {r.emoji}
-              </span>
-            ))}
-          </div>
-        )}
+       <div style={{
+         maxWidth, display: 'flex', flexDirection: 'column',
+         alignItems: isMine ? 'flex-end' : 'flex-start', position: 'relative',
+       }}>
+         {/* Header (tên + giờ) */}
+         {showHeader && (
+           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 3 }}>
+             {!isMine && (
+               <span style={{ fontSize: isMobile ? 13 : 14, fontWeight: 700, color: senderColor }}>
+                 {msg.senderName}
+               </span>
+             )}
+             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{msg.time}</span>
+           </div>
+         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexDirection: isMine ? 'row-reverse' : 'row' }}>
-          {/* Bubble */}
-          <div style={{
-            background: isMine ? 'var(--bubble-self)' : 'var(--bubble-other)',
-            color: isMine ? '#fff' : 'var(--text-primary)',
-            padding: isMobile ? '9px 14px' : '8px 13px',
-            borderRadius: isMine
-              ? (showHeader ? '18px 4px 18px 18px' : '18px 4px 4px 18px')
-              : (showHeader ? '4px 18px 18px 18px' : '4px 18px 18px 4px'),
-            fontSize: isMobile ? 15 : 14, lineHeight: 1.5,
-            wordBreak: 'break-word',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.12)', maxWidth: '100%',
-          }}>
+         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexDirection: isMine ? 'row-reverse' : 'row' }}>
+           {/* Bubble */}
+           <div style={{
+             background: isMine ? 'var(--bubble-self)' : 'var(--bubble-other)',
+             color: isMine ? '#fff' : 'var(--text-primary)',
+             padding: isMobile ? '9px 14px' : '8px 14px',
+             borderRadius: 20,
+             fontSize: isMobile ? 15 : 14, lineHeight: 1.5,
+             wordBreak: 'break-word',
+             boxShadow: isBeingRepliedTo ? '0 0 0 2px var(--accent), 0 4px 12px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.12)',
+             maxWidth: '100%',
+             transform: isBeingRepliedTo ? 'scale(1.02)' : 'scale(1)',
+             transition: 'all 0.2s ease-out',
+             position: 'relative'
+           }}>
+            {renderRepliedContext()}
             {renderContent()}
+
+            {/* Standalone Reaction Trigger (Web Hover) */}
+            {hover && !isMobile && !(msg.revoked || msg.recalled) && (
+              <div
+                onClick={(e) => { e.stopPropagation(); setShowEmojiBar(p => !p); }}
+                style={{
+                  position: 'absolute',
+                  bottom: -14,
+                  right: -10, // Locked to right corner
+                  width: 28, height: 28,
+                  background: '#ffffff',
+                  border: '1px solid #e1e4e8',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                  zIndex: 10,
+                  color: '#5f6368',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#f1f3f4'; e.currentTarget.style.color = 'var(--accent)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#5f6368'; }}
+              >
+                <ThumbsUp size={14} />
+              </div>
+            )}
+
+             {/* Emoji bar (desktop hover) - Anchored to the standalone button */}
+            {showEmojiBar && !isMobile && !(msg.revoked || msg.recalled) && (
+              <div style={{
+                position: 'absolute', 
+                bottom: 35, 
+                right: -10, // Anchor to the right
+                background: '#ffffff', border: '1px solid #e1e4e8', borderRadius: 24,
+                padding: '6px 12px', display: 'flex', gap: 12,
+                boxShadow: '0 4px 15px rgba(0,0,0,0.15)', zIndex: 2000,
+                animation: 'fadeInUp 0.1s ease'
+              }}>
+                {(reactionTypes?.length > 0 ? reactionTypes : [
+                  { emoji: '👍' }, { emoji: '❤️' }, { emoji: '😂' },
+                  { emoji: '😮' }, { emoji: '😢' }, { emoji: '😡' },
+                ]).map(r => (
+                  <span
+                    key={r.emoji || r.code}
+                    title={r.label}
+                    style={{ fontSize: 18, cursor: 'pointer', transition: 'transform 0.1s' }}
+                    onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.3)'}
+                    onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                    onClick={() => { onReact(msg, r.emoji); setShowEmojiBar(false); }}
+                  >
+                    {r.emoji}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Reactions summary - Synchronized Bottom-Right */}
+            {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+              <div
+                onClick={(e) => { e.stopPropagation(); onShowDetails(msg); }}
+                style={{
+                  position: 'absolute', bottom: -12, right: (hover && !isMobile) ? 22 : -10,
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  background: '#fff', border: '1px solid #e1e4e8', borderRadius: 12,
+                  padding: '2px 8px', fontSize: 13, cursor: 'pointer',
+                  boxShadow: '0 2px 5px rgba(0,0,0,0.1)', zIndex: 2, userSelect: 'none',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {Object.entries(msg.reactions).map(([emoji, count], idx) => (
+                  <span key={idx} style={{ display: 'flex', alignItems: 'center', gap: 2, borderRadius: 4, padding: '0 2px' }}>
+                    <span>{emoji}</span>
+                    {count > 1 && <span style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>{count}</span>}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Desktop hover actions */}
-          {hover && !isMobile && (
+          {/* Desktop hover actions (Zalo Style) */}
+          {hover && !isMobile && !showEmojiBar && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 2,
               background: '#ffffff', border: '1px solid #e1e4e8',
-              borderRadius: 20, padding: '2px 6px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              borderRadius: 20, padding: '2px 4px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+              position: 'relative', zIndex: 10
             }}>
               {[
                 ...(!(msg.revoked || msg.recalled) ? [
-                  { content: <ThumbsUp size={13} />, title: 'Thả cảm xúc', onClick: () => setShowEmojiBar(p => !p) },
+                  { content: <Quote size={13} />, title: 'Trả lời', onClick: () => onReply(msg) },
                   { content: <CornerUpRight size={13} />, title: 'Chuyển tiếp', onClick: () => onForward(msg) },
                 ] : []),
                 {
@@ -291,6 +398,7 @@ const MessageBubble = ({
                   ↩️ Thu hồi
                 </div>
               )}
+
               <div onClick={() => { onDelete(msg); setOpenMenuId(null); }}
                 style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#ed4245' }}>
                 🗑️ Xóa
@@ -305,26 +413,6 @@ const MessageBubble = ({
           )}
         </div>
 
-        {/* Reactions summary */}
-        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-          <div
-            onClick={() => onShowDetails(msg)}
-            style={{
-              position: 'absolute', bottom: -10, [isMine ? 'left' : 'right']: 12,
-              display: 'flex', alignItems: 'center', gap: 4,
-              background: '#fff', border: '1px solid #e1e4e8', borderRadius: 12,
-              padding: '2px 8px', fontSize: 13, cursor: 'pointer',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.1)', zIndex: 2, userSelect: 'none',
-            }}
-          >
-            {Object.entries(msg.reactions).map(([emoji, count], idx) => (
-              <span key={idx} style={{ display: 'flex', alignItems: 'center', gap: 2, borderRadius: 4, padding: '0 2px' }}>
-                <span>{emoji}</span>
-                {count > 1 && <span style={{ fontSize: 11, fontWeight: 700, color: '#555' }}>{count}</span>}
-              </span>
-            ))}
-          </div>
-        )}
 
         {/* Đã xem / Đã gửi */}
         {isMine && (
@@ -393,7 +481,7 @@ const MessageBubble = ({
               ))}
             </div>
             {[
-              { icon: <Reply size={20} />, label: 'Trả lời' },
+              { icon: <Reply size={20} />, label: 'Trả lời', onClick: () => { onReply(msg); setShowActions(false); } },
               { icon: <CornerUpRight size={20} />, label: 'Chuyển tiếp', onClick: () => { onForward(msg); setShowActions(false); } },
               { icon: <Copy size={20} />, label: 'Sao chép' },
               { icon: <Pin size={20} />, label: 'Ghim tin nhắn' },

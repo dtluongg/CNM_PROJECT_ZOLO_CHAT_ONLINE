@@ -60,6 +60,7 @@ export default function MessageScreen({ route, navigation }) {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [typingUser, setTypingUser] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
+  const [replyingMessage, setReplyingMessage] = useState(null);
   const [reactionTypes, setReactionTypes] = useState([]);
 
   // State các modal
@@ -87,8 +88,8 @@ export default function MessageScreen({ route, navigation }) {
   // Capture lúc mount (trước markAsRead chạy) để dùng cho AI query
   const aiSnapshotRef = useRef({
     unreadCount: conversation.unread || 0,
-    lastReadId:  conversation.myMembership?.lastReadMessageId || null,
-    aiSummary:   conversation.aiSummary || null,
+    lastReadId: conversation.myMembership?.lastReadMessageId || null,
+    aiSummary: conversation.aiSummary || null,
   });
 
   // ── Hooks quản lý tin nhắn ──────────────────────────────────────────────
@@ -97,16 +98,18 @@ export default function MessageScreen({ route, navigation }) {
   // ── Hook ghi âm ─────────────────────────────────────────────────────────
   const { isRecording, recordingSec, startRecording, stopRecording, cancelRecording } =
     useRecording(conversation.id, (msg) => {
-      const id = msg._id?.toString();
       msgHook.addMessage(msg);
+      setReplyingMessage(null);
+      setEditingMessage(null);
     });
 
   // ── Hook xử lý file ─────────────────────────────────────────────────────
   const { pickAndSendImage, pickAndSendFile, openFile } = useFileHandler(
     conversation.id,
     (msg) => {
-      const id = msg._id?.toString();
       msgHook.addMessage(msg);
+      setReplyingMessage(null);
+      setEditingMessage(null);
     }
   );
 
@@ -180,7 +183,7 @@ export default function MessageScreen({ route, navigation }) {
     if (lastMsg.senderId !== currentUserId) {
       const mId = lastMsg._id?.toString();
       if (mId && !mId.startsWith('temp_')) {
-        messageApi.markAsRead(conversation.id, mId).catch(() => {});
+        messageApi.markAsRead(conversation.id, mId).catch(() => { });
       }
     }
   }, [msgHook.messages.length, conversation.id]);
@@ -288,11 +291,14 @@ export default function MessageScreen({ route, navigation }) {
       payload: {},
       time: fmtTime(now),
       createdAt: now,
+      replyToMessageId: replyingMessage || null,
     };
 
     msgHook.addTempMessage(tempMsg);
+    const replyId = replyingMessage?._id || replyingMessage?.id;
     setText('');
     setShowEmoji(false);
+    setReplyingMessage(null);
 
     // Dừng typing indicator
     if (socketRef.current) {
@@ -301,7 +307,7 @@ export default function MessageScreen({ route, navigation }) {
     }
 
     try {
-      const res = await messageApi.sendText(conversation.id, trimmed);
+      const res = await messageApi.sendText(conversation.id, trimmed, replyId);
       msgHook.replaceTemp(tempId, res.data.data);
     } catch (err) {
       console.error('sendText error:', err);
@@ -313,6 +319,13 @@ export default function MessageScreen({ route, navigation }) {
         msgHook.removeTempMessage(tempId);
       }
     }
+  };
+
+  // ── Bắt đầu trả lời tin nhắn ──────────────────────────────────────────
+  const handleReply = (msg) => {
+    setReplyingMessage(msg);
+    setEditingMessage(null);
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   // ── React emoji ─────────────────────────────────────────────────────────
@@ -401,11 +414,11 @@ export default function MessageScreen({ route, navigation }) {
       !prev.time?.includes(' ');
 
     displayItems.push({
-        type:       msg.type === 'system' ? 'system' : 'msg',
-        msg,
-        key:        `msg-${msgKey || i}`,
-        isMine:     msg.senderId === currentUserId,
-        showHeader: msg.type === 'system' ? false : !sameGroup,
+      type: msg.type === 'system' ? 'system' : 'msg',
+      msg,
+      key: `msg-${msgKey || i}`,
+      isMine: msg.senderId === currentUserId,
+      showHeader: msg.type === 'system' ? false : !sameGroup,
     });
   });
 
@@ -425,11 +438,11 @@ export default function MessageScreen({ route, navigation }) {
       });
       // AI card luôn ở cuối
       displayItems.push({
-        type:               'ai-summary',
-        key:                `ai-summary-${conversation.id}`,
-        conversationId:     conversation.id,
+        type: 'ai-summary',
+        key: `ai-summary-${conversation.id}`,
+        conversationId: conversation.id,
         snapshotLastReadId: lastReadId,
-        initialSummary:     aiSummary,
+        initialSummary: aiSummary,
       });
     }
   }
@@ -445,11 +458,11 @@ export default function MessageScreen({ route, navigation }) {
       ? isOnline
         ? 'Đang hoạt động'
         : (() => {
-            const ls = conversation.otherUserId
-              ? getLastSeen(conversation.otherUserId)
-              : null;
-            return ls ? `Hoạt động ${formatLastSeen(ls)}` : 'Ngoại tuyến';
-          })()
+          const ls = conversation.otherUserId
+            ? getLastSeen(conversation.otherUserId)
+            : null;
+          return ls ? `Hoạt động ${formatLastSeen(ls)}` : 'Ngoại tuyến';
+        })()
       : `${conversation.memberCount || conversation.members || 0} thành viên`;
 
   // ────────────────────────────────────────────────────────────────────────
@@ -591,50 +604,50 @@ export default function MessageScreen({ route, navigation }) {
 
           // Render từng item (divider ngày hoặc bong bóng tin nhắn)
           renderItem={({ item }) => {
-              if (item.type === 'date') {
-                  return <DateDivider label={item.label} styles={styles} />;
-              }
-              if (item.type === 'system') {
-                  return (
-                      <SystemMessageBubble
-                          msg={item.msg}
-                          currentUserId={currentUserId}
-                          THEME={THEME}
-                      />
-                  );
-              }
-              if (item.type === 'unread-divider') {
-                  return <UnreadDivider key={item.key} THEME={THEME} />;
-              }
-              if (item.type === 'ai-summary') {
-                  return (
-                      <AiSummaryCard
-                          key={item.key}
-                          conversationId={item.conversationId}
-                          snapshotLastReadId={item.snapshotLastReadId}
-                          initialSummary={item.initialSummary}
-                          THEME={THEME}
-                      />
-                  );
-              }
+            if (item.type === 'date') {
+              return <DateDivider label={item.label} styles={styles} />;
+            }
+            if (item.type === 'system') {
               return (
-                  <MessageBubble
-                      msg={item.msg}
-                      isMine={item.isMine}
-                      showHeader={item.showHeader}
-                      onLongPress={setActionMsg}
-                      onShowReadBy={handleShowReadBy}
-                      onAvatarPress={(senderId) =>
-                          senderId && navigation.push('UserProfile', { userId: senderId })
-                      }
-                      currentUserId={currentUserId}
-                      conversation={conversation}
-                      THEME={THEME}
-                      styles={styles}
-                      onImagePress={(url) => setPreviewImage(url)}
-                      onFilePress={(url, fileName) => openFile(url, fileName)}
-                  />
+                <SystemMessageBubble
+                  msg={item.msg}
+                  currentUserId={currentUserId}
+                  THEME={THEME}
+                />
               );
+            }
+            if (item.type === 'unread-divider') {
+              return <UnreadDivider key={item.key} THEME={THEME} />;
+            }
+            if (item.type === 'ai-summary') {
+              return (
+                <AiSummaryCard
+                  key={item.key}
+                  conversationId={item.conversationId}
+                  snapshotLastReadId={item.snapshotLastReadId}
+                  initialSummary={item.initialSummary}
+                  THEME={THEME}
+                />
+              );
+            }
+            return (
+              <MessageBubble
+                msg={item.msg}
+                isMine={item.isMine}
+                showHeader={item.showHeader}
+                onLongPress={setActionMsg}
+                onShowReadBy={handleShowReadBy}
+                onAvatarPress={(senderId) =>
+                  senderId && navigation.push('UserProfile', { userId: senderId })
+                }
+                currentUserId={currentUserId}
+                conversation={conversation}
+                THEME={THEME}
+                styles={styles}
+                onImagePress={(url) => setPreviewImage(url)}
+                onFilePress={(url, fileName) => openFile(url, fileName)}
+              />
+            );
           }}
         />
 
@@ -720,7 +733,7 @@ export default function MessageScreen({ route, navigation }) {
               <RecordingBar
                 recordingSec={recordingSec}
                 onCancel={cancelRecording}
-                onStop={stopRecording}
+                onStop={() => stopRecording(replyingMessage?._id || replyingMessage?.id)}
                 THEME={THEME}
                 styles={styles}
               />
@@ -732,14 +745,16 @@ export default function MessageScreen({ route, navigation }) {
                   if (v.trim()) emitTyping();
                 }}
                 onSend={handleSend}
-                onPickFile={pickAndSendFile}
-                onPickImage={pickAndSendImage}
+                onPickFile={() => pickAndSendFile(replyingMessage?._id || replyingMessage?.id)}
+                onPickImage={() => pickAndSendImage(replyingMessage?._id || replyingMessage?.id)}
                 onStartRecord={startRecording}
                 onToggleEmoji={() => setShowEmoji((v) => !v)}
                 inputRef={inputRef}
                 placeholder={`Nhắn tin ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
                 THEME={THEME}
                 styles={styles}
+                replyingMessage={replyingMessage}
+                onCancelReply={() => setReplyingMessage(null)}
               />
             )
           )}
@@ -780,6 +795,7 @@ export default function MessageScreen({ route, navigation }) {
         onReact={handleReact}
         onRevoke={handleRevoke}
         onEdit={handleStartEdit}
+        onReply={handleReply}
         onDelete={handleDeleteForMe}
         onForward={(msg) => { setForwardingMsg(msg); setShowForwardModal(true); }}
         THEME={THEME}

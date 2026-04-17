@@ -28,6 +28,13 @@ const SOCKET_URL =
 const useSocket = (token, conversationId, currentUserId, handlers) => {
   const socketRef = useRef(null);
 
+  const handlersRef = useRef(handlers);
+
+  // Cập nhật ref mỗi khi handlers thay đổi để các listener luôn dùng bản mới nhất
+  useEffect(() => {
+    handlersRef.current = handlers;
+  }, [handlers]);
+
   useEffect(() => {
     if (!token) return;
 
@@ -46,49 +53,49 @@ const useSocket = (token, conversationId, currentUserId, handlers) => {
     // ── Tin nhắn mới ───────────────────────────────────────────────────
     socket.on('chat:new-message', ({ conversationId: cid, message }) => {
       if (cid !== conversationId) return;
-      handlers.onNewMessage?.(message);
+      handlersRef.current.onNewMessage?.(message);
     });
 
     // ── Đang nhập ─────────────────────────────────────────────────────
     socket.on('chat:typing', ({ conversationId: cid, userId, displayName }) => {
       if (cid !== conversationId || userId === currentUserId) return;
-      handlers.onTyping?.({ userId, displayName });
+      handlersRef.current.onTyping?.({ userId, displayName });
     });
 
     // ── Dừng nhập ─────────────────────────────────────────────────────
     socket.on('chat:stop-typing', ({ conversationId: cid }) => {
       if (cid !== conversationId) return;
-      handlers.onStopTyping?.();
+      handlersRef.current.onStopTyping?.();
     });
 
     // ── Cập nhật reaction ─────────────────────────────────────────────
     socket.on('chat:message-reaction', (data) => {
       if (data.conversationId !== conversationId) return;
-      handlers.onReaction?.({ ...data, currentUserId });
+      handlersRef.current.onReaction?.({ ...data, currentUserId });
     });
 
     // ── Thu hồi tin nhắn ──────────────────────────────────────────────
     socket.on('chat:message-revoked', ({ conversationId: cid, messageId }) => {
       if (cid !== conversationId) return;
-      handlers.onRevoked?.(messageId);
+      handlersRef.current.onRevoked?.(messageId);
     });
 
     // ── Chỉnh sửa tin nhắn ────────────────────────────────────────────
     socket.on('chat:message-edited', ({ conversationId: cid, message }) => {
       if (cid !== conversationId) return;
-      handlers.onEdited?.(message);
+      handlersRef.current.onEdited?.(message);
     });
 
     // ── Đánh dấu đã đọc ───────────────────────────────────────────────
     socket.on('chat:message-read', (data) => {
       if (data.conversationId !== conversationId) return;
-      handlers.onRead?.(data);
+      handlersRef.current.onRead?.(data);
     });
 
     // ── Xoá tin nhắn phía tôi ─────────────────────────────────────────
     socket.on('chat:message-deleted-for-me', ({ conversationId: cid, messageId }) => {
       if (cid !== conversationId) return;
-      handlers.onDeletedForMe?.(messageId);
+      handlersRef.current.onDeletedForMe?.(messageId);
     });
 
     // Rời phòng và ngắt kết nối khi unmount

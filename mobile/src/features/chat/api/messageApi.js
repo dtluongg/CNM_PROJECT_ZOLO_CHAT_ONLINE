@@ -30,14 +30,15 @@ const messageApi = {
       replyToMessageId,
     }),
 
-  sendVoice: (conversationId, attachmentId) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'voice', attachmentId }),
+  // GỬI TIN NHẮN MEDIA (CÓ TRẢ LỜI)
+  sendVoice: (conversationId, attachmentId, replyToMessageId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'voice', attachmentId, replyToMessageId }),
 
-  sendImage: (conversationId, attachmentId) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'image', attachmentId }),
+  sendImage: (conversationId, attachmentId, replyToMessageId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'image', attachmentId, replyToMessageId }),
 
-  sendFile: (conversationId, attachmentId) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId }),
+  sendFile: (conversationId, attachmentId, replyToMessageId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId, replyToMessageId }),
 
   uploadVoice: (formData) => apiClient.post('/voice/upload', formData, rnUploadConfig),
   uploadFile: (formData) => apiClient.post('/uploads/file', formData, rnUploadConfig),

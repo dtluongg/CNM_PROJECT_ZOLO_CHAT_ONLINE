@@ -118,6 +118,8 @@ export const useMessages = ({
     }
 
     try {
+      const { replyToMessageId } = payload;
+
       // ── TEXT ─────────────────────────────────────────────────────────────
       if (payload.type === 'text' && !payload.isEdit) {
         const { content } = payload;
@@ -129,10 +131,11 @@ export const useMessages = ({
           _id: tempId, senderId: myId, senderName: myName, avatar: myAvatar,
           type: 'text', content: content.trim(), payload: {},
           time: fmtTime(now), createdAt: now,
+          replyToMessageId: replyToMessageId || null, // Include for optimistic update
         };
         setMessages((prev) => ({ ...prev, [convId]: [...(prev[convId] || []), tempMsg] }));
 
-        const res    = await messageApi.sendText(convId, content.trim());
+        const res    = await messageApi.sendText(convId, content.trim(), replyToMessageId);
         const real   = normalizeMsg(res.data.data);
         const realId = real._id?.toString();
 
@@ -166,7 +169,7 @@ export const useMessages = ({
         if (duration) fd.append('duration', String(Math.round(duration)));
 
         const up  = await messageApi.uploadVoice(fd);
-        const res = await messageApi.sendVoice(convId, up.data.voice.fileId);
+        const res = await messageApi.sendVoice(convId, up.data.voice.fileId, replyToMessageId);
         const msg = normalizeMsg(res.data.data);
         addMessage(convId, msg);
         updateConversationPreview(convId, { lastMessage: msg.content, time: msg.time });
@@ -180,7 +183,7 @@ export const useMessages = ({
         fd.append('file', payload.file);
 
         const up  = await messageApi.uploadImage(fd);
-        const res = await messageApi.sendImage(convId, up.data.file.fileId);
+        const res = await messageApi.sendImage(convId, up.data.file.fileId, replyToMessageId);
         const msg = normalizeMsg(res.data.data);
         addMessage(convId, msg);
         updateConversationPreview(convId, { lastMessage: '[Hình ảnh]', time: msg.time });
@@ -194,7 +197,7 @@ export const useMessages = ({
         fd.append('file', payload.file);
 
         const up  = await messageApi.uploadFile(fd);
-        const res = await messageApi.sendFile(convId, up.data.file.fileId);
+        const res = await messageApi.sendFile(convId, up.data.file.fileId, replyToMessageId);
         const msg = normalizeMsg(res.data.data);
         addMessage(convId, msg);
         updateConversationPreview(convId, { lastMessage: msg.content, time: msg.time });
