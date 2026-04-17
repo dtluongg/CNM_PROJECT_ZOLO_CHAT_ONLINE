@@ -48,6 +48,7 @@ const MessageBubble = ({
   onImagePress,
   onFilePress,
   onJumpToMessage,
+  isPinned,
 }) => {
   const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName, THEME);
   const bubbleBg = isMine ? THEME.bubbleSelf : THEME.bubbleOther;
@@ -308,6 +309,16 @@ const MessageBubble = ({
               },
             ]}
           >
+            {isPinned && (
+              <View style={{ 
+                flexDirection: 'row', alignItems: 'center', 
+                marginBottom: 4, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)',
+                opacity: 0.8
+              }}>
+                <Text style={{ fontSize: 10, marginRight: 4 }}>📌</Text>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: bubbleText, textTransform: 'uppercase' }}>Ghim tin nhắn</Text>
+              </View>
+            )}
             {renderRepliedContext()}
             {renderContent()}
           </View>

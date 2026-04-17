@@ -6,7 +6,7 @@ import { useEffect } from 'react';
  * - read (đã đọc)
  * - delete-for-me (xóa phía mình)
  */
-const useChatSocket = ({ socket, conversation, currentUserId, setMessages }) => {
+const useChatSocket = ({ socket, conversation, currentUserId, setMessages, onPinnedMessagesChange }) => {
   useEffect(() => {
     if (!socket) return;
 
@@ -46,16 +46,27 @@ const useChatSocket = ({ socket, conversation, currentUserId, setMessages }) => 
       setMessages(prev => prev.filter(m => (m._id || m.id)?.toString() !== messageId));
     };
 
+    // ── Pin/Unpin ─────────────────────────────────────────────
+    const handlePinSync = (data) => {
+      const { conversationId: cid, pinnedMessages: newPins } = data;
+      if (convId && cid !== convId) return;
+      onPinnedMessagesChange?.(newPins);
+    };
+
     socket.on('chat:message-reaction',        handleReaction);
     socket.on('chat:message-read',            handleRead);
     socket.on('chat:message-deleted-for-me',  handleDeleteForMeSync);
+    socket.on('chat:pin-message',             handlePinSync);
+    socket.on('chat:unpin-message',           handlePinSync);
 
     return () => {
       socket.off('chat:message-reaction',        handleReaction);
       socket.off('chat:message-read',            handleRead);
       socket.off('chat:message-deleted-for-me',  handleDeleteForMeSync);
+      socket.off('chat:pin-message',             handlePinSync);
+      socket.off('chat:unpin-message',           handlePinSync);
     };
-  }, [socket, conversation?.id, conversation?._id, currentUserId, setMessages]);
+  }, [socket, conversation?.id, conversation?._id, currentUserId, setMessages, onPinnedMessagesChange]);
 };
 
 export default useChatSocket;

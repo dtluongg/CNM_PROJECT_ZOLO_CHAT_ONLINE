@@ -76,6 +76,13 @@ const messageApi = {
   // fromMessageId: snapshot lastReadMessageId lúc mở màn chat (trước markAsRead)
   getAiSummary: (conversationId, fromMessageId = null) =>
     apiClient.post(`/messages/${conversationId}/aiSummary`, { fromMessageId }),
+
+  // ── Ghim tin nhắn ──────────────────────────────────────────────────
+  pinMessage: (conversationId, messageId) =>
+    apiClient.post(`/conversations/${conversationId}/pin/${messageId}`),
+
+  unpinMessage: (conversationId, messageId) =>
+    apiClient.post(`/conversations/${conversationId}/unpin/${messageId}`),
 };
 
 export default messageApi;

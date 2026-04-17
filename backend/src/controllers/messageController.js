@@ -409,11 +409,23 @@ const revokeMessage = async (req, res) => {
         await message.save();
 
         // ── Cập nhật lastMessage của conversation nếu cần ─────────────
-        const conversation = await Conversation.findById(message.conversationId);
-        if (conversation && conversation.lastMessageId?.toString() === messageId) {
-            await Conversation.findByIdAndUpdate(message.conversationId, {
-                lastMessagePreview: '[Tin nhắn đã được thu hồi]'
-            });
+        const conversationId = message.conversationId;
+        const conversation = await Conversation.findById(conversationId);
+        let pinnedChanged = false;
+
+        if (conversation) {
+            if (conversation.lastMessageId?.toString() === messageId) {
+                conversation.lastMessagePreview = '[Tin nhắn đã được thu hồi]';
+            }
+
+            // Tự động bỏ ghim nếu tin nhắn bị thu hồi
+            const initialPinnedLength = conversation.pinnedMessages.length;
+            conversation.pinnedMessages = conversation.pinnedMessages.filter(p => p.messageId.toString() !== messageId);
+            if (conversation.pinnedMessages.length !== initialPinnedLength) {
+                pinnedChanged = true;
+            }
+
+            await conversation.save();
         }
 
         // ── Phát real-time tới tất cả thành viên ─────────────────────
@@ -424,10 +436,18 @@ const revokeMessage = async (req, res) => {
 
         const io = getIO();
         allMembers.forEach(({ userId: memberId }) => {
-            io.to(`user:${memberId.toString()}`).emit('chat:message-revoked', {
+            const memberSocketId = `user:${memberId.toString()}`;
+            io.to(memberSocketId).emit('chat:message-revoked', {
                 conversationId: message.conversationId,
                 messageId: message._id,
             });
+
+            if (pinnedChanged) {
+                io.to(memberSocketId).emit('chat:unpin-message', {
+                    conversationId: message.conversationId,
+                    pinnedMessages: conversation.pinnedMessages
+                });
+            }
         });
 
         return res.status(200).json({ message: 'Thu hồi tin nhắn thành công', data: { _id: message._id, revoked: true } });

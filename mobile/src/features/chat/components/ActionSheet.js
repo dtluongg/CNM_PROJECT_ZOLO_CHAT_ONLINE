@@ -29,6 +29,9 @@ const ActionSheet = ({
   onDelete,
   onForward,
   onReply,
+  onPin,
+  onUnpin,
+  isPinned,
   THEME,
   styles,
 }) => {
@@ -59,10 +62,10 @@ const ActionSheet = ({
       show: msg.type === 'text' && !isRevoked,
     },
     {
-      icon: <Feather name="bookmark" size={20} color={THEME.textPrimary} />,
-      label: 'Ghim tin nhắn',
-      action: 'pin',
-      show: true,
+      icon: <Feather name="bookmark" size={20} color={isPinned ? '#faa61a' : THEME.textPrimary} />,
+      label: isPinned ? 'Bỏ ghim' : 'Ghim tin nhắn',
+      action: isPinned ? 'unpin' : 'pin',
+      show: !isRevoked,
     },
     {
       icon: <MaterialCommunityIcons name="cancel" size={20} color="#ed4245" />,
@@ -131,6 +134,8 @@ const ActionSheet = ({
                   if (a.action === 'edit') onEdit(msg);
                   if (a.action === 'delete') onDelete(msg);
                   if (a.action === 'forward') onForward(msg);
+                  if (a.action === 'pin') onPin(msg);
+                  if (a.action === 'unpin') onUnpin(msg._id || msg.id);
                   onClose();
                 }}
                 style={styles.sheetAction}

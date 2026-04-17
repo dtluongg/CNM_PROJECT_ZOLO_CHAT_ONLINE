@@ -18,12 +18,14 @@ import RecordingBar from '../components/RecordingBar';
 import EmojiPicker from '../components/EmojiPicker';
 import ActionSheet from '../components/ActionSheet';
 import InfoPanel from '../components/InfoPanel';
+import PinLimitModal from '../components/PinLimitModal';
 import ForwardModal from '../components/ForwardModal';
 import ReadByModal from '../components/ReadByModal';
 import ImagePreviewModal from '../components/ImagePreviewModal';
 import SystemMessageBubble from '../components/SystemMessageBubble';
 import UnreadDivider from '../components/UnreadDivider';
 import AiSummaryCard from '../components/AiSummaryCard';
+import PinnedBar from '../components/PinnedBar';
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import useMessages from '../hooks/useMessages';
 import useSocket from '../hooks/useSocket';
@@ -62,6 +64,11 @@ export default function MessageScreen({ route, navigation }) {
   const [editingMessage, setEditingMessage] = useState(null);
   const [replyingMessage, setReplyingMessage] = useState(null);
   const [reactionTypes, setReactionTypes] = useState([]);
+  const [pinnedMessages, setPinnedMessages] = useState(conversation.pinnedMessages || []);
+
+  useEffect(() => {
+    setPinnedMessages(conversation.pinnedMessages || []);
+  }, [conversation.id]);
 
   // State các modal
   const [actionMsg, setActionMsg] = useState(null);
@@ -73,6 +80,8 @@ export default function MessageScreen({ route, navigation }) {
 
   // State info panel (modal 3 chấm)
   const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [showPinLimitModal, setShowPinLimitModal] = useState(false);
+  const [pendingPinMsgId, setPendingPinMsgId] = useState(null);
   const [infoTab, setInfoTab] = useState('info');
   const [mediaData, setMediaData] = useState({ images: [], files: [] });
   const [loadingMedia, setLoadingMedia] = useState(false);
@@ -123,6 +132,7 @@ export default function MessageScreen({ route, navigation }) {
     onEdited: (message) => msgHook.editMessage(message),
     onRead: (data) => msgHook.markRead(data),
     onDeletedForMe: (messageId) => msgHook.deleteMessage(messageId),
+    onPinnedMessagesChange: (newPins) => setPinnedMessages(newPins),
   });
 
   // ── Setup khi mount ─────────────────────────────────────────────────────
@@ -365,6 +375,69 @@ export default function MessageScreen({ route, navigation }) {
     }
   };
 
+  const handlePin = async (msg) => {
+    try {
+      const mId = msg._id || msg.id;
+      await messageApi.pinMessage(conversation.id, mId.toString());
+    } catch (err) {
+      if (err.response?.status === 400 && conversation.pinnedMessages?.length >= 3) {
+        setPendingPinMsgId(msg._id || msg.id);
+        setShowPinLimitModal(true);
+      } else {
+        Alert.alert('Lỗi', err.response?.data?.message || 'Không thể ghim tin nhắn');
+      }
+    }
+  };
+
+  const handleConfirmReplacePin = async (selectedIndex) => {
+    try {
+      const pinToReplace = conversation.pinnedMessages[selectedIndex];
+      const oldMsgId = pinToReplace.messageId._id || pinToReplace.messageId.id;
+      
+      // Bỏ ghim cái cũ
+      await messageApi.unpinMessage(conversation.id, oldMsgId.toString());
+      // Ghim cái mới
+      await messageApi.pinMessage(conversation.id, pendingPinMsgId.toString());
+      
+      setShowPinLimitModal(false);
+      setPendingPinMsgId(null);
+    } catch (err) {
+      console.error('handleConfirmReplacePin error:', err);
+      Alert.alert('Lỗi', 'Không thể thay thế tin nhắn ghim');
+    }
+  };
+
+  const handleUnpin = (mId) => {
+    Alert.alert(
+      'Bỏ ghim',
+      'Bạn có chắc muốn bỏ ghim nội dung này không?',
+      [
+        { text: 'Không', style: 'cancel' },
+        { 
+          text: 'Bỏ ghim', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await messageApi.unpinMessage(conversation.id, mId);
+            } catch (err) {
+              Alert.alert('Lỗi', err.response?.data?.message || 'Không thể bỏ ghim tin nhắn');
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const handleJumpToMessage = (targetId) => {
+    if (!targetId) return;
+    const index = msgHook.messages.findIndex(m => (m._id || m.id)?.toString() === targetId.toString());
+    if (index !== -1) {
+      flatRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    } else {
+      Alert.alert('Thông báo', 'Tin nhắn không nằm trong lịch sử hiển thị hiện tại');
+    }
+  };
+
   // ── Bắt đầu chỉnh sửa tin nhắn ─────────────────────────────────────────
   const handleStartEdit = (msg) => {
     setEditingMessage(msg);
@@ -536,9 +609,23 @@ export default function MessageScreen({ route, navigation }) {
         </View>
       </View>
 
+      <PinnedBar 
+        pinnedMessages={pinnedMessages}
+        onJump={handleJumpToMessage}
+        onUnpin={handleUnpin}
+      />
+
       {/* ── Body: danh sách tin nhắn + thanh input ────────────────────────── */}
       <View style={{ flex: 1 }}>
-        <FlatList
+        <PinLimitModal 
+        isOpen={showPinLimitModal}
+        onClose={() => { setShowPinLimitModal(false); setPendingPinMsgId(null); }}
+        pinnedMessages={conversation.pinnedMessages || []}
+        onConfirm={handleConfirmReplacePin}
+        THEME={THEME}
+      />
+
+      <FlatList
           ref={flatRef}
           data={displayItems}
           keyExtractor={(item) => item.key}
@@ -646,6 +733,9 @@ export default function MessageScreen({ route, navigation }) {
                 styles={styles}
                 onImagePress={(url) => setPreviewImage(url)}
                 onFilePress={(url, fileName) => openFile(url, fileName)}
+                onPin={handlePin}
+                onUnpin={handleUnpin}
+                isPinned={pinnedMessages.some(p => (p.messageId?._id || p.messageId?.id || p.messageId)?.toString() === (item.msg?._id || item.msg?.id)?.toString())}
               />
             );
           }}
@@ -797,6 +887,9 @@ export default function MessageScreen({ route, navigation }) {
         onEdit={handleStartEdit}
         onReply={handleReply}
         onDelete={handleDeleteForMe}
+        onPin={handlePin}
+        onUnpin={handleUnpin}
+        isPinned={actionMsg ? pinnedMessages.some(p => (p.messageId?._id || p.messageId?.id || p.messageId)?.toString() === (actionMsg?._id || actionMsg?.id)?.toString()) : false}
         onForward={(msg) => { setForwardingMsg(msg); setShowForwardModal(true); }}
         THEME={THEME}
         styles={styles}

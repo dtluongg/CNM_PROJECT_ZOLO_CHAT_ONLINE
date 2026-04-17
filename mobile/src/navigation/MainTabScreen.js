@@ -42,6 +42,7 @@ const mapConv = (item) => {
     // ── Cần cho AI Summary feature ──────────────────────────────────
     myMembership: item.myMembership || null,   // có lastReadMessageId, unreadCount
     aiSummary:    item.myMembership?.aiSummary || null,  // summary đã lưu trong DB
+    pinnedMessages: item.pinnedMessages || [],
   };
 };
 

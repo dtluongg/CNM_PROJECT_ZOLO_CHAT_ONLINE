@@ -66,6 +66,7 @@ const pickConversationFields = (conversation) => ({
     lastMessagePreview: conversation.lastMessagePreview,
     lastMessageTime: conversation.lastMessageTime,
     isLocked: conversation.isLocked,
+    pinnedMessages: conversation.pinnedMessages || [],
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
 });
@@ -512,6 +513,11 @@ const listMyConversations = async (req, res, next) => {
             .sort({ lastMessageTime: -1, updatedAt: -1 })
             .populate('createdBy', '_id displayName avatar')
             .populate('lastMessageId', '_id senderId content type createdAt')
+            .populate({
+                path: 'pinnedMessages.messageId',
+                select: '_id senderId content type payload createdAt revoked',
+                populate: { path: 'senderId', select: 'displayName avatar' }
+            })
             .lean();
 
         const dmDisplayMap = await getDmDisplayInfo(
@@ -579,6 +585,11 @@ const getConversationById = async (req, res, next) => {
         const conversation = await Conversation.findById(conversationId)
             .populate('createdBy', '_id displayName avatar')
             .populate('lastMessageId', '_id senderId content type createdAt')
+            .populate({
+                path: 'pinnedMessages.messageId',
+                select: '_id senderId content type payload createdAt revoked',
+                populate: { path: 'senderId', select: 'displayName avatar' }
+            })
             .lean();
 
         if (!conversation) {
@@ -794,6 +805,131 @@ const deleteConversationForMe = async (req, res, next) => {
     }
 };
 
+// API ghim tin nhắn
+// Policy: Tất cả thành viên đều có quyền ghim. Tối đa 3 tin nhắn/conversation.
+const pinMessage = async (req, res, next) => {
+    try {
+        const userId = getCurrentUserId(req);
+        const { id, messageId } = req.params;
+        const conversationId = id;
+
+        ensureValidObjectId(conversationId, 'conversationId');
+        ensureValidObjectId(messageId, 'messageId');
+
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation) {
+            return res.status(404).json({ message: 'Không tìm thấy cuộc trò chuyện' });
+        }
+
+        await requireConversationMember(conversationId, userId);
+
+        const Message = require('../models/messageModel');
+        const message = await Message.findOne({ _id: messageId, conversationId });
+        if (!message) {
+            return res.status(404).json({ message: 'Tin nhắn không tồn tại hoặc không thuộc cuộc trò chuyện này' });
+        }
+
+        // Kiểm tra giới hạn 3 tin nhắn
+        if (conversation.pinnedMessages.length >= 3) {
+            return res.status(400).json({ message: 'Đã đạt giới hạn ghim tối đa (3 tin nhắn). Vui lòng bỏ ghim tin cũ trước khi ghim mới.' });
+        }
+
+        // Kiểm tra tin nhắn đã được ghim chưa
+        const isAlreadyPinned = conversation.pinnedMessages.some(p => p.messageId.toString() === messageId);
+        if (isAlreadyPinned) {
+            return res.status(400).json({ message: 'Tin nhắn này đã được ghim trước đó' });
+        }
+
+        // Thêm vào danh sách ghim
+        conversation.pinnedMessages.push({
+            messageId,
+            pinnedBy: userId,
+            pinnedAt: new Date()
+        });
+
+        await conversation.save();
+
+        // Populate để trả về FE đầy đủ thông tin nội dung tin nhắn ghim
+        await conversation.populate({
+            path: 'pinnedMessages.messageId',
+            select: 'senderId content type payload createdAt revoked',
+            populate: { path: 'senderId', select: 'displayName avatar' }
+        });
+
+        // Phát socket tới mọi người
+        const { getIO } = require('../socket/socketManager');
+        const io = getIO();
+        const allMembers = await ConversationMember.find({ conversationId, leftAt: null }, { userId: 1 });
+        allMembers.forEach(({ userId: memberId }) => {
+            io.to(`user:${memberId.toString()}`).emit('chat:pin-message', {
+                conversationId,
+                pinnedMessages: conversation.pinnedMessages
+            });
+        });
+
+        return res.status(200).json({
+            message: 'Ghim tin nhắn thành công',
+            data: conversation.pinnedMessages
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// API bỏ ghim tin nhắn
+const unpinMessage = async (req, res, next) => {
+    try {
+        const userId = getCurrentUserId(req);
+        const { id, messageId } = req.params;
+        const conversationId = id;
+
+        ensureValidObjectId(conversationId, 'conversationId');
+        ensureValidObjectId(messageId, 'messageId');
+
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation) {
+            return res.status(404).json({ message: 'Không tìm thấy cuộc trò chuyện' });
+        }
+
+        await requireConversationMember(conversationId, userId);
+
+        // Xóa khỏi danh sách ghim
+        const initialLength = conversation.pinnedMessages.length;
+        conversation.pinnedMessages = conversation.pinnedMessages.filter(p => p.messageId.toString() !== messageId);
+        
+        if (conversation.pinnedMessages.length === initialLength) {
+            return res.status(404).json({ message: 'Tin nhắn không nằm trong danh sách ghim' });
+        }
+
+        await conversation.save();
+
+        // Populate lại sau khi xóa
+        await conversation.populate({
+            path: 'pinnedMessages.messageId',
+            select: 'senderId content type payload createdAt revoked',
+            populate: { path: 'senderId', select: 'displayName avatar' }
+        });
+
+        // Phát socket tới mọi người
+        const { getIO } = require('../socket/socketManager');
+        const io = getIO();
+        const allMembers = await ConversationMember.find({ conversationId, leftAt: null }, { userId: 1 });
+        allMembers.forEach(({ userId: memberId }) => {
+            io.to(`user:${memberId.toString()}`).emit('chat:unpin-message', {
+                conversationId,
+                pinnedMessages: conversation.pinnedMessages
+            });
+        });
+
+        return res.status(200).json({
+            message: 'Bỏ ghim tin nhắn thành công',
+            data: conversation.pinnedMessages
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createDmConversationEndpoint,
     createGroupConversationEndpoint,
@@ -804,4 +940,6 @@ module.exports = {
     setConversationLock,
     setConversationArchived,
     deleteConversationForMe,
+    pinMessage,
+    unpinMessage
 };

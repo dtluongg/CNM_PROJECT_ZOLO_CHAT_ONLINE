@@ -21,6 +21,7 @@ export const mapConversationItem = (item, dmOverrides) => {
     memberCount: item.totalMembers,
     otherUserId: isDm ? (item.otherUserId || other?._id?.toString() || null) : null,
     myMembership: item.myMembership || null,   // lastReadMessageId, unreadCount, aiSummary
+    pinnedMessages: item.pinnedMessages || [],
     // Shortcut tiện dùng trong ChatArea
     aiSummary: item.myMembership?.aiSummary || null,
     raw:         item,

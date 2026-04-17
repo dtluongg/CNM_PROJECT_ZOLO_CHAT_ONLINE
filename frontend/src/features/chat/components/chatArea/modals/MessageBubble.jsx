@@ -29,6 +29,9 @@ const MessageBubble = ({
   conversationType,
   currentUserId,
   onAvatarClick,
+  onPin,
+  onUnpin,
+  isPinned,
 }) => {
   const observerRef    = useRef(null);
   const menuRef        = useRef(null);
@@ -241,21 +244,31 @@ const MessageBubble = ({
 
          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexDirection: isMine ? 'row-reverse' : 'row' }}>
            {/* Bubble */}
-           <div style={{
-             background: isMine ? 'var(--bubble-self)' : 'var(--bubble-other)',
-             color: isMine ? '#fff' : 'var(--text-primary)',
-             padding: isMobile ? '9px 14px' : '8px 14px',
-             borderRadius: 20,
-             fontSize: isMobile ? 15 : 14, lineHeight: 1.5,
-             wordBreak: 'break-word',
-             boxShadow: isBeingRepliedTo ? '0 0 0 2px var(--accent), 0 4px 12px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.12)',
-             maxWidth: '100%',
-             transform: isBeingRepliedTo ? 'scale(1.02)' : 'scale(1)',
-             transition: 'all 0.2s ease-out',
-             position: 'relative'
-           }}>
-            {renderRepliedContext()}
-            {renderContent()}
+            <div style={{
+              background: isMine ? 'var(--bubble-self)' : 'var(--bubble-other)',
+              color: isMine ? '#fff' : 'var(--text-primary)',
+              padding: isMobile ? '9px 14px' : '8px 14px',
+              borderRadius: 20,
+              fontSize: isMobile ? 15 : 14, lineHeight: 1.5,
+              wordBreak: 'break-word',
+              boxShadow: isBeingRepliedTo ? '0 0 0 2px var(--accent), 0 4px 12px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.12)',
+              maxWidth: '100%',
+              transform: isBeingRepliedTo ? 'scale(1.02)' : 'scale(1)',
+              transition: 'all 0.2s ease-out',
+              position: 'relative'
+            }}>
+             {isPinned && (
+               <div style={{ 
+                 display: 'flex', alignItems: 'center', gap: 6, 
+                 marginBottom: 4, paddingBottom: 4, borderBottom: '1px solid rgba(255,255,255,0.1)',
+                 opacity: 0.8, fontSize: 10, fontWeight: 700, textTransform: 'uppercase'
+               }}>
+                 <span>📌</span>
+                 <span>Ghim tin nhắn</span>
+               </div>
+             )}
+             {renderRepliedContext()}
+             {renderContent()}
 
             {/* Standalone Reaction Trigger (Web Hover) */}
             {hover && !isMobile && !(msg.revoked || msg.recalled) && (
@@ -409,6 +422,18 @@ const MessageBubble = ({
                   ✏️ Chỉnh sửa tin nhắn
                 </div>
               )}
+              {!(msg.revoked || msg.recalled) && (
+                <div 
+                  onClick={() => { isPinned ? onUnpin(msg._id || msg.id) : onPin(msg._id || msg.id); setOpenMenuId(null); }}
+                  style={{ 
+                    padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#000',
+                    display: 'flex', alignItems: 'center', gap: 10
+                  }}
+                >
+                  <span style={{ width: 18, textAlign: 'center' }}>📌</span>
+                  <span>{isPinned ? 'Bỏ ghim' : 'Ghim tin nhắn'}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -484,8 +509,12 @@ const MessageBubble = ({
               { icon: <Reply size={20} />, label: 'Trả lời', onClick: () => { onReply(msg); setShowActions(false); } },
               { icon: <CornerUpRight size={20} />, label: 'Chuyển tiếp', onClick: () => { onForward(msg); setShowActions(false); } },
               { icon: <Copy size={20} />, label: 'Sao chép' },
-              { icon: <Pin size={20} />, label: 'Ghim tin nhắn' },
-              { icon: <Trash2 size={20} />, label: 'Xóa tin nhắn', danger: true },
+              { 
+                icon: <Pin size={20} />, 
+                label: isPinned ? 'Bỏ ghim' : 'Ghim tin nhắn',
+                onClick: () => { isPinned ? onUnpin(msg._id || msg.id) : onPin(msg._id || msg.id); setShowActions(false); }
+              },
+              { icon: <Trash2 size={20} />, label: 'Xóa tin nhắn', danger: true, onClick: () => { onDelete(msg); setShowActions(false); } },
             ].map(action => (
               <button
                 key={action.label}

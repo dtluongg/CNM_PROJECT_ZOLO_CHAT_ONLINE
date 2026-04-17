@@ -98,6 +98,17 @@ const useSocket = (token, conversationId, currentUserId, handlers) => {
       handlersRef.current.onDeletedForMe?.(messageId);
     });
 
+    // ── Ghim/Bỏ ghim tin nhắn ─────────────────────────────────────────
+    socket.on('chat:pin-message', (data) => {
+      if (data.conversationId !== conversationId) return;
+      handlersRef.current.onPinnedMessagesChange?.(data.pinnedMessages);
+    });
+
+    socket.on('chat:unpin-message', (data) => {
+      if (data.conversationId !== conversationId) return;
+      handlersRef.current.onPinnedMessagesChange?.(data.pinnedMessages);
+    });
+
     // Rời phòng và ngắt kết nối khi unmount
     return () => {
       socket.emit('chat:leave', { conversationId });

@@ -11,6 +11,8 @@ const {
     setConversationLock,
     setConversationArchived,
     deleteConversationForMe,
+    pinMessage,
+    unpinMessage,
 } = require('../controllers/conversationController');
 
 const {
@@ -71,5 +73,9 @@ router.patch('/:id/transfer-owner', transferOwner);
 
 // Endpoint chuẩn để cập nhật role + quyền đặc biệt
 router.patch('/:id/members/:userId/role', updateMember);
+
+// Ghim/Bỏ ghim tin nhắn
+router.post('/:id/pin/:messageId', pinMessage);
+router.post('/:id/unpin/:messageId', unpinMessage);
 
 module.exports = router;

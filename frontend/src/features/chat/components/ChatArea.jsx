@@ -10,8 +10,10 @@ import Avatar from './chatArea/ui/Avatar';
 import DateDivider from './chatArea/ui/DateDivider';
 import TypingIndicator from './chatArea/ui/TypingIndicator';
 import SystemMessage from './chatArea/ui/SystemMessage';
+import PinnedBar from './chatArea/ui/PinnedBar';
 // ── Message Bubble ─────────────────────────────────────
 import MessageBubble from './chatArea/modals/MessageBubble';
+import PinLimitModal from './chatArea/modals/PinLimitModal';
 // ── AI Summary components ──────────────────────────────────────────────
 import UnreadDivider from './chatArea/ui/UnreadDivider';
 import AiSummaryCard from './chatArea/ui/AiSummaryCard';
@@ -19,6 +21,7 @@ import AiSummaryCard from './chatArea/ui/AiSummaryCard';
 // ── Modals ─────────────────────────────────────────────
 import ForwardModal from './chatArea/modals/ForwardModal';
 import { ReactionListModal, ReadListModal } from './chatArea/modals/ReactionModal';
+import UnpinConfirmModal from './chatArea/modals/UnpinConfirmModal';
 
 // ── Custom Hooks ───────────────────────────────────────
 import useChatSocket from './chatArea/hooks/useChatSocket';
@@ -70,6 +73,16 @@ export default function ChatArea({
   const [highlightedId,   setHighlightedId]   = useState(null);
   const [forwardingMsg,   setForwardingMsg]   = useState(null);
   const [showForwardModal, setShowForwardModal] = useState(false);
+  const [pinnedMessages, setPinnedMessages] = useState(conversation?.pinnedMessages || []);
+  const [showPinLimitModal, setShowPinLimitModal] = useState(false);
+  const [pendingPinMsgId, setPendingPinMsgId] = useState(null);
+  const [showUnpinModal, setShowUnpinModal] = useState(false);
+  const [messageIdToUnpin, setMessageIdToUnpin] = useState(null);
+
+  // Sync pinned messages khi đổi conversation
+  useEffect(() => {
+    setPinnedMessages(conversation?.pinnedMessages || []);
+  }, [conversation?.id]);
 
   // ── Snapshot lastReadMessageId tại thời điểm mở conversation ────────
   // Phải capture inline (không dùng useEffect) để lấy giá trị trước khi markAsRead chạy
@@ -91,7 +104,13 @@ export default function ChatArea({
   }, []);
 
   // ── Socket listeners ───────────────────────────────────────
-  useChatSocket({ socket, conversation, currentUserId, setMessages });
+  useChatSocket({ 
+    socket, 
+    conversation, 
+    currentUserId, 
+    setMessages, 
+    onPinnedMessagesChange: (newPins) => setPinnedMessages(newPins) 
+  });
 
   // ── Auto scroll ────────────────────────────────────────────
   const { bottomRef } = useScrollBehavior({ messages, currentUserId });
@@ -151,6 +170,53 @@ export default function ChatArea({
 
   const handleImageLoad = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+  };
+
+  const handlePin = async (msgId) => {
+    try {
+      await messageApi.pinMessage(conversation.id, msgId);
+    } catch (err) {
+      if (err?.response?.status === 400 && pinnedMessages.length >= 3) {
+        setPendingPinMsgId(msgId);
+        setShowPinLimitModal(true);
+      } else {
+        window.alert(err?.response?.data?.message || 'Không thể ghim tin nhắn');
+      }
+    }
+  };
+
+  const handleConfirmReplacePin = async (selectedIndex) => {
+    try {
+      const pinToReplace = pinnedMessages[selectedIndex];
+      const oldMsgId = pinToReplace.messageId._id || pinToReplace.messageId.id || pinToReplace.messageId;
+      
+      // Bỏ ghim cái cũ trước
+      await messageApi.unpinMessage(conversation.id, oldMsgId);
+      // Ghim cái mới
+      await messageApi.pinMessage(conversation.id, pendingPinMsgId);
+      
+      setShowPinLimitModal(false);
+      setPendingPinMsgId(null);
+    } catch (err) {
+      window.alert('Lỗi khi cập nhật danh sách ghim');
+    }
+  };
+
+  const handleUnpin = (msgId) => {
+    console.log('Unpin request for msgId:', msgId);
+    setMessageIdToUnpin(msgId);
+    setShowUnpinModal(true);
+  };
+
+  const confirmUnpin = async () => {
+    if (!messageIdToUnpin) return;
+    try {
+      await messageApi.unpinMessage(conversation.id, messageIdToUnpin);
+      setShowUnpinModal(false);
+      setMessageIdToUnpin(null);
+    } catch (err) {
+      window.alert(err?.response?.data?.message || 'Không thể bỏ ghim tin nhắn');
+    }
   };
 
   // ── Không có conversation ──────────────────────────────────
@@ -358,6 +424,26 @@ export default function ChatArea({
         </div>
       </div>
 
+      {/* Pinned Messages Bar */}
+      <PinnedBar 
+        pinnedMessages={pinnedMessages} 
+        onJump={handleJumpToMessage}
+        onUnpin={handleUnpin}
+      />
+
+      <PinLimitModal 
+        isOpen={showPinLimitModal}
+        onClose={() => { setShowPinLimitModal(false); setPendingPinMsgId(null); }}
+        pinnedMessages={pinnedMessages}
+        onConfirm={handleConfirmReplacePin}
+      />
+
+      <UnpinConfirmModal 
+        isOpen={showUnpinModal}
+        onClose={() => { setShowUnpinModal(false); setMessageIdToUnpin(null); }}
+        onConfirm={confirmUnpin}
+      />
+
       <div style={{
         flex: 1, overflowY: 'auto', overflowX: 'hidden',
         scrollbarWidth: 'thin', scrollbarColor: 'var(--bg-hover) transparent',
@@ -432,6 +518,9 @@ export default function ChatArea({
                 currentUserId={currentUserId}
                 onAvatarClick={onViewProfile}
                 onImageLoad={handleImageLoad}
+                onPin={handlePin}
+                onUnpin={handleUnpin}
+                isPinned={pinnedMessages.some(p => (p.messageId?._id || p.messageId?.id || p.messageId)?.toString() === (item.msg?._id || item.msg?.id)?.toString())}
               />
             </div>
           );
