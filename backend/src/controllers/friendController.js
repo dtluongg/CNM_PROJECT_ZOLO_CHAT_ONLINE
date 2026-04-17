@@ -2,6 +2,7 @@ const FriendRequest = require('../models/friendRequestModel');
 const Friendship = require('../models/friendshipModel');
 const User = require('../models/userModel');
 const mongoose = require('mongoose');
+const { createAndEmitNotification } = require('../services/notificationService');
 
 const getCurrentUserId = (req) => (req.user?._id || req.user?.id || '').toString();
 
@@ -173,6 +174,19 @@ const sendFriendRequest = async (req, res, next) => {
 
         await newRequest.save();
 
+        try {
+            await createAndEmitNotification({
+                userId: toUserId,
+                actorId: fromUserId,
+                type: 'friend_request',
+                title: 'Bạn có lời mời kết bạn mới',
+                body: `${req.user?.displayName || 'Ai đó'} đã gửi lời mời kết bạn cho bạn`,
+                friendRequestId: newRequest._id,
+            });
+        } catch (notifyErr) {
+            console.error('friend request notification error:', notifyErr.message);
+        }
+
         res.status(201).json({
             success: true,
             message: "Gửi lời mời kết bạn thành công",
@@ -246,6 +260,22 @@ const acceptFriendRequest = async (req, res, next) => {
             message: "Chấp nhận kết bạn thành công",
             data: friendship
         });
+
+        try {
+            const requesterId = friendship.userId1.toString() === currentUserId
+                ? friendship.userId2
+                : friendship.userId1;
+
+            await createAndEmitNotification({
+                userId: requesterId,
+                actorId: currentUserId,
+                type: 'friend_accepted',
+                title: 'Lời mời kết bạn đã được chấp nhận',
+                body: `${req.user?.displayName || 'Ai đó'} đã chấp nhận lời mời kết bạn của bạn`,
+            });
+        } catch (notifyErr) {
+            console.error('friend accepted notification error:', notifyErr.message);
+        }
     } catch (error) {
         next(error);
     } finally {
@@ -547,6 +577,32 @@ const getBlockedList = async (req, res, next) => {
     }
 };
 
+const getFriendStatus = async (req, res, next) => {
+    try {
+        const currentUserId = getCurrentUserId(req);
+        const { userId } = req.params;
+
+        ensureValidObjectId(userId, 'userId');
+
+        const { u1, u2 } = normalizeFriendPair(currentUserId, userId);
+        const friendship = await Friendship.findOne({ userId1: u1, userId2: u2 }).lean();
+
+        if (!friendship) {
+            return res.json({ success: true, data: { isFriend: false, iBlocked: false, theyBlockedMe: false } });
+        }
+
+        const iBlockedThem = friendship.isBlockedBy?.toString() === currentUserId;
+        const theyBlockedMe = !!(friendship.isBlockedBy && friendship.isBlockedBy.toString() !== currentUserId);
+
+        res.json({
+            success: true,
+            data: { isFriend: true, iBlocked: iBlockedThem, theyBlockedMe },
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     sendFriendRequest,
     acceptFriendRequest,
@@ -558,5 +614,6 @@ module.exports = {
     unfriend,
     updateNickname,
     blockFriend,
-    getBlockedList
+    getBlockedList,
+    getFriendStatus,
 }

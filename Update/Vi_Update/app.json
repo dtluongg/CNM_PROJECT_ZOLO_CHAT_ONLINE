@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Zolo Chat",
+    "icon": "./public/logo.png",
+    "slug": "chatapp-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "updates": {
+      "checkAutomatically": "never"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chatapp.mobile"
+    },
+    "android": {
+      "package": "com.chatapp.mobile",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
+      ]
+    },
+    "scheme": "chatapp",
+    "experiments": {
+      "typedRoutes": false
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép ZoloChat truy cập ảnh để đổi avatar và ảnh bìa."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép ZoloChat dùng camera để quét mã QR."
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.0.21"
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6ea44905-01b0-4a2b-91cc-b20ac5a746ee"
+      }
+    }
+  }
+}

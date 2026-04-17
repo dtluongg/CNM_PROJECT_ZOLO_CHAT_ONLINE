@@ -20,7 +20,7 @@ const onlineUsers = new Map();
 const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
-            origin:      ['http://localhost:5173', 'http://localhost:8081'],
+            origin:      ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:8081'],
             credentials: true,
         },
         // Tăng buffer cho video signaling (SDP có thể dài)
@@ -98,19 +98,27 @@ const initSocket = (httpServer) => {
 
         // Client yêu cầu danh sách online hiện tại (gọi 1 lần khi kết nối)
         socket.on('presence:subscribe', async () => {
-            // Lấy status của từng user đang online từ DB (hoặc User model)
+            // Lấy snapshot online từ Presence collection để tránh lệch giữa các tab/cửa sổ
             const onlineIds = [...onlineUsers.keys()];
             let statusMap = {};
             try {
-                const users = await userModel.find(
-                    { _id: { $in: onlineIds } },
-                    { _id: 1, status: 1, statusText: 1 }
+                const presences = await Presence.find(
+                    { userId: { $in: onlineIds } },
+                    { userId: 1, status: 1 }
                 ).lean();
-                users.forEach(u => {
-                    const st = u.status || 'online';
+
+                presences.forEach((presence) => {
+                    const st = presence.status || 'online';
                     // invisible users không xuất hiện trong danh sách online của người khác
-                    if (st !== 'invisible') {
-                        statusMap[u._id.toString()] = st;
+                    if (st !== 'invisible' && st !== 'offline') {
+                        statusMap[presence.userId.toString()] = st;
+                    }
+                });
+
+                // Fallback an toàn: nếu Presence chưa kịp ghi, vẫn coi là online khi socket đang nối
+                onlineIds.forEach((id) => {
+                    if (!statusMap[id]) {
+                        statusMap[id] = 'online';
                     }
                 });
             } catch (_) {

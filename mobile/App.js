@@ -8,6 +8,10 @@ import { LogBox } from 'react-native';
 import { AuthProvider } from './src/context/AuthContext';
 import { PresenceProvider } from './src/context/PresenceContext';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { CallProvider } from './src/features/call/CallContext';
+import IncomingCallScreen from './src/features/call/screens/IncomingCallScreen';
+import OutgoingCallScreen from './src/features/call/screens/OutgoingCallScreen';
+import ActiveCallScreen   from './src/features/call/screens/ActiveCallScreen';
 import AppNavigator from './src/navigation/AppNavigator';
 
 LogBox.ignoreLogs(['Text strings must be rendered']);
@@ -21,7 +25,12 @@ function App() {
       <AuthProvider>
         <ThemeProvider>
           <PresenceProvider>
-            <AppNavigator />
+            <CallProvider>
+              <AppNavigator />
+              <IncomingCallScreen />
+              <OutgoingCallScreen />
+              <ActiveCallScreen />
+            </CallProvider>
           </PresenceProvider>
         </ThemeProvider>
       </AuthProvider>

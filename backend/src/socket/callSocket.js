@@ -19,17 +19,108 @@
  *   (một bên) ──call:end──► Server ──call:ended──► cả hai
  * ─────────────────────────────────────────────────────────────────────────────
  */
-
+const getFullAvatarUrl = (avatar) => {
+    if (!avatar) return null;
+    // Nếu bạn dùng Cloudinary / S3 signed URL có expire, nên transform về version không expire hoặc permanent URL
+    // Ví dụ Cloudinary:
+    // return avatar.replace(/\/upload\//, '/upload/q_auto,f_auto/');
+    return avatar;
+};
 const Call       = require('../models/callModel');
 const userModel  = require('../models/userModel');
-
+const Message = require('../models/messageModel');
+const Conversation = require('../models/conversationModel');
+const ConversationMember = require('../models/conversationMemberModel');
+const { createAndEmitNotification } = require('../services/notificationService');
 // Thời gian chờ nhấc máy: 30 giây
 const RING_TIMEOUT_MS = 30_000;
 
 // callId (string) → NodeJS.Timeout  — timers cho auto-missed
 // Module-level: dùng chung cho mọi socket instance
 const callTimers = new Map();
+async function createCallSystemMessage(io, call, duration, finalStatus) {
+    try {
+        if (!call.conversationId) return;
+        const conv = await Conversation.findById(call.conversationId);
+        if (!conv || conv.type !== 'dm') return;
 
+        const icon = call.type === 'video' ? '📹' : '📞';
+        const [caller, callee] = await Promise.all([
+            userModel.findById(call.callerId).select('displayName avatar').lean(),
+            userModel.findById(call.calleeId).select('displayName avatar').lean(),
+        ]);
+        const callerAvatar = getFullAvatarUrl(caller?.avatar);
+        const calleeAvatar = getFullAvatarUrl(callee?.avatar);
+        let content;
+        if (finalStatus === 'missed') {
+            content = `${icon} Cuộc gọi nhỡ`;
+        } else if (finalStatus === 'rejected') {
+            content = `${icon} Cuộc gọi bị từ chối`;
+        } else {
+            const m = Math.floor(duration / 60);
+            const s = duration % 60;
+            const dur = m > 0 ? `${m} phút ${s} giây` : `${s} giây`;
+            content = `${icon} Cuộc gọi ${call.type === 'video' ? 'video' : 'thoại'} · ${dur}`;
+        }
+
+        const msg = await Message.create({
+            conversationId: conv._id,
+            senderId: call.callerId,
+            type: 'system',
+            content,
+            payload: {
+                event: 'call_ended',
+                callType: call.type,
+                duration,
+                status: finalStatus,
+                callId: call._id,
+
+                callerId: call.callerId.toString(),
+                calleeId: call.calleeId.toString(),
+
+                callerName: caller?.displayName || '?',
+                callerAvatar,
+                calleeName: callee?.displayName || '?',
+                calleeAvatar,
+            },
+        });
+
+        await Conversation.findByIdAndUpdate(conv._id, {
+            lastMessageId:      msg._id,
+            lastMessagePreview: content,
+            lastMessageTime:    msg.createdAt,
+        });
+
+        const formatted = {
+            _id: msg._id,
+            conversationId: conv._id.toString(),
+            senderId: call.callerId.toString(),
+            type: 'system',
+            content,
+            payload: msg.payload,
+            createdAt: msg.createdAt,
+
+            callerName: msg.payload.callerName,
+            callerAvatar: msg.payload.callerAvatar,
+            calleeName: msg.payload.calleeName,
+            calleeAvatar: msg.payload.calleeAvatar,
+
+            time: new Date(msg.createdAt).toLocaleTimeString('vi-VN', {
+                hour: '2-digit',
+                minute: '2-digit',
+            }),
+        };
+
+        [call.callerId.toString(), call.calleeId.toString()].forEach(uid => {
+            io.to(`user:${uid}`).emit('chat:new-message', {
+                conversationId: conv._id.toString(),
+                message:        formatted,
+            });
+        });
+    } catch (err) {
+        console.error('createCallSystemMessage error:', err);
+    }
+}
 // ─────────────────────────────────────────────────────────────────────────────
 //  Factory: được gọi 1 lần mỗi khi có socket kết nối mới
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,9 +153,22 @@ module.exports = (io, socket, onlineUsers) => {
 
             const callee = await userModel.findById(calleeId).select('displayName avatar');
             if (!callee) return ack?.({ error: 'Người dùng không tồn tại' });
+            const callerConvs = await ConversationMember.find({
+                userId: userId, leftAt: null,
+            }).distinct('conversationId');
 
+            const sharedMember = await ConversationMember.findOne({
+                conversationId: { $in: callerConvs },
+                userId:         calleeId,
+                leftAt:         null,
+            }).lean();
             // Tạo bản ghi cuộc gọi trong DB
-            const call   = await Call.create({ callerId: userId, calleeId, type });
+            const call = await Call.create({
+                callerId: userId,
+                calleeId,
+                type,
+                conversationId: sharedMember?.conversationId || null,
+            });
             const callId = call._id.toString();
 
             // Caller join call room để nhận call:answered và ICE candidates
@@ -93,6 +197,21 @@ module.exports = (io, socket, onlineUsers) => {
                 offer,
             });
 
+            try {
+                await createAndEmitNotification({
+                    userId: calleeId,
+                    actorId: userId,
+                    type: 'call_incoming',
+                    title: `Cuộc gọi ${type === 'video' ? 'video' : 'thoại'} đến`,
+                    body: `${socket.user.displayName || 'Ai đó'} đang gọi cho bạn`,
+                    callId: call._id,
+                    conversationId: call.conversationId,
+                    data: { callType: type },
+                });
+            } catch (notifyErr) {
+                console.error('call incoming notification error:', notifyErr.message);
+            }
+
             // Auto-timeout: 30s không nhấc → missed
             const timer = setTimeout(async () => {
                 try {
@@ -102,6 +221,21 @@ module.exports = (io, socket, onlineUsers) => {
                             status:  'missed',
                             endedAt: new Date(),
                         });
+
+                        try {
+                            await createAndEmitNotification({
+                                userId,
+                                actorId: calleeId,
+                                type: 'call_missed',
+                                title: 'Cuộc gọi nhỡ',
+                                body: `Bạn đã gọi ${callee.displayName || 'người dùng'} nhưng không có phản hồi`,
+                                callId: call._id,
+                                conversationId: call.conversationId,
+                            });
+                        } catch (notifyErr) {
+                            console.error('call missed notification error:', notifyErr.message);
+                        }
+
                         // Báo cả hai bên
                         io.to(`call:${callId}`).emit('call:timeout', { callId });
                         io.to(`user:${calleeId}`).emit('call:timeout', { callId });
@@ -202,6 +336,23 @@ module.exports = (io, socket, onlineUsers) => {
                 status:  'rejected',
                 endedAt: new Date(),
             });
+            await createCallSystemMessage(io, call, 0, 'rejected');
+
+            try {
+                await createAndEmitNotification({
+                    userId: call.callerId,
+                    actorId: userId,
+                    type: 'call_rejected',
+                    title: 'Cuộc gọi bị từ chối',
+                    body: `${socket.user.displayName || 'Người dùng'} đã từ chối cuộc gọi của bạn`,
+                    callId: call._id,
+                    conversationId: call.conversationId,
+                    data: { callType: call.type },
+                });
+            } catch (notifyErr) {
+                console.error('call rejected notification error:', notifyErr.message);
+            }
+
 
             // Thông báo caller qua call room (caller đang ở đó) và personal room (backup)
             socket.to(`call:${callId}`).emit('call:rejected', { callId, reason: 'rejected' });
@@ -264,7 +415,7 @@ module.exports = (io, socket, onlineUsers) => {
                 duration,
                 endedBy: userId,
             });
-
+            await createCallSystemMessage(io, call, duration, newStatus);
             socket.currentCallId = null;
 
             // Broadcast cho tất cả trong call room (bao gồm người gửi)
@@ -339,6 +490,7 @@ module.exports = (io, socket, onlineUsers) => {
                 duration,
                 endedBy: userId,
             });
+            await createCallSystemMessage(io, call, duration, call.status === 'calling' ? 'missed' : 'ended');
 
             // Thông báo peer còn lại (socket đã ngắt nên dùng io.to thay vì socket.to)
             socket.to(`call:${callId}`).emit('call:ended', {

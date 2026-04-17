@@ -1,9 +1,11 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { MessageCircle, Users, Cloud, Briefcase, Settings } from 'lucide-react';
+import { MessageCircle, Users, Cloud, Briefcase, Settings, Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 import ProfileSettings from '../features/user/components/ProfileSettings';
+import { useNotifications } from '../context/NotificationContext';
+import NotificationCenter from '../features/notifications/components/NotificationCenter';
 
 const getInitials = (name) => {
   if (!name) return '?';
@@ -16,6 +18,8 @@ const SidebarNav = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const [showSettings, setShowSettings] = useState(false);
+    const [showNotificationCenter, setShowNotificationCenter] = useState(false);
+    const { unreadCount } = useNotifications();
 
     // Kiểm tra tab hiện tại
     const isChat = location.pathname.startsWith('/chat');
@@ -37,7 +41,8 @@ const SidebarNav = () => {
                 alignItems: 'center', 
                 padding: '24px 0',
                 borderRight: '1px solid var(--border)',
-                zIndex: 50
+                zIndex: 50,
+                position: 'relative',
             }}
         >
             {/* User Avatar */}
@@ -68,7 +73,6 @@ const SidebarNav = () => {
                 <button 
                     onClick={() => handleNavigate('/chat')}
                     style={{
-                        position: 'relative',
                         width: 44, height: 44,
                         borderRadius: 12,
                         backgroundColor: isChat ? 'var(--bg-hover)' : 'transparent',
@@ -78,12 +82,32 @@ const SidebarNav = () => {
                     }}
                 >
                     <MessageCircle strokeWidth={isChat ? 2.5 : 2} size={24} />
-                    {/* Fake unread badge for UI replica */}
-                    <span style={{
-                        position: 'absolute', top: -2, right: -2,
-                        backgroundColor: '#ef4444', color: '#fff', fontSize: 10, fontWeight: 800,
-                        padding: '1px 5px', borderRadius: 10, border: '2px solid var(--bg-secondary)'
-                    }}>5+</span>
+                </button>
+
+                {/* Notification Center */}
+                <button
+                    onClick={() => setShowNotificationCenter((v) => !v)}
+                    style={{
+                        position: 'relative',
+                        width: 44, height: 44,
+                        borderRadius: 12,
+                        backgroundColor: showNotificationCenter ? 'var(--bg-hover)' : 'transparent',
+                        color: showNotificationCenter ? 'var(--accent)' : 'var(--text-muted)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                    }}
+                >
+                    <Bell strokeWidth={showNotificationCenter ? 2.5 : 2} size={24} />
+                    {unreadCount > 0 && (
+                        <span style={{
+                            position: 'absolute', top: -2, right: -2,
+                            backgroundColor: '#ef4444', color: '#fff', fontSize: 10, fontWeight: 800,
+                            padding: '1px 5px', borderRadius: 10, border: '2px solid var(--bg-secondary)',
+                            minWidth: 18, textAlign: 'center',
+                        }}>
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                    )}
                 </button>
 
                 {/* Danh bạ */}
@@ -142,6 +166,10 @@ const SidebarNav = () => {
             
             {/* Modal Settings */}
             {showSettings && <ProfileSettings onClose={() => setShowSettings(false)} />}
+            <NotificationCenter
+                open={showNotificationCenter}
+                onClose={() => setShowNotificationCenter(false)}
+            />
         </div>
     );
 };

@@ -3,6 +3,12 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { PresenceProvider } from './context/PresenceContext';
+import { NotificationProvider } from './context/NotificationContext';
+import { CallProvider } from './features/call/CallContext';
+import IncomingCallModal from './features/call/components/IncomingCallModal';
+import OutgoingCallScreen from './features/call/components/OutgoingCallScreen';
+import ActiveCallScreen from './features/call/components/ActiveCallScreen';
+import CallNotification from './features/call/components/CallNotification';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 import Signup from './features/auth/Signup';
@@ -17,6 +23,7 @@ import UserProfilePage from './features/user/UserProfilePage';
 import ChangePassword from './features/auth/ChangePassword';
 import FriendsPage from './features/friends/FriendsPage';
 import SidebarNav from './components/SidebarNav';
+import NotificationToast from './features/notifications/components/NotificationToast';
 
 // Các route có Sidebar bên trái kiểu AppShell (Zalo)
 const APP_SHELL_ROUTES = ['/chat', '/friends', '/user'];
@@ -39,7 +46,7 @@ const ThemeSyncHandler = () => {
 const Layout = ({ children }) => {
   const location = useLocation();
   const isAppShell = APP_SHELL_ROUTES.some((r) => location.pathname.startsWith(r));
-  
+
   if (isAppShell) {
     return (
       <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
@@ -69,8 +76,15 @@ const App = () => {
         <AuthProvider>
           <ThemeSyncHandler />
           <PresenceProvider>
-            <Layout>
-              <Routes>
+            <NotificationProvider>
+              <CallProvider>
+              <CallNotification />
+              <NotificationToast />
+              <IncomingCallModal />
+              <OutgoingCallScreen />
+              <ActiveCallScreen />
+              <Layout>
+                <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/signin" element={<Signin />} />
@@ -120,8 +134,10 @@ const App = () => {
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/complete-profile" element={<CompleteProfile />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Layout>
+                </Routes>
+              </Layout>
+              </CallProvider>
+            </NotificationProvider>
           </PresenceProvider>
         </AuthProvider>
       </ThemeProvider>

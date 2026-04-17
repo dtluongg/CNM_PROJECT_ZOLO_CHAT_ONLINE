@@ -13,8 +13,16 @@ const server = http.createServer(app);
 
 // ── MIDDLEWARE ──
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:8081'],
-    credentials: true,
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'https://localhost:5173',        // ← thêm
+    'http://192.168.88.135:5173',
+    'https://192.168.88.135:5173',   // ← thêm
+    'http://localhost:8081',
+    'http://192.168.88.135:8081',
+  ],
+  credentials: true,
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -34,6 +42,7 @@ const voiceRouter        = require('./src/routes/voiceRouter');
 const conversationRouter = require('./src/routes/conversationRouter');
 const messageRouter      = require('./src/routes/messageRouter');
 const reactionRouter     = require('./src/routes/reactionRouter');
+const notificationRouter = require('./src/routes/notificationRouter');
 
 
 app.use('/backend/api/users',         userRouter);
@@ -45,6 +54,7 @@ app.use('/backend/api/voice',         voiceRouter);
 app.use('/backend/api/conversations', conversationRouter);
 app.use('/backend/api/messages',      messageRouter);
 app.use('/backend/api/reactions',     reactionRouter);
+app.use('/backend/api/notifications', notificationRouter);
 
 
 // ── SOCKET ──
