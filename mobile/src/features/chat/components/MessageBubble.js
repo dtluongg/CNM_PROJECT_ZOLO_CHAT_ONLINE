@@ -87,12 +87,12 @@ const MessageBubble = ({
       <TouchableOpacity 
         activeOpacity={0.7}
         onPress={() => onJumpToMessage && onJumpToMessage(msg.replyToMessageId._id || msg.replyToMessageId.id)}
-        style={styles.repliedContainer}
+        style={[styles.repliedContainer, { borderLeftColor: isMine ? '#fff' : THEME.accent }]}
       >
-        <Text style={styles.repliedSender} numberOfLines={1}>
+        <Text style={[styles.repliedSender, { color: isMine ? '#fff' : THEME.accent }]} numberOfLines={1}>
           {repliedBy}
         </Text>
-        <Text style={styles.repliedText} numberOfLines={2}>
+        <Text style={[styles.repliedText, { color: isMine ? 'rgba(255,255,255,0.85)' : THEME.textPrimary }]} numberOfLines={2}>
           {repliedContent}
         </Text>
       </TouchableOpacity>
@@ -302,7 +302,11 @@ const MessageBubble = ({
       </View>
 
       {/* Nội dung tin nhắn */}
-      <View style={[styles.msgContent, { alignItems: isMine ? 'flex-end' : 'flex-start' }]}>
+      <View style={[
+        styles.msgContent, 
+        { alignItems: isMine ? 'flex-end' : 'flex-start' },
+        msg.type === 'poll' && { maxWidth: '100%', width: '100%' }
+      ]}>
         {/* Header: tên + thời gian (chỉ hiện ở tin đầu tiên của chuỗi) */}
         {showHeader && (
           <View style={[styles.msgHeader, { flexDirection: isMine ? 'row-reverse' : 'row' }]}>
@@ -320,13 +324,16 @@ const MessageBubble = ({
               styles.bubble,
               { backgroundColor: bubbleBg },
               borderRadius,
-              // Bỏ padding + nền khi là media (ảnh/video)
+              msg.type === 'poll' && { alignSelf: 'center', marginTop: 10 },
+              // Bỏ padding + nền khi là media (ảnh/video) hoặc bình chọn
               (msg.type === 'video' ||
                 msg.type === 'image' ||
+                msg.type === 'poll' ||
                 /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(parsePayload(msg.payload).fileName || '')) && {
                 padding: 0,
                 overflow: 'hidden',
                 backgroundColor: 'transparent',
+                borderWidth: 0,
                 shadowOpacity: 0,
                 elevation: 0,
               },

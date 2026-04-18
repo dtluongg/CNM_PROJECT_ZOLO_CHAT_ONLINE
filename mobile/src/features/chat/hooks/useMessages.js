@@ -156,6 +156,14 @@ const useMessages = (conversationId, currentUserId) => {
   }, []);
 
   // Cập nhật optimistic khi chỉnh sửa tin nhắn
+  const applyEdit = useCallback((messageId, newContent) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        (m._id || m.id)?.toString() === messageId?.toString()
+          ? { ...m, content: newContent, edited: true }
+          : m
+      )
+    );
   }, []);
 
   // Cập nhật Poll (bình chọn)

@@ -275,18 +275,23 @@ const getMessages = async (req, res) => {
         if (pollMsgs.length > 0) {
             const User = require('../models/userModel');
             const voterIds = [...new Set(pollMsgs.flatMap(m => 
-                (m.payload?.options || []).flatMap(opt => (opt.voterIds || []).map(v => (v._id || v).toString()))
-            ))];
+                (m.payload?.options || []).flatMap(opt => (opt.voterIds || []).map(v => (v?._id || v || '').toString()))
+            ))].filter(id => id && id !== '');
             
             if (voterIds.length > 0) {
                 const voters = await User.find({ _id: { $in: voterIds } }).select('displayName avatar').lean();
                 const voterMap = {};
-                voters.forEach(v => voterMap[v._id.toString()] = v);
+                voters.forEach(v => {
+                    if (v && v._id) voterMap[v._id.toString()] = v;
+                });
                 
                 pollMsgs.forEach(m => {
                     if (m.payload && m.payload.options) {
                         m.payload.options.forEach(opt => {
-                            opt.voterIds = (opt.voterIds || []).map(vid => voterMap[(vid._id || vid).toString()] || vid);
+                            opt.voterIds = (opt.voterIds || []).map(vid => {
+                                const idStr = (vid?._id || vid || '').toString();
+                                return voterMap[idStr] || vid;
+                            });
                         });
                     }
                 });

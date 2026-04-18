@@ -108,8 +108,8 @@ const messageApi = {
   createPoll: (conversationId, { topic, options, multipleChoice }) =>
     apiClient.post(`/messages/${conversationId}/poll`, { topic, options, multipleChoice }),
 
-  votePoll: (messageId, { optionId, optionIds, newOptions } = {}) =>
-    apiClient.patch(`/messages/poll/${messageId}/vote`, { optionId, optionIds, newOptions }),
+  votePoll: (messageId, { optionId, optionIds, newOptions, votedNewOptions } = {}) =>
+    apiClient.patch(`/messages/poll/${messageId}/vote`, { optionId, optionIds, newOptions, votedNewOptions }),
 };
 
 

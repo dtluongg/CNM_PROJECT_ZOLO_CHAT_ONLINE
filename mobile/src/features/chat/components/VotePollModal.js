@@ -19,7 +19,7 @@ const VotePollModal = ({ visible, onClose, topic, options, multipleChoice, onVot
       setSelectedNew(new Set());
       setInputValue('');
     }
-  }, [visible, userVotes]);
+  }, [visible]); // Chỉ reset khi mở modal, không reset khi server update dở dang
 
   const handleToggleOption = (optionId) => {
     setSelected(prev => {
@@ -56,15 +56,26 @@ const VotePollModal = ({ visible, onClose, topic, options, multipleChoice, onVot
   const handleAddNewOption = () => {
     const val = inputValue.trim();
     if (val) {
-      if (options.some(o => o.text === val) || newOptions.includes(val)) {
+      // Nếu text đã tồn tại trong danh sách chính thức
+      const existing = options.find(o => o.text.toLowerCase() === val.toLowerCase());
+      if (existing) {
+        handleToggleOption(existing.id);
         setInputValue('');
         return;
       }
+
+      // Nếu text đã tồn tại trong danh sách tạm (mới thêm)
+      if (newOptions.includes(val)) {
+        setInputValue('');
+        return;
+      }
+
       setNewOptions([...newOptions, val]);
       if (!multipleChoice) {
         setSelected(new Set());
         setSelectedNew(new Set([val]));
       } else {
+        // Giữ nguyên selected cũ, chỉ thêm tích chọn cho option vừa thêm
         setSelectedNew(prev => new Set([...prev, val]));
       }
       setInputValue('');
@@ -175,7 +186,7 @@ const VotePollModal = ({ visible, onClose, topic, options, multipleChoice, onVot
                               return next;
                             });
                          }}>
-                            <Text style={{ color: THEME.danger || '#ff4444', fontSize: 16 }}>✕</Text>
+                            <Text style={{ color: '#ed4245', fontSize: 16 }}>✕</Text>
                          </TouchableOpacity>
                       </TouchableOpacity>
                     );
@@ -228,7 +239,7 @@ const styles = StyleSheet.create({
   },
   modal: {
     width: '100%',
-    height: SCREEN_HEIGHT * 0.85,
+    maxHeight: SCREEN_HEIGHT * 0.85,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: 'hidden'

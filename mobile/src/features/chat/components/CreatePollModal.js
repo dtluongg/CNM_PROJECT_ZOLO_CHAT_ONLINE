@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import {
   View, Text, Modal, TextInput, TouchableOpacity,
   StyleSheet, ScrollView, KeyboardAvoidingView, Platform,
-  Switch
+  Switch, Dimensions
 } from 'react-native';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 import { Feather } from '@expo/vector-icons';
 
 const CreatePollModal = ({ visible, onClose, onCreate, THEME }) => {
@@ -93,7 +95,16 @@ const CreatePollModal = ({ visible, onClose, onCreate, THEME }) => {
               ))}
 
               {options.length < 10 && (
-                <TouchableOpacity onPress={handleAddOption} style={styles.addBtn}>
+                <TouchableOpacity 
+                  onPress={handleAddOption} 
+                  style={[
+                    styles.addBtn, 
+                    { 
+                      borderColor: THEME.accent + '4D', 
+                      backgroundColor: THEME.accent + '0D' 
+                    }
+                  ]}
+                >
                   <Text style={{ color: THEME.accent, fontWeight: '700' }}>+ Thêm lựa chọn</Text>
                 </TouchableOpacity>
               )}
@@ -145,11 +156,11 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   content: {
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    borderTopLeftRadius: 30, // Đồng bộ với VotePollModal
+    borderTopRightRadius: 30,
     padding: 24,
-    paddingTop: 30,
-    maxHeight: '85%',
+    paddingTop: 20,
+    maxHeight: SCREEN_HEIGHT * 0.85,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.3,
@@ -199,9 +210,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: THEME.accent + '4D', // 0.3 opacity
     marginTop: 8,
-    backgroundColor: THEME.accent + '0D', // 0.05 opacity
   },
   switchContainer: {
     flexDirection: 'row',

@@ -54,10 +54,20 @@ export default function VotePollModal({ isOpen, onClose, topic, options, multipl
   const handleAddNewOption = () => {
     const val = inputValue.trim();
     if (val) {
-      if (options.some(o => o.text === val) || newOptions.includes(val)) {
+      // Nếu text đã tồn tại trong danh sách chính thức
+      const existing = options.find(o => o.text.toLowerCase() === val.toLowerCase());
+      if (existing) {
+        handleToggleOption(existing.id);
         setInputValue('');
         return;
       }
+
+      // Nếu text đã tồn tại trong danh sách tạm (mới thêm)
+      if (newOptions.includes(val)) {
+        setInputValue('');
+        return;
+      }
+
       setNewOptions([...newOptions, val]);
       // Tự động chọn phương án mới vừa thêm (vẫn có thể bỏ chọn sau đó)
       if (!multipleChoice) {

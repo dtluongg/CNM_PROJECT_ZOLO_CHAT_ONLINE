@@ -1,6 +1,9 @@
 const Message = require('../models/messageModel');
 const User = require('../models/userModel');
+const Conversation = require('../models/conversationModel');
+const ConversationMember = require('../models/conversationMemberModel');
 const { getIO } = require('../socket/socketManager');
+const { notifyNewMessage } = require('../services/notificationService');
 
 /**
  * Tạo bình chọn mới
@@ -44,8 +47,47 @@ exports.createPoll = async (req, res) => {
       senderId: populatedMsg.senderId?._id || populatedMsg.senderId,
     };
 
+    // ── Cập nhật Metadata Conversation ────────────────────────────
+    await Conversation.findByIdAndUpdate(conversationId, {
+      lastMessageId: newMessage._id,
+      lastMessagePreview: `[Bình chọn] ${topic}`,
+      lastMessageTime: newMessage.createdAt,
+    });
+
+    // ── Tăng unreadCount cho các thành viên khác ─────────────────
+    await ConversationMember.updateMany(
+      { conversationId, userId: { $ne: senderId }, leftAt: null },
+      { $inc: { unreadCount: 1 } }
+    );
+
+    // ── Lấy danh sách thành viên để gửi Socket & Notification ─────
+    const allMembers = await ConversationMember.find({ conversationId, leftAt: null }, { userId: 1 });
+
+    // ── Phát Socket Real-time ─────────────────────────────────────
     const io = getIO();
-    if (io) io.to(conversationId).emit('chat:message', formattedMsg);
+    if (io) {
+      allMembers.forEach(({ userId: memberId }) => {
+        io.to(`user:${memberId.toString()}`).emit('chat:new-message', {
+          conversationId,
+          message: formattedMsg,
+        });
+      });
+    }
+
+    // ── Gửi Thông báo đẩy (Push Notification) ──────────────────────
+    try {
+      await notifyNewMessage({
+        conversationId,
+        messageId: newMessage._id,
+        senderId,
+        senderName: req.user.displayName,
+        messageType: 'poll',
+        messageContent: `[Bình chọn] ${topic}`,
+        recipientIds: allMembers.map((m) => m.userId),
+      });
+    } catch (err) {
+      console.error('Notify poll error:', err.message);
+    }
 
     res.status(201).json(formattedMsg);
   } catch (err) {
@@ -69,14 +111,30 @@ exports.votePoll = async (req, res) => {
     let { options, multipleChoice = false } = payload;
     let updated = false;
 
-    // 1. Thêm phương án mới nếu có
-    const votedNewOptions = req.body.votedNewOptions || [];
+    // ── Chuẩn hóa dữ liệu đầu vào ─────────────────────────────────────
+    const votedNewOptions = (req.body.votedNewOptions || []).map(t => t.trim());
+    const newlyAddedTexts = (req.body.newOptions || []).map(t => t.trim());
+    const targetIds = (optionIds && Array.isArray(optionIds)) 
+      ? optionIds.map(id => id.toString()) 
+      : (optionId ? [optionId.toString()] : []);
+
+    // FIX: Nếu text trong `votedNewOptions` thực chất đã tồn tại trong `options`,
+    // hãy chuyển nó thành một lượt bầu chọn ID tương ứng để tránh bị bỏ sót.
+    votedNewOptions.forEach(text => {
+      const match = options.find(o => o.text.toLowerCase() === text.toLowerCase());
+      if (match && !targetIds.includes(match.id)) {
+        targetIds.push(match.id);
+      }
+    });
+
+    // ── 1. Thêm phương án mới thực sự ──────────────────────────────────
     if (req.body.newOptions && Array.isArray(req.body.newOptions)) {
       req.body.newOptions.forEach(optText => {
         const trimmed = optText.trim();
-        if (trimmed && !options.some(o => o.text === trimmed)) {
-          const newId = (options.length + 1).toString();
-          const shouldVote = votedNewOptions.includes(trimmed);
+        // Chỉ thêm nếu text chưa tồn tại
+        if (trimmed && !options.some(o => o.text.toLowerCase() === trimmed.toLowerCase())) {
+          const newId = (options.length > 0 ? Math.max(...options.map(o => parseInt(o.id) || 0)) + 1 : 1).toString();
+          const shouldVote = votedNewOptions.some(t => t.toLowerCase() === trimmed.toLowerCase());
           const newOption = {
             id: newId,
             text: trimmed,
@@ -88,33 +146,23 @@ exports.votePoll = async (req, res) => {
       });
     }
 
-    const isClearRequest = !optionId && (!optionIds || optionIds.length === 0);
-    const targetIds = (optionIds && Array.isArray(optionIds)) 
-      ? optionIds 
-      : (optionId ? [optionId] : []);
+    const isClearRequest = targetIds.length === 0 && votedNewOptions.length === 0;
 
-    // Map to track which options were JUST created in this request
-    const newlyAddedTexts = (req.body.newOptions || []).map(t => t.trim());
-
+    // ── 2. Cập nhật lượt bầu chọn cho toàn bộ Options ──────────────────
     options.forEach(opt => {
-      const alreadyVoted = opt.voterIds.some(v => (v._id || v || '').toString() === userId);
-      const isNewlyAdded = newlyAddedTexts.includes(opt.text);
+      const alreadyVoted = (opt.voterIds || []).some(v => (v._id || v || '').toString() === userId);
+      const isNewlyAdded = newlyAddedTexts.some(t => t.toLowerCase() === opt.text.toLowerCase());
       
-      if (isClearRequest) {
-        if (alreadyVoted) {
-          opt.voterIds = opt.voterIds.filter(v => (v._id || v || '').toString() !== userId);
-          updated = true;
-        }
-      } else if (targetIds.includes(opt.id)) {
+      if (targetIds.includes(opt.id)) {
         if (!alreadyVoted) {
           opt.voterIds.push(userId);
           updated = true;
         }
       } else {
-        // Only clear votes for existing options that were NOT in the target list
-        // AND skip clearing if it's a newly added option that we just voted for
+        // Nếu không nằm trong target hiện tại
         if (alreadyVoted && !isNewlyAdded) {
-          if (optionIds || !multipleChoice) {
+          // Clear nếu là chọn 1 hoặc client gửi danh sách ID cụ thể (kể cả mảng rỗng [])
+          if (!multipleChoice || Array.isArray(optionIds)) {
             opt.voterIds = opt.voterIds.filter(v => (v._id || v || '').toString() !== userId);
             updated = true;
           }
@@ -151,10 +199,12 @@ exports.votePoll = async (req, res) => {
       senderId: populatedMsg.senderId?._id || populatedMsg.senderId
     };
 
+    const allMembers = await ConversationMember.find({ conversationId: message.conversationId, leftAt: null }, { userId: 1 });
     const io = getIO();
     if (io) {
-      io.to(message.conversationId.toString()).emit('chat:update-poll', finalFormattedMsg);
-      io.to(message.conversationId.toString()).emit('chat:message-updated', finalFormattedMsg);
+      allMembers.forEach(({ userId: memberId }) => {
+        io.to(`user:${memberId.toString()}`).emit('chat:update-poll', finalFormattedMsg);
+      });
     }
 
     res.json(finalFormattedMsg);

@@ -34,7 +34,9 @@ const PollMessage = ({ message, currentUserId, onVote, THEME, isPinned }) => {
           flexDirection: 'row', alignItems: 'center', 
           marginBottom: 8, paddingBottom: 6, 
           borderBottomWidth: 1, borderBottomColor: THEME.border,
-          opacity: 0.9
+          opacity: 0.9,
+          paddingHorizontal: 12, // Thêm padding để cân đối với khung Poll
+          marginTop: -4
         }}>
           <Text style={{ fontSize: 10, marginRight: 4 }}>📌</Text>
           <Text style={{ 
@@ -84,7 +86,7 @@ const PollMessage = ({ message, currentUserId, onVote, THEME, isPinned }) => {
                     styles.progressBar, 
                     { 
                       width: `${percentage}%`, 
-                      backgroundColor: isSelected ? THEME.accent + '15' : 'rgba(0,0,0,0.03)' 
+                      backgroundColor: isSelected ? THEME.accent + '25' : 'rgba(255,255,255,0.08)' 
                     }
                   ]} />
                 )}
@@ -158,9 +160,9 @@ const PollMessage = ({ message, currentUserId, onVote, THEME, isPinned }) => {
 
 const styles = StyleSheet.create({
   container: {
-    width: SCREEN_WIDTH * 0.9,
-    padding: 16,
-    borderRadius: 20,
+    width: SCREEN_WIDTH * 0.78,
+    padding: 12,
+    borderRadius: 18,
     borderWidth: 1,
     marginVertical: 6,
     shadowColor: '#000',
@@ -170,44 +172,44 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   topic: {
-    fontSize: 17,
+    fontSize: 15.5,
     fontWeight: '800',
     marginBottom: 2,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   subtitle: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     fontWeight: '600',
-    marginBottom: 12,
+    marginBottom: 6,
     opacity: 0.8
   },
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 8,
   },
   summaryText: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   optionsList: {
-    marginBottom: 16,
+    marginBottom: 10,
   },
   optionContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
+    gap: 10,
+    marginBottom: 6,
   },
   optionBubble: {
     flex: 1,
-    height: 42,
+    height: 38,
     borderRadius: 10,
     borderWidth: 1.2,
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
   },
   progressBar: {
     position: 'absolute',
@@ -222,7 +224,7 @@ const styles = StyleSheet.create({
     zIndex: 1
   },
   optionText: {
-    fontSize: 14,
+    fontSize: 13.5,
   },
   checkIcon: {
     fontSize: 18,
@@ -236,11 +238,11 @@ const styles = StyleSheet.create({
   },
   mainButton: {
     width: '100%',
-    height: 42,
+    height: 38,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginTop: 2,
   },
   mainButtonText: {
     fontSize: 14,

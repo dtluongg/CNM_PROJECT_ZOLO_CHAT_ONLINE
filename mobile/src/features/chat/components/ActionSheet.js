@@ -141,7 +141,7 @@ const ActionSheet = ({
                 style={styles.sheetAction}
               >
                 {a.icon}
-                <Text style={[styles.sheetActionLabel, a.danger && { color: THEME.danger }]}>
+                <Text style={[styles.sheetActionLabel, a.danger && { color: '#ed4245' }]}>
                   {a.label}
                 </Text>
               </TouchableOpacity>

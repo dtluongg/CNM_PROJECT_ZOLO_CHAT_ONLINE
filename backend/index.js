@@ -18,9 +18,9 @@ app.use(cors({
     'http://localhost:5174',
     'https://localhost:5173',
     'http://localhost:8081',
-    'http://172.20.10.3:5173',
-    'http://172.20.10.3:8081',
-    'http://172.20.10.3:2026',
+    'http://172.27.130.18:5173',
+    'http://172.27.130.18:8081',
+    'http://172.27.130.18:2026',
   ],
   credentials: true,
 }));
