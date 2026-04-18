@@ -7,8 +7,8 @@ const conversationApi = {
   createDmConversation: (targetUserId, initialMessage = '') =>
     apiClient.post('/conversations/dm', { targetUserId, initialMessage }),
 
-  createGroupConversation: ({ name, avatar = '', memberIds = [] }) =>
-    apiClient.post('/conversations/group', { name, avatar, memberIds }),
+  createGroupConversation: ({ name, avatar = '', memberIds = [], groupType = 'general', description = '' }) =>
+    apiClient.post('/conversations/group', { name, avatar, memberIds, groupType, description }),
 
   leaveConversation: (conversationId) =>
     apiClient.post(`/conversations/${conversationId}/leave`),
@@ -33,6 +33,19 @@ const conversationApi = {
 
   disbandConversation: (conversationId) =>
     apiClient.post(`/conversations/${conversationId}/disband`),
+
+  // Topics
+  listTopics: (conversationId) =>
+    apiClient.get(`/conversations/${conversationId}/topics`),
+
+  createTopic: (conversationId, payload) =>
+    apiClient.post(`/conversations/${conversationId}/topics`, payload),
+
+  updateTopic: (conversationId, topicId, payload) =>
+    apiClient.patch(`/conversations/${conversationId}/topics/${topicId}`, payload),
+
+  deleteTopic: (conversationId, topicId) =>
+    apiClient.delete(`/conversations/${conversationId}/topics/${topicId}`),
 };
 
 export default conversationApi;

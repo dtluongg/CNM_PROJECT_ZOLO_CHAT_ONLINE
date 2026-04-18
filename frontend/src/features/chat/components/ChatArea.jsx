@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2 } from 'lucide-react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock } from 'lucide-react';
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
 import conversationApi from '../api/conversationApi';
@@ -61,6 +61,8 @@ export default function ChatArea({
   onPhoneCall,
   onVideoCall,
   onPollVote,
+  activeTopic,
+  onTopicSelect,
 }) {
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
 
@@ -79,6 +81,9 @@ export default function ChatArea({
   const [pendingPinMsgId, setPendingPinMsgId] = useState(null);
   const [showUnpinModal, setShowUnpinModal] = useState(false);
   const [messageIdToUnpin, setMessageIdToUnpin] = useState(null);
+  const [showChannelSheet, setShowChannelSheet] = useState(false);
+  const [sheetTopics, setSheetTopics]           = useState([]);
+  const [sheetLoading, setSheetLoading]         = useState(false);
 
   // Sync pinned messages khi đổi conversation
   useEffect(() => {
@@ -105,16 +110,16 @@ export default function ChatArea({
   }, []);
 
   // ── Socket listeners ───────────────────────────────────────
-  useChatSocket({ 
-    socket, 
-    conversation, 
-    currentUserId, 
-    setMessages, 
-    onPinnedMessagesChange: (newPins) => setPinnedMessages(newPins) 
+  useChatSocket({
+    socket,
+    conversation,
+    currentUserId,
+    setMessages,
+    onPinnedMessagesChange: (newPins) => setPinnedMessages(newPins)
   });
 
-  // ── Auto scroll ────────────────────────────────────────────
-  const { bottomRef } = useScrollBehavior({ messages, currentUserId });
+  // ── Auto scroll (uses visibleMessages so topic switch scrolls to bottom) ──
+  const { bottomRef } = useScrollBehavior({ messages: messages, currentUserId });
 
   // ── Handlers ───────────────────────────────────────────────
   const handleMarkAsRead = async (msg) => {
@@ -190,12 +195,12 @@ export default function ChatArea({
     try {
       const pinToReplace = pinnedMessages[selectedIndex];
       const oldMsgId = pinToReplace.messageId._id || pinToReplace.messageId.id || pinToReplace.messageId;
-      
+
       // Bỏ ghim cái cũ trước
       await messageApi.unpinMessage(conversation.id, oldMsgId);
       // Ghim cái mới
       await messageApi.pinMessage(conversation.id, pendingPinMsgId);
-      
+
       setShowPinLimitModal(false);
       setPendingPinMsgId(null);
     } catch (err) {
@@ -219,6 +224,17 @@ export default function ChatArea({
       window.alert(err?.response?.data?.message || 'Không thể bỏ ghim tin nhắn');
     }
   };
+
+  const openChannelSheet = useCallback(async () => {
+    if (!conversation?.id) return;
+    setShowChannelSheet(true);
+    setSheetLoading(true);
+    try {
+      const res = await conversationApi.listTopics(conversation.id);
+      setSheetTopics(Array.isArray(res?.data?.data) ? res.data.data : []);
+    } catch { setSheetTopics([]); }
+    finally { setSheetLoading(false); }
+  }, [conversation?.id]);
 
   // ── Không có conversation ──────────────────────────────────
   if (!conversation) {
@@ -245,10 +261,18 @@ export default function ChatArea({
     );
   }
 
+  // ── Filter messages by active topic (groups only) ─────────
+  const visibleMessages = (conversation?.type === 'group' && activeTopic)
+    ? messages.filter((m) => {
+        const mTopicId = m.topicId?.toString?.() || m.topicId || null;
+        return mTopicId === activeTopic._id?.toString();
+      })
+    : messages;
+
   // ── Build display items ────────────────────────────────────
   const displayItems = [];
-  messages.forEach((msg, i) => {
-    const prev    = messages[i - 1];
+  visibleMessages.forEach((msg, i) => {
+    const prev    = visibleMessages[i - 1];
     const msgDate = msg.time?.split(' ')[0];
     const prevDate = prev?.time?.split(' ')[0];
     if (i === 0 || (msgDate && prevDate && msgDate !== prevDate && msg.time?.includes(' '))) {
@@ -367,13 +391,26 @@ export default function ChatArea({
             )}
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-              {conversation.type === 'group' && <span style={{ color: 'var(--text-muted)', marginRight: 2 }}>#</span>}
-              {conversation.name}
-            </div>
-            <div style={{ fontSize: 11, color: dmOnline ? (STATUS_COLOR_MAP[dmStatus] || '#3ba55c') : 'var(--text-muted)', lineHeight: 1 }}>
-              {onlineStatus}
-            </div>
+            {conversation.type === 'group' ? (
+              <>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                  <span style={{ color: 'var(--accent)', marginRight: 1 }}>#</span>
+                  {activeTopic ? activeTopic.name : 'chung'}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1 }}>
+                  {conversation.name} · {onlineStatus}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                  {conversation.name}
+                </div>
+                <div style={{ fontSize: 11, color: dmOnline ? (STATUS_COLOR_MAP[dmStatus] || '#3ba55c') : 'var(--text-muted)', lineHeight: 1 }}>
+                  {onlineStatus}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -381,6 +418,7 @@ export default function ChatArea({
           {isMobile ? (
             <>
               {[
+                ...(conversation?.type === 'group' ? [{ icon: <Hash size={20} />, title: 'Kênh chat', onClick: openChannelSheet }] : []),
                 { icon: <Phone size={20} />, title: 'Gọi thoại', onClick: conversation?.type === 'dm' ? onPhoneCall : undefined },
                 { icon: <Video size={20} />, title: 'Gọi video', onClick: conversation?.type === 'dm' ? onVideoCall : undefined },
                 { icon: <Users size={20} />, title: 'Thông tin', onClick: onToggleRight, active: showRight },
@@ -426,24 +464,46 @@ export default function ChatArea({
       </div>
 
       {/* Pinned Messages Bar */}
-      <PinnedBar 
-        pinnedMessages={pinnedMessages} 
+      <PinnedBar
+        pinnedMessages={pinnedMessages}
         onJump={handleJumpToMessage}
         onUnpin={handleUnpin}
       />
 
-      <PinLimitModal 
+      <PinLimitModal
         isOpen={showPinLimitModal}
         onClose={() => { setShowPinLimitModal(false); setPendingPinMsgId(null); }}
         pinnedMessages={pinnedMessages}
         onConfirm={handleConfirmReplacePin}
       />
 
-      <UnpinConfirmModal 
+      <UnpinConfirmModal
         isOpen={showUnpinModal}
         onClose={() => { setShowUnpinModal(false); setMessageIdToUnpin(null); }}
         onConfirm={confirmUnpin}
       />
+
+      {/* Topic bar - only for groups when a topic is selected */}
+      {conversation.type === 'group' && activeTopic && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '5px 16px', background: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border)', flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>#</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{activeTopic.name}</span>
+          {activeTopic.description && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>— {activeTopic.description}</span>
+          )}
+          <button
+            onClick={() => onTopicSelect && onTopicSelect(null)}
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, padding: '2px 6px', borderRadius: 4 }}
+            title="Quay về kênh chung"
+          >
+            ✕ Thoát kênh
+          </button>
+        </div>
+      )}
 
       <div style={{
         flex: 1, overflowY: 'auto', overflowX: 'hidden',
@@ -490,8 +550,8 @@ export default function ChatArea({
             />
           );
           return (
-            <div 
-              key={item.key} 
+            <div
+              key={item.key}
               id={item.type === 'msg' ? `msg-${item.msg?._id || item.msg?.id}` : undefined}
               className={item.type === 'msg' && (highlightedId === item.msg?._id || highlightedId === item.msg?.id) ? 'msg-highlight' : ''}
               style={{ padding: '0 16px' }}
@@ -574,11 +634,18 @@ export default function ChatArea({
       {!(conversation.type === 'dm' && blockStatus?.iBlocked) && (
         <MessageInput
           onSend={async (payload) => {
-            await onSendMessage(payload);
+            const enriched = (conversation.type === 'group' && activeTopic)
+              ? { ...payload, topicId: activeTopic._id }
+              : payload;
+            await onSendMessage(enriched);
             if (payload.isEdit) setEditingMessage(null);
-            setReplyingMessage(null); // Fix: Clear reply bar after successful send
+            setReplyingMessage(null);
           }}
-          placeholder={`Nhắn tin tới ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
+          placeholder={
+            conversation.type === 'group'
+              ? `Nhắn tin tới #${activeTopic ? activeTopic.name : 'chung'}...`
+              : `Nhắn tin tới ${conversation.name}...`
+          }
           isMobile={isMobile}
           isGroup={conversation.type === 'group'}
           conversationId={conversation.id}
@@ -608,9 +675,95 @@ export default function ChatArea({
         onForward={() => console.log('Forwarded successfully')}
       />
 
+      {/* Mobile channel bottom sheet (groups only) */}
+      {showChannelSheet && (
+        <div
+          onClick={() => setShowChannelSheet(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 400,
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              background: 'var(--bg-secondary)',
+              borderRadius: '18px 18px 0 0',
+              maxHeight: '70vh', display: 'flex', flexDirection: 'column',
+              animation: 'slideUpSheet 0.25s cubic-bezier(0.4,0,0.2,1)',
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            }}
+          >
+            {/* Sheet handle */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 6px' }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--bg-hover)' }} />
+            </div>
+            {/* Sheet header */}
+            <div style={{ padding: '0 18px 10px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-primary)' }}>Kênh chat</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{conversation.name}</div>
+            </div>
+            {/* Channel list */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 12px' }}>
+              {/* #chung */}
+              <div
+                onClick={() => { onTopicSelect && onTopicSelect(null); setShowChannelSheet(false); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 10px', borderRadius: 10, cursor: 'pointer',
+                  background: !activeTopic ? 'var(--accent)' : 'transparent',
+                  marginBottom: 2,
+                }}
+              >
+                <Hash size={18} style={{ color: !activeTopic ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
+                <span style={{ fontSize: 15, fontWeight: !activeTopic ? 700 : 500, color: !activeTopic ? '#fff' : 'var(--text-primary)' }}>
+                  chung
+                </span>
+              </div>
+
+              {sheetLoading && (
+                <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 10px' }}>Đang tải kênh...</div>
+              )}
+
+              {sheetTopics.map(topic => (
+                <div
+                  key={topic._id}
+                  onClick={() => { if (!topic.isLocked) { onTopicSelect && onTopicSelect(topic); setShowChannelSheet(false); } }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '11px 10px', borderRadius: 10,
+                    cursor: topic.isLocked ? 'not-allowed' : 'pointer',
+                    background: activeTopic?._id === topic._id ? 'var(--accent)' : 'transparent',
+                    opacity: topic.isLocked ? 0.5 : 1,
+                    marginBottom: 2,
+                  }}
+                >
+                  <Hash size={18} style={{ color: activeTopic?._id === topic._id ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 15, fontWeight: activeTopic?._id === topic._id ? 700 : 500, color: activeTopic?._id === topic._id ? '#fff' : 'var(--text-primary)', flex: 1 }}>
+                    {topic.name}
+                  </span>
+                  {topic.isLocked && <Lock size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+                  {topic.categoryName && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{topic.categoryName}</span>
+                  )}
+                </div>
+              ))}
+
+              {!sheetLoading && sheetTopics.length === 0 && (
+                <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 10px', fontStyle: 'italic' }}>
+                  Chưa có kênh nào.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes bounce { 0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-5px);opacity:1} }
         @keyframes fadeInUp { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+        @keyframes slideUpSheet { from{transform:translateY(100%)} to{transform:translateY(0)} }
       `}</style>
     </div>
   );

@@ -33,6 +33,7 @@ const Chat = () => {
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showUserSearch, setShowUserSearch]   = useState(false);
   const [typingUsers, setTypingUsers]         = useState({});
+  const [activeTopic, setActiveTopic]         = useState(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -58,6 +59,9 @@ const Chat = () => {
   // Keep a ref for socket callbacks
   const activeConvRef = useRef(null);
   useEffect(() => { activeConvRef.current = activeConversation; }, [activeConversation]);
+
+  // Reset active topic when switching conversations
+  useEffect(() => { setActiveTopic(null); }, [activeConversation?.id]);
 
   // ── Messages ─────────────────────────────────────────────────────────────
   const {
@@ -184,6 +188,9 @@ const Chat = () => {
   const {
     showCreateGroupModal, setShowCreateGroupModal,
     friendsForGroup, groupName, setGroupName,
+    groupType, setGroupType,
+    groupDescription, setGroupDescription,
+    groupAvatarPreview, handleAvatarFileChange,
     selectedFriendIds, loadingFriends, creatingGroup,
     handleOpenCreateGroup, toggleSelectFriend,
     handleCreateGroup, handleLeaveGroup,
@@ -221,6 +228,8 @@ const Chat = () => {
     onPhoneCall: handlePhoneCall,
     onVideoCall: handleVideoCall,
     onPollVote: handlePollVote,
+    activeTopic,
+    onTopicSelect: setActiveTopic,
   };
 
   const rightSidebarProps = {
@@ -233,6 +242,8 @@ const Chat = () => {
     onBlockToggled: () => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId),
     onPhoneCall: handlePhoneCall,
     onVideoCall: handleVideoCall,
+    activeTopic,
+    onTopicSelect: setActiveTopic,
   };
 
   // ── MOBILE LAYOUT ────────────────────────────────────────────────────────
@@ -257,6 +268,8 @@ const Chat = () => {
               onOpenSettings={() => setShowProfileSettings(true)}
               onOpenSearch={() => setShowUserSearch(true)}
               onOpenCreateGroup={handleOpenCreateGroup}
+              activeTopic={activeTopic}
+              onTopicSelect={setActiveTopic}
               isMobile
             />
           </div>
@@ -303,6 +316,8 @@ const Chat = () => {
         onOpenSettings={() => setShowProfileSettings(true)}
         onOpenSearch={() => setShowUserSearch(true)}
         onOpenCreateGroup={handleOpenCreateGroup}
+        activeTopic={activeTopic}
+        onTopicSelect={setActiveTopic}
       />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
@@ -333,6 +348,12 @@ const Chat = () => {
         <CreateGroupModal
           groupName={groupName}
           setGroupName={setGroupName}
+          groupType={groupType}
+          setGroupType={setGroupType}
+          groupDescription={groupDescription}
+          setGroupDescription={setGroupDescription}
+          groupAvatarPreview={groupAvatarPreview}
+          onAvatarFileChange={handleAvatarFileChange}
           selectedFriendIds={selectedFriendIds}
           friendsForGroup={friendsForGroup}
           loadingFriends={loadingFriends}

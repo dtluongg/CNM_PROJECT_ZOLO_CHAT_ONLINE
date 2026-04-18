@@ -28,6 +28,7 @@ import SectionHeader from "./rightSidebar/ui/SectionHeader";
 import ActionButton from "./rightSidebar/ui/ActionButton";
 import RoleChip from "./rightSidebar/ui/RoleChip";
 import AvatarDisplay from "./rightSidebar/ui/AvatarDisplay";
+import TopicManager from "./rightSidebar/TopicManager";
 
 import { getAvatarColor } from "./rightSidebar/utils/avatarUtils";
 
@@ -41,6 +42,8 @@ export default function RightSidebar({
     onBlockToggled,
     onPhoneCall,
     onVideoCall,
+    activeTopic,
+    onTopicSelect,
 }) {
     const [tab, setTab] = useState("info");
     const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
@@ -506,6 +509,9 @@ export default function RightSidebar({
                 >
                     {[
                         { key: "info", label: "Thông tin" },
+                        ...(conversation?.type === "group"
+                            ? [{ key: "topics", label: "Kênh" }]
+                            : []),
                         { key: "media", label: "Media" },
                         { key: "files", label: "File" },
                         ...(conversation?.type === "dm"
@@ -610,6 +616,7 @@ export default function RightSidebar({
                                         </span>
                                     </div>
                                     {conversation.type === "group" && (
+                                        <>
                                         <div
                                             style={{
                                                 display: "flex",
@@ -617,27 +624,26 @@ export default function RightSidebar({
                                                 gap: 8,
                                             }}
                                         >
-                                            <span
-                                                style={{
-                                                    fontSize: 12,
-                                                    color: "var(--text-muted)",
-                                                }}
-                                            >
-                                                Số thành viên
-                                            </span>
-                                            <span
-                                                style={{
-                                                    fontSize: 12,
-                                                    fontWeight: 700,
-                                                    color: "var(--text-primary)",
-                                                }}
-                                            >
-                                                {members.length ||
-                                                    conversation.memberCount ||
-                                                    conversation.members ||
-                                                    0}
+                                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Số thành viên</span>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
+                                                {members.length || conversation.memberCount || conversation.members || 0}
                                             </span>
                                         </div>
+                                        {conversation.groupType && (
+                                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Loại nhóm</span>
+                                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                                                    {({ study: '📚 Học tập', gaming: '🎮 Gaming', general: '💬 Chung', project: '📌 Dự án', other: '🗂️ Khác' })[conversation.groupType] || conversation.groupType}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {conversation.description && (
+                                            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
+                                                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Mô tả</span>
+                                                <span style={{ fontSize: 12, color: "var(--text-primary)", fontStyle: "italic" }}>{conversation.description}</span>
+                                            </div>
+                                        )}
+                                        </>
                                     )}
                                 </div>
                             </div>
@@ -1567,6 +1573,18 @@ export default function RightSidebar({
                                         )}
                                     </div>
                                 ))}
+                        </div>
+                    )}
+
+                    {/* ==================== TAB TOPICS ==================== */}
+                    {tab === "topics" && conversation?.type === "group" && (
+                        <div>
+                            <TopicManager
+                                conversation={conversation}
+                                canManage={canManageMembers}
+                                activeTopic={activeTopic}
+                                onTopicSelect={onTopicSelect}
+                            />
                         </div>
                     )}
 

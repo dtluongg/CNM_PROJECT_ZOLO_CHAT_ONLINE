@@ -25,6 +25,8 @@ const {
     transferOwner,
 } = require('../controllers/conversationMemberController');
 
+const { listTopics, createTopic, updateTopic, deleteTopic } = require('../controllers/topicController');
+
 // Mọi endpoint conversation đều yêu cầu đăng nhập.
 router.use(verifyToken);
 
@@ -77,5 +79,11 @@ router.patch('/:id/members/:userId/role', updateMember);
 // Ghim/Bỏ ghim tin nhắn
 router.post('/:id/pin/:messageId', pinMessage);
 router.post('/:id/unpin/:messageId', unpinMessage);
+
+// Topics (kênh con trong nhóm)
+router.get('/:id/topics', listTopics);
+router.post('/:id/topics', createTopic);
+router.patch('/:id/topics/:topicId', updateTopic);
+router.delete('/:id/topics/:topicId', deleteTopic);
 
 module.exports = router;
