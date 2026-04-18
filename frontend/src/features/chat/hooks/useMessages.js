@@ -204,6 +204,17 @@ export const useMessages = ({
         setActiveConversation((prev) =>
           prev?.id === convId ? { ...prev, lastMessage: msg.content, time: msg.time } : prev
         );
+      
+      // ── POLL ─────────────────────────────────────────────────────────────
+      } else if (payload.type === 'poll') {
+        const { topic, options, multipleChoice } = payload;
+        const res = await messageApi.createPoll(convId, { topic, options, multipleChoice });
+        const msg = normalizeMsg(res.data);
+        addMessage(convId, msg);
+        updateConversationPreview(convId, { lastMessage: msg.content, time: msg.time });
+        setActiveConversation((prev) =>
+          prev?.id === convId ? { ...prev, lastMessage: msg.content, time: msg.time } : prev
+        );
       }
 
     } catch (err) {
@@ -232,6 +243,17 @@ export const useMessages = ({
     addMessage, editMessageInState, updateConversationPreview, fetchDmBlockStatus,
   ]);
 
+  const handlePollVote = useCallback(async (messageId, voteData) => {
+    if (!activeConversation) return;
+    try {
+      const res = await messageApi.votePoll(messageId, voteData);
+      const updatedMsg = normalizeMsg(res.data);
+      updateMessage(activeConversation.id, messageId, () => updatedMsg);
+    } catch (err) {
+      console.error('handlePollVote error:', err);
+    }
+  }, [activeConversation, updateMessage]);
+
   return {
     messages,
     setMessages,
@@ -241,5 +263,6 @@ export const useMessages = ({
     editMessageInState,
     resetMessages,
     handleSendMessage,
+    handlePollVote,
   };
 };

@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import Avatar from './Avatar';
 import VoicePlayer from './VoicePlayer';
 import VideoPlayer from './VideoPlayer';
+import PollMessage from './PollMessage';
 
 // Màu tên người gửi trong nhóm chat, luân phiên theo tên
 const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245'];
@@ -49,6 +50,7 @@ const MessageBubble = ({
   onFilePress,
   onJumpToMessage,
   isPinned,
+  onVote,
 }) => {
   const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName, THEME);
   const bubbleBg = isMine ? THEME.bubbleSelf : THEME.bubbleOther;
@@ -68,9 +70,18 @@ const MessageBubble = ({
   const renderRepliedContext = () => {
     if (!msg.replyToMessageId || msg.revoked || msg.recalled) return null;
     const repliedBy = msg.replyToMessageId.senderId?.displayName || 'Người dùng Zolo';
-    const repliedContent = msg.replyToMessageId.revoked 
-      ? 'Tin nhắn đã được thu hồi' 
-      : (msg.replyToMessageId.type === 'text' ? msg.replyToMessageId.content : `[${msg.replyToMessageId.type}]`);
+    let repliedContent = '';
+    if (msg.replyToMessageId.revoked) {
+      repliedContent = 'Tin nhắn đã được thu hồi';
+    } else if (msg.replyToMessageId.type === 'text') {
+      repliedContent = msg.replyToMessageId.content;
+    } else if (msg.replyToMessageId.type === 'poll') {
+      const payload = parsePayload(msg.replyToMessageId.payload);
+      const pollTopic = payload.topic || msg.replyToMessageId.content || 'Bình chọn';
+      repliedContent = `Bình chọn: ${pollTopic}`;
+    } else {
+      repliedContent = `[${msg.replyToMessageId.type}]`;
+    }
 
     return (
       <TouchableOpacity 
@@ -204,6 +215,18 @@ const MessageBubble = ({
     }
 
     // Tin nhắn văn bản (mặc định)
+    if (msg.type === 'poll') {
+      return (
+        <PollMessage 
+          message={msg} 
+          currentUserId={currentUserId} 
+          onVote={onVote} 
+          THEME={THEME} 
+          isPinned={isPinned}
+        />
+      );
+    }
+
     return (
       <Text style={[styles.bubbleText, { color: bubbleText }]}>
         {msg.content}
@@ -309,14 +332,19 @@ const MessageBubble = ({
               },
             ]}
           >
-            {isPinned && (
+            {isPinned && msg.type !== 'poll' && (
               <View style={{ 
                 flexDirection: 'row', alignItems: 'center', 
-                marginBottom: 4, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)',
-                opacity: 0.8
+                marginBottom: 4, paddingBottom: 4, 
+                borderBottomWidth: 1, 
+                borderBottomColor: (msg.type === 'poll' || !isMine) ? THEME.border : 'rgba(255,255,255,0.2)',
+                opacity: 0.9
               }}>
                 <Text style={{ fontSize: 10, marginRight: 4 }}>📌</Text>
-                <Text style={{ fontSize: 10, fontWeight: '700', color: bubbleText, textTransform: 'uppercase' }}>Ghim tin nhắn</Text>
+                <Text style={{ 
+                  fontSize: 10, fontWeight: '700', textTransform: 'uppercase',
+                  color: (msg.type === 'poll' || msg.type === 'image' || msg.type === 'video' || !isMine) ? THEME.accent : '#fff'
+                }}>Ghim tin nhắn</Text>
               </View>
             )}
             {renderRepliedContext()}
@@ -325,7 +353,7 @@ const MessageBubble = ({
         </Pressable>
 
         {/* Tổng hợp reaction hiển thị dưới bong bóng */}
-        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+        {msg.reactions && Object.keys(msg.reactions).length > 0 && msg.type !== 'poll' && (
           <View style={[styles.reactionSummary, isMine ? { right: 12 } : { left: 12 }]}>
             {Object.entries(msg.reactions).map(([emoji, count], idx) => (
               <View key={idx} style={styles.reactionItem}>

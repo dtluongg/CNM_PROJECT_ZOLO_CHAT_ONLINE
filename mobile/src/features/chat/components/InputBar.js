@@ -23,6 +23,7 @@ const InputBar = ({
   onSend,
   onPickFile,
   onPickImage,
+  onPickPoll,
   onStartRecord,
   onToggleEmoji,
   inputRef,
@@ -31,8 +32,9 @@ const InputBar = ({
   styles,
   replyingMessage,
   onCancelReply,
+  isGroup,
 }) => (
-  <View>
+  <View style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
     {/* Thanh xem trước tin nhắn đang trả lời */}
     {replyingMessage && (
       <View style={[styles.replyBar, { borderLeftWidth: 4, borderLeftColor: THEME.accent, paddingLeft: 12, borderTopWidth: 0 }]}>
@@ -48,49 +50,53 @@ const InputBar = ({
       </View>
     )}
 
-    <View style={styles.inputBar}>
-    {/* Nút đính kèm file */}
-    <TouchableOpacity style={styles.inputBtn} onPress={onPickFile}>
-      <Feather name="paperclip" size={22} color={THEME.textMuted} />
-    </TouchableOpacity>
-
-    {/* Ô nhập text + nút emoji */}
-    <View style={styles.inputWrap}>
-      <TextInput
-        ref={inputRef}
-        style={styles.textInput}
-        value={text}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={THEME.textMuted}
-        multiline
-        selectionColor={THEME.accent}
-      />
-      <TouchableOpacity onPress={onToggleEmoji} style={styles.emojiToggle}>
-        <Feather name="smile" size={22} color={THEME.textMuted} />
+    {/* Row 1: Top Toolbar (Attachments & Tools) */}
+    <View style={styles.toolbar}>
+      <TouchableOpacity style={styles.toolbarBtn} onPress={onPickImage}>
+        <Feather name="image" size={20} color={THEME.textMuted} />
       </TouchableOpacity>
+      <TouchableOpacity style={styles.toolbarBtn} onPress={onPickFile}>
+        <Feather name="paperclip" size={20} color={THEME.textMuted} />
+      </TouchableOpacity>
+      {isGroup && (
+        <TouchableOpacity style={styles.toolbarBtn} onPress={onPickPoll}>
+          <Feather name="bar-chart-2" size={20} color={THEME.textMuted} />
+        </TouchableOpacity>
+      )}
     </View>
 
-    {/* Nút gửi (hiện khi có text) hoặc nút ảnh + mic */}
-    {text.trim().length > 0 ? (
-      <TouchableOpacity style={styles.sendBtn} onPress={onSend}>
-        <Ionicons name="send" size={18} color="#fff" />
-      </TouchableOpacity>
-    ) : (
-      <>
-        {/* Nút chọn ảnh */}
-        <TouchableOpacity style={styles.inputBtn} onPress={onPickImage}>
-          <Feather name="image" size={22} color={THEME.textMuted} />
+    {/* Row 2: Bottom Input Row */}
+    <View style={styles.inputBar}>
+      {/* Nút ghi âm — chỉ hiện trên native (iOS/Android) */}
+      {Platform.OS !== 'web' && (
+        <TouchableOpacity style={styles.inputBtn} onPress={onStartRecord}>
+          <Feather name="mic" size={22} color={THEME.textMuted} />
         </TouchableOpacity>
+      )}
 
-        {/* Nút ghi âm — chỉ hiện trên native (iOS/Android) */}
-        {Platform.OS !== 'web' && (
-          <TouchableOpacity style={styles.inputBtn} onPress={onStartRecord}>
-            <Feather name="mic" size={22} color={THEME.textMuted} />
-          </TouchableOpacity>
-        )}
-      </>
-    )}
+      {/* Ô nhập text + nút emoji */}
+      <View style={styles.inputWrap}>
+        <TextInput
+          ref={inputRef}
+          style={styles.textInput}
+          value={text}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={THEME.textMuted}
+          multiline
+          selectionColor={THEME.accent}
+        />
+        <TouchableOpacity onPress={onToggleEmoji} style={styles.emojiToggle}>
+          <Feather name="smile" size={22} color={THEME.textMuted} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Nút gửi (hiện khi có text) */}
+      {text.trim().length > 0 && (
+        <TouchableOpacity style={styles.sendBtn} onPress={onSend}>
+          <Ionicons name="send" size={18} color="#fff" />
+        </TouchableOpacity>
+      )}
     </View>
   </View>
 );

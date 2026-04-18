@@ -156,10 +156,15 @@ const useMessages = (conversationId, currentUserId) => {
   }, []);
 
   // Cập nhật optimistic khi chỉnh sửa tin nhắn
-  const applyEdit = useCallback((messageId, newContent) => {
+  }, []);
+
+  // Cập nhật Poll (bình chọn)
+  const updatePoll = useCallback((updatedMsg) => {
     setMessages((prev) =>
       prev.map((m) =>
-        m._id?.toString() === messageId ? { ...m, content: newContent, edited: true } : m
+        (m._id || m.id)?.toString() === updatedMsg._id?.toString()
+          ? { ...m, ...normalizeMsg(updatedMsg) }
+          : m
       )
     );
   }, []);
@@ -179,6 +184,7 @@ const useMessages = (conversationId, currentUserId) => {
     removeTempMessage,
     markBlocked,
     applyEdit,
+    updatePoll,
   };
 };
 

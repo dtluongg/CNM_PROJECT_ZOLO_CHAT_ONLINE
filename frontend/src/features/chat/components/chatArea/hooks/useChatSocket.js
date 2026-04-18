@@ -46,6 +46,16 @@ const useChatSocket = ({ socket, conversation, currentUserId, setMessages, onPin
       setMessages(prev => prev.filter(m => (m._id || m.id)?.toString() !== messageId));
     };
 
+    // ── Update Poll ───────────────────────────────────────────
+    const handleUpdatePoll = (updatedMsg) => {
+      const { conversationId: cid, _id: messageId } = updatedMsg;
+      if (convId && cid !== convId) return;
+
+      setMessages(prev => prev.map(m => 
+        (m._id || m.id)?.toString() === messageId ? { ...m, ...updatedMsg } : m
+      ));
+    };
+
     // ── Pin/Unpin ─────────────────────────────────────────────
     const handlePinSync = (data) => {
       const { conversationId: cid, pinnedMessages: newPins } = data;
@@ -58,6 +68,7 @@ const useChatSocket = ({ socket, conversation, currentUserId, setMessages, onPin
     socket.on('chat:message-deleted-for-me',  handleDeleteForMeSync);
     socket.on('chat:pin-message',             handlePinSync);
     socket.on('chat:unpin-message',           handlePinSync);
+    socket.on('chat:update-poll',             handleUpdatePoll);
 
     return () => {
       socket.off('chat:message-reaction',        handleReaction);
@@ -65,6 +76,7 @@ const useChatSocket = ({ socket, conversation, currentUserId, setMessages, onPin
       socket.off('chat:message-deleted-for-me',  handleDeleteForMeSync);
       socket.off('chat:pin-message',             handlePinSync);
       socket.off('chat:unpin-message',           handlePinSync);
+      socket.off('chat:update-poll',             handleUpdatePoll);
     };
   }, [socket, conversation?.id, conversation?._id, currentUserId, setMessages, onPinnedMessagesChange]);
 };

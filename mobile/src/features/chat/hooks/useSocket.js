@@ -109,6 +109,12 @@ const useSocket = (token, conversationId, currentUserId, handlers) => {
       handlersRef.current.onPinnedMessagesChange?.(data.pinnedMessages);
     });
 
+    // ── Cập nhật Poll ─────────────────────────────────────────────────
+    socket.on('chat:update-poll', (updatedMsg) => {
+      if (updatedMsg.conversationId !== conversationId) return;
+      handlersRef.current.onUpdatePoll?.(updatedMsg);
+    });
+
     // Rời phòng và ngắt kết nối khi unmount
     return () => {
       socket.emit('chat:leave', { conversationId });

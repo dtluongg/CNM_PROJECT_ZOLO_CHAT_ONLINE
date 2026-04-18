@@ -26,6 +26,7 @@ import SystemMessageBubble from '../components/SystemMessageBubble';
 import UnreadDivider from '../components/UnreadDivider';
 import AiSummaryCard from '../components/AiSummaryCard';
 import PinnedBar from '../components/PinnedBar';
+import CreatePollModal from '../components/CreatePollModal';
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import useMessages from '../hooks/useMessages';
 import useSocket from '../hooks/useSocket';
@@ -65,6 +66,7 @@ export default function MessageScreen({ route, navigation }) {
   const [replyingMessage, setReplyingMessage] = useState(null);
   const [reactionTypes, setReactionTypes] = useState([]);
   const [pinnedMessages, setPinnedMessages] = useState(conversation.pinnedMessages || []);
+  const [showPollModal, setShowPollModal] = useState(false);
 
   useEffect(() => {
     setPinnedMessages(conversation.pinnedMessages || []);
@@ -133,6 +135,7 @@ export default function MessageScreen({ route, navigation }) {
     onRead: (data) => msgHook.markRead(data),
     onDeletedForMe: (messageId) => msgHook.deleteMessage(messageId),
     onPinnedMessagesChange: (newPins) => setPinnedMessages(newPins),
+    onUpdatePoll: (updatedMsg) => msgHook.updatePoll(updatedMsg),
   });
 
   // ── Setup khi mount ─────────────────────────────────────────────────────
@@ -336,6 +339,24 @@ export default function MessageScreen({ route, navigation }) {
     setReplyingMessage(msg);
     setEditingMessage(null);
     setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  // ── Bình chọn (Poll) ──────────────────────────────────────────────────
+  const handleCreatePoll = async ({ topic, options, multipleChoice }) => {
+    try {
+      await messageApi.createPoll(conversation.id, { topic, options, multipleChoice });
+    } catch (err) {
+      console.error('handleCreatePoll error:', err);
+      Alert.alert('Lỗi', 'Không thể tạo bình chọn');
+    }
+  };
+
+  const handlePollVote = async (messageId, voteData) => {
+    try {
+      await messageApi.votePoll(messageId, voteData);
+    } catch (err) {
+      console.error('handlePollVote error:', err);
+    }
   };
 
   // ── React emoji ─────────────────────────────────────────────────────────
@@ -736,6 +757,7 @@ export default function MessageScreen({ route, navigation }) {
                 onPin={handlePin}
                 onUnpin={handleUnpin}
                 isPinned={pinnedMessages.some(p => (p.messageId?._id || p.messageId?.id || p.messageId)?.toString() === (item.msg?._id || item.msg?.id)?.toString())}
+                onVote={(optId) => handlePollVote(item.msg?._id || item.msg?.id, optId)}
               />
             );
           }}
@@ -830,6 +852,7 @@ export default function MessageScreen({ route, navigation }) {
             ) : (
               <InputBar
                 text={text}
+                isGroup={conversation.type === 'group'}
                 onChangeText={(v) => {
                   setText(v);
                   if (v.trim()) emitTyping();
@@ -838,7 +861,8 @@ export default function MessageScreen({ route, navigation }) {
                 onPickFile={() => pickAndSendFile(replyingMessage?._id || replyingMessage?.id)}
                 onPickImage={() => pickAndSendImage(replyingMessage?._id || replyingMessage?.id)}
                 onStartRecord={startRecording}
-                onToggleEmoji={() => setShowEmoji((v) => !v)}
+                onToggleEmoji={() => setShowEmoji(!showEmoji)}
+                onPickPoll={() => setShowPollModal(true)}
                 inputRef={inputRef}
                 placeholder={`Nhắn tin ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
                 THEME={THEME}
@@ -848,6 +872,12 @@ export default function MessageScreen({ route, navigation }) {
               />
             )
           )}
+          <CreatePollModal 
+            visible={showPollModal}
+            onClose={() => setShowPollModal(false)}
+            onCreate={handleCreatePoll}
+            THEME={THEME}
+          />
         </View>
       </View>
 

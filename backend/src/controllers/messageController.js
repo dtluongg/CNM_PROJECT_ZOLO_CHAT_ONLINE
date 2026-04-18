@@ -270,6 +270,29 @@ const getMessages = async (req, res) => {
                 .lean()
         ]);
 
+        // Manually populate voterIds for poll messages
+        const pollMsgs = raw.filter(m => m.type === 'poll');
+        if (pollMsgs.length > 0) {
+            const User = require('../models/userModel');
+            const voterIds = [...new Set(pollMsgs.flatMap(m => 
+                (m.payload?.options || []).flatMap(opt => (opt.voterIds || []).map(v => (v._id || v).toString()))
+            ))];
+            
+            if (voterIds.length > 0) {
+                const voters = await User.find({ _id: { $in: voterIds } }).select('displayName avatar').lean();
+                const voterMap = {};
+                voters.forEach(v => voterMap[v._id.toString()] = v);
+                
+                pollMsgs.forEach(m => {
+                    if (m.payload && m.payload.options) {
+                        m.payload.options.forEach(opt => {
+                            opt.voterIds = (opt.voterIds || []).map(vid => voterMap[(vid._id || vid).toString()] || vid);
+                        });
+                    }
+                });
+            }
+        }
+
         // Đảo ngược để hiển thị theo chiều thời gian (cũ → mới)
         const messages = raw.reverse().map(msg => {
             // Lọc reaction của tin nhắn này

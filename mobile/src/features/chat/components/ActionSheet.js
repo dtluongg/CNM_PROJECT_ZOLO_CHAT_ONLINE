@@ -52,7 +52,7 @@ const ActionSheet = ({
       icon: <Feather name="corner-up-right" size={20} color={THEME.textPrimary} />,
       label: 'Chuyển tiếp',
       action: 'forward',
-      show: true,
+      show: msg.type !== 'poll',
     },
     {
       icon: <Feather name="copy" size={20} color={THEME.textPrimary} />,
@@ -72,8 +72,8 @@ const ActionSheet = ({
       label: 'Thu hồi',
       action: 'revoke',
       danger: true,
-      // Chỉ hiện với tin của mình chưa thu hồi
-      show: isMe && !isRevoked,
+      // Chỉ hiện với tin của mình chưa thu hồi và không phải bình chọn
+      show: isMe && !isRevoked && msg.type !== 'poll',
     },
     {
       icon: <Feather name="edit-2" size={20} color={THEME.textPrimary} />,
@@ -87,7 +87,7 @@ const ActionSheet = ({
       label: 'Xóa tin nhắn',
       action: 'delete',
       danger: true,
-      show: true,
+      show: msg.type !== 'poll',
     },
   ];
 
@@ -97,8 +97,8 @@ const ActionSheet = ({
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
 
-          {/* Hàng emoji react (ẩn khi tin đã thu hồi) */}
-          {!isRevoked && (
+          {/* Hàng emoji react (ẩn khi tin đã thu hồi hoặc là bình chọn) */}
+          {!isRevoked && msg.type !== 'poll' && (
             <View style={styles.reactRow}>
               {(reactionTypes.length > 0
                 ? reactionTypes

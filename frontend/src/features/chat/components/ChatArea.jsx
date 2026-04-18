@@ -60,6 +60,7 @@ export default function ChatArea({
   onBlockStatusChanged,
   onPhoneCall,
   onVideoCall,
+  onPollVote,
 }) {
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
 
@@ -521,6 +522,7 @@ export default function ChatArea({
                 onPin={handlePin}
                 onUnpin={handleUnpin}
                 isPinned={pinnedMessages.some(p => (p.messageId?._id || p.messageId?.id || p.messageId)?.toString() === (item.msg?._id || item.msg?.id)?.toString())}
+                onVote={onPollVote}
               />
             </div>
           );
@@ -578,6 +580,7 @@ export default function ChatArea({
           }}
           placeholder={`Nhắn tin tới ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
           isMobile={isMobile}
+          isGroup={conversation.type === 'group'}
           conversationId={conversation.id}
           socket={socket}
           editingMessage={editingMessage}

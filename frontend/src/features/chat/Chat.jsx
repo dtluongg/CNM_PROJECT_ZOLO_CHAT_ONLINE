@@ -68,6 +68,7 @@ const Chat = () => {
     editMessageInState,
     resetMessages,
     handleSendMessage,
+    handlePollVote,
   } = useMessages({
     currentUser,
     activeConversation,
@@ -219,6 +220,7 @@ const Chat = () => {
     onBlockStatusChanged: () => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId),
     onPhoneCall: handlePhoneCall,
     onVideoCall: handleVideoCall,
+    onPollVote: handlePollVote,
   };
 
   const rightSidebarProps = {

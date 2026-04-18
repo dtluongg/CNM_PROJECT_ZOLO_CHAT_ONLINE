@@ -103,6 +103,13 @@ const messageApi = {
 
   unpinMessage: (conversationId, messageId) =>
     apiClient.post(`/conversations/${conversationId}/unpin/${messageId}`),
+
+  // ── Bình chọn (Poll) ────────────────────────────────────────────────
+  createPoll: (conversationId, { topic, options, multipleChoice }) =>
+    apiClient.post(`/messages/${conversationId}/poll`, { topic, options, multipleChoice }),
+
+  votePoll: (messageId, { optionId, optionIds, newOptions } = {}) =>
+    apiClient.patch(`/messages/poll/${messageId}/vote`, { optionId, optionIds, newOptions }),
 };
 
 

@@ -171,6 +171,19 @@ const useStyles = (THEME) =>
     },
     emojiChar: { fontSize: 22 },
 
+    // ── Thanh công cụ ────────────────────────────────────────────────────
+    toolbar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      backgroundColor: THEME.bgSecondary,
+    },
+    toolbarBtn: {
+      padding: 6,
+    },
+
     // ── Thanh nhập tin nhắn ──────────────────────────────────────────────
     inputBar: {
       flexDirection: 'row',
