@@ -115,6 +115,23 @@ const Chat = () => {
         c.id === conversationId ? { ...c, unread: 0 } : c
       ));
     },
+    onReminderAlert: ({ conversationId, reminderId }) => {
+      setMessages((prev) => {
+        const list = prev[conversationId];
+        if (!list) return prev;
+        return {
+          ...prev,
+          [conversationId]: list.map((m) => {
+            const mId = (m._id || m.id)?.toString();
+            if (mId !== reminderId) return m;
+            return {
+              ...m,
+              payload: { ...(m.payload || {}), isTriggered: true }
+            };
+          })
+        };
+      });
+    },
   });
 
   // ── location state effects ────────────────────────────────────────────────

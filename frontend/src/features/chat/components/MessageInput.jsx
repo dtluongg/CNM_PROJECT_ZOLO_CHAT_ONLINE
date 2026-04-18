@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Paperclip, Smile, Mic, Send, Image, X, BarChart2 } from 'lucide-react';
+import { Paperclip, Smile, Mic, Send, Image, X, BarChart2, AlarmClock } from 'lucide-react';
 import CreatePollModal from './chatArea/modals/CreatePollModal';
+import CreateReminderModal from './chatArea/modals/CreateReminderModal';
 
 const EMOJIS = [
   '😀','😂','😍','🥺','😭','😊','😎','🤔',
@@ -39,6 +40,7 @@ export default function MessageInput({ onSend, placeholder, isMobile, isGroup, c
   const [recordingSec, setRecordingSec] = useState(0);
   const [attachments, setAttachments] = useState([]); // [{id, file, previewUrl}]
   const [showPollModal, setShowPollModal] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
 
   // Sync text when editingMessage changes
   useEffect(() => {
@@ -453,6 +455,22 @@ export default function MessageInput({ onSend, placeholder, isMobile, isGroup, c
               <BarChart2 size={20} />
             </button>
           )}
+
+          {/* Nhắc hẹn - Hiện ở cả chat đơn và nhóm */}
+          <button
+            title="Nhắc hẹn"
+            onClick={() => setShowReminderModal(true)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', padding: '6px', borderRadius: 6,
+              display: 'flex', alignItems: 'center', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#ff9f43'; e.currentTarget.style.background = 'rgba(255,159,67,0.08)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}
+          >
+            <AlarmClock size={20} />
+          </button>
+
         </div>
       )}
 
@@ -585,6 +603,12 @@ export default function MessageInput({ onSend, placeholder, isMobile, isGroup, c
         isOpen={showPollModal} 
         onClose={() => setShowPollModal(false)}
         onCreate={(data) => onSend({ type: 'poll', ...data })}
+      />
+      <CreateReminderModal
+        isOpen={showReminderModal}
+        onClose={() => setShowReminderModal(false)}
+        onCreate={(data) => onSend({ type: 'reminder', ...data })}
+        isGroup={isGroup}
       />
     </div>
   );

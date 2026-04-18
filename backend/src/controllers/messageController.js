@@ -80,9 +80,9 @@ const sendMessage = async (req, res) => {
 
         await requireMembership(conversationId, userId);
 
-        const { type = 'text', content = '', attachmentId, replyToMessageId, forwardFromMessageId } = req.body;
+        const { type = 'text', content = '', attachmentId, payload, replyToMessageId, forwardFromMessageId } = req.body;
 
-        const ALLOWED_TYPES = ['text', 'voice', 'image', 'file'];
+        const ALLOWED_TYPES = ['text', 'voice', 'image', 'file', 'reminder'];
         if (!ALLOWED_TYPES.includes(type)) {
             return res.status(400).json({ message: `type phải là: ${ALLOWED_TYPES.join(', ')}` });
         }
@@ -90,7 +90,7 @@ const sendMessage = async (req, res) => {
         // ── Xử lý Forward (nếu có) ──────────────────────────────────────
         let finalType = type;
         let finalContent = content;
-        let finalPayload = {};
+        let finalPayload = payload || {};
         let attachment = null;
 
         if (isValidId(forwardFromMessageId)) {
@@ -110,7 +110,7 @@ const sendMessage = async (req, res) => {
             }
 
             // ── Xử lý attachment cho voice / image / file ───────────────────
-            if (type !== 'text') {
+            if (type !== 'text' && type !== 'reminder') {
                 if (!isValidId(attachmentId)) {
                     return res.status(400).json({ message: 'attachmentId không hợp lệ' });
                 }
@@ -123,12 +123,26 @@ const sendMessage = async (req, res) => {
                 }
 
                 finalPayload = {
+                    ...finalPayload,
                     url: attachment.url,
                     fileName: attachment.fileName || '',
                     fileSize: attachment.fileSize || 0,
                     mimeType: attachment.mimeType || '',
                     duration: attachment.duration || null,
                 };
+            }
+
+            if (type === 'reminder') {
+                const reminderTime = new Date(finalPayload.reminderTime);
+                if (isNaN(reminderTime.getTime())) {
+                    return res.status(400).json({ message: 'Thời gian nhắc hẹn không hợp lệ' });
+                }
+                if (reminderTime <= new Date()) {
+                    return res.status(400).json({ message: 'Thời gian nhắc hẹn phải ở tương lai' });
+                }
+                finalPayload.reminderTime = reminderTime; // Lưu dưới dạng Date object để Cron job query chuẩn
+                finalPayload.content = content.trim();
+                finalPayload.isTriggered = false;
             }
         }
 
@@ -137,6 +151,7 @@ const sendMessage = async (req, res) => {
             finalType === 'text' ? finalContent.trim() :
                 finalType === 'voice' ? '[Tin nhắn thoại]' :
                     finalType === 'image' ? '[Hình ảnh]' :
+                    finalType === 'reminder' ? '[Nhắc hẹn]' :
             /* file */         (finalPayload?.fileName || '[File đính kèm]');
 
         // ── Tạo message ────────────────────────────────────────────────

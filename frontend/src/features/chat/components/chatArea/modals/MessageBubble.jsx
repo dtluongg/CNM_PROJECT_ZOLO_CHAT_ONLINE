@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 import PollMessage from '../ui/PollMessage';
+import ReminderMessage from '../ui/ReminderMessage';
+
 
 const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245'];
 
@@ -99,6 +101,9 @@ const MessageBubble = ({
     } else if (msg.replyToMessageId.type === 'poll') {
       const pollTopic = msg.replyToMessageId.payload?.topic || msg.replyToMessageId.content || 'Bình chọn';
       repliedContent = `Bình chọn: ${pollTopic}`;
+    } else if (msg.replyToMessageId.type === 'reminder') {
+      const reminderTopic = msg.replyToMessageId.payload?.content || msg.replyToMessageId.content || 'Nhắc hẹn';
+      repliedContent = `Nhắc hẹn: ${reminderTopic}`;
     } else {
       repliedContent = `[${msg.replyToMessageId.type}]`;
     }
@@ -200,6 +205,16 @@ const MessageBubble = ({
         />
       );
     }
+    if (msg.type === 'reminder') {
+      return (
+        <ReminderMessage 
+          message={msg} 
+          isMine={isMine} 
+          isPinned={isPinned}
+        />
+      );
+    }
+
     return (
       <>
         {msg.content}
@@ -264,20 +279,23 @@ const MessageBubble = ({
 
          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexDirection: isMine ? 'row-reverse' : 'row' }}>
            {/* Bubble */}
-            <div style={{
-              background: msg.type === 'poll' ? 'transparent' : (isMine ? 'var(--bubble-self)' : 'var(--bubble-other)'),
+           <div style={{
+              background: (msg.type === 'poll' || msg.type === 'reminder') ? 'transparent' : (isMine ? 'var(--bubble-self)' : 'var(--bubble-other)'),
+
               color: isMine ? '#fff' : 'var(--text-primary)',
-              padding: msg.type === 'poll' ? 0 : (isMobile ? '9px 14px' : '8px 14px'),
-              borderRadius: msg.type === 'poll' ? 0 : 20,
+              padding: (msg.type === 'poll' || msg.type === 'reminder') ? 0 : (isMobile ? '9px 14px' : '8px 14px'),
+              borderRadius: (msg.type === 'poll' || msg.type === 'reminder') ? 0 : 20,
+
               fontSize: isMobile ? 15 : 14, lineHeight: 1.5,
               wordBreak: 'break-word',
-              boxShadow: msg.type === 'poll' ? 'none' : (isBeingRepliedTo ? '0 0 0 2px var(--accent), 0 4px 12px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.12)'),
+              boxShadow: (msg.type === 'poll' || msg.type === 'reminder') ? 'none' : (isBeingRepliedTo ? '0 0 0 2px var(--accent), 0 4px 12px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.12)'),
+
               maxWidth: '100%',
               transform: isBeingRepliedTo ? 'scale(1.02)' : 'scale(1)',
               transition: 'all 0.2s ease-out',
               position: 'relative'
             }}>
-             {isPinned && msg.type !== 'poll' && (
+             {isPinned && msg.type !== 'poll' && msg.type !== 'reminder' && (
                <div style={{ 
                  display: 'flex', alignItems: 'center', gap: 6, 
                  marginBottom: 4, paddingBottom: 4, 
@@ -293,7 +311,7 @@ const MessageBubble = ({
              {renderContent()}
 
             {/* Standalone Reaction Trigger (Web Hover) */}
-            {hover && !isMobile && !(msg.revoked || msg.recalled || msg.type === 'poll') && (
+            {hover && !isMobile && !(msg.revoked || msg.recalled || msg.type === 'poll' || msg.type === 'reminder') && (
               <div
                 onClick={(e) => { e.stopPropagation(); setShowEmojiBar(p => !p); }}
                 style={{
@@ -321,7 +339,7 @@ const MessageBubble = ({
             )}
 
              {/* Emoji bar (desktop hover) - Anchored to the standalone button */}
-            {showEmojiBar && !isMobile && !(msg.revoked || msg.recalled || msg.type === 'poll') && (
+            {showEmojiBar && !isMobile && !(msg.revoked || msg.recalled || msg.type === 'poll' || msg.type === 'reminder') && (
               <div style={{
                 position: 'absolute', 
                 bottom: 35, 
@@ -350,7 +368,7 @@ const MessageBubble = ({
             )}
 
             {/* Reactions summary - Synchronized Bottom-Right */}
-            {msg.reactions && Object.keys(msg.reactions).length > 0 && msg.type !== 'poll' && (
+            {msg.reactions && Object.keys(msg.reactions).length > 0 && msg.type !== 'poll' && msg.type !== 'reminder' && (
               <div
                 onClick={(e) => { e.stopPropagation(); onShowDetails(msg); }}
                 style={{
@@ -385,7 +403,7 @@ const MessageBubble = ({
               {[
                 ...(!(msg.revoked || msg.recalled) ? [
                   { content: <Quote size={13} />, title: 'Trả lời', onClick: () => onReply(msg) },
-                  ...(msg.type !== 'poll' ? [{ content: <CornerUpRight size={13} />, title: 'Chuyển tiếp', onClick: () => onForward(msg) }] : []),
+                  ...(msg.type !== 'poll' && msg.type !== 'reminder' ? [{ content: <CornerUpRight size={13} />, title: 'Chuyển tiếp', onClick: () => onForward(msg) }] : []),
                 ] : []),
                 {
                   content: <MoreHorizontal size={14} />, title: 'Thêm',
@@ -427,20 +445,20 @@ const MessageBubble = ({
                 padding: '6px 0', zIndex: 999, minWidth: 180, border: '1px solid #eee',
               }}
             >
-              {isMine && msg.type !== 'poll' && (
+              {isMine && msg.type !== 'poll' && msg.type !== 'reminder' && (
                 <div onClick={() => { onRecall(msg); setOpenMenuId(null); }}
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#ed4245', fontWeight: 600 }}>
                   ↩️ Thu hồi
                 </div>
               )}
 
-              {msg.type !== 'poll' && (
+              {msg.type !== 'poll' && msg.type !== 'reminder' && (
                 <div onClick={() => { onDelete(msg); setOpenMenuId(null); }}
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#ed4245' }}>
                   🗑️ Xóa
                 </div>
               )}
-              {isMine && msg.type !== 'poll' && (
+              {isMine && msg.type !== 'poll' && msg.type !== 'reminder' && (
                 <div onClick={() => { onEdit(msg); setOpenMenuId(null); }}
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#000' }}>
                   ✏️ Chỉnh sửa tin nhắn

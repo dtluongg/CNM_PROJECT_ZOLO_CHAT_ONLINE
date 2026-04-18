@@ -215,6 +215,35 @@ export const useMessages = ({
         setActiveConversation((prev) =>
           prev?.id === convId ? { ...prev, lastMessage: msg.content, time: msg.time } : prev
         );
+
+      // ── REMINDER ─────────────────────────────────────────────────────────
+      } else if (payload.type === 'reminder') {
+        const { content, reminderTime } = payload;
+        const tempId = `temp_${Date.now()}`;
+        const now = new Date().toISOString();
+        const tempMsg = {
+          _id: tempId, senderId: myId, senderName: myName, avatar: myAvatar,
+          type: 'reminder', content: content.trim(), 
+          payload: { reminderTime },
+          time: fmtTime(now), createdAt: now
+        };
+        setMessages((prev) => ({ ...prev, [convId]: [...(prev[convId] || []), tempMsg] }));
+
+        const res = await messageApi.createReminder(convId, { content, reminderTime });
+        const real = normalizeMsg(res.data.data);
+        const realId = real._id?.toString();
+        
+        setMessages((prev) => {
+          const list = prev[convId] || [];
+          // Deduplicate: remove real message if it already arrived via socket
+          const cleaned = list.filter((m) => (m._id || m.id)?.toString() !== realId);
+          return { ...prev, [convId]: cleaned.map((m) => (m._id === tempId ? real : m)) };
+        });
+
+        updateConversationPreview(convId, { lastMessage: '[Nhắc hẹn]', time: real.time });
+        setActiveConversation((prev) =>
+          prev?.id === convId ? { ...prev, lastMessage: '[Nhắc hẹn]', time: real.time } : prev
+        );
       }
 
     } catch (err) {

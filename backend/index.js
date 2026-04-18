@@ -43,6 +43,8 @@ const conversationRouter = require('./src/routes/conversationRouter');
 const messageRouter      = require('./src/routes/messageRouter');
 const reactionRouter     = require('./src/routes/reactionRouter');
 const notificationRouter = require('./src/routes/notificationRouter');
+const { initReminderCron } = require('./src/services/reminderService');
+
 
 
 app.use('/backend/api/users',         userRouter);
@@ -60,6 +62,8 @@ app.use('/backend/api/notifications', notificationRouter);
 // ── SOCKET ──
 const { initSocket } = require('./src/socket/socketManager');
 initSocket(server);
+initReminderCron();
+
 
 // ── ERROR HANDLER ──
 const errorHandler = require('./src/middlewares/errorHandler');

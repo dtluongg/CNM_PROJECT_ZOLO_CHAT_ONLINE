@@ -258,7 +258,7 @@ export default function ChatArea({
     displayItems.push({
       type:      msg.type === 'system' ? 'system' : 'msg',
       msg,
-      isMine:    msg.senderId === currentUserId,
+      isMine:    (msg.senderId?._id || msg.senderId) === currentUserId,
       showHeader: msg.type === 'system' ? false : !sameGroup,
       onForward: (m) => { setForwardingMsg(m); setShowForwardModal(true); },
       key:       msg._id || msg.id,

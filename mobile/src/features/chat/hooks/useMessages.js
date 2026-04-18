@@ -9,8 +9,21 @@ const fmtTime = (iso) => {
   return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 };
 
+// Parse payload an toàn: xử lý cả trường hợp là string JSON (Android) lẫn object (Web)
+const parsePayload = (payload) => {
+  if (!payload) return {};
+  if (typeof payload === 'string') {
+    try { return JSON.parse(payload); } catch { return {}; }
+  }
+  return payload;
+};
+ 
 // Chuẩn hoá dữ liệu tin nhắn từ server
-const normalizeMsg = (msg) => ({ ...msg, time: fmtTime(msg.createdAt) });
+const normalizeMsg = (msg) => ({ 
+  ...msg, 
+  time: fmtTime(msg.createdAt),
+  payload: parsePayload(msg.payload) 
+});
 
 /**
  * Hook quản lý toàn bộ danh sách tin nhắn của một cuộc hội thoại.
@@ -177,6 +190,22 @@ const useMessages = (conversationId, currentUserId) => {
     );
   }, []);
 
+  // Cập nhật trạng thái "Đã nhắc" cho tin nhắn nhắc hẹn
+  const triggerReminder = useCallback((reminderId) => {
+    setMessages((prev) =>
+      prev.map((m) => {
+        const mId = (m._id || m.id)?.toString();
+        if (mId !== reminderId?.toString()) return m;
+        // Sử dụng parsePayload để tránh lỗi spread một chuỗi JSON
+        const currentPayload = parsePayload(m.payload);
+        return {
+          ...m,
+          payload: { ...currentPayload, isTriggered: true },
+        };
+      })
+    );
+  }, []);
+ 
   return {
     messages,
     normalizeMsg,
@@ -193,6 +222,7 @@ const useMessages = (conversationId, currentUserId) => {
     markBlocked,
     applyEdit,
     updatePoll,
+    triggerReminder,
   };
 };
 

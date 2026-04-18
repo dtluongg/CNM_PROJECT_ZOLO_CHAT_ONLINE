@@ -27,6 +27,7 @@ import UnreadDivider from '../components/UnreadDivider';
 import AiSummaryCard from '../components/AiSummaryCard';
 import PinnedBar from '../components/PinnedBar';
 import CreatePollModal from '../components/CreatePollModal';
+import CreateReminderModal from '../components/CreateReminderModal';
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import useMessages from '../hooks/useMessages';
 import useSocket from '../hooks/useSocket';
@@ -67,6 +68,7 @@ export default function MessageScreen({ route, navigation }) {
   const [reactionTypes, setReactionTypes] = useState([]);
   const [pinnedMessages, setPinnedMessages] = useState(conversation.pinnedMessages || []);
   const [showPollModal, setShowPollModal] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
 
   useEffect(() => {
     setPinnedMessages(conversation.pinnedMessages || []);
@@ -136,6 +138,9 @@ export default function MessageScreen({ route, navigation }) {
     onDeletedForMe: (messageId) => msgHook.deleteMessage(messageId),
     onPinnedMessagesChange: (newPins) => setPinnedMessages(newPins),
     onUpdatePoll: (updatedMsg) => msgHook.updatePoll(updatedMsg),
+    onReminderAlert: ({ reminderId }) => {
+      msgHook.triggerReminder(reminderId);
+    },
   });
 
   // ── Setup khi mount ─────────────────────────────────────────────────────
@@ -359,6 +364,35 @@ export default function MessageScreen({ route, navigation }) {
     }
   };
 
+  // ── Nhắc hẹn (Reminder) ──────────────────────────────────────────────
+  const handleCreateReminder = async ({ content, reminderTime }) => {
+    const tempId = `temp_rem_${Date.now()}`;
+    const now = new Date().toISOString();
+    const tempMsg = {
+      _id: tempId,
+      senderId: currentUserId,
+      senderName: user?.displayName || 'Tôi',
+      avatar: user?.avatar || null,
+      type: 'reminder',
+      content: content.trim(),
+      payload: { reminderTime },
+      time: fmtTime(now),
+      createdAt: now,
+    };
+
+    msgHook.addTempMessage(tempMsg);
+    setShowReminderModal(false);
+
+    try {
+      const res = await messageApi.createReminder(conversation.id, { content, reminderTime });
+      msgHook.replaceTemp(tempId, res.data.data);
+    } catch (err) {
+      console.error('handleCreateReminder error:', err);
+      msgHook.removeTempMessage(tempId);
+      Alert.alert('Lỗi', 'Không thể tạo nhắc hẹn');
+    }
+  };
+
   // ── React emoji ─────────────────────────────────────────────────────────
   const handleReact = async (msg, emoji) => {
     try {
@@ -511,7 +545,7 @@ export default function MessageScreen({ route, navigation }) {
       type: msg.type === 'system' ? 'system' : 'msg',
       msg,
       key: `msg-${msgKey || i}`,
-      isMine: msg.senderId === currentUserId,
+      isMine: (msg.senderId?._id || msg.senderId) === currentUserId,
       showHeader: msg.type === 'system' ? false : !sameGroup,
     });
   });
@@ -860,6 +894,7 @@ export default function MessageScreen({ route, navigation }) {
                 onSend={handleSend}
                 onPickFile={() => pickAndSendFile(replyingMessage?._id || replyingMessage?.id)}
                 onPickImage={() => pickAndSendImage(replyingMessage?._id || replyingMessage?.id)}
+                onPickReminder={() => setShowReminderModal(true)}
                 onStartRecord={startRecording}
                 onToggleEmoji={() => setShowEmoji(!showEmoji)}
                 onPickPoll={() => setShowPollModal(true)}
@@ -876,6 +911,13 @@ export default function MessageScreen({ route, navigation }) {
             visible={showPollModal}
             onClose={() => setShowPollModal(false)}
             onCreate={handleCreatePoll}
+            THEME={THEME}
+          />
+          <CreateReminderModal
+            visible={showReminderModal}
+            onClose={() => setShowReminderModal(false)}
+            onCreate={handleCreateReminder}
+            isGroup={conversation.type === 'group'}
             THEME={THEME}
           />
         </View>
