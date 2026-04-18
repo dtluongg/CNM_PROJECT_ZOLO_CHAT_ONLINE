@@ -3,7 +3,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { usePresence } from '../../../context/PresenceContext';
 import {
   ChevronLeft, ChevronRight, Search, Plus, Settings,
-  Hash, MessageCircle, LogOut, UserSearch, X, ArrowLeft,
+  Hash, Volume2, FileText, MessageCircle, LogOut, UserSearch, X, ArrowLeft,
   ChevronDown, Lock, Users,
 } from 'lucide-react';
 
@@ -107,6 +107,9 @@ export default function LeftSidebar({
   // ── Channel row component ──────────────────────────────────
   const ChannelRow = ({ topic, active, onSelect }) => {
     const [hovered, setHovered] = useState(false);
+    const isVoice = topic.channelType === 'voice';
+    const isSystem = topic.channelType === 'system';
+    const ChannelIcon = isVoice ? Volume2 : isSystem ? FileText : Hash;
     return (
       <div
         onClick={() => !topic.isLocked && onSelect(topic)}
@@ -124,7 +127,7 @@ export default function LeftSidebar({
           transition: 'background 0.1s',
         }}
       >
-        <Hash size={isMobile ? 17 : 14} style={{ color: active ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
+        <ChannelIcon size={isMobile ? 17 : 14} style={{ color: active ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
         <span style={{
           fontSize: isMobile ? 15 : 13, flex: 1,
           color: active ? '#fff' : 'var(--text-primary)',
@@ -134,6 +137,9 @@ export default function LeftSidebar({
           {topic.name}
         </span>
         {topic.isLocked && <Lock size={11} style={{ color: active ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)', flexShrink: 0 }} />}
+        {isVoice && !topic.isLocked && (
+          <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)', flexShrink: 0 }}>🔊</span>
+        )}
       </div>
     );
   };

@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, Image, TouchableOpacity,
-  Modal, Pressable, ScrollView, Alert,
+  Modal, Pressable, ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Avatar from './Avatar';
 import CallHistoryTab from '../../call/components/CallHistoryTab';
+import conversationApi from '../api/conversationApi';
 
 /**
  * Panel thông tin cuộc trò chuyện (mở bằng nút 3 chấm trên header).
@@ -46,15 +47,31 @@ const InfoPanel = ({
   onImagePress,
   onFilePress,
   onViewProfile,
+  activeTopic,
+  onTopicSelect,
   THEME,
   styles,
 }) => {
-  const tabs = [
-    { key: 'info',  label: 'Thông tin' },
-    { key: 'media', label: 'Ảnh' },
-    { key: 'files', label: 'File' },
-        ...(conversation?.type === 'dm' ? [{ key: 'calls', label: 'Cuộc gọi' }] : []),
+  const [topics, setTopics] = useState([]);
+  const [loadingTopics, setLoadingTopics] = useState(false);
 
+  useEffect(() => {
+    if (!visible || infoTab !== 'channels' || !conversation?.id || conversation?.type !== 'group') return;
+    let cancelled = false;
+    setLoadingTopics(true);
+    conversationApi.listTopics(conversation.id)
+      .then(res => { if (!cancelled) setTopics(Array.isArray(res?.data?.data) ? res.data.data : []); })
+      .catch(() => { if (!cancelled) setTopics([]); })
+      .finally(() => { if (!cancelled) setLoadingTopics(false); });
+    return () => { cancelled = true; };
+  }, [visible, infoTab, conversation?.id]);
+
+  const tabs = [
+    { key: 'info',     label: 'Thông tin' },
+    ...(conversation?.type === 'group' ? [{ key: 'channels', label: 'Kênh' }] : []),
+    { key: 'media',    label: 'Ảnh' },
+    { key: 'files',    label: 'File' },
+    ...(conversation?.type === 'dm' ? [{ key: 'calls', label: 'Cuộc gọi' }] : []),
   ];
 
   return (
@@ -403,6 +420,88 @@ const InfoPanel = ({
                   ))}
               </View>
             )}
+            {/* ── Tab Kênh ── */}
+            {infoTab === 'channels' && conversation?.type === 'group' && (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
+                {/* #chung */}
+                <TouchableOpacity
+                  onPress={() => { onTopicSelect && onTopicSelect(null); onClose(); }}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 10,
+                    paddingVertical: 12, paddingHorizontal: 12,
+                    borderRadius: 10, marginBottom: 4,
+                    backgroundColor: !activeTopic ? THEME.accent + '22' : THEME.bgPrimary,
+                    borderWidth: 1,
+                    borderColor: !activeTopic ? THEME.accent : THEME.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 16, color: !activeTopic ? THEME.accent : THEME.textMuted }}>#</Text>
+                  <Text style={{ fontSize: 14, fontWeight: !activeTopic ? '700' : '500', color: !activeTopic ? THEME.accent : THEME.textPrimary }}>
+                    chung
+                  </Text>
+                  {!activeTopic && <Text style={{ marginLeft: 'auto', fontSize: 11, color: THEME.accent }}>● đang xem</Text>}
+                </TouchableOpacity>
+
+                {loadingTopics && (
+                  <View style={{ alignItems: 'center', padding: 16 }}>
+                    <ActivityIndicator color={THEME.accent} />
+                    <Text style={{ color: THEME.textMuted, fontSize: 13, marginTop: 8 }}>Đang tải kênh...</Text>
+                  </View>
+                )}
+
+                {!loadingTopics && topics.length === 0 && (
+                  <Text style={{ color: THEME.textMuted, fontSize: 13, padding: 12, fontStyle: 'italic' }}>
+                    Chưa có kênh nào.
+                  </Text>
+                )}
+
+                {!loadingTopics && (() => {
+                  const grouped = topics.reduce((acc, t) => {
+                    const cat = t.categoryName || '';
+                    if (!acc[cat]) acc[cat] = [];
+                    acc[cat].push(t);
+                    return acc;
+                  }, {});
+                  return Object.entries(grouped).map(([cat, catTopics]) => (
+                    <View key={cat} style={{ marginTop: cat ? 12 : 0 }}>
+                      {!!cat && (
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: THEME.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4, marginLeft: 4 }}>
+                          {cat}
+                        </Text>
+                      )}
+                      {catTopics.map(topic => {
+                        const isActive = activeTopic?._id === topic._id;
+                        const icon = topic.channelType === 'voice' ? '🔊' : topic.channelType === 'system' ? '📋' : '#';
+                        return (
+                          <TouchableOpacity
+                            key={topic._id}
+                            onPress={() => { if (!topic.isLocked) { onTopicSelect && onTopicSelect(topic); onClose(); } }}
+                            disabled={!!topic.isLocked}
+                            style={{
+                              flexDirection: 'row', alignItems: 'center', gap: 10,
+                              paddingVertical: 11, paddingHorizontal: 12,
+                              borderRadius: 10, marginBottom: 4,
+                              backgroundColor: isActive ? THEME.accent + '22' : THEME.bgPrimary,
+                              borderWidth: 1,
+                              borderColor: isActive ? THEME.accent : THEME.border,
+                              opacity: topic.isLocked ? 0.5 : 1,
+                            }}
+                          >
+                            <Text style={{ fontSize: 15, color: isActive ? THEME.accent : THEME.textMuted }}>{icon}</Text>
+                            <Text style={{ flex: 1, fontSize: 14, fontWeight: isActive ? '700' : '500', color: isActive ? THEME.accent : THEME.textPrimary }} numberOfLines={1}>
+                              {topic.name}
+                            </Text>
+                            {topic.isLocked && <Text style={{ fontSize: 12, color: THEME.textMuted }}>🔒</Text>}
+                            {isActive && <Text style={{ fontSize: 11, color: THEME.accent }}>● đang xem</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ));
+                })()}
+              </View>
+            )}
+
             {/* ── Tab Cuộc gọi ── */}
                         {infoTab === 'calls' && conversation?.type === 'dm' && (
                           <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>

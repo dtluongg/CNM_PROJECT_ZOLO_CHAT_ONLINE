@@ -20,13 +20,13 @@ const normalizeMsg = (msg) => ({ ...msg, time: fmtTime(msg.createdAt) });
  * @param {string} currentUserId  - ID người dùng hiện tại
  * @returns {object} state và các hàm thao tác tin nhắn
  */
-const useMessages = (conversationId, currentUserId) => {
+const useMessages = (conversationId, currentUserId, topicId = null) => {
   const [messages, setMessages] = useState([]);
 
   // Tải tin nhắn từ API, lọc trùng lặp theo _id
   const loadMessages = useCallback(async () => {
     try {
-      const res = await messageApi.getMessages(conversationId);
+      const res = await messageApi.getMessages(conversationId, { topicId });
       const raw = (res.data.messages || []).map(normalizeMsg);
       const seen = new Set();
       const msgs = raw.filter((m) => {
@@ -39,7 +39,7 @@ const useMessages = (conversationId, currentUserId) => {
     } catch (err) {
       console.error('Load messages error:', err);
     }
-  }, [conversationId]);
+  }, [conversationId, topicId]);
 
   // Load lần đầu khi mount
   useEffect(() => {

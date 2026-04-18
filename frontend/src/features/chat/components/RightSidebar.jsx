@@ -16,6 +16,8 @@ import {
     UserCog,
     Trash2,
     FileText,
+    Camera,
+    Save,
 } from "lucide-react";
 
 import conversationApi from "../api/conversationApi";
@@ -75,6 +77,13 @@ export default function RightSidebar({
     const [nicknameBusy, setNicknameBusy] = useState(false);
     const [notifSetting, setNotifSetting] = useState(null);
     const [notifBusy, setNotifBusy] = useState(false);
+
+    // ── Group Settings State ─────────────────────────────
+    const [groupSettingsForm, setGroupSettingsForm] = useState({ name: '', groupType: 'general', description: '' });
+    const [groupAvatarFile, setGroupAvatarFile] = useState(null);
+    const [groupAvatarPreview, setGroupAvatarPreview] = useState(null);
+    const [savingGroupSettings, setSavingGroupSettings] = useState(false);
+    const groupAvatarInputRef = React.useRef(null);
 
     const myUserId = (user?._id || user?.id || "").toString();
     const accentColor =
@@ -175,6 +184,18 @@ export default function RightSidebar({
     }, [conversation?.otherUserId]);
 
     // ── Effects ──────────────────────────────────────────
+    useEffect(() => {
+        if (conversation?.type === 'group') {
+            setGroupSettingsForm({
+                name: conversation.name || '',
+                groupType: conversation.groupType || 'general',
+                description: conversation.raw?.description || conversation.description || '',
+            });
+            setGroupAvatarFile(null);
+            setGroupAvatarPreview(null);
+        }
+    }, [conversation?.id, conversation?.type]);
+
     useEffect(() => {
         setEditingMemberId(null);
         setSelectedAddIds([]);
@@ -425,6 +446,32 @@ export default function RightSidebar({
         }
     };
 
+    const handleSaveGroupSettings = async () => {
+        if (!conversation?.id) return;
+        try {
+            setSavingGroupSettings(true);
+            let avatarUrl = conversation.avatar || '';
+            if (groupAvatarFile) {
+                const fd = new FormData();
+                fd.append('file', groupAvatarFile);
+                const uploadRes = await messageApi.uploadImage(fd);
+                avatarUrl = uploadRes?.data?.data?.url || uploadRes?.data?.url || avatarUrl;
+            }
+            await conversationApi.updateGroupInfo(conversation.id, {
+                name: groupSettingsForm.name.trim(),
+                groupType: groupSettingsForm.groupType,
+                description: groupSettingsForm.description,
+                avatar: avatarUrl,
+            });
+            if (onGroupUpdated) await onGroupUpdated();
+            window.alert('Đã cập nhật thông tin nhóm');
+        } catch (error) {
+            window.alert(error.response?.data?.message || 'Không thể cập nhật nhóm');
+        } finally {
+            setSavingGroupSettings(false);
+        }
+    };
+
     if (!conversation) return null;
 
     return (
@@ -516,6 +563,9 @@ export default function RightSidebar({
                         { key: "files", label: "File" },
                         ...(conversation?.type === "dm"
                             ? [{ key: "calls", label: "Cuộc gọi" }]
+                            : []),
+                        ...(conversation?.type === "group" && canManageMembers
+                            ? [{ key: "settings", label: "Cài đặt" }]
                             : []),
                     ].map((t) => (
                         <button
@@ -1585,6 +1635,125 @@ export default function RightSidebar({
                                 activeTopic={activeTopic}
                                 onTopicSelect={onTopicSelect}
                             />
+                        </div>
+                    )}
+
+                    {/* ==================== TAB SETTINGS ==================== */}
+                    {tab === "settings" && conversation?.type === "group" && canManageMembers && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <SectionHeader title="Cài đặt nhóm" />
+
+                            {/* Avatar */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div
+                                    onClick={() => groupAvatarInputRef.current?.click()}
+                                    style={{
+                                        width: 60, height: 60, borderRadius: '50%', flexShrink: 0,
+                                        background: groupAvatarPreview || conversation.avatar ? 'transparent' : 'var(--bg-hover)',
+                                        border: '2px dashed var(--border)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        cursor: 'pointer', overflow: 'hidden', position: 'relative',
+                                    }}
+                                    title="Đổi ảnh đại diện nhóm"
+                                >
+                                    {(groupAvatarPreview || conversation.avatar) ? (
+                                        <img src={groupAvatarPreview || conversation.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                        <Camera size={20} style={{ color: 'var(--text-muted)' }} />
+                                    )}
+                                </div>
+                                <input
+                                    ref={groupAvatarInputRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                    style={{ display: 'none' }}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        setGroupAvatarFile(file);
+                                        setGroupAvatarPreview(URL.createObjectURL(file));
+                                    }}
+                                />
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                    Nhấn để thay đổi ảnh đại diện nhóm
+                                </div>
+                            </div>
+
+                            {/* Name */}
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>Tên nhóm</div>
+                                <input
+                                    value={groupSettingsForm.name}
+                                    onChange={(e) => setGroupSettingsForm((p) => ({ ...p, name: e.target.value }))}
+                                    placeholder="Tên nhóm..."
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box',
+                                        background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                        borderRadius: 8, color: 'var(--text-primary)',
+                                        padding: '8px 10px', outline: 'none', fontSize: 13,
+                                    }}
+                                />
+                            </div>
+
+                            {/* Group type */}
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>Loại nhóm</div>
+                                <select
+                                    value={groupSettingsForm.groupType}
+                                    onChange={(e) => setGroupSettingsForm((p) => ({ ...p, groupType: e.target.value }))}
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box',
+                                        background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                        borderRadius: 8, color: 'var(--text-primary)',
+                                        padding: '8px 10px', outline: 'none', fontSize: 13, cursor: 'pointer',
+                                    }}
+                                >
+                                    {[
+                                        { value: 'general', label: '💬 Thảo luận chung' },
+                                        { value: 'study',   label: '📚 Học tập' },
+                                        { value: 'gaming',  label: '🎮 Gaming' },
+                                        { value: 'project', label: '📌 Dự án / Làm việc' },
+                                        { value: 'other',   label: '🗂️ Khác' },
+                                    ].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>Mô tả nhóm</div>
+                                <textarea
+                                    value={groupSettingsForm.description}
+                                    onChange={(e) => setGroupSettingsForm((p) => ({ ...p, description: e.target.value }))}
+                                    placeholder="Mô tả ngắn về nhóm..."
+                                    maxLength={200}
+                                    rows={3}
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box',
+                                        background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                        borderRadius: 8, color: 'var(--text-primary)',
+                                        padding: '8px 10px', outline: 'none', fontSize: 13,
+                                        resize: 'none', fontFamily: 'inherit',
+                                    }}
+                                />
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
+                                    {groupSettingsForm.description.length}/200
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleSaveGroupSettings}
+                                disabled={savingGroupSettings || !groupSettingsForm.name.trim()}
+                                style={{
+                                    background: 'var(--accent)', border: 'none', borderRadius: 8,
+                                    padding: '9px 16px', cursor: 'pointer',
+                                    color: '#fff', fontWeight: 700, fontSize: 13,
+                                    opacity: (savingGroupSettings || !groupSettingsForm.name.trim()) ? 0.6 : 1,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                }}
+                            >
+                                <Save size={14} />
+                                {savingGroupSettings ? 'Đang lưu...' : 'Lưu thay đổi'}
+                            </button>
                         </div>
                     )}
 

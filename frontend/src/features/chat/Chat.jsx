@@ -149,6 +149,11 @@ const Chat = () => {
       socketRef.current.emit('chat:leave', { conversationId: activeConvRef.current.id });
     }
     setActiveConversation(conv);
+    if (!conv) {
+      if (isMobile) setMobileView('list');
+      fetchDmBlockStatus(null);
+      return;
+    }
     setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, unread: 0 } : c)));
 
     if (socketRef.current) socketRef.current.emit('chat:join', { conversationId: conv.id });

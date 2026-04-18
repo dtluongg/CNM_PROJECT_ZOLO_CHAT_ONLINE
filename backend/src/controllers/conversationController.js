@@ -1,8 +1,34 @@
 const mongoose = require('mongoose');
 const Conversation = require('../models/conversationModel');
 const ConversationMember = require('../models/conversationMemberModel');
+const ConversationTopic = require('../models/conversationTopicModel');
 const Friendship = require('../models/friendshipModel');
 const User = require('../models/userModel');
+
+const DEFAULT_CHANNELS = {
+    study: [
+        { name: 'học-tập-chung',    emoji: '📚', categoryName: '📚 Học tập', channelType: 'text',  position: 0 },
+        { name: 'hỏi-bài',          emoji: '❓', categoryName: '📚 Học tập', channelType: 'text',  position: 1 },
+        { name: 'chia-sẻ-tài-liệu', emoji: '📄', categoryName: '📚 Học tập', channelType: 'text',  position: 2 },
+    ],
+    gaming: [
+        { name: 'tìm-team',    emoji: '🎮', categoryName: '🎮 Gaming', channelType: 'text',  position: 0 },
+        { name: 'meme-game',   emoji: '😂', categoryName: '🎮 Gaming', channelType: 'text',  position: 1 },
+        { name: 'voice-gaming',emoji: '🔊', categoryName: '🎮 Gaming', channelType: 'voice', position: 2 },
+    ],
+    general: [
+        { name: 'thảo-luận', emoji: '💬', categoryName: '💬 Chat chung', channelType: 'text', position: 0 },
+        { name: 'off-topic',  emoji: '🎭', categoryName: '💬 Chat chung', channelType: 'text', position: 1 },
+    ],
+    project: [
+        { name: 'kế-hoạch', emoji: '📌', categoryName: '📌 Dự án', channelType: 'text',  position: 0 },
+        { name: 'báo-cáo',  emoji: '📊', categoryName: '📌 Dự án', channelType: 'text',  position: 1 },
+        { name: 'họp-nhóm', emoji: '🔊', categoryName: '📌 Dự án', channelType: 'voice', position: 2 },
+    ],
+    other: [
+        { name: 'thảo-luận', emoji: '💬', categoryName: '💬 Chat chung', channelType: 'text', position: 0 },
+    ],
+};
 
 // Chuyển id string sang ObjectId để dùng trong aggregate/query có kiểu chặt chẽ.
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
@@ -310,6 +336,19 @@ const createGroupConversation = async (userId, payload) => {
 
             await ConversationMember.create(members, { session, ordered: true });
         });
+
+        const channels = DEFAULT_CHANNELS[createdConversation.groupType] || DEFAULT_CHANNELS.general;
+        await ConversationTopic.insertMany(
+            channels.map((ch) => ({
+                conversationId: createdConversation._id,
+                name: ch.name,
+                emoji: ch.emoji,
+                categoryName: ch.categoryName,
+                channelType: ch.channelType,
+                position: ch.position,
+                createdBy: toObjectId(userId),
+            }))
+        );
 
         return createdConversation;
     } finally {

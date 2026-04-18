@@ -17,17 +17,19 @@ const rnUploadConfig = Platform.OS !== 'web'
   : {};
 
 const messageApi = {
-  getMessages: (conversationId, { before, limit = 30 } = {}) => {
+  getMessages: (conversationId, { before, limit = 30, topicId = null } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (before) params.set('before', before);
+    if (topicId) params.set('topicId', topicId);
     return apiClient.get(`/messages/${conversationId}?${params}`);
   },
 
-  sendText: (conversationId, content, replyToMessageId = null) =>
+  sendText: (conversationId, content, replyToMessageId = null, topicId = null) =>
     apiClient.post(`/messages/${conversationId}`, {
       type: 'text',
       content,
       replyToMessageId,
+      ...(topicId ? { topicId } : {}),
     }),
 
   // GỬI TIN NHẮN MEDIA (CÓ TRẢ LỜI)

@@ -20,9 +20,12 @@ export const useFriendsData = () => {
   // ── Create group modal ───────────────────────────────────────────────────
   const [showCreateGroup, setShowCreateGroup]       = useState(false);
   const [groupName, setGroupName]                   = useState('');
+  const [groupType, setGroupType]                   = useState('general');      // ← thêm
+  const [groupDescription, setGroupDescription]     = useState('');             // ← thêm
+  const [groupAvatarPreview, setGroupAvatarPreview] = useState(null);           // ← thêm
+  const [groupAvatarFile, setGroupAvatarFile]       = useState(null);           // ← thêm
   const [selectedFriendIds, setSelectedFriendIds]   = useState([]);
   const [creatingChat, setCreatingChat]             = useState(false);
-
   // ── Fetch ────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     try {
@@ -155,9 +158,20 @@ export const useFriendsData = () => {
       prev.includes(friendId) ? prev.filter((id) => id !== friendId) : [...prev, friendId]
     );
   }, []);
+  const handleAvatarFileChange = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setGroupAvatarFile(file);
+    setGroupAvatarPreview(URL.createObjectURL(file));
+  }, []);
+
 
   const openCreateGroupModal = useCallback(() => {
     setGroupName('');
+    setGroupType('general');          // ← thêm
+    setGroupDescription('');          // ← thêm
+    setGroupAvatarPreview(null);      // ← thêm
+    setGroupAvatarFile(null);         // ← thêm
     setSelectedFriendIds([]);
     setShowCreateGroup(true);
   }, []);
@@ -169,8 +183,10 @@ export const useFriendsData = () => {
     try {
       setCreatingChat(true);
       const res = await conversationApi.createGroupConversation({
-        name:      groupName.trim(),
-        memberIds: selectedFriendIds,
+        name:        groupName.trim(),
+        memberIds:   selectedFriendIds,
+        groupType,           // ← thêm nếu backend hỗ trợ
+        description: groupDescription, // ← thêm nếu backend hỗ trợ
       });
       const conversationId = res?.data?.data?._id;
       if (!conversationId) throw new Error('Không nhận được conversationId từ server');
@@ -202,5 +218,9 @@ export const useFriendsData = () => {
     toggleSelectFriend,
     openCreateGroupModal,
     handleCreateGroupConversation,
+    groupType, setGroupType,                    // ← thêm
+    groupDescription, setGroupDescription,      // ← thêm
+    groupAvatarPreview,                         // ← thêm
+    handleAvatarFileChange,                     // ← thêm
   };
 };

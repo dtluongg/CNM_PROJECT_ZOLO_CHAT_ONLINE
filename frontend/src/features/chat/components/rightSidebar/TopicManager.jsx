@@ -1,5 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, Lock, Unlock, Hash, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Lock, Unlock, Hash, Volume2, FileText, ChevronDown, ChevronRight, X } from 'lucide-react';
+
+const CHANNEL_TYPE_OPTS = [
+    { value: 'text',   label: '# Văn bản',  Icon: Hash    },
+    { value: 'voice',  label: '🔊 Giọng nói', Icon: Volume2  },
+    { value: 'system', label: '📋 Hệ thống',  Icon: FileText },
+];
+
+const getChannelIcon = (channelType) => {
+    if (channelType === 'voice') return Volume2;
+    if (channelType === 'system') return FileText;
+    return Hash;
+};
 import conversationApi from '../../api/conversationApi';
 
 const CATEGORY_EMOJIS = ['💬', '📢', '📚', '🎮', '🔧', '🎵', '📌', '🎉'];
@@ -9,7 +21,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
     const [loading, setLoading]             = useState(false);
     const [showForm, setShowForm]           = useState(false);
     const [editingTopic, setEditingTopic]   = useState(null);
-    const [form, setForm]                   = useState({ name: '', emoji: '💬', categoryName: '', description: '' });
+    const [form, setForm]                   = useState({ name: '', emoji: '💬', categoryName: '', channelType: 'text', description: '' });
     const [saving, setSaving]               = useState(false);
     const [collapsedCats, setCollapsedCats] = useState({});
     const [hoveredId, setHoveredId]         = useState(null);
@@ -31,7 +43,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
 
     const openCreate = () => {
         setEditingTopic(null);
-        setForm({ name: '', emoji: '💬', categoryName: '', description: '' });
+        setForm({ name: '', emoji: '💬', categoryName: '', channelType: 'text', description: '' });
         setShowForm(true);
     };
 
@@ -41,6 +53,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
             name: topic.name,
             emoji: topic.emoji || '💬',
             categoryName: topic.categoryName || '',
+            channelType: topic.channelType || 'text',
             description: topic.description || '',
         });
         setShowForm(true);
@@ -112,6 +125,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
 
     const TopicRow = ({ topic, isActive }) => {
         const hovered = hoveredId === topic._id;
+        const ChannelIcon = getChannelIcon(topic.channelType);
         return (
             <div
                 onMouseEnter={() => setHoveredId(topic._id)}
@@ -128,7 +142,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
                     onClick={() => !topic.isLocked && onTopicSelect(topic)}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, cursor: topic.isLocked ? 'not-allowed' : 'pointer' }}
                 >
-                    <Hash size={14} style={{ color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--text-muted)', flexShrink: 0 }} />
+                    <ChannelIcon size={14} style={{ color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--text-muted)', flexShrink: 0 }} />
                     <span style={{
                         fontSize: 13, flex: 1,
                         color: isActive ? '#fff' : 'var(--text-primary)',
@@ -276,6 +290,16 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
                             autoFocus
                         />
                     </div>
+
+                    <select
+                        value={form.channelType}
+                        onChange={(e) => setForm((p) => ({ ...p, channelType: e.target.value }))}
+                        style={{ ...s.input }}
+                    >
+                        {CHANNEL_TYPE_OPTS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                    </select>
 
                     <input
                         placeholder="Danh mục (ví dụ: 📚 Học tập)"

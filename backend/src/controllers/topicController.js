@@ -73,7 +73,7 @@ const createTopic = async (req, res, next) => {
     try {
         const userId = getCurrentUserId(req);
         const { id: conversationId } = req.params;
-        const { name, emoji, categoryName, position, description } = req.body;
+        const { name, emoji, categoryName, position, description, channelType } = req.body;
 
         if (!isValidId(conversationId)) {
             return res.status(400).json({ message: 'conversationId không hợp lệ' });
@@ -94,11 +94,13 @@ const createTopic = async (req, res, next) => {
             .lean();
         const nextPosition = position !== undefined ? Number(position) : (maxPositionDoc?.position ?? -1) + 1;
 
+        const VALID_CHANNEL_TYPES = ['text', 'voice', 'system'];
         const topic = await ConversationTopic.create({
             conversationId,
             name: name.trim().toLowerCase().replace(/\s+/g, '-'),
             emoji: emoji || '💬',
             categoryName: categoryName || '',
+            channelType: VALID_CHANNEL_TYPES.includes(channelType) ? channelType : 'text',
             position: nextPosition,
             description: (description || '').toString().slice(0, 200),
             createdBy: userId,
@@ -115,7 +117,7 @@ const updateTopic = async (req, res, next) => {
     try {
         const userId = getCurrentUserId(req);
         const { id: conversationId, topicId } = req.params;
-        const { name, emoji, categoryName, position, isLocked, description } = req.body;
+        const { name, emoji, categoryName, position, isLocked, description, channelType } = req.body;
 
         if (!isValidId(conversationId) || !isValidId(topicId)) {
             return res.status(400).json({ message: 'ID không hợp lệ' });
@@ -126,12 +128,14 @@ const updateTopic = async (req, res, next) => {
         const topic = await ConversationTopic.findOne({ _id: topicId, conversationId });
         if (!topic) return res.status(404).json({ message: 'Không tìm thấy kênh' });
 
+        const VALID_CHANNEL_TYPES = ['text', 'voice', 'system'];
         if (name !== undefined) topic.name = name.trim().toLowerCase().replace(/\s+/g, '-');
         if (emoji !== undefined) topic.emoji = emoji;
         if (categoryName !== undefined) topic.categoryName = categoryName;
         if (position !== undefined) topic.position = Number(position);
         if (typeof isLocked === 'boolean') topic.isLocked = isLocked;
         if (description !== undefined) topic.description = (description || '').toString().slice(0, 200);
+        if (channelType !== undefined && VALID_CHANNEL_TYPES.includes(channelType)) topic.channelType = channelType;
 
         await topic.save();
 

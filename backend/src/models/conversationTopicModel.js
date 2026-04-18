@@ -7,6 +7,7 @@ const conversationTopicSchema = new mongoose.Schema(
     emoji: { type: String, default: '💬' },
     categoryName: { type: String, default: '' },
     position: { type: Number, default: 0 },
+    channelType: { type: String, enum: ['text', 'voice', 'system'], default: 'text' },
     isLocked: { type: Boolean, default: false },
     description: { type: String, default: '', maxlength: 200 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
