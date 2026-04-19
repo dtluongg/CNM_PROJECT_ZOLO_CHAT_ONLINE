@@ -295,12 +295,12 @@ export default function ChatArea({
   }
 
   // ── Filter messages by active topic (groups only) ─────────
-  const visibleMessages = (conversation?.type === 'group' && activeTopic)
-    ? messages.filter((m) => {
+  const visibleMessages = conversation?.type === 'group' && !activeTopic
+    ? messages.filter(m => {
         const mTopicId = m.topicId?.toString?.() || m.topicId || null;
-        return mTopicId === activeTopic._id?.toString();
+        return !mTopicId && m.type !== 'system';
       })
-    : messages;
+    : messages; // đã được filter đúng từ Chat.jsx rồi
 
   // ── Build display items ────────────────────────────────────
   const displayItems = [];

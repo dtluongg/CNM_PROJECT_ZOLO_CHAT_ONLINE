@@ -133,6 +133,12 @@ const Chat = () => {
     const openConversationId = location.state?.openConversationId;
     if (peer && openConversationId) applyDmOverride(openConversationId, peer);
   }, [location.state, applyDmOverride]);
+    // Thêm useEffect này trong Chat.jsx
+    useEffect(() => {
+      if (!activeConversation?.id) return;
+      if (activeConversation.type !== 'group') return;
+      loadMessages(activeConversation.id, activeTopic?._id || null);
+    }, [activeTopic?._id, activeConversation?.id]);
 
   useEffect(() => {
     const pendingPeer = location.state?.pendingPeer;
@@ -224,7 +230,15 @@ const Chat = () => {
 
   // ── Derived values ───────────────────────────────────────────────────────
   const unreadTotal      = conversations.reduce((s, c) => s + (c.unread || 0), 0);
-  const activeMessages   = activeConversation ? messages[activeConversation.id] || [] : [];
+  const activeMessages = (() => {
+    if (!activeConversation) return [];
+    if (activeConversation.type === 'group' && activeTopic?._id) {
+      const key = `${activeConversation.id}__${activeTopic._id}`;
+      return messages[key] || [];
+    }
+    return messages[activeConversation.id] || [];
+  })();
+
   const activeTypingUser = activeConversation ? typingUsers[activeConversation.id] || null : null;
   const currentUserId    = currentUser?._id?.toString() || null;
 
