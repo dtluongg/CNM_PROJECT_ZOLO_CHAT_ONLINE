@@ -134,12 +134,20 @@ const Chat = () => {
     if (peer && openConversationId) applyDmOverride(openConversationId, peer);
   }, [location.state, applyDmOverride]);
 
+
   useEffect(() => {
     const pendingPeer = location.state?.pendingPeer;
     if (!pendingPeer?.id) return;
     applyPendingPeer(pendingPeer);
     if (isMobile) { setMobileView('chat'); setMobileTab('messages'); }
   }, [location.state, isMobile, applyPendingPeer]);
+
+    useEffect(() => {
+      if (!activeConversation?.id) return;
+      if (activeConversation.type !== 'group') return;
+      loadMessages(activeConversation.id, activeTopic?._id || null);
+      fetchMyPermissions(activeConversation.id, currentUser?._id?.toString());
+    }, [activeTopic?._id, activeConversation?.id]);
 
   useEffect(() => { fetchConversations(); }, [fetchConversations]);
 
@@ -168,7 +176,8 @@ const Chat = () => {
     else fetchDmBlockStatus(null);
 
     await loadMessages(conv.id);
-    if (conv.type === 'group') fetchMyPermissions(conv.id);
+    if (conv.type === 'group') fetchMyPermissions(conv.id, currentUser?._id?.toString());
+
     else setMyPermissions(null);
 
   }, [isMobile, fetchDmBlockStatus, loadMessages, setActiveConversation, setConversations, socketRef]);
@@ -224,7 +233,15 @@ const Chat = () => {
 
   // ── Derived values ───────────────────────────────────────────────────────
   const unreadTotal      = conversations.reduce((s, c) => s + (c.unread || 0), 0);
-  const activeMessages   = activeConversation ? messages[activeConversation.id] || [] : [];
+  const activeMessages = (() => {
+    if (!activeConversation) return [];
+    if (activeConversation.type === 'group' && activeTopic?._id) {
+      const key = `${activeConversation.id}__${activeTopic._id}`;
+      return messages[key] || [];
+    }
+    return messages[activeConversation.id] || [];
+  })();
+
   const activeTypingUser = activeConversation ? typingUsers[activeConversation.id] || null : null;
   const currentUserId    = currentUser?._id?.toString() || null;
 

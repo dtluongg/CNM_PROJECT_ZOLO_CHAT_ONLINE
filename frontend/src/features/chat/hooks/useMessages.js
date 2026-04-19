@@ -16,23 +16,27 @@ export const useMessages = ({
 }) => {
   const [messages, setMessages] = useState({});
 
-  const loadMessages = useCallback(async (convId) => {
-    if (messages[convId]) return;
+  const loadMessages = useCallback(async (convId, topicId = null) => {
+    // Key riêng cho từng topic
+    const stateKey = topicId ? `${convId}__${topicId}` : convId;
+    if (messages[stateKey]) return;
     try {
-      const res  = await messageApi.getMessages(convId);
+      const res  = await messageApi.getMessages(convId, { topicId: topicId || undefined });
       const msgs = (res.data.messages || []).map(normalizeMsg);
-      setMessages((prev) => ({ ...prev, [convId]: msgs }));
+      setMessages((prev) => ({ ...prev, [stateKey]: msgs }));
     } catch (err) {
       console.error('Load messages error:', err);
-      setMessages((prev) => ({ ...prev, [convId]: [] }));
+      setMessages((prev) => ({ ...prev, [stateKey]: [] }));
     }
   }, [messages]);
 
   const addMessage = useCallback((convId, msg) => {
+    const topicId = msg.topicId?.toString?.() || msg.topicId || null;
+    const stateKey = topicId ? `${convId}__${topicId}` : convId;
     setMessages((prev) => {
-      const list = prev[convId] || [];
+      const list = prev[stateKey] || [];
       if (list.some((m) => m._id?.toString() === msg._id?.toString())) return prev;
-      return { ...prev, [convId]: [...list, msg] };
+      return { ...prev, [stateKey]: [...list, msg] };
     });
   }, []);
 

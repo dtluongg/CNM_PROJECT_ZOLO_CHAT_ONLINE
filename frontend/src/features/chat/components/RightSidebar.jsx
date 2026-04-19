@@ -125,8 +125,7 @@ export default function RightSidebar({
       !!myMember && (
         myMember.role === "owner" ||
         myMember.role === "admin" ||
-        myPermissions?.globalPermissions?.canInviteMembers === true ||
-        myMember.canInviteMembers === true
+        myPermissions?.globalPermissions?.canInviteMembers === true
       );
     const isOwner = myMember?.role === "owner";
 
@@ -805,7 +804,7 @@ export default function RightSidebar({
                                     )}
                                 </div>
                             )}
-                            {conversation.type === 'group' && !canInviteMembers && myMember && (
+                            {conversation.type === 'group' && !canInviteMembers && myMember && myMember.role === 'member' && (
                                 <div style={{ marginBottom: 16 }}>
                                     <SectionHeader title="Giới thiệu thành viên" />
                                     <div style={{
@@ -895,7 +894,88 @@ export default function RightSidebar({
                                     </div>
                                 </div>
                             )}
-
+                            {/* Thêm thành viên trực tiếp — owner/admin */}
+                            {conversation.type === 'group' && canInviteMembers && (
+                                <div style={{ marginBottom: 16 }}>
+                                    <SectionHeader title="Thêm thành viên" />
+                                    <div style={{
+                                        background: 'var(--bg-tertiary)', borderRadius: 8,
+                                        padding: '12px 14px', border: '1px solid var(--border)',
+                                    }}>
+                                        {loadingFriendPool ? (
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Đang tải...</div>
+                                        ) : friendPool.length === 0 ? (
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                                Không có bạn bè nào để thêm.
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ maxHeight: 180, overflowY: 'auto', marginBottom: 10 }}>
+                                                    {friendPool.map(f => {
+                                                        const fid = (f.friendId || '').toString();
+                                                        const checked = selectedAddIds.includes(fid);
+                                                        return (
+                                                            <div key={fid} onClick={() => handleToggleAddMember(fid)} style={{
+                                                                display: 'flex', alignItems: 'center', gap: 8,
+                                                                padding: '7px 8px', borderRadius: 7, cursor: 'pointer',
+                                                                background: checked ? 'rgba(88,101,242,0.12)' : 'transparent',
+                                                                marginBottom: 2,
+                                                            }}>
+                                                                <div style={{
+                                                                    width: 16, height: 16, borderRadius: 5, flexShrink: 0,
+                                                                    border: `2px solid ${checked ? 'var(--accent)' : 'var(--border)'}`,
+                                                                    background: checked ? 'var(--accent)' : 'transparent',
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                }}>
+                                                                    {checked && <span style={{ color: '#fff', fontSize: 10, fontWeight: 900 }}>✓</span>}
+                                                                </div>
+                                                                {f.avatar ? (
+                                                                    <img src={f.avatar} alt="" style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                                                                ) : (
+                                                                    <div style={{
+                                                                        width: 26, height: 26, borderRadius: '50%', background: 'var(--accent)',
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                        color: '#fff', fontSize: 11, fontWeight: 700, flexShrink: 0,
+                                                                    }}>
+                                                                        {(f.displayName || '?')[0].toUpperCase()}
+                                                                    </div>
+                                                                )}
+                                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {f.displayName || f.friendName}
+                                                                    </div>
+                                                                    {f.email && (
+                                                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                            {f.email}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <button
+                                                    onClick={handleAddMembers}
+                                                    disabled={selectedAddIds.length === 0 || busyAction === 'add-members'}
+                                                    style={{
+                                                        width: '100%', padding: '8px 0',
+                                                        background: 'var(--accent)', color: '#fff',
+                                                        border: 'none', borderRadius: 8, cursor: 'pointer',
+                                                        fontSize: 12, fontWeight: 700,
+                                                        opacity: (selectedAddIds.length === 0 || busyAction === 'add-members') ? 0.5 : 1,
+                                                    }}
+                                                >
+                                                    {busyAction === 'add-members'
+                                                        ? 'Đang thêm...'
+                                                        : selectedAddIds.length > 0
+                                                            ? `➕ Thêm ${selectedAddIds.length} người`
+                                                            : '➕ Thêm thành viên'}
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                             {/* Hành động */}
                             <div
                                 style={{
