@@ -44,6 +44,7 @@ const messageRouter      = require('./src/routes/messageRouter');
 const reactionRouter     = require('./src/routes/reactionRouter');
 const notificationRouter = require('./src/routes/notificationRouter');
 const groupRoleRouter = require('./src/routes/groupRoleRouter');
+const voiceRoomRouter    = require('./src/routes/voiceRoomRouter');
 
 //
 app.use('/backend/api/users',         userRouter);
@@ -57,6 +58,7 @@ app.use('/backend/api/messages',      messageRouter);
 app.use('/backend/api/reactions',     reactionRouter);
 app.use('/backend/api/notifications', notificationRouter);
 app.use('/backend/api/conversations/:id', groupRoleRouter);
+app.use('/backend/api/voice-rooms',   voiceRoomRouter);
 
 // ── SOCKET ──
 const { initSocket } = require('./src/socket/socketManager');

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock } from 'lucide-react';
+import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock , Volume2 } from 'lucide-react';
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
 import conversationApi from '../api/conversationApi';
@@ -26,6 +26,9 @@ import UnpinConfirmModal from './chatArea/modals/UnpinConfirmModal';
 // ── Custom Hooks ───────────────────────────────────────
 import useChatSocket from './chatArea/hooks/useChatSocket';
 import useScrollBehavior from './chatArea/hooks/useScrollBehavior';
+
+// ── Voice channel ──────────────────────────────────────
+import VoiceChannelView from '../../voice/components/VoiceChannelView';
 
 // ── Utils ──────────────────────────────────────────────
 import { getAvatarColor, getInitials } from './chatArea/utils/avatarUtils';
@@ -60,6 +63,8 @@ export default function ChatArea({
   onBlockStatusChanged,
   onPhoneCall,
   onVideoCall,
+  onVoiceRoom,
+  voiceRoomActive,
   onPollVote,
   activeTopic,
   onTopicSelect,
@@ -419,6 +424,7 @@ export default function ChatArea({
             <>
               {[
                 ...(conversation?.type === 'group' ? [{ icon: <Hash size={20} />, title: 'Kênh chat', onClick: openChannelSheet }] : []),
+                ...(conversation?.type === 'group' ? [{ icon: <Volume2 size={20} />, title: 'Phòng thoại', onClick: onVoiceRoom, active: voiceRoomActive }] : []),
                 { icon: <Phone size={20} />, title: 'Gọi thoại', onClick: conversation?.type === 'dm' ? onPhoneCall : undefined },
                 { icon: <Video size={20} />, title: 'Gọi video', onClick: conversation?.type === 'dm' ? onVideoCall : undefined },
                 { icon: <Users size={20} />, title: 'Thông tin', onClick: onToggleRight, active: showRight },
@@ -440,6 +446,7 @@ export default function ChatArea({
               {[
                 { icon: <Phone size={16} />, title: 'Gọi thoại', onClick: conversation?.type === 'dm' ? onPhoneCall : undefined },
                 { icon: <Video size={16} />, title: 'Gọi video', onClick: conversation?.type === 'dm' ? onVideoCall : undefined },
+                ...(conversation?.type === 'group' ? [{ icon: <Volume2 size={16} />, title: 'Phòng thoại', onClick: onVoiceRoom, active: voiceRoomActive }] : []),
                 { icon: <Search size={16} />, title: 'Tìm kiếm' },
                 { icon: <Users size={16} />, title: 'Thành viên', onClick: onToggleRight, active: showRight },
                 { icon: <Pin size={16} />, title: 'Tin nhắn đã ghim' },
@@ -483,8 +490,18 @@ export default function ChatArea({
         onConfirm={confirmUnpin}
       />
 
-      {/* Topic bar - only for groups when a topic is selected */}
-      {conversation.type === 'group' && activeTopic && (
+      {/* Voice channel view — replaces messages when voice topic is active */}
+      {activeTopic?.channelType === 'voice' && (
+        <VoiceChannelView
+          topic={activeTopic}
+          conversation={conversation}
+          currentUserId={currentUserId}
+          onExitChannel={() => onTopicSelect && onTopicSelect(null)}
+        />
+      )}
+
+      {/* Topic bar - only for text/system topics */}
+      {conversation.type === 'group' && activeTopic && activeTopic.channelType !== 'voice' && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '5px 16px', background: 'var(--bg-secondary)',
@@ -505,7 +522,7 @@ export default function ChatArea({
         </div>
       )}
 
-      <div style={{
+      {activeTopic?.channelType === 'voice' ? null : <><div style={{
         flex: 1, overflowY: 'auto', overflowX: 'hidden',
         scrollbarWidth: 'thin', scrollbarColor: 'var(--bg-hover) transparent',
         WebkitOverflowScrolling: 'touch',
@@ -631,7 +648,7 @@ export default function ChatArea({
         </div>
       )}
 
-      {!(conversation.type === 'dm' && blockStatus?.iBlocked) && (
+      {!(conversation.type === 'dm' && blockStatus?.iBlocked) &&  activeTopic?.channelType !== 'voice' && (
         <MessageInput
           onSend={async (payload) => {
             const enriched = (conversation.type === 'group' && activeTopic)
@@ -656,6 +673,7 @@ export default function ChatArea({
           onCancelReply={() => setReplyingMessage(null)}
         />
       )}
+  </>}{/* end voice conditional */}
 
       <ReactionListModal
         messageId={showReactionList}

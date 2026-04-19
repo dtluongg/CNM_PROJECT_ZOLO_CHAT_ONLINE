@@ -11,6 +11,10 @@ import Avatar, { getAvatarColor, getInitials } from './leftSidebar/ui/Avatar';
 import ConvItem from './leftSidebar/ui/ConvItem';
 import IconBtn from './leftSidebar/ui/IconBtn';
 import conversationApi from '../api/conversationApi';
+import voiceRoomApi from '../../voice/api/voiceRoomApi';
+import { VoiceRoomProvider } from '../../voice/VoiceRoomContext';
+import { useVoiceRoomContext } from '../../voice/VoiceRoomContext';
+
 
 const GROUP_TYPE_LABEL = {
   study:   '📚 Học tập',
@@ -36,6 +40,9 @@ export default function LeftSidebar({
   const [search, setSearch]                 = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  // ── Voice room context ─────────────────────────────────────
+  const { getRoomInfo, fetchStatusBatch, isInRoom } = useVoiceRoomContext();
+
   // ── Topic list for group view ──────────────────────────────
   const [topics, setTopics]               = useState([]);
   const [topicsLoading, setTopicsLoading] = useState(false);
@@ -52,7 +59,13 @@ export default function LeftSidebar({
     let cancelled = false;
     setTopicsLoading(true);
     conversationApi.listTopics(activeConv.id)
-      .then(res => { if (!cancelled) setTopics(Array.isArray(res?.data?.data) ? res.data.data : []); })
+      .then(res => {
+        if (!cancelled) {
+          setTopics(Array.isArray(res?.data?.data) ? res.data.data : []);
+          // Fetch voice room status for all channels after topics load
+          fetchStatusBatch(activeConv.id);
+        }
+      })
       .catch(() => { if (!cancelled) setTopics([]); })
       .finally(() => { if (!cancelled) setTopicsLoading(false); });
 
@@ -106,39 +119,76 @@ export default function LeftSidebar({
 
   // ── Channel row component ──────────────────────────────────
   const ChannelRow = ({ topic, active, onSelect }) => {
-    const [hovered, setHovered] = useState(false);
-    const isVoice = topic.channelType === 'voice';
+    const [hovered, setHovered]   = useState(false);
+    const isVoice  = topic.channelType === 'voice';
     const isSystem = topic.channelType === 'system';
     const ChannelIcon = isVoice ? Volume2 : isSystem ? FileText : Hash;
+
+    // Voice channel: get live participant list
+    const voiceInfo    = isVoice && topic._id ? getRoomInfo(topic._id) : null;
+    const voiceParts   = voiceInfo?.active ? (voiceInfo.participants || []) : [];
+    const iAmInThis    = isVoice && topic._id ? isInRoom(topic._id) : false;
+
     return (
-      <div
-        onClick={() => !topic.isLocked && onSelect(topic)}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: isMobile ? '10px 12px' : '5px 8px',
-          borderRadius: 6, cursor: topic.isLocked ? 'not-allowed' : 'pointer',
-          margin: isMobile ? '1px 0' : '1px 4px',
-          background: active
-            ? 'var(--accent)'
-            : hovered ? 'var(--bg-hover)' : 'transparent',
-          opacity: topic.isLocked ? 0.5 : 1,
-          transition: 'background 0.1s',
-        }}
-      >
-        <ChannelIcon size={isMobile ? 17 : 14} style={{ color: active ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
-        <span style={{
-          fontSize: isMobile ? 15 : 13, flex: 1,
-          color: active ? '#fff' : 'var(--text-primary)',
-          fontWeight: active ? 700 : 500,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {topic.name}
-        </span>
-        {topic.isLocked && <Lock size={11} style={{ color: active ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)', flexShrink: 0 }} />}
-        {isVoice && !topic.isLocked && (
-          <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)', flexShrink: 0 }}>🔊</span>
+      <div style={{ margin: isMobile ? '1px 0' : '1px 4px' }}>
+        {/* Channel name row */}
+        <div
+          onClick={() => !topic.isLocked && onSelect(topic)}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: isMobile ? '10px 12px' : '5px 8px',
+            borderRadius: 6, cursor: topic.isLocked ? 'not-allowed' : 'pointer',
+            background: active ? 'var(--accent)' : hovered ? 'var(--bg-hover)' : 'transparent',
+            opacity: topic.isLocked ? 0.5 : 1,
+            transition: 'background 0.1s',
+          }}
+        >
+          <ChannelIcon size={isMobile ? 17 : 14} style={{ color: active ? '#fff' : voiceParts.length > 0 ? '#3ba55c' : 'var(--text-muted)', flexShrink: 0 }} />
+          <span style={{ fontSize: isMobile ? 15 : 13, flex: 1, color: active ? '#fff' : 'var(--text-primary)', fontWeight: active ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {topic.name}
+          </span>
+          {topic.isLocked && <Lock size={11} style={{ color: active ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)', flexShrink: 0 }} />}
+          {isVoice && voiceParts.length > 0 && (
+            <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.8)' : '#3ba55c', fontWeight: 700, flexShrink: 0 }}>{voiceParts.length}</span>
+          )}
+          {iAmInThis && (
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: active ? '#fff' : '#3ba55c', flexShrink: 0 }} />
+          )}
+        </div>
+
+        {/* Participant avatars below voice channel (when people are in it) */}
+        {isVoice && voiceParts.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: isMobile ? '2px 12px 6px 32px' : '2px 8px 4px 26px', flexWrap: 'wrap' }}>
+            {voiceParts.slice(0, 6).map(p => (
+              <VoiceParticipantChip key={p.userId} participant={p} size={isMobile ? 22 : 18} />
+            ))}
+            {voiceParts.length > 6 && (
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{voiceParts.length - 6}</span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const VoiceParticipantChip = ({ participant, size }) => {
+    const [err, setErr] = useState(false);
+    return (
+      <div title={participant.displayName} style={{ position: 'relative' }}>
+        {participant.avatar && !err ? (
+          <img src={participant.avatar} alt={participant.displayName} onError={() => setErr(true)}
+            style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
+        ) : (
+          <div style={{
+            width: size, height: size, borderRadius: '50%',
+            background: getAvatarColor(participant.displayName),
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontSize: size * 0.45, fontWeight: 700,
+          }}>
+            {getInitials(participant.displayName)}
+          </div>
         )}
       </div>
     );

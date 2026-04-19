@@ -17,6 +17,8 @@ import { useMessages }       from './hooks/useMessages';
 import { useBlockStatus }    from './hooks/useBlockStatus';
 import { useGroupActions }   from './hooks/useGroupActions';
 import { useNotifications }  from '../../context/NotificationContext';
+import { VoiceRoomProvider } from '../voice/VoiceRoomContext';
+import VoiceRoomPanel        from '../voice/components/VoiceRoomPanel';
 
 const Chat = () => {
   const { user: currentUser, token } = useAuth();
@@ -164,6 +166,11 @@ const Chat = () => {
     await loadMessages(conv.id);
   }, [isMobile, fetchDmBlockStatus, loadMessages, setActiveConversation, setConversations, socketRef]);
 
+  // ── Voice Room ──────────────────────────────────────────────────────────
+  const [showVoicePanel,    setShowVoicePanel]    = useState(false);
+  const [voiceRoomActive,   setVoiceRoomActive]   = useState(false);
+  const handleVoiceRoom = useCallback(() => setShowVoicePanel(v => !v), []);
+
   // ── Calls ────────────────────────────────────────────────────────────────
   const handlePhoneCall = useCallback(() => {
     if (!activeConversation?.otherUserId) return;
@@ -232,6 +239,8 @@ const Chat = () => {
     onBlockStatusChanged: () => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId),
     onPhoneCall: handlePhoneCall,
     onVideoCall: handleVideoCall,
+    onVoiceRoom: handleVoiceRoom,
+    voiceRoomActive,
     onPollVote: handlePollVote,
     activeTopic,
     onTopicSelect: setActiveTopic,
@@ -254,6 +263,7 @@ const Chat = () => {
   // ── MOBILE LAYOUT ────────────────────────────────────────────────────────
   if (isMobile) {
     return (
+      <VoiceRoomProvider>
       <div style={{
         width: '100vw', height: '100%', background: 'var(--bg-primary)',
         position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -304,12 +314,20 @@ const Chat = () => {
             <RightSidebar {...rightSidebarProps} isMobile />
           </div>
         )}
+        <VoiceRoomPanel
+          visible={showVoicePanel}
+          conversation={activeConversation}
+          currentUserId={currentUserId}
+          onClose={() => setShowVoicePanel(false)}
+        />
       </div>
+      </VoiceRoomProvider>
     );
   }
 
   // ── DESKTOP LAYOUT ───────────────────────────────────────────────────────
   return (
+    <VoiceRoomProvider>
     <div style={{
       width: '100%', height: '100%', background: 'var(--bg-primary)',
       position: 'relative', display: 'flex', overflow: 'hidden',
@@ -368,7 +386,15 @@ const Chat = () => {
           onClose={() => setShowCreateGroupModal(false)}
         />
       )}
+
+      <VoiceRoomPanel
+        visible={showVoicePanel}
+        conversation={activeConversation}
+        currentUserId={currentUserId}
+        onClose={() => setShowVoicePanel(false)}
+      />
     </div>
+    </VoiceRoomProvider>
   );
 };
 
