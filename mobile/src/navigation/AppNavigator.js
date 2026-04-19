@@ -16,7 +16,8 @@ import MainTabScreen        from './MainTabScreen';
 import MessageScreen        from '../features/chat/screens/MessageScreen';
 import UserProfileScreen    from '../features/user/screens/UserProfileScreen';
 import ChangePasswordScreen from '../features/auth/screens/ChangePasswordScreen';
-import FriendsScreen        from '../features/friends/screens/FriendsScreen'; // <-- Component của Member 1
+import FriendsScreen        from '../features/friends/screens/FriendsScreen';
+import VoiceChannelScreen   from '../features/voice/screens/VoiceChannelScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -60,6 +61,7 @@ const AppNavigator = () => {
             <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
             <Stack.Screen name="Friends" component={FriendsScreen} />
             <Stack.Screen name="FriendRequests" component={require('../features/friends/screens/FriendRequestsScreen').default} />
+            <Stack.Screen name="VoiceChannel" component={VoiceChannelScreen} />
           </Stack.Group>
         ) : (
           <Stack.Group>

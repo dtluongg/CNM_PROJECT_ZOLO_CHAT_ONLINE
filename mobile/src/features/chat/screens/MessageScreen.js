@@ -26,6 +26,8 @@ import SystemMessageBubble from '../components/SystemMessageBubble';
 import UnreadDivider from '../components/UnreadDivider';
 import AiSummaryCard from '../components/AiSummaryCard';
 import PinnedBar from '../components/PinnedBar';
+import VoiceRoomPanel from '../../voice/components/VoiceRoomPanel';
+import { useVoiceRoomContext } from '../../voice/VoiceRoomContext';
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import useMessages from '../hooks/useMessages';
 import useSocket from '../hooks/useSocket';
@@ -53,6 +55,7 @@ export default function MessageScreen({ route, navigation }) {
   const { theme: THEME } = useTheme();
   const { isUserOnline, getLastSeen } = usePresence();
   const { initiateCall } = useCall();
+  const { isInRoom, fetchStatusBatch } = useVoiceRoomContext();
   const styles = useStyles(THEME);
   const currentUserId = user?._id?.toString() || null;
 
@@ -899,6 +902,15 @@ export default function MessageScreen({ route, navigation }) {
             </View>
           )}
 
+          {/* Voice room panel – hiển thị khi đang trong kênh thoại của nhóm này */}
+          {conversation.type === 'group' && (
+            <VoiceRoomPanel
+              conversation={conversation}
+              topics={topics}
+              navigation={navigation}
+            />
+          )}
+
           {/* Bộ chọn emoji */}
           {showEmoji && <EmojiPicker onSelect={insertEmoji} styles={styles} />}
 
@@ -958,6 +970,11 @@ export default function MessageScreen({ route, navigation }) {
         onViewProfile={() => { setShowInfoPanel(false); navigation.push('UserProfile', { userId: conversation.otherUserId }); }}
         onLeaveGroup={handleLeaveGroup}
         onDisbandGroup={handleDisbandGroup}
+        topics={topics}
+        setTopics={setTopics}
+        onConversationUpdate={(updated) => {
+          // Cập nhật tên nhóm trên header nếu cần
+        }}
         THEME={THEME}
         styles={styles}
       />
@@ -1034,7 +1051,10 @@ export default function MessageScreen({ route, navigation }) {
                 <TouchableOpacity
                   key={topic._id}
                   onPress={() => {
-                    if (!isVoice) {
+                    if (isVoice) {
+                      setShowChannelSheet(false);
+                      navigation.push('VoiceChannel', { conversation, topic });
+                    } else {
                       setActiveTopic(topic);
                       setShowChannelSheet(false);
                     }
@@ -1068,11 +1088,14 @@ export default function MessageScreen({ route, navigation }) {
                     <Text style={{ fontSize: 14, fontWeight: isActive ? '700' : '500', color: THEME.textPrimary }}>
                       {topic.name}
                     </Text>
-                    {isVoice && (
-                      <Text style={{ fontSize: 11, color: '#22c55e', marginTop: 1 }}>Kênh thoại</Text>
-                    )}
+                    <Text style={{ fontSize: 11, color: isVoice ? '#22c55e' : THEME.textMuted, marginTop: 1 }}>
+                      {isVoice ? 'Nhấn để vào phòng thoại' : 'Kênh văn bản'}
+                    </Text>
                   </View>
-                  {isActive && <Feather name="check" size={16} color={THEME.accent} />}
+                  {isVoice
+                    ? <Feather name="log-in" size={16} color="#22c55e" />
+                    : isActive && <Feather name="check" size={16} color={THEME.accent} />
+                  }
                 </TouchableOpacity>
               );
             })}
