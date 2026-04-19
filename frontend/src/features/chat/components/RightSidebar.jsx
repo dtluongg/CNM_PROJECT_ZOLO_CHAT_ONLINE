@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useAuth } from "../../../context/AuthContext";
+import apiClient from '../../../services/apiClient';
 import { usePresence, formatLastSeen } from "../../../context/PresenceContext";
 import { useNotifications } from "../../../context/NotificationContext";
 import {
@@ -48,6 +49,8 @@ export default function RightSidebar({
     activeTopic,
     onTopicSelect,
     onTopicsChanged,
+    myPermissions,
+    onPermissionsChanged,
 }) {
     const [tab, setTab] = useState("info");
     const [showMemberModal, setShowMemberModal] = useState(false);
@@ -87,6 +90,11 @@ export default function RightSidebar({
     const [groupAvatarPreview, setGroupAvatarPreview] = useState(null);
     const [savingGroupSettings, setSavingGroupSettings] = useState(false);
     const groupAvatarInputRef = React.useRef(null);
+    const [joinRequestMsg, setJoinRequestMsg]   = useState('');
+    const [joinRequestBusy, setJoinRequestBusy] = useState(false);
+    const [joinRequestSent, setJoinRequestSent] = useState(false);
+    const [friendsToInvite, setFriendsToInvite] = useState([]);
+    const [selectedFriendId, setSelectedFriendId] = useState('');
 
     const myUserId = (user?._id || user?.id || "").toString();
     const accentColor =
@@ -114,7 +122,12 @@ export default function RightSidebar({
             myMember.role === "admin" ||
             myMember.canManageMembers);
     const canInviteMembers =
-        !!myMember && (myMember.role === "owner" || myMember.canInviteMembers);
+      !!myMember && (
+        myMember.role === "owner" ||
+        myMember.role === "admin" ||
+        myPermissions?.globalPermissions?.canInviteMembers === true ||
+        myMember.canInviteMembers === true
+      );
     const isOwner = myMember?.role === "owner";
 
     // ── Load Members ─────────────────────────────────────
@@ -185,6 +198,27 @@ export default function RightSidebar({
             setDmFriendState(null);
         }
     }, [conversation?.otherUserId]);
+    const handleSendJoinRequest = async () => {
+        if (!selectedFriendId) {
+            window.alert('Vui lòng chọn người muốn giới thiệu');
+            return;
+        }
+        setJoinRequestBusy(true);
+        try {
+            await apiClient.post(`/conversations/${conversation.id}/join-requests`, {
+                targetUserId: selectedFriendId,
+                message: joinRequestMsg.trim(),
+            });
+            setJoinRequestSent(true);
+            setJoinRequestMsg('');
+            setSelectedFriendId('');
+        } catch (err) {
+            window.alert(err.response?.data?.message || 'Không thể gửi yêu cầu');
+        } finally {
+            setJoinRequestBusy(false);
+        }
+    };
+
 
     // ── Effects ──────────────────────────────────────────
     useEffect(() => {
@@ -214,7 +248,16 @@ export default function RightSidebar({
             .catch(() => setMediaData({ images: [], files: [] }))
             .finally(() => setLoadingMedia(false));
     }, [tab, conversation?.id]);
-
+    useEffect(() => {
+        if (!conversation?.id || conversation.type !== 'group' || canInviteMembers) return;
+        friendApi.getFriendList()
+            .then(res => {
+                const list = res?.data?.success ? res.data.data || [] : [];
+                const activeMemberIds = new Set(members.map(m => (m.user?._id || '').toString()));
+                setFriendsToInvite(list.filter(f => !activeMemberIds.has((f.friendId || '').toString())));
+            })
+            .catch(() => setFriendsToInvite([]));
+    }, [conversation?.id, canInviteMembers, members]);
     useEffect(() => {
         loadMembers();
     }, [loadMembers]);
@@ -762,114 +805,96 @@ export default function RightSidebar({
                                     )}
                                 </div>
                             )}
-                            {/* Thêm thành viên */}
-                            {conversation.type === "group" &&
-                                canInviteMembers && (
-                                    <div style={{ marginBottom: 16 }}>
-                                        <SectionHeader title="Thêm thành viên" />
-                                        <div
-                                            style={{
-                                                background:
-                                                    "var(--bg-tertiary)",
-                                                borderRadius: 8,
-                                                padding: 10,
-                                                border: "1px solid var(--border)",
-                                            }}
-                                        >
-                                            {loadingFriendPool && (
-                                                <div
+                            {conversation.type === 'group' && !canInviteMembers && myMember && (
+                                <div style={{ marginBottom: 16 }}>
+                                    <SectionHeader title="Giới thiệu thành viên" />
+                                    <div style={{
+                                        background: 'var(--bg-tertiary)', borderRadius: 8,
+                                        padding: '12px 14px', border: '1px solid var(--border)',
+                                    }}>
+                                        {joinRequestSent ? (
+                                            <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                                                <div style={{ fontSize: 24, marginBottom: 6 }}>✅</div>
+                                                <div style={{ fontSize: 13, color: '#57f287', fontWeight: 600 }}>
+                                                    Đã gửi yêu cầu!
+                                                </div>
+                                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                                                    Chờ admin hoặc chủ nhóm duyệt.
+                                                </div>
+                                                <button
+                                                    onClick={() => setJoinRequestSent(false)}
                                                     style={{
-                                                        fontSize: 12,
-                                                        color: "var(--text-muted)",
-                                                        marginBottom: 8,
+                                                        marginTop: 8, fontSize: 11, color: 'var(--accent)',
+                                                        background: 'none', border: 'none', cursor: 'pointer',
                                                     }}
                                                 >
-                                                    Đang tải danh sách bạn bè...
+                                                    Giới thiệu người khác
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                                                    🔒 Bạn không có quyền mời trực tiếp.<br/>
+                                                    Chọn bạn bè để giới thiệu — admin sẽ duyệt.
                                                 </div>
-                                            )}
-                                            {!loadingFriendPool &&
-                                                friendPool.length === 0 && (
-                                                    <div
-                                                        style={{
-                                                            fontSize: 12,
-                                                            color: "var(--text-muted)",
-                                                            marginBottom: 8,
-                                                        }}
-                                                    >
-                                                        Không còn bạn bè nào để
-                                                        thêm vào nhóm.
+
+                                                {/* Chọn bạn bè */}
+                                                <select
+                                                    value={selectedFriendId}
+                                                    onChange={e => setSelectedFriendId(e.target.value)}
+                                                    style={{
+                                                        width: '100%', padding: '7px 10px', borderRadius: 8,
+                                                        fontSize: 12, border: '1px solid var(--border)',
+                                                        background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                                                        marginBottom: 8, boxSizing: 'border-box',
+                                                    }}
+                                                >
+                                                    <option value=''>— Chọn người muốn giới thiệu —</option>
+                                                    {friendsToInvite.map(f => (
+                                                        <option key={f.friendId} value={f.friendId}>
+                                                            {f.displayName || f.friendName}
+                                                        </option>
+                                                    ))}
+                                                </select>
+
+                                                {friendsToInvite.length === 0 && (
+                                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                                                        Không có bạn bè nào để giới thiệu.
                                                     </div>
                                                 )}
-                                            {!loadingFriendPool &&
-                                                friendPool
-                                                    .slice(0, 20)
-                                                    .map((f) => {
-                                                        const fid = (
-                                                            f.friendId || ""
-                                                        ).toString();
-                                                        const checked =
-                                                            selectedAddIds.includes(
-                                                                fid,
-                                                            );
-                                                        return (
-                                                            <label
-                                                                key={fid}
-                                                                style={{
-                                                                    display:
-                                                                        "block",
-                                                                    fontSize: 12,
-                                                                    color: "var(--text-secondary)",
-                                                                    marginBottom: 6,
-                                                                }}
-                                                            >
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={
-                                                                        checked
-                                                                    }
-                                                                    onChange={() =>
-                                                                        handleToggleAddMember(
-                                                                            fid,
-                                                                        )
-                                                                    }
-                                                                />{" "}
-                                                                {f.displayName}
-                                                            </label>
-                                                        );
-                                                    })}
-                                            <button
-                                                onClick={handleAddMembers}
-                                                disabled={
-                                                    selectedAddIds.length ===
-                                                        0 ||
-                                                    busyAction === "add-members"
-                                                }
-                                                style={{
-                                                    border: "none",
-                                                    borderRadius: 6,
-                                                    padding: "7px 10px",
-                                                    background: "var(--accent)",
-                                                    color: "#fff",
-                                                    cursor: "pointer",
-                                                    fontSize: 12,
-                                                    fontWeight: 700,
-                                                    marginTop: 6,
-                                                    opacity:
-                                                        selectedAddIds.length ===
-                                                            0 ||
-                                                        busyAction ===
-                                                            "add-members"
-                                                            ? 0.6
-                                                            : 1,
-                                                }}
-                                            >
-                                                {busyAction === "add-members"
-                                                    ? "Đang thêm..."
-                                                    : `Thêm ${selectedAddIds.length} thành viên`}
-                                            </button>
-                                        </div>
+
+                                                <textarea
+                                                    value={joinRequestMsg}
+                                                    onChange={e => setJoinRequestMsg(e.target.value)}
+                                                    placeholder="Lý do giới thiệu (tùy chọn)..."
+                                                    rows={2}
+                                                    style={{
+                                                        width: '100%', boxSizing: 'border-box',
+                                                        padding: '7px 10px', borderRadius: 8, fontSize: 12,
+                                                        border: '1px solid var(--border)', background: 'var(--bg-primary)',
+                                                        color: 'var(--text-primary)', outline: 'none',
+                                                        resize: 'none', fontFamily: 'inherit', marginBottom: 8,
+                                                    }}
+                                                />
+
+                                                <button
+                                                    onClick={handleSendJoinRequest}
+                                                    disabled={joinRequestBusy || !selectedFriendId}
+                                                    style={{
+                                                        width: '100%', padding: '8px 0',
+                                                        background: 'var(--accent)', color: '#fff',
+                                                        border: 'none', borderRadius: 8, cursor: 'pointer',
+                                                        fontSize: 12, fontWeight: 700,
+                                                        opacity: (joinRequestBusy || !selectedFriendId) ? 0.6 : 1,
+                                                    }}
+                                                >
+                                                    {joinRequestBusy ? 'Đang gửi...' : '📨 Gửi yêu cầu giới thiệu'}
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
-                                )}
+                                </div>
+                            )}
 
                             {/* Hành động */}
                             <div
@@ -1398,13 +1423,17 @@ export default function RightSidebar({
                             {/* ← xóa </div> thừa ở đây */}
 
                             {showMemberModal && (
-                                <MemberManagementModal
-                                    visible={showMemberModal}
-                                    onClose={() => setShowMemberModal(false)}
-                                    conversation={conversation}
-                                    currentUserId={myUserId}
-                                    onRefresh={() => { loadMembers(); if (onGroupUpdated) onGroupUpdated(); }}
-                                />
+                              <MemberManagementModal
+                                visible={showMemberModal}
+                                onClose={() => setShowMemberModal(false)}
+                                conversation={conversation}
+                                currentUserId={myUserId}
+                                onRefresh={() => {
+                                  loadMembers();
+                                  if (onGroupUpdated) onGroupUpdated();
+                                  onPermissionsChanged?.(); // 👈 thêm
+                                }}
+                              />
                             )}
                         </div>
                     );

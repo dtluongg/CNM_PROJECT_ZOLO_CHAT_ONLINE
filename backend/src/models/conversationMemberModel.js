@@ -41,7 +41,7 @@ const conversationMemberSchema = new mongoose.Schema(
 
     // Quyền đặc biệt cá nhân (override cứng, không qua role)
     canSendMessages:  { type: Boolean, default: true },
-    canInviteMembers: { type: Boolean, default: true },
+    canInviteMembers: { type: Boolean, default: false },
     canManageMembers: { type: Boolean, default: false },
 
     // Cài đặt cá nhân

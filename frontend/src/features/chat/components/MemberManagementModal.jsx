@@ -30,7 +30,7 @@ const ROLE_CFG = {
 };
 
 const PERMISSIONS_META = [
-    { key: 'canSendMessages',  label: 'Gửi tin nhắn',      desc: 'Cho phép gửi tin nhắn trong nhóm' },
+    { key: 'canSendMessages',  label: 'Gửi tin nhắn được tất cả các kênh',      desc: 'Cho phép gửi tin nhắn trong nhóm' },
     { key: 'canInviteMembers', label: 'Mời thành viên',     desc: 'Cho phép mời người khác vào nhóm' },
     { key: 'canManageMembers', label: 'Quản lý thành viên', desc: 'Cho phép chỉnh sửa quyền của thành viên' },
 ];
@@ -73,7 +73,140 @@ function Toggle({ checked, onChange, disabled }) {
         </div>
     );
 }
+function JoinRequestsTab({ conversation, onApproved }) {
+    const [requests, setRequests] = useState([]);
+    const [loading, setLoading]   = useState(false);
+    const [busy, setBusy]         = useState('');
 
+    const load = useCallback(async () => {
+        if (!conversation?.id) return;
+        setLoading(true);
+        try {
+            const res = await apiClient.get(`/conversations/${conversation.id}/join-requests`);
+            setRequests(Array.isArray(res?.data?.data) ? res.data.data : []);
+        } catch { setRequests([]); }
+        finally { setLoading(false); }
+    }, [conversation?.id]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const handleReview = async (requestId, action) => {
+        setBusy(`${action}-${requestId}`);
+        try {
+            await apiClient.patch(
+                `/conversations/${conversation.id}/join-requests/${requestId}`,
+                { action }
+            );
+            setRequests(prev => prev.filter(r => r._id !== requestId));
+            if (action === 'approve') onApproved?.();
+        } catch (err) {
+            window.alert(err.response?.data?.message || 'Không thể thực hiện');
+        } finally { setBusy(''); }
+    };
+
+    if (loading) return (
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+            Đang tải...
+        </div>
+    );
+
+    return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{
+                padding: '10px 16px', borderBottom: '1px solid var(--border)',
+                flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {requests.length} yêu cầu đang chờ duyệt
+                </span>
+                <button onClick={load} style={{
+                    fontSize: 11, color: 'var(--accent)', background: 'none',
+                    border: 'none', cursor: 'pointer', fontWeight: 600,
+                }}>
+                    🔄 Làm mới
+                </button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+                {requests.length === 0 ? (
+                    <div style={{
+                        padding: 40, textAlign: 'center',
+                        color: 'var(--text-muted)', fontSize: 13,
+                    }}>
+                        <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>
+                        Không có yêu cầu nào đang chờ duyệt
+                    </div>
+                ) : (
+                    requests.map(req => (
+                        <div key={req._id} style={{
+                            display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '12px 16px', borderBottom: '1px solid var(--border)',
+                        }}>
+                            {/* Avatar */}
+                            <MemberAvatar
+                                name={req.userId?.displayName}
+                                avatar={req.userId?.avatar}
+                                size={40}
+                            />
+
+                            {/* Info */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{
+                                    fontWeight: 600, fontSize: 13,
+                                    color: 'var(--text-primary)',
+                                }}>
+                                    {req.userId?.displayName || '?'}
+                                </div>
+                                {req.message && (
+                                    <div style={{
+                                        fontSize: 12, color: 'var(--text-muted)',
+                                        marginTop: 2, fontStyle: 'italic',
+                                    }}>
+                                        "{req.message}"
+                                    </div>
+                                )}
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                                    {new Date(req.createdAt).toLocaleString('vi-VN')}
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                                <button
+                                    onClick={() => handleReview(req._id, 'approve')}
+                                    disabled={!!busy}
+                                    style={{
+                                        padding: '6px 12px', borderRadius: 8,
+                                        background: '#57f287', color: '#000',
+                                        border: 'none', cursor: busy ? 'not-allowed' : 'pointer',
+                                        fontSize: 12, fontWeight: 700,
+                                        opacity: busy === `approve-${req._id}` ? 0.6 : 1,
+                                    }}
+                                >
+                                    {busy === `approve-${req._id}` ? '...' : '✓ Duyệt'}
+                                </button>
+                                <button
+                                    onClick={() => handleReview(req._id, 'reject')}
+                                    disabled={!!busy}
+                                    style={{
+                                        padding: '6px 12px', borderRadius: 8,
+                                        background: '#ed424520', color: '#ed4245',
+                                        border: '1px solid #ed424540',
+                                        cursor: busy ? 'not-allowed' : 'pointer',
+                                        fontSize: 12, fontWeight: 600,
+                                        opacity: busy === `reject-${req._id}` ? 0.6 : 1,
+                                    }}
+                                >
+                                    {busy === `reject-${req._id}` ? '...' : '✕ Từ chối'}
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    );
+}
 function SectionLabel({ label, count }) {
     return (
         <div style={{
@@ -98,7 +231,7 @@ const roleApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 //  TAB 1: THÀNH VIÊN
 // ─────────────────────────────────────────────────────────────────────────────
-function MembersTab({ conversation, currentUserId, customRoles, members, onMembersReload }) {
+function MembersTab({ conversation, currentUserId, customRoles, members, onMembersReload, topics }) {
     const [loading, setLoading]         = useState(false);
     const [search, setSearch]           = useState('');
     const [expandedId, setExpandedId]   = useState(null);
@@ -107,6 +240,8 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
     const [pendingEdit, setPendingEdit] = useState({});
 
     const myMember = members.find(m => (m.user?._id || '').toString() === currentUserId);
+    const canManage = myMember?.role === 'owner' || myMember?.role === 'admin' || myMember?.canManageMembers;
+
     const amOwner  = myMember?.role === 'owner';
     const amAdmin  = myMember?.role === 'admin' || myMember?.canManageMembers;
 
@@ -151,12 +286,13 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
         const ed = getEdit(m);
         setBusy(`save-${id}`);
         try {
-            await conversationApi.updateConversationMember(conversation.id, id, {
-                role:             ed.role,
-                canSendMessages:  ed.canSendMessages,
-                canInviteMembers: ed.canInviteMembers,
-                canManageMembers: ed.canManageMembers,
-            });
+            // Chỉ update system role
+            if (ed.role !== m.role) {
+                await conversationApi.updateConversationMember(conversation.id, id, {
+                    role: ed.role,
+                });
+            }
+            // Assign custom role
             await roleApi.assign(conversation.id, id, ed.customRoleId || null);
             setPendingEdit(prev => { const n = { ...prev }; delete n[id]; return n; });
             await onMembersReload();
@@ -260,6 +396,7 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                 </div>
 
                 {/* ── Expanded panel ── */}
+                {/* Expanded panel — chỉ giữ system role + custom role */}
                 {isExpanded && editable && (
                     <div style={{
                         background: 'var(--bg-tertiary)', padding: '14px 20px 16px',
@@ -303,41 +440,18 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                                     color: 'var(--text-primary)', cursor: 'pointer',
                                 }}
                             >
-                                <option value=''>— Không có —</option>
+                                <option value=''>— Không có (mặc định) —</option>
                                 {customRoles.map(r => (
                                     <option key={r._id} value={r._id.toString()}>{r.name}</option>
                                 ))}
                             </select>
-                        </div>
-
-                        {/* Permissions */}
-                        <div style={{ marginBottom: 14 }}>
-                            <div style={{
-                                fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-                                textTransform: 'uppercase', marginBottom: 8,
-                            }}>Quyền cá nhân (override)</div>
-                            {PERMISSIONS_META.map(p => (
-                                <div key={p.key} style={{
-                                    display: 'flex', alignItems: 'center',
-                                    justifyContent: 'space-between', marginBottom: 10,
-                                }}>
-                                    <div>
-                                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                                            {p.label}
-                                        </div>
-                                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.desc}</div>
-                                    </div>
-                                    <Toggle
-                                        checked={!!ed[p.key]}
-                                        onChange={v => setEdit(m, p.key, v)}
-                                        disabled={!amOwner && p.key === 'canManageMembers'}
-                                    />
-                                </div>
-                            ))}
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                                💡 Quyền kênh được quản lý hoàn toàn qua Role tab
+                            </div>
                         </div>
 
                         {/* Actions */}
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             {isDirty(m) && (
                                 <button onClick={() => handleSave(m)} disabled={isBusy} style={{
                                     display: 'flex', alignItems: 'center', gap: 4,
@@ -370,6 +484,17 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                         />
                     </div>
                 )}
+                {ed.customRoleId && (() => {
+                    const assignedRole = customRoles.find(r => r._id.toString() === ed.customRoleId);
+                    if (!assignedRole) return null;
+
+                    const allowedIds  = (assignedRole.allowedTopicIds  || []).map(t => (t._id || t).toString());
+                    const sendableIds = (assignedRole.sendableTopicIds || []).map(t => (t._id || t).toString());
+
+                    // Lấy danh sách topics từ MemberManagementModal (cần truyền xuống)
+                    return null; // placeholder — xem bên dưới
+                })()}
+
             </div>
         );
     };
@@ -502,75 +627,123 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
 
     const textTopics  = topics.filter(t => t.channelType === 'text');
     const voiceTopics = topics.filter(t => t.channelType === 'voice');
+    const renderTopicPermissions = (ed, roleId, isNew = false) => {
+        // Tính nguồn quyền cho từng topic (chỉ khi edit role đã có, không phải tạo mới)
+        const getPermSource = (tid) => {
+            if (isNew || !roleId) return null;
+            // Tìm member nào đang dùng role này có personal override
+            const roleMembers = getMembersOfRole(roleId);
+            const hasOverride = roleMembers.some(m =>
+                (m.topicOverrides || []).some(o => o.topicId?.toString() === tid)
+            );
+            return hasOverride ? 'override' : 'role';
+        };
 
-    const renderTopicPermissions = (ed, roleId, isNew = false) => (
-        <div style={{ marginTop: 12 }}>
-            <div style={{
-                fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-                textTransform: 'uppercase', marginBottom: 4,
-            }}>Kênh được truy cập</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
-                Để trống = truy cập tất cả kênh
-            </div>
-            <div style={{ display: 'grid', gap: 4, marginBottom: 12 }}>
-                {[...textTopics, ...voiceTopics].map(t => {
-                    const tid        = t._id.toString();
-                    const allowedIds = (ed.allowedTopicIds || []).map(id => id.toString());
-                    const sendableIds= (ed.sendableTopicIds || []).map(id => id.toString());
-                    const hasAccess  = allowedIds.includes(tid);
-                    const hasSend    = sendableIds.includes(tid);
-                    return (
-                        <div key={tid} style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '5px 8px', background: 'var(--bg-secondary)', borderRadius: 6,
-                        }}>
-                            {t.channelType === 'voice'
-                                ? <Volume2 size={12} color="var(--text-muted)" />
-                                : <Hash size={12} color="var(--text-muted)" />}
-                            <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)' }}>
-                                {t.emoji} {t.name}
-                            </span>
-                            <label style={{
-                                fontSize: 11, color: 'var(--text-muted)',
-                                display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer',
+        return (
+            <div style={{ marginTop: 12 }}>
+                <div style={{
+                    fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+                    textTransform: 'uppercase', marginBottom: 4,
+                }}>Kênh được truy cập</div>
+                <div style={{
+                    fontSize: 11, color: 'var(--text-muted)', marginBottom: 6,
+                    padding: '6px 8px', background: 'var(--bg-primary)',
+                    borderRadius: 6, lineHeight: 1.5,
+                }}>
+                    💡 <strong>Xem:</strong> tick = được vào kênh, bỏ tick = bị chặn<br/>
+                    💡 <strong>Gửi:</strong> tick = được gửi tin, bỏ tick = chỉ đọc<br/>
+                    💡 Để trống tất cả Xem = được xem mọi kênh, nhưng phải tick Gửi mới gửi được
+                </div>
+                <div style={{ display: 'grid', gap: 4, marginBottom: 12 }}>
+                    {[...textTopics, ...voiceTopics].map(t => {
+                        const tid         = t._id.toString();
+                        const allowedIds  = (ed.allowedTopicIds  || []).map(id => id.toString());
+                        const sendableIds = (ed.sendableTopicIds || []).map(id => id.toString());
+                        const hasAccess   = allowedIds.includes(tid);
+                        const hasSend     = sendableIds.includes(tid);
+                        const source      = getPermSource(tid);
+
+                        return (
+                            <div key={tid} style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '7px 10px', background: 'var(--bg-secondary)',
+                                borderRadius: 6, borderLeft: hasSend
+                                    ? '3px solid #57f287'
+                                    : hasAccess
+                                        ? '3px solid #5865f2'
+                                        : '3px solid var(--border)',
                             }}>
-                                <input type="checkbox" checked={hasAccess}
-                                    onChange={() => isNew
-                                        ? setNewRole(p => ({
-                                            ...p,
-                                            allowedTopicIds: hasAccess
-                                                ? p.allowedTopicIds.filter(id => id !== tid)
-                                                : [...p.allowedTopicIds, tid],
-                                          }))
-                                        : toggleTopic(roleId, 'allowedTopicIds', tid)
-                                    }
-                                />
-                                Xem
-                            </label>
-                            <label style={{
-                                fontSize: 11, color: 'var(--text-muted)',
-                                display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer',
-                            }}>
-                                <input type="checkbox" checked={hasSend}
-                                    disabled={!hasAccess && allowedIds.length > 0}
-                                    onChange={() => isNew
-                                        ? setNewRole(p => ({
-                                            ...p,
-                                            sendableTopicIds: hasSend
-                                                ? p.sendableTopicIds.filter(id => id !== tid)
-                                                : [...p.sendableTopicIds, tid],
-                                          }))
-                                        : toggleTopic(roleId, 'sendableTopicIds', tid)
-                                    }
-                                />
-                                Gửi
-                            </label>
-                        </div>
-                    );
-                })}
+                                {t.channelType === 'voice'
+                                    ? <Volume2 size={12} color="var(--text-muted)" />
+                                    : <Hash size={12} color="var(--text-muted)" />}
+                                <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)' }}>
+                                    {t.emoji} {t.name}
+                                </span>
+
+                                {/* Badge trạng thái */}
+                                <span style={{
+                                    fontSize: 10, padding: '1px 6px', borderRadius: 4,
+                                    background: hasSend ? '#57f28720' : hasAccess ? '#5865f220' : '#ed424520',
+                                    color: hasSend ? '#57f287' : hasAccess ? '#5865f2' : '#ed4245',
+                                    fontWeight: 600, marginRight: 4,
+                                }}>
+                                    {hasSend ? '✓ Gửi' : hasAccess ? '👁 Xem' : '✕ Chặn'}
+                                </span>
+
+                                <label style={{
+                                    fontSize: 11, color: 'var(--text-muted)',
+                                    display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer',
+                                }}>
+                                    <input type="checkbox" checked={hasAccess}
+                                        onChange={() => isNew
+                                            ? setNewRole(p => ({
+                                                ...p,
+                                                allowedTopicIds: hasAccess
+                                                    ? p.allowedTopicIds.filter(id => id !== tid)
+                                                    : [...p.allowedTopicIds, tid],
+                                                // Nếu bỏ xem thì bỏ gửi luôn
+                                                sendableTopicIds: hasAccess
+                                                    ? p.sendableTopicIds.filter(id => id !== tid)
+                                                    : p.sendableTopicIds,
+                                              }))
+                                            : (() => {
+                                                toggleTopic(roleId, 'allowedTopicIds', tid);
+                                                // Nếu bỏ xem thì bỏ gửi luôn
+                                                if (hasAccess && hasSend) {
+                                                    toggleTopic(roleId, 'sendableTopicIds', tid);
+                                                }
+                                              })()
+                                        }
+                                    />
+                                    Xem
+                                </label>
+                                <label style={{
+                                    fontSize: 11, color: 'var(--text-muted)',
+                                    display: 'flex', alignItems: 'center', gap: 3,
+                                    cursor: !hasAccess ? 'not-allowed' : 'pointer',
+                                    opacity: !hasAccess ? 0.4 : 1,
+                                }}>
+                                    <input type="checkbox" checked={hasSend}
+                                        disabled={!hasAccess}
+                                        onChange={() => isNew
+                                            ? setNewRole(p => ({
+                                                ...p,
+                                                sendableTopicIds: hasSend
+                                                    ? p.sendableTopicIds.filter(id => id !== tid)
+                                                    : [...p.sendableTopicIds, tid],
+                                              }))
+                                            : toggleTopic(roleId, 'sendableTopicIds', tid)
+                                        }
+                                    />
+                                    Gửi
+                                </label>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     // Mini avatar stack cho member đang dùng role
     const renderMemberAvatars = (roleMembers) => {
@@ -898,6 +1071,8 @@ export default function MemberManagementModal({ visible, onClose, conversation, 
     // FIX KEY: members state ở modal level để cả 2 tab dùng chung
     const [members, setMembers]           = useState([]);
     const [loadingRoles, setLoadingRoles] = useState(false);
+    const myMember  = members.find(m => (m.user?._id || '').toString() === currentUserId);
+    const canManage = myMember?.role === 'owner' || myMember?.role === 'admin' || !!myMember?.canManageMembers;
 
     const loadRoles = useCallback(async () => {
         if (!conversation?.id) return;
@@ -944,8 +1119,9 @@ export default function MemberManagementModal({ visible, onClose, conversation, 
     if (!visible) return null;
 
     const tabs = [
-        { key: 'members', label: '👥 Thành viên' },
-        { key: 'roles',   label: '🎭 Roles' },
+        { key: 'members', label: 'Thành viên' },
+        { key: 'roles',   label: 'Roles' },
+        ...(canManage ? [{ key: 'requests', label: 'Duyệt' }] : []),
     ];
 
     return (
@@ -1009,6 +1185,7 @@ export default function MemberManagementModal({ visible, onClose, conversation, 
                         currentUserId={currentUserId}
                         customRoles={roles}
                         members={members}
+                        topics={topics}
                         onMembersReload={handleReloadAll}
                     />
                 )}
@@ -1022,6 +1199,13 @@ export default function MemberManagementModal({ visible, onClose, conversation, 
                         onRefresh={handleReloadAll}
                     />
                 )}
+                {activeTab === 'requests' && canManage && (
+                    <JoinRequestsTab
+                        conversation={conversation}
+                        onApproved={handleReloadAll}
+                    />
+                )}
+
             </div>
         </div>
     );

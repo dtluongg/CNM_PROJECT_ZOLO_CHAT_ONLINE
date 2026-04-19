@@ -1,5 +1,5 @@
 import { Phone, Video, LogIn, LogOut, UserX } from 'lucide-react';
-import MiniAvatar from './MiniAvatar'
+import MiniAvatar from './Avatar'
 
 const SystemMessage = ({ msg }) => {
   const event = msg.payload?.event;
