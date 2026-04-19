@@ -33,7 +33,9 @@ function ParticipantCard({ participant, size, currentUserId, localVideoTrack, ge
     }
   }, [participant.isLocal, participant.identity, localVideoTrack, getRemoteCameraTrack]);
 
-  const showVideo = participant.isLocal ? !!localVideoTrack : !!participant.hasCamera;
+  const showVideo = participant.isLocal
+    ? !!localVideoTrack
+    : !!getRemoteCameraTrack(participant.identity);
 
   return (
     <div style={{

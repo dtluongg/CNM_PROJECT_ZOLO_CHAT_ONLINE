@@ -148,7 +148,11 @@ export function useVoiceRoom() {
       setIsCameraOff(enabled);
       refreshParticipants(room);
     } catch (e) {
-      console.warn('[VoiceRoom] Camera toggle failed:', e.message);
+      if (e.name === 'NotAllowedError') {
+        alert('Trình duyệt chưa cho phép truy cập camera. Vui lòng kiểm tra cài đặt.'); // hoặc dùng toast
+      } else {
+        console.warn('[VoiceRoom] Camera toggle failed:', e.message);
+      }
     }
   }, [refreshParticipants]);
 
