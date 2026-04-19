@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const conversationSchema = new mongoose.Schema(
   {
     type: { type: String, enum: ['dm', 'group'], required: true },
+    type: { type: String, enum: ['dm', 'group'], required: true },
     name: { type: String, default: '' }, // Có thể để trống với DM
     avatar: { type: String, default: '' },
     groupType: {

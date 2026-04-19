@@ -78,7 +78,13 @@ export const useGroupActions = ({
         const formData = new FormData();
         formData.append('file', groupAvatarFile);
         const uploadRes = await messageApi.uploadImage(formData);
-        avatarUrl = uploadRes?.data?.data?.url || uploadRes?.data?.url || '';
+        console.log('Upload response:', uploadRes?.data); // xem structure thật
+        avatarUrl = uploadRes?.data?.file?.url   // uploadController trả về { file: { url } }
+                 || uploadRes?.data?.data?.url
+                 || uploadRes?.data?.url
+                 || '';
+
+        console.log('avatarUrl to be saved:', avatarUrl); // phải có URL ở đây
       }
 
       const res     = await conversationApi.createGroupConversation({

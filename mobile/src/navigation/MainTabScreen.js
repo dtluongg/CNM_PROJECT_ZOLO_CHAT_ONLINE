@@ -13,8 +13,8 @@ import { usePresence } from '../context/PresenceContext';
 import ProfileScreen from '../features/user/screens/ProfileScreen';
 import FriendsScreen from '../features/friends/screens/FriendsScreen';
 import conversationApi from '../features/chat/api/conversationApi';
+import messageApi from '../features/chat/api/messageApi';
 import friendApi from '../features/friends/api/friendApi';
-import { uploadImageToSupabase } from '../services/storageUpload';
 import { SOCKET_URL } from '../config/env';
 
 const GROUP_TYPES = [
@@ -110,7 +110,12 @@ function CreateGroupSheet({ visible, onClose, onCreated, THEME, styles, userId }
       setCreating(true);
       let avatarUrl = '';
       if (avatarUri) {
-        avatarUrl = await uploadImageToSupabase(avatarUri, 'group-avatars', userId);
+        const ext = avatarUri.split('?')[0].split('.').pop()?.toLowerCase() || 'jpg';
+        const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+        const formData = new FormData();
+        formData.append('file', { uri: avatarUri, name: `avatar.${ext}`, type: mime });
+        const uploadRes = await messageApi.uploadImage(formData);
+        avatarUrl = uploadRes?.data?.file?.url || '';
       }
       await conversationApi.createGroupConversation({
         name: groupName.trim(), avatar: avatarUrl,
@@ -298,6 +303,7 @@ function CreateGroupSheet({ visible, onClose, onCreated, THEME, styles, userId }
 // Shared components
 // ─────────────────────────────────────────────
 const Avatar = ({ name, avatar, size = 44, status = null, online = null, THEME, styles }) => {
+  const [imgError, setImgError] = React.useState(false);
   const bg = getAvatarColor(name);
   const dotSize = Math.floor(size * 0.28);
   const statusColor = online === false
@@ -306,8 +312,8 @@ const Avatar = ({ name, avatar, size = 44, status = null, online = null, THEME, 
 
   return (
     <View style={{ width: size, height: size }}>
-      {avatar
-        ? <Image source={{ uri: avatar }} style={{ width: size, height: size, borderRadius: size / 2 }} />
+      {avatar && !imgError
+        ? <Image source={{ uri: avatar }} style={{ width: size, height: size, borderRadius: size / 2 }} onError={() => setImgError(true)} />
         : (
           <View style={[styles.avatarCircle, { width: size, height: size, borderRadius: size / 2, backgroundColor: bg }]}>
             <Text style={[styles.avatarText, { fontSize: size * 0.38 }]}>{getInitials(name)}</Text>

@@ -25,8 +25,8 @@ const conversationApi = {
   updateConversationMember: (conversationId, userId, payload) =>
     apiClient.patch(`/conversations/${conversationId}/members/${userId}/role`, payload),
 
-  kickConversationMember: (conversationId, userId) =>
-    apiClient.delete(`/conversations/${conversationId}/members/${userId}`),
+  kickConversationMember: (conversationId, userId, reason = null) =>
+    apiClient.delete(`/conversations/${conversationId}/members/${userId}`, { data: { reason } }),
 
   transferConversationOwner: (conversationId, newOwnerUserId) =>
     apiClient.patch(`/conversations/${conversationId}/transfer-owner`, { newOwnerUserId }),

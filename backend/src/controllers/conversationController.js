@@ -10,23 +10,28 @@ const DEFAULT_CHANNELS = {
         { name: 'học-tập-chung',    emoji: '📚', categoryName: '📚 Học tập', channelType: 'text',  position: 0 },
         { name: 'hỏi-bài',          emoji: '❓', categoryName: '📚 Học tập', channelType: 'text',  position: 1 },
         { name: 'chia-sẻ-tài-liệu', emoji: '📄', categoryName: '📚 Học tập', channelType: 'text',  position: 2 },
+        { name: 'nhật-ký-nhóm',     emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
     ],
     gaming: [
         { name: 'tìm-team',    emoji: '🎮', categoryName: '🎮 Gaming', channelType: 'text',  position: 0 },
         { name: 'meme-game',   emoji: '😂', categoryName: '🎮 Gaming', channelType: 'text',  position: 1 },
         { name: 'voice-gaming',emoji: '🔊', categoryName: '🎮 Gaming', channelType: 'voice', position: 2 },
+        { name: 'nhật-ký-nhóm', emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
     ],
     general: [
         { name: 'thảo-luận', emoji: '💬', categoryName: '💬 Chat chung', channelType: 'text', position: 0 },
         { name: 'off-topic',  emoji: '🎭', categoryName: '💬 Chat chung', channelType: 'text', position: 1 },
+        { name: 'nhật-ký-nhóm', emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
     ],
     project: [
         { name: 'kế-hoạch', emoji: '📌', categoryName: '📌 Dự án', channelType: 'text',  position: 0 },
         { name: 'báo-cáo',  emoji: '📊', categoryName: '📌 Dự án', channelType: 'text',  position: 1 },
         { name: 'họp-nhóm', emoji: '🔊', categoryName: '📌 Dự án', channelType: 'voice', position: 2 },
+        { name: 'nhật-ký-nhóm', emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
     ],
     other: [
         { name: 'thảo-luận', emoji: '💬', categoryName: '💬 Chat chung', channelType: 'text', position: 0 },
+        { name: 'nhật-ký-nhóm', emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
     ],
 };
 
