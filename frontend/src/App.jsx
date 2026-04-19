@@ -1,59 +1,146 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { PresenceProvider } from './context/PresenceContext';
+import { NotificationProvider } from './context/NotificationContext';
+import { CallProvider } from './features/call/CallContext';
+import IncomingCallModal from './features/call/components/IncomingCallModal';
+import OutgoingCallScreen from './features/call/components/OutgoingCallScreen';
+import ActiveCallScreen from './features/call/components/ActiveCallScreen';
+import CallNotification from './features/call/components/CallNotification';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
-import Signup from './pages/Signup';
-import Signin from './pages/Signin';
-import Dashboard from './pages/Dashboard';
-import AuthCallback from './pages/AuthCallback';
-import CompleteProfile from './pages/CompleteProfile';
+import Signup from './features/auth/Signup';
+import Signin from './features/auth/Signin';
+import Dashboard from './features/chat/Dashboard';
+import Chat from './features/chat/Chat';
+import AuthCallback from './features/auth/AuthCallback';
+import CompleteProfile from './features/auth/CompleteProfile';
+import ForgotPassword from './features/auth/ForgotPassword';
+import Home from './pages/Home';
+import UserProfilePage from './features/user/UserProfilePage';
+import ChangePassword from './features/auth/ChangePassword';
+import FriendsPage from './features/friends/FriendsPage';
+import SidebarNav from './components/SidebarNav';
+import NotificationToast from './features/notifications/components/NotificationToast';
 
-const Home = () => (
-  <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
-    <div className="text-center">
-      <h1 className="text-5xl font-bold text-white mb-6">ZOLO Chat</h1>
-      <p className="text-xl text-blue-100 mb-8">Ứng dụng chat online hiện đại</p>
-      <div className="space-x-4">
-        <a
-          href="/signin"
-          className="inline-block bg-white text-blue-600 font-bold py-3 px-8 rounded-lg hover:bg-blue-50 transition"
-        >
-          Đăng Nhập
-        </a>
-        <a
-          href="/signup"
-          className="inline-block bg-blue-400 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-500 transition"
-        >
-          Đăng Ký
-        </a>
+// Các route có Sidebar bên trái kiểu AppShell (Zalo)
+const APP_SHELL_ROUTES = ['/chat', '/friends', '/user'];
+
+const ThemeSyncHandler = () => {
+  const { user } = useAuth();
+  const { syncTheme } = useTheme();
+
+  React.useEffect(() => {
+    if (user) {
+      syncTheme(user.themeName || 'dark', user.themeColors || null);
+    } else {
+      syncTheme('dark', null); // Reset khi đăng xuất
+    }
+  }, [user, syncTheme]);
+
+  return null;
+};
+
+const Layout = ({ children }) => {
+  const location = useLocation();
+  const isAppShell = APP_SHELL_ROUTES.some((r) => location.pathname.startsWith(r));
+
+  if (isAppShell) {
+    return (
+      <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+        {/* Lớp vỏ Zalo chuẩn Theme màu */}
+        <SidebarNav />
+        {/* Khu vực render trang chức năng */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', backgroundColor: 'var(--bg-primary)' }}>
+          {children}
+        </div>
       </div>
-    </div>
-  </div>
-);
+    );
+  }
+
+  // Layout thường (Trang chủ, Đăng nhập) có Navbar ngang
+  return (
+    <>
+      <Navbar />
+      {children}
+    </>
+  );
+};
 
 const App = () => {
   return (
     <Router>
-      <AuthProvider>
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/signin" element={<Signin />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/complete-profile" element={<CompleteProfile />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ThemeSyncHandler />
+          <PresenceProvider>
+            <NotificationProvider>
+              <CallProvider>
+              <CallNotification />
+              <NotificationToast />
+              <IncomingCallModal />
+              <OutgoingCallScreen />
+              <ActiveCallScreen />
+              <Layout>
+                <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/signin" element={<Signin />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+
+                {/* Giữ route cũ /dashboard nhưng chuyển hướng về /chat */}
+                <Route path="/dashboard" element={<Navigate to="/chat" replace />} />
+
+                <Route
+                  path="/chat"
+                  element={
+                    <ProtectedRoute>
+                      <Chat />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/user/:userId"
+                  element={
+                    <ProtectedRoute>
+                      <UserProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/change-password"
+                  element={
+                    <ProtectedRoute>
+                      <ChangePassword />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* MODULE BẠN BÈ */}
+                <Route
+                  path="/friends"
+                  element={
+                    <ProtectedRoute>
+                      <FriendsPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+
+                <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/complete-profile" element={<CompleteProfile />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Layout>
+              </CallProvider>
+            </NotificationProvider>
+          </PresenceProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </Router>
   );
 };

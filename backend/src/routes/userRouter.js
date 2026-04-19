@@ -1,22 +1,26 @@
 const express = require('express');
 const router = express.Router();
-const { signup, signin, signout, getNewAccessToken } = require('../controllers/userController');
-const verifyLocalToken = require('../middlewares/verifyLocalToken');
+const verifyToken = require('../middlewares/verifyToken');
 
-// ── Đăng ký tài khoản local ──────────────────────────────────────
-// Body: { username, password, email, firstName, lastName, phone?, emailOtp, phoneOtp? }
-router.post('/signup', signup);
+const {
+    updateProfile,
+    searchUsers,
+    getPublicProfile,
+} = require('../controllers/userController');
 
-// ── Đăng nhập local ──────────────────────────────────────────────
-// Body: { username, password }  (username có thể là email)
-router.post('/signin', signin);
+// ════════════════════════════════════════════════════════════════
+//  UPDATE PROFILE (avatar, displayName, bio, banner, themes...)
+// ════════════════════════════════════════════════════════════════
+router.patch('/update-profile', verifyToken, updateProfile);
 
-// ── Đăng xuất ────────────────────────────────────────────────────
-// Cookie: refreshToken
-router.post('/signout', signout);
+// ════════════════════════════════════════════════════════════════
+//  TÌM KIẾM USER
+// ════════════════════════════════════════════════════════════════
+router.get('/search', verifyToken, searchUsers);
 
-// ── Lấy access token mới bằng refresh token ──────────────────────
-// Cookie: refreshToken
-router.post('/refreshme', getNewAccessToken);
+// ════════════════════════════════════════════════════════════════
+//  PUBLIC PROFILE - Cho người dùng khác xem hồ sơ
+// ════════════════════════════════════════════════════════════════
+router.get('/:userId/profile', verifyToken, getPublicProfile);
 
 module.exports = router;

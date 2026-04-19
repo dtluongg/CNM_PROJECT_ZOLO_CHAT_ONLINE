@@ -1,228 +1,183 @@
 const userModel = require('../models/userModel');
-const authModel = require('../models/authModel');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const { verifyOtp } = require('../services/otpService');
+const { getIO }  = require('../socket/socketManager');
 
-// ── Helper: tạo cặp token local ──────────────────────────────────
-const createLocalTokens = async (userId, res) => {
-    // Access token ngắn hạn (15 phút)
-    const accessToken = jwt.sign(
-        { user_id: userId },
-        process.env.acc_secret,
-        { expiresIn: '15m' }
-    );
-
-    // Refresh token dài hạn (7 ngày) lưu vào DB
-    const refreshToken = crypto.randomBytes(64).toString('hex');
-    await authModel.create({
-        userId,
-        refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
-
-    // Gửi refresh token qua cookie httpOnly
-    res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    return accessToken;
-};
-
-// ── SIGNUP ────────────────────────────────────────────────────────
-const signup = async (req, res) => {
+// ════════════════════════════════════════════════════════════════
+//  CẬP NHẬT PROFILE (avatar, displayName, and extended settings)
+// ════════════════════════════════════════════════════════════════
+const updateProfile = async (req, res) => {
     try {
-        const { username, password, email, firstName, lastName, phone, emailOtp, phoneOtp } = req.body;
+        const {
+            avatar, displayName,
+            bio, status, statusText, banner, usernameColor, themeName, themeColors,
+        } = req.body;
+        const userId = req.user._id;
 
-        // Validate input
-        if (!username || !password || !email || !firstName || !lastName) {
-            return res.status(400).json({ message: 'Vui lòng điền đầy đủ thông tin bắt buộc' });
+        const updates = {};
+        if (displayName !== undefined && displayName.trim()) {
+            updates.displayName = displayName.trim();
         }
-
-        // ── Xác thực OTP: cần ít nhất 1 trong 2 (email HOẶC phone) ─
-        const hasEmailOtp = !!emailOtp;
-        const hasPhoneOtp = !!(phone && phoneOtp);
-
-        if (!hasEmailOtp && !hasPhoneOtp) {
-            return res.status(400).json({ message: 'Cần xác thực ít nhất một phương thức: email OTP hoặc số điện thoại OTP' });
-        }
-
-        let isEmailVerifiedResult = false;
-        if (hasEmailOtp) {
-            const emailResult = await verifyOtp(email, 'email', emailOtp);
-            if (!emailResult.success) {
-                return res.status(400).json({ message: emailResult.message });
+        if (avatar !== undefined) {
+            // Chấp nhận URL hoặc base64 data URL
+            if (avatar && avatar.length > 5 * 1024 * 1024) {
+                return res.status(400).json({ message: 'Ảnh quá lớn, tối đa 5MB' });
             }
-            isEmailVerifiedResult = true;
+            updates.avatar = avatar;
+        }
+        if (bio !== undefined) updates.bio = bio;
+        if (status !== undefined) updates.status = status;
+        if (statusText !== undefined) updates.statusText = statusText;
+        if (banner !== undefined) updates.banner = banner;
+        if (usernameColor !== undefined) updates.usernameColor = usernameColor;
+        if (themeName !== undefined) updates.themeName = themeName;
+        if (themeColors !== undefined) updates.themeColors = themeColors;
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ message: 'Không có dữ liệu để cập nhật' });
         }
 
-        let isPhoneVerified = false;
-        if (hasPhoneOtp) {
-            const phoneResult = await verifyOtp(phone, 'phone', phoneOtp);
-            if (!phoneResult.success) {
-                return res.status(400).json({ message: phoneResult.message });
-            }
-            isPhoneVerified = true;
+        const updatedUser = await userModel.findByIdAndUpdate(
+            userId,
+            updates,
+            { new: true, select: '-passwordHash' }
+        );
+
+        // ── Broadcast status change via socket ──────────────────────────────
+        if (updates.status !== undefined || updates.statusText !== undefined) {
+            try {
+                const io  = getIO();
+                const uid = userId.toString();
+                const newStatus     = updatedUser.status     || 'online';
+                const newStatusText = updatedUser.statusText || '';
+                if (newStatus === 'invisible') {
+                    // Appear offline to everyone else (no lastSeen = user is just hidden)
+                    io.emit('presence:offline', { userId: uid });
+                } else {
+                    io.emit('presence:status-changed', {
+                        userId:     uid,
+                        status:     newStatus,
+                        statusText: newStatusText,
+                    });
+                }
+            } catch (_) { /* socket may not be ready in test environments */ }
         }
-
-        // ── Kiểm tra trùng lặp ───────────────────────────────────
-        const existingUsername = await userModel.findOne({ username });
-        if (existingUsername) {
-            return res.status(400).json({ message: 'Username đã tồn tại, vui lòng chọn tên khác' });
-        }
-
-        const existingEmail = await userModel.findOne({ email });
-        if (existingEmail) {
-            return res.status(400).json({ message: 'Email đã được sử dụng' });
-        }
-
-        // ── Tạo user ─────────────────────────────────────────────
-        const passwordHash = await bcrypt.hash(password, 10);
-        await userModel.create({
-            username,
-            passwordHash,
-            email,
-            displayName: `${firstName} ${lastName}`,
-            phone: phone || undefined,
-            isEmailVerified: isEmailVerifiedResult,
-            isPhoneVerified,
-            authProvider: 'local',
-        });
-
-        return res.status(201).json({ message: 'Đăng ký tài khoản thành công' });
-
-    } catch (error) {
-        console.error('Signup error:', error.message);
-        return res.status(500).json({ message: 'Lỗi server khi đăng ký' });
-    }
-};
-
-// ── SIGNIN ────────────────────────────────────────────────────────
-const signin = async (req, res) => {
-    try {
-        const { username, password } = req.body;
-
-        if (!username || !password) {
-            return res.status(400).json({ message: 'Vui lòng nhập username và password' });
-        }
-
-        // Tìm user (có thể đăng nhập bằng username hoặc email)
-        const userFind = await userModel.findOne({
-            $or: [{ username }, { email: username }]
-        });
-
-        if (!userFind) {
-            return res.status(400).json({ message: 'Username hoặc email không tồn tại' });
-        }
-
-        // Kiểm tra user có dùng OAuth không
-        if (!userFind.passwordHash) {
-            return res.status(400).json({
-                message: `Tài khoản này đăng nhập qua ${userFind.authProvider}. Vui lòng dùng nút đăng nhập tương ứng`,
-            });
-        }
-
-        // So sánh password
-        const passwordMatch = await bcrypt.compare(password, userFind.passwordHash);
-        if (!passwordMatch) {
-            return res.status(400).json({ message: 'Mật khẩu không chính xác' });
-        }
-
-        // Tạo tokens
-        const accessToken = await createLocalTokens(userFind._id, res);
 
         return res.status(200).json({
-            message: 'Đăng nhập thành công',
-            accessToken,
+            message: 'Cập nhật profile thành công',
             user: {
-                _id: userFind._id,
-                username: userFind.username,
-                email: userFind.email,
-                displayName: userFind.displayName,
-                avatar: userFind.avatar,
-                authProvider: userFind.authProvider,
+                _id: updatedUser._id,
+                username: updatedUser.username || null,
+                email: updatedUser.email,
+                displayName: updatedUser.displayName,
+                phone: updatedUser.phone || null,
+                avatar: updatedUser.avatar || null,
+                banner: updatedUser.banner || null,
+                bio: updatedUser.bio || '',
+                status: updatedUser.status || 'online',
+                statusText: updatedUser.statusText || '',
+                usernameColor: updatedUser.usernameColor || '#5865f2',
+                themeName: updatedUser.themeName || 'dark',
+                themeColors: updatedUser.themeColors || null,
+                authProvider: updatedUser.authProvider,
+                isEmailVerified: updatedUser.isEmailVerified,
+                isPhoneVerified: updatedUser.isPhoneVerified,
+                createdAt: updatedUser.createdAt,
             },
         });
 
     } catch (error) {
-        console.error('Signin error:', error.message);
-        return res.status(500).json({ message: 'Lỗi server khi đăng nhập' });
+        console.error('updateProfile error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server khi cập nhật profile' });
     }
 };
 
-// ── SIGNOUT ───────────────────────────────────────────────────────
-const signout = async (req, res) => {
+// ════════════════════════════════════════════════════════════════
+//  TÌM KIẾM USER (theo username, email, displayName)
+// ════════════════════════════════════════════════════════════════
+const searchUsers = async (req, res) => {
     try {
-        const refreshToken = req.cookies.refreshToken;
-        if (!refreshToken) {
-            // OAuth user không có refresh token cookie — vẫn trả 200
-            return res.status(200).json({ message: 'Đăng xuất thành công' });
+        const { q } = req.query;
+        if (!q || q.trim().length < 2) {
+            return res.status(400).json({ message: 'Từ khóa tìm kiếm phải có ít nhất 2 ký tự' });
         }
 
-        // Xóa cookie
-        res.clearCookie('refreshToken', {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-        });
+        const keyword = q.trim();
+        const regex = new RegExp(keyword, 'i');
 
-        // Xóa trong DB
-        await authModel.findOneAndDelete({ refreshToken });
-
-        return res.status(200).json({ message: 'Đăng xuất thành công' });
-
-    } catch (error) {
-        console.error('Signout error:', error.message);
-        return res.status(500).json({ message: 'Lỗi server khi đăng xuất' });
-    }
-};
-
-// ── REFRESH ACCESS TOKEN ──────────────────────────────────────────
-const getNewAccessToken = async (req, res) => {
-    try {
-        const refreshToken = req.cookies.refreshToken;
-        if (!refreshToken) {
-            return res.status(401).json({ message: 'Không có refresh token', code: 'NO_REFRESH_TOKEN' });
-        }
-
-        // Tìm session hợp lệ
-        const authSession = await authModel.findOne({
-            refreshToken,
-            expiresAt: { $gt: new Date() },
-        });
-
-        if (!authSession) {
-            res.clearCookie('refreshToken');
-            return res.status(401).json({ message: 'Refresh token không hợp lệ hoặc đã hết hạn', code: 'REFRESH_EXPIRED' });
-        }
-
-        // Kiểm tra user còn tồn tại
-        const user = await userModel.findById(authSession.userId);
-        if (!user) {
-            await authModel.deleteOne({ _id: authSession._id });
-            return res.status(401).json({ message: 'User không tồn tại' });
-        }
-
-        // Tạo access token mới
-        const newAccessToken = jwt.sign(
-            { user_id: user._id },
-            process.env.acc_secret,
-            { expiresIn: '15m' }
-        );
+        const users = await userModel.find({
+            _id: { $ne: req.user._id }, // Không tìm bản thân
+            $or: [
+                { displayName: regex },
+                { username: regex },
+                { email: regex },
+            ],
+        })
+        .select('_id displayName username email avatar usernameColor status statusText bio')
+        .limit(20);
 
         return res.status(200).json({
-            message: 'Lấy access token mới thành công',
-            accessToken: newAccessToken,
+            users: users.map(u => ({
+                _id: u._id,
+                displayName: u.displayName,
+                username: u.username || null,
+                email: u.email,
+                avatar: u.avatar || null,
+                usernameColor: u.usernameColor || '#5865f2',
+                status: u.status === 'invisible' ? 'offline' : u.status,
+                statusText: u.status === 'invisible' ? '' : (u.statusText || ''),
+                bio: u.bio || '',
+            })),
         });
-
     } catch (error) {
-        console.error('Refresh token error:', error.message);
+        console.error('searchUsers error:', error.message);
+        return res.status(500).json({ message: 'Lỗi server khi tìm kiếm' });
+    }
+};
+
+// ════════════════════════════════════════════════════════════════
+//  PUBLIC PROFILE - Cho người dùng khác xem hồ sơ
+// ════════════════════════════════════════════════════════════════
+const getPublicProfile = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!userId || !userId.match(/^[a-f\d]{24}$/i)) {
+            return res.status(400).json({ message: 'userId không hợp lệ' });
+        }
+
+        const user = await userModel.findById(userId).select(
+            'displayName username email avatar banner bio status statusText usernameColor createdAt'
+        );
+
+        if (!user) {
+            return res.status(404).json({ message: 'Không tìm thấy người dùng' });
+        }
+
+        const visibleStatus = user.status === 'invisible' ? 'offline' : user.status;
+
+        return res.status(200).json({
+            user: {
+                _id: user._id,
+                displayName: user.displayName,
+                username: user.username || null,
+                email: user.email,
+                avatar: user.avatar || null,
+                banner: user.banner || null,
+                bio: user.bio || '',
+                status: visibleStatus,
+                statusText: user.status === 'invisible' ? '' : (user.statusText || ''),
+                usernameColor: user.usernameColor || '#5865f2',
+                createdAt: user.createdAt,
+            },
+        });
+    } catch (error) {
+        console.error('getPublicProfile error:', error.message);
         return res.status(500).json({ message: 'Lỗi server' });
     }
 };
 
-module.exports = { signup, signin, signout, getNewAccessToken };
+
+module.exports = {
+    updateProfile,
+    searchUsers,
+    getPublicProfile
+};

@@ -22,4 +22,8 @@ Thumbs.db
 dist/
 build/
 
+# IDE
+.idea
+
+# Optional (nếu là file cá nhân)
 git-command.txt
