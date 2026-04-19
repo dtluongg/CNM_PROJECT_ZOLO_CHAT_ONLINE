@@ -3,6 +3,7 @@ const router = express.Router();
 const verifyToken = require('../middlewares/verifytoken');
 const { sendMessage, getMessages, getAttachments, revokeMessage, editMessage, markAsRead, deleteMessageForMe } = require('../controllers/messageController');
 const { summarizeUnread } = require('../controllers/aiController');
+const { createPoll, votePoll } = require('../controllers/pollController');
 
 // ════════════════════════════════════════════════════════════════
 //  GET  /backend/api/messages/:conversationId/attachments – Ảnh & file
@@ -18,6 +19,8 @@ const { summarizeUnread } = require('../controllers/aiController');
 // ════════════════════════════════════════════════════════════════
 router.get('/:conversationId/attachments', verifyToken, getAttachments);
 router.post('/:conversationId/aiSummary',  verifyToken, summarizeUnread);
+router.post('/:conversationId/poll',       verifyToken, createPoll);
+router.patch('/poll/:messageId/vote',      verifyToken, votePoll);
 router.get('/:conversationId', verifyToken, getMessages);
 router.post('/:conversationId', verifyToken, sendMessage);
 router.post('/:conversationId/read/:messageId', verifyToken, markAsRead);

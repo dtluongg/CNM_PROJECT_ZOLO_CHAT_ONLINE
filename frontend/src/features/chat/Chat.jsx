@@ -17,6 +17,8 @@ import { useMessages }       from './hooks/useMessages';
 import { useBlockStatus }    from './hooks/useBlockStatus';
 import { useGroupActions }   from './hooks/useGroupActions';
 import { useNotifications }  from '../../context/NotificationContext';
+import { VoiceRoomProvider } from '../voice/VoiceRoomContext';
+import VoiceRoomPanel        from '../voice/components/VoiceRoomPanel';
 
 const Chat = () => {
   const { user: currentUser, token } = useAuth();
@@ -33,6 +35,8 @@ const Chat = () => {
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showUserSearch, setShowUserSearch]   = useState(false);
   const [typingUsers, setTypingUsers]         = useState({});
+  const [activeTopic, setActiveTopic]         = useState(null);
+  const [topicsVersion, setTopicsVersion] = useState(0);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -59,6 +63,9 @@ const Chat = () => {
   const activeConvRef = useRef(null);
   useEffect(() => { activeConvRef.current = activeConversation; }, [activeConversation]);
 
+  // Reset active topic when switching conversations
+  useEffect(() => { setActiveTopic(null); }, [activeConversation?.id]);
+
   // ── Messages ─────────────────────────────────────────────────────────────
   const {
     messages, setMessages,
@@ -68,6 +75,7 @@ const Chat = () => {
     editMessageInState,
     resetMessages,
     handleSendMessage,
+    handlePollVote,
   } = useMessages({
     currentUser,
     activeConversation,
@@ -144,6 +152,11 @@ const Chat = () => {
       socketRef.current.emit('chat:leave', { conversationId: activeConvRef.current.id });
     }
     setActiveConversation(conv);
+    if (!conv) {
+      if (isMobile) setMobileView('list');
+      fetchDmBlockStatus(null);
+      return;
+    }
     setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, unread: 0 } : c)));
 
     if (socketRef.current) socketRef.current.emit('chat:join', { conversationId: conv.id });
@@ -153,6 +166,11 @@ const Chat = () => {
 
     await loadMessages(conv.id);
   }, [isMobile, fetchDmBlockStatus, loadMessages, setActiveConversation, setConversations, socketRef]);
+
+  // ── Voice Room ──────────────────────────────────────────────────────────
+  const [showVoicePanel,    setShowVoicePanel]    = useState(false);
+  const [voiceRoomActive,   setVoiceRoomActive]   = useState(false);
+  const handleVoiceRoom = useCallback(() => setShowVoicePanel(v => !v), []);
 
   // ── Calls ────────────────────────────────────────────────────────────────
   const handlePhoneCall = useCallback(() => {
@@ -183,6 +201,9 @@ const Chat = () => {
   const {
     showCreateGroupModal, setShowCreateGroupModal,
     friendsForGroup, groupName, setGroupName,
+    groupType, setGroupType,
+    groupDescription, setGroupDescription,
+    groupAvatarPreview, handleAvatarFileChange,
     selectedFriendIds, loadingFriends, creatingGroup,
     handleOpenCreateGroup, toggleSelectFriend,
     handleCreateGroup, handleLeaveGroup,
@@ -219,6 +240,11 @@ const Chat = () => {
     onBlockStatusChanged: () => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId),
     onPhoneCall: handlePhoneCall,
     onVideoCall: handleVideoCall,
+    onVoiceRoom: handleVoiceRoom,
+    voiceRoomActive,
+    onPollVote: handlePollVote,
+    activeTopic,
+    onTopicSelect: setActiveTopic,
   };
 
   const rightSidebarProps = {
@@ -231,11 +257,15 @@ const Chat = () => {
     onBlockToggled: () => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId),
     onPhoneCall: handlePhoneCall,
     onVideoCall: handleVideoCall,
+    activeTopic,
+    onTopicSelect: setActiveTopic,
+    onTopicsChanged: () => setTopicsVersion(v => v + 1), // ← thêm dòng này
   };
 
   // ── MOBILE LAYOUT ────────────────────────────────────────────────────────
   if (isMobile) {
     return (
+      <VoiceRoomProvider>
       <div style={{
         width: '100vw', height: '100%', background: 'var(--bg-primary)',
         position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -255,6 +285,9 @@ const Chat = () => {
               onOpenSettings={() => setShowProfileSettings(true)}
               onOpenSearch={() => setShowUserSearch(true)}
               onOpenCreateGroup={handleOpenCreateGroup}
+              activeTopic={activeTopic}
+              onTopicSelect={setActiveTopic}
+              topicsVersion={topicsVersion}
               isMobile
             />
           </div>
@@ -284,12 +317,20 @@ const Chat = () => {
             <RightSidebar {...rightSidebarProps} isMobile />
           </div>
         )}
+        <VoiceRoomPanel
+          visible={showVoicePanel}
+          conversation={activeConversation}
+          currentUserId={currentUserId}
+          onClose={() => setShowVoicePanel(false)}
+        />
       </div>
+      </VoiceRoomProvider>
     );
   }
 
   // ── DESKTOP LAYOUT ───────────────────────────────────────────────────────
   return (
+    <VoiceRoomProvider>
     <div style={{
       width: '100%', height: '100%', background: 'var(--bg-primary)',
       position: 'relative', display: 'flex', overflow: 'hidden',
@@ -301,6 +342,9 @@ const Chat = () => {
         onOpenSettings={() => setShowProfileSettings(true)}
         onOpenSearch={() => setShowUserSearch(true)}
         onOpenCreateGroup={handleOpenCreateGroup}
+        activeTopic={activeTopic}
+        onTopicSelect={setActiveTopic}
+        topicsVersion={topicsVersion}
       />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
@@ -331,6 +375,12 @@ const Chat = () => {
         <CreateGroupModal
           groupName={groupName}
           setGroupName={setGroupName}
+          groupType={groupType}
+          setGroupType={setGroupType}
+          groupDescription={groupDescription}
+          setGroupDescription={setGroupDescription}
+          groupAvatarPreview={groupAvatarPreview}
+          onAvatarFileChange={handleAvatarFileChange}
           selectedFriendIds={selectedFriendIds}
           friendsForGroup={friendsForGroup}
           loadingFriends={loadingFriends}
@@ -340,7 +390,15 @@ const Chat = () => {
           onClose={() => setShowCreateGroupModal(false)}
         />
       )}
+
+      <VoiceRoomPanel
+        visible={showVoicePanel}
+        conversation={activeConversation}
+        currentUserId={currentUserId}
+        onClose={() => setShowVoicePanel(false)}
+      />
     </div>
+    </VoiceRoomProvider>
   );
 };
 

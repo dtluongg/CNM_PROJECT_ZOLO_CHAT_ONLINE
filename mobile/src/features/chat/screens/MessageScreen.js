@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  Keyboard, Alert, StatusBar, Platform,
+  Keyboard, Alert, StatusBar, Platform, Modal, Pressable,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../context/AuthContext';
@@ -78,6 +78,11 @@ export default function MessageScreen({ route, navigation }) {
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [forwardingMsg, setForwardingMsg] = useState(null);
 
+  // State topics / channels (group only)
+  const [topics, setTopics] = useState([]);
+  const [activeTopic, setActiveTopic] = useState(null);
+  const [showChannelSheet, setShowChannelSheet] = useState(false);
+
   // State info panel (modal 3 chấm)
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [showPinLimitModal, setShowPinLimitModal] = useState(false);
@@ -101,8 +106,38 @@ export default function MessageScreen({ route, navigation }) {
     aiSummary: conversation.aiSummary || null,
   });
 
+  // ── Load topics cho group conversation ─────────────────────────────────
+  useEffect(() => {
+    if (conversation.type !== 'group') return;
+    conversationApi.listTopics(conversation.id)
+      .then(res => {
+        const list = res.data?.topics || res.data?.data || [];
+
+        setTopics(list);
+        // Tự chọn kênh text đầu tiên nếu có
+        const firstText = list.find(t => !t.channelType || t.channelType === 'text');
+        if (firstText) setActiveTopic(firstText);
+      })
+      .catch(() => setTopics([]));
+  }, [conversation.id, conversation.type]);
+  useEffect(() => {
+    if (conversation.type !== 'group') return;
+    conversationApi.listTopics(conversation.id)
+      .then(res => {
+        const list = res.data?.topics || res.data?.data || [];
+        console.log('Topics loaded:', list.length, list); // 👈 xem có data không
+        setTopics(list);
+        const firstText = list.find(t => !t.channelType || t.channelType === 'text');
+        if (firstText) setActiveTopic(firstText);
+      })
+      .catch((err) => {
+        console.log('Topics error:', err); // 👈 xem lỗi gì
+        setTopics([]);
+      });
+  }, [conversation.id, conversation.type]);
+
   // ── Hooks quản lý tin nhắn ──────────────────────────────────────────────
-  const msgHook = useMessages(conversation.id, currentUserId);
+  const msgHook = useMessages(conversation.id, currentUserId, activeTopic?._id || null);
 
   // ── Hook ghi âm ─────────────────────────────────────────────────────────
   const { isRecording, recordingSec, startRecording, stopRecording, cancelRecording } =
@@ -110,7 +145,7 @@ export default function MessageScreen({ route, navigation }) {
       msgHook.addMessage(msg);
       setReplyingMessage(null);
       setEditingMessage(null);
-    });
+    }, activeTopic?._id || null);
 
   // ── Hook xử lý file ─────────────────────────────────────────────────────
   const { pickAndSendImage, pickAndSendFile, openFile } = useFileHandler(
@@ -119,7 +154,8 @@ export default function MessageScreen({ route, navigation }) {
       msgHook.addMessage(msg);
       setReplyingMessage(null);
       setEditingMessage(null);
-    }
+    },
+    activeTopic?._id || null
   );
 
   // ── Hook socket ─────────────────────────────────────────────────────────
@@ -234,6 +270,28 @@ export default function MessageScreen({ route, navigation }) {
     fetchBlockStatus();
   }, [fetchBlockStatus]);
 
+  // ── Rời nhóm ────────────────────────────────────────────────────────────
+  const handleLeaveGroup = async () => {
+    try {
+      await conversationApi.leaveConversation(conversation.id);
+      setShowInfoPanel(false);
+      navigation.goBack();
+    } catch (err) {
+      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể rời nhóm.');
+    }
+  };
+
+  // ── Giải tán nhóm ───────────────────────────────────────────────────────
+  const handleDisbandGroup = async () => {
+    try {
+      await conversationApi.disbandConversation(conversation.id);
+      setShowInfoPanel(false);
+      navigation.goBack();
+    } catch (err) {
+      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể giải tán nhóm.');
+    }
+  };
+
   // ── Chặn / bỏ chặn người dùng ──────────────────────────────────────────
   const handleBlockUser = async () => {
     if (!conversation.otherUserId) return;
@@ -317,7 +375,7 @@ export default function MessageScreen({ route, navigation }) {
     }
 
     try {
-      const res = await messageApi.sendText(conversation.id, trimmed, replyId);
+      const res = await messageApi.sendText(conversation.id, trimmed, replyId, activeTopic?._id || null);
       msgHook.replaceTemp(tempId, res.data.data);
     } catch (err) {
       console.error('sendText error:', err);
@@ -393,12 +451,12 @@ export default function MessageScreen({ route, navigation }) {
     try {
       const pinToReplace = conversation.pinnedMessages[selectedIndex];
       const oldMsgId = pinToReplace.messageId._id || pinToReplace.messageId.id;
-      
+
       // Bỏ ghim cái cũ
       await messageApi.unpinMessage(conversation.id, oldMsgId.toString());
       // Ghim cái mới
       await messageApi.pinMessage(conversation.id, pendingPinMsgId.toString());
-      
+
       setShowPinLimitModal(false);
       setPendingPinMsgId(null);
     } catch (err) {
@@ -413,8 +471,8 @@ export default function MessageScreen({ route, navigation }) {
       'Bạn có chắc muốn bỏ ghim nội dung này không?',
       [
         { text: 'Không', style: 'cancel' },
-        { 
-          text: 'Bỏ ghim', 
+        {
+          text: 'Bỏ ghim',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -609,7 +667,34 @@ export default function MessageScreen({ route, navigation }) {
         </View>
       </View>
 
-      <PinnedBar 
+      {/* ── Channel bar (group only) ──────────────────────────────────────── */}
+      {conversation.type === 'group' && topics.length > 0 && (
+        <TouchableOpacity
+          onPress={() => setShowChannelSheet(true)}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingVertical: 7,
+            backgroundColor: THEME.bgSecondary,
+            borderBottomWidth: 1,
+            borderBottomColor: THEME.border,
+            gap: 6,
+          }}
+        >
+          <Feather
+            name={activeTopic?.channelType === 'voice' ? 'volume-2' : 'hash'}
+            size={14}
+            color={THEME.accent}
+          />
+          <Text style={{ fontSize: 13, fontWeight: '700', color: THEME.textPrimary, flex: 1 }}>
+            {activeTopic?.name || 'chung'}
+          </Text>
+          <Feather name="chevron-down" size={14} color={THEME.textMuted} />
+        </TouchableOpacity>
+      )}
+
+      <PinnedBar
         pinnedMessages={pinnedMessages}
         onJump={handleJumpToMessage}
         onUnpin={handleUnpin}
@@ -617,7 +702,7 @@ export default function MessageScreen({ route, navigation }) {
 
       {/* ── Body: danh sách tin nhắn + thanh input ────────────────────────── */}
       <View style={{ flex: 1 }}>
-        <PinLimitModal 
+        <PinLimitModal
         isOpen={showPinLimitModal}
         onClose={() => { setShowPinLimitModal(false); setPendingPinMsgId(null); }}
         pinnedMessages={conversation.pinnedMessages || []}
@@ -871,6 +956,8 @@ export default function MessageScreen({ route, navigation }) {
         onImagePress={(url) => { setShowInfoPanel(false); setTimeout(() => setPreviewImage(url), 300); }}
         onFilePress={openFile}
         onViewProfile={() => { setShowInfoPanel(false); navigation.push('UserProfile', { userId: conversation.otherUserId }); }}
+        onLeaveGroup={handleLeaveGroup}
+        onDisbandGroup={handleDisbandGroup}
         THEME={THEME}
         styles={styles}
       />
@@ -920,6 +1007,101 @@ export default function MessageScreen({ route, navigation }) {
         onDownload={openFile}
         THEME={THEME}
       />
+
+      {/* ── Channel picker sheet ──────────────────────────────────────────── */}
+      <Modal
+        visible={showChannelSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowChannelSheet(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          onPress={() => setShowChannelSheet(false)}
+        >
+          <View
+            style={{ backgroundColor: THEME.bgSecondary, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 32 }}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={{ width: 40, height: 4, backgroundColor: THEME.border, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 12 }} />
+            <Text style={{ fontSize: 15, fontWeight: '800', color: THEME.textPrimary, paddingHorizontal: 20, marginBottom: 10 }}>
+              Chọn kênh
+            </Text>
+            {topics.map(topic => {
+              const isActive = activeTopic?._id === topic._id;
+              const isVoice = topic.channelType === 'voice';
+              return (
+                <TouchableOpacity
+                  key={topic._id}
+                  onPress={() => {
+                    if (!isVoice) {
+                      setActiveTopic(topic);
+                      setShowChannelSheet(false);
+                    }
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 20,
+                    paddingVertical: 12,
+                    backgroundColor: isActive ? THEME.accent + '18' : 'transparent',
+                    gap: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 17,
+                      backgroundColor: isVoice ? '#22c55e18' : THEME.accent + '18',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Feather
+                      name={isVoice ? 'volume-2' : 'hash'}
+                      size={16}
+                      color={isVoice ? '#22c55e' : THEME.accent}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: isActive ? '700' : '500', color: THEME.textPrimary }}>
+                      {topic.name}
+                    </Text>
+                    {isVoice && (
+                      <Text style={{ fontSize: 11, color: '#22c55e', marginTop: 1 }}>Kênh thoại</Text>
+                    )}
+                  </View>
+                  {isActive && <Feather name="check" size={16} color={THEME.accent} />}
+                </TouchableOpacity>
+              );
+            })}
+            {/* Option for no topic (general) */}
+            <TouchableOpacity
+              onPress={() => { setActiveTopic(null); setShowChannelSheet(false); }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 20,
+                paddingVertical: 12,
+                backgroundColor: !activeTopic ? THEME.accent + '18' : 'transparent',
+                gap: 12,
+                marginTop: 4,
+                borderTopWidth: 1,
+                borderTopColor: THEME.border,
+              }}
+            >
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: THEME.bgPrimary, justifyContent: 'center', alignItems: 'center' }}>
+                <Feather name="message-square" size={16} color={THEME.textMuted} />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: !activeTopic ? '700' : '500', color: THEME.textPrimary }}>
+                Tất cả tin nhắn
+              </Text>
+              {!activeTopic && <Feather name="check" size={16} color={THEME.accent} />}
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

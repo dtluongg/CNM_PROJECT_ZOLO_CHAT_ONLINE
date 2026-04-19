@@ -48,6 +48,7 @@ const formatMsg = (msg, sender) => ({
     type: msg.type,
     content: msg.content,
     payload: msg.payload || {},
+    topicId: msg.topicId || null,
     replyToMessageId: msg.replyToMessageId || null,
     forwardFromMessageId: msg.forwardFromMessageId || null,
     edited: msg.edited,
@@ -80,7 +81,7 @@ const sendMessage = async (req, res) => {
 
         await requireMembership(conversationId, userId);
 
-        const { type = 'text', content = '', attachmentId, replyToMessageId, forwardFromMessageId } = req.body;
+        const { type = 'text', content = '', attachmentId, replyToMessageId, forwardFromMessageId, topicId } = req.body;
 
         const ALLOWED_TYPES = ['text', 'voice', 'image', 'file'];
         if (!ALLOWED_TYPES.includes(type)) {
@@ -146,6 +147,7 @@ const sendMessage = async (req, res) => {
             content: finalType === 'text' ? finalContent.trim() : preview,
             type: finalType,
             payload: finalPayload,
+            topicId: isValidId(topicId) ? topicId : null,
             replyToMessageId:
                 isValidId(replyToMessageId) ? replyToMessageId : null,
             forwardFromMessageId:
@@ -242,6 +244,7 @@ const getMessages = async (req, res) => {
 
         const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 30));
         const before = req.query.before;
+        const topicId = req.query.topicId;
 
         const filter = {
             conversationId,
@@ -250,6 +253,11 @@ const getMessages = async (req, res) => {
         };
         if (isValidId(before)) {
             filter._id = { $lt: new mongoose.Types.ObjectId(before) };
+        }
+        if (isValidId(topicId)) {
+            filter.topicId = new mongoose.Types.ObjectId(topicId);
+        } else if (topicId === 'null' || topicId === 'none') {
+            filter.topicId = null;
         }
 
         const raw = await Message.find(filter)
@@ -269,6 +277,34 @@ const getMessages = async (req, res) => {
                 .populate('userId', 'displayName avatar')
                 .lean()
         ]);
+
+        // Manually populate voterIds for poll messages
+        const pollMsgs = raw.filter(m => m.type === 'poll');
+        if (pollMsgs.length > 0) {
+            const User = require('../models/userModel');
+            const voterIds = [...new Set(pollMsgs.flatMap(m => 
+                (m.payload?.options || []).flatMap(opt => (opt.voterIds || []).map(v => (v?._id || v || '').toString()))
+            ))].filter(id => id && id !== '');
+            
+            if (voterIds.length > 0) {
+                const voters = await User.find({ _id: { $in: voterIds } }).select('displayName avatar').lean();
+                const voterMap = {};
+                voters.forEach(v => {
+                    if (v && v._id) voterMap[v._id.toString()] = v;
+                });
+                
+                pollMsgs.forEach(m => {
+                    if (m.payload && m.payload.options) {
+                        m.payload.options.forEach(opt => {
+                            opt.voterIds = (opt.voterIds || []).map(vid => {
+                                const idStr = (vid?._id || vid || '').toString();
+                                return voterMap[idStr] || vid;
+                            });
+                        });
+                    }
+                });
+            }
+        }
 
         // Đảo ngược để hiển thị theo chiều thời gian (cũ → mới)
         const messages = raw.reverse().map(msg => {

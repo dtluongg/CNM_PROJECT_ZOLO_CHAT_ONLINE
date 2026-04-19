@@ -17,28 +17,30 @@ const rnUploadConfig = Platform.OS !== 'web'
   : {};
 
 const messageApi = {
-  getMessages: (conversationId, { before, limit = 30 } = {}) => {
+  getMessages: (conversationId, { before, limit = 30, topicId } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (before) params.set('before', before);
+    if (topicId) params.set('topicId', topicId);
     return apiClient.get(`/messages/${conversationId}?${params}`);
   },
 
-  sendText: (conversationId, content, replyToMessageId = null) =>
+  sendText: (conversationId, content, replyToMessageId = null, topicId = null) =>
     apiClient.post(`/messages/${conversationId}`, {
       type: 'text',
       content,
       replyToMessageId,
+      topicId,
     }),
 
   // GỬI TIN NHẮN MEDIA (CÓ TRẢ LỜI)
-  sendVoice: (conversationId, attachmentId, replyToMessageId = null) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'voice', attachmentId, replyToMessageId }),
+  sendVoice: (conversationId, attachmentId, replyToMessageId = null, topicId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'voice', attachmentId, replyToMessageId, topicId }),
 
-  sendImage: (conversationId, attachmentId, replyToMessageId = null) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'image', attachmentId, replyToMessageId }),
+  sendImage: (conversationId, attachmentId, replyToMessageId = null, topicId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'image', attachmentId, replyToMessageId, topicId }),
 
-  sendFile: (conversationId, attachmentId, replyToMessageId = null) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId, replyToMessageId }),
+  sendFile: (conversationId, attachmentId, replyToMessageId = null, topicId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId, replyToMessageId, topicId }),
 
   uploadVoice: (formData) => apiClient.post('/voice/upload', formData, rnUploadConfig),
   uploadFile: (formData) => apiClient.post('/uploads/file', formData, rnUploadConfig),

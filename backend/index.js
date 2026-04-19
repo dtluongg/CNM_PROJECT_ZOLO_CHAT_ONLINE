@@ -18,9 +18,9 @@ app.use(cors({
     'http://localhost:5174',
     'https://localhost:5173',
     'http://localhost:8081',
-    'http://172.20.10.3:5173',
-    'http://172.20.10.3:8081',
-    'http://172.20.10.3:2026',
+    'http://172.27.130.18:5173',
+    'http://172.27.130.18:8081',
+    'http://172.27.130.18:2026',
   ],
   credentials: true,
 }));
@@ -43,8 +43,10 @@ const conversationRouter = require('./src/routes/conversationRouter');
 const messageRouter      = require('./src/routes/messageRouter');
 const reactionRouter     = require('./src/routes/reactionRouter');
 const notificationRouter = require('./src/routes/notificationRouter');
+const groupRoleRouter = require('./src/routes/groupRoleRouter');
+const voiceRoomRouter    = require('./src/routes/voiceRoomRouter');
 
-
+//
 app.use('/backend/api/users',         userRouter);
 app.use('/backend/api/auth',          authRouter);
 app.use('/backend/api/friends',       friendRouter);
@@ -55,7 +57,8 @@ app.use('/backend/api/conversations', conversationRouter);
 app.use('/backend/api/messages',      messageRouter);
 app.use('/backend/api/reactions',     reactionRouter);
 app.use('/backend/api/notifications', notificationRouter);
-
+app.use('/backend/api/conversations/:id', groupRoleRouter);
+app.use('/backend/api/voice-rooms',   voiceRoomRouter);
 
 // ── SOCKET ──
 const { initSocket } = require('./src/socket/socketManager');

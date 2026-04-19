@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import conversationApi from '../api/conversationApi';
+import messageApi from '../api/messageApi';
 import friendApi from '../../friends/api/friendApi';
 import { formatConversationTime } from '../utils/formatTime';
 
@@ -14,6 +15,10 @@ export const useGroupActions = ({
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [friendsForGroup, setFriendsForGroup]           = useState([]);
   const [groupName, setGroupName]                       = useState('');
+  const [groupType, setGroupType]                       = useState('general');
+  const [groupDescription, setGroupDescription]         = useState('');
+  const [groupAvatarFile, setGroupAvatarFile]           = useState(null);
+  const [groupAvatarPreview, setGroupAvatarPreview]     = useState(null);
   const [selectedFriendIds, setSelectedFriendIds]       = useState([]);
   const [loadingFriends, setLoadingFriends]             = useState(false);
   const [creatingGroup, setCreatingGroup]               = useState(false);
@@ -22,6 +27,10 @@ export const useGroupActions = ({
     try {
       setShowCreateGroupModal(true);
       setGroupName('');
+      setGroupType('general');
+      setGroupDescription('');
+      setGroupAvatarFile(null);
+      setGroupAvatarPreview(null);
       setSelectedFriendIds([]);
       setLoadingFriends(true);
 
@@ -34,6 +43,14 @@ export const useGroupActions = ({
     } finally {
       setLoadingFriends(false);
     }
+  }, []);
+
+  const handleAvatarFileChange = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setGroupAvatarFile(file);
+    const url = URL.createObjectURL(file);
+    setGroupAvatarPreview(url);
   }, []);
 
   const toggleSelectFriend = useCallback((friendId) => {
@@ -54,9 +71,28 @@ export const useGroupActions = ({
 
     try {
       setCreatingGroup(true);
+
+      // Upload avatar nếu có
+      let avatarUrl = '';
+      if (groupAvatarFile) {
+        const formData = new FormData();
+        formData.append('file', groupAvatarFile);
+        const uploadRes = await messageApi.uploadImage(formData);
+        console.log('Upload response:', uploadRes?.data); // xem structure thật
+        avatarUrl = uploadRes?.data?.file?.url   // uploadController trả về { file: { url } }
+                 || uploadRes?.data?.data?.url
+                 || uploadRes?.data?.url
+                 || '';
+
+        console.log('avatarUrl to be saved:', avatarUrl); // phải có URL ở đây
+      }
+
       const res     = await conversationApi.createGroupConversation({
-        name:      groupName.trim(),
-        memberIds: selectedFriendIds,
+        name:        groupName.trim(),
+        avatar:      avatarUrl,
+        memberIds:   selectedFriendIds,
+        groupType,
+        description: groupDescription,
       });
       const created         = res?.data?.data;
       const conversationId  = created?._id;
@@ -71,6 +107,8 @@ export const useGroupActions = ({
           id:          conversationId,
           name:        created.name || 'Nhóm mới',
           avatar:      created.avatar || null,
+          groupType:   created.groupType || 'general',
+          description: created.description || '',
           lastMessage: created.lastMessagePreview || 'Chưa có tin nhắn',
           time:        formatConversationTime(created.lastMessageTime || created.updatedAt || created.createdAt),
           unread:      0,
@@ -91,8 +129,8 @@ export const useGroupActions = ({
       setCreatingGroup(false);
     }
   }, [
-    fetchConversations, groupName, isMobile,
-    selectedFriendIds, setActiveConversation, setMobileView, setMobileTab,
+    fetchConversations, groupName, groupType, groupDescription, groupAvatarFile,
+    isMobile, selectedFriendIds, setActiveConversation, setMobileView, setMobileTab,
   ]);
 
   const handleLeaveGroup = useCallback(async (conversationId) => {
@@ -118,6 +156,10 @@ export const useGroupActions = ({
     showCreateGroupModal, setShowCreateGroupModal,
     friendsForGroup,
     groupName, setGroupName,
+    groupType, setGroupType,
+    groupDescription, setGroupDescription,
+    groupAvatarPreview,
+    handleAvatarFileChange,
     selectedFriendIds,
     loadingFriends,
     creatingGroup,

@@ -5,8 +5,9 @@ const messageSchema = new mongoose.Schema(
     conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true },
     senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
     content: { type: String, default: '' },
-    type: { type: String, enum: ['text', 'image', 'file', 'video', 'voice', 'emoji', 'system'], default: 'text' },
+    type: { type: String, enum: ['text', 'image', 'file', 'video', 'voice', 'emoji', 'system', 'poll'], default: 'text' },
     
+    topicId: { type: mongoose.Schema.Types.ObjectId, ref: 'ConversationTopic', default: null },
     replyToMessageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
     forwardFromMessageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
     

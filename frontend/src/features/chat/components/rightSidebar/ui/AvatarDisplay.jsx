@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { getInitials, STATUS_CONFIG } from '../utils/avatarUtils';
 
@@ -11,6 +11,8 @@ const AvatarDisplay = ({
   formatLastSeen,
 }) => {
   const statusConfig = presStatus ? STATUS_CONFIG[presStatus] || STATUS_CONFIG.online : null;
+  const [imgError, setImgError] = useState(false);
+  useEffect(() => { setImgError(false); }, [conversation.avatar]);
 
   return (
     <div style={{ background: 'var(--bg-tertiary)', borderRadius: 10, overflow: 'hidden', margin: 12 }}>
@@ -25,10 +27,11 @@ const AvatarDisplay = ({
 
       <div style={{ padding: '0 14px 14px', marginTop: -28 }}>
         <div style={{ position: 'relative', display: 'inline-block' }}>
-          {conversation.avatar ? (
+          {conversation.avatar && !imgError ? (
             <img
               src={conversation.avatar}
               alt={conversation.name}
+              onError={() => setImgError(true)}
               style={{
                 width: 56,
                 height: 56,

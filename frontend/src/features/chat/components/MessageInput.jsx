@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Paperclip, Smile, Mic, Send, Image, X } from 'lucide-react';
+import { Paperclip, Smile, Mic, Send, Image, X, BarChart2 } from 'lucide-react';
+import CreatePollModal from './chatArea/modals/CreatePollModal';
 
 const EMOJIS = [
   '😀','😂','😍','🥺','😭','😊','😎','🤔',
@@ -30,13 +31,14 @@ function fmtDuration(secs) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export default function MessageInput({ onSend, placeholder, isMobile, conversationId, socket, editingMessage, onCancelEdit, replyingMessage, onCancelReply }) {
+export default function MessageInput({ onSend, placeholder, isMobile, isGroup, conversationId, socket, editingMessage, onCancelEdit, replyingMessage, onCancelReply }) {
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [focused, setFocused] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSec, setRecordingSec] = useState(0);
   const [attachments, setAttachments] = useState([]); // [{id, file, previewUrl}]
+  const [showPollModal, setShowPollModal] = useState(false);
 
   // Sync text when editingMessage changes
   useEffect(() => {
@@ -375,231 +377,141 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
   // ── Normal UI ─────────────────────────────────────────────────────────────
   return (
     <div style={{
-      padding: isMobile ? '8px 10px' : '0 16px 14px',
-      paddingBottom: isMobile ? 'calc(8px + env(safe-area-inset-bottom, 0px))' : '14px',
-      flexShrink: 0, position: 'relative',
-      background: isMobile ? 'var(--bg-secondary)' : 'transparent',
-      borderTop: isMobile ? '1px solid var(--border)' : 'none',
+      paddingBottom: isMobile ? 'calc(8px + env(safe-area-inset-bottom, 0px))' : 0,
+      flexShrink: 0, 
+      position: 'relative',
+      background: 'var(--bg-primary)',
+      borderTop: '1px solid var(--border)',
     }}>
-      {/* Thanh hiển thị đang chỉnh sửa tin nhắn */}
-      {editingMessage && (
+      {/* ── TOOLBAR (Ảnh 2 style) ── */}
+      {!isMobile && (
         <div style={{
-          position: 'absolute', bottom: replyingMessage ? 'calc(100% + 40px)' : '100%', left: isMobile ? 0 : 16, right: isMobile ? 0 : 16,
-          background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderBottom: 'none',
-          borderRadius: isMobile ? 0 : '12px 12px 0 0', padding: '8px 12px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          fontSize: 12, animation: 'fadeInUp 0.15s ease'
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '4px 12px',
+          borderBottom: '1px solid var(--border)',
+          backgroundColor: 'var(--bg-primary)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: 'var(--accent)', fontWeight: 700 }}>Đang chỉnh sửa tin nhắn</span>
-            <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
-              {editingMessage.content}
-            </span>
-          </div>
-          <button onClick={onCancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-            <X size={14} />
+          {/* Emoji icon */}
+          <button 
+            onClick={() => setShowEmoji(v => !v)} 
+            title="Biểu tượng cảm xúc"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: showEmoji ? 'var(--accent)' : 'var(--text-muted)',
+              padding: '6px', borderRadius: 6, transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = showEmoji ? 'var(--accent)' : 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}
+          >
+            <Smile size={20} />
           </button>
+
+          {/* Image button */}
+          <button
+            title="Gửi ảnh"
+            onClick={() => imageInputRef.current?.click()}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', padding: '6px', borderRadius: 6,
+              display: 'flex', alignItems: 'center', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}
+          >
+            <Image size={20} />
+          </button>
+
+          {/* Attach file button */}
+          <button
+            title="Đính kèm file"
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', padding: '6px', borderRadius: 6,
+              display: 'flex', alignItems: 'center', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}
+          >
+            <Paperclip size={20} />
+          </button>
+
+          {/* Polling button - Chỉ hiện trong nhóm */}
+          {isGroup && (
+            <button
+              title="Tạo bình chọn"
+              onClick={() => setShowPollModal(true)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-muted)', padding: '6px', borderRadius: 6,
+                display: 'flex', alignItems: 'center', transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'rgba(0,132,255,0.08)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}
+            >
+              <BarChart2 size={20} />
+            </button>
+          )}
         </div>
       )}
 
-      {/* Thanh hiển thị đang trả lời tin nhắn */}
-      {replyingMessage && (
+      {/* Thanh hiển thị đang chỉnh sửa/trả lời tin nhắn (giữ nguyên logic) */}
+      {(editingMessage || replyingMessage) && (
         <div style={{
           position: 'absolute', bottom: '100%', left: isMobile ? 0 : 16, right: isMobile ? 0 : 16,
-          background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderLeft: '4px solid var(--accent)', borderBottom: 'none',
-          borderRadius: isMobile ? 0 : (editingMessage ? 0 : '12px 12px 0 0'), padding: '8px 16px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          fontSize: 12, animation: 'fadeInUp 0.15s ease'
+          background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: isMobile ? 0 : '12px 12px 0 0',
+          padding: '8px 12px', zIndex: 10, animation: 'fadeInUp 0.15s ease'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: 'var(--accent)', fontWeight: 800 }}>Đang trả lời {replyingMessage.senderName}</span>
-            <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
-              {replyingMessage.type === 'text' ? replyingMessage.content : `[${replyingMessage.type}]`}
-            </span>
-          </div>
-          <button onClick={onCancelReply} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-            <X size={14} />
-          </button>
+          {editingMessage && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 12 }}>Đang chỉnh sửa</span>
+              <button onClick={onCancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={14} /></button>
+            </div>
+          )}
+          {replyingMessage && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 12 }}>Đang trả lời {replyingMessage.senderName}</span>
+              <button onClick={onCancelReply} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={14} /></button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Hidden file inputs */}
       <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileChange} />
       <input ref={imageInputRef} type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} />
 
-      {/* Attachment Preview UI */}
       {attachments.length > 0 && (
-        <div style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border)',
-          borderBottom: 'none',
-          borderRadius: isMobile ? 0 : '12px 12px 0 0',
-          padding: '12px 16px',
-          animation: 'fadeInUp 0.15s ease',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-          marginBottom: -1, // collapse border with input container
-          position: 'relative',
-          zIndex: 10
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-               {attachments.length} ảnh
+         <div style={{
+            background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderBottom: 'none',
+            borderRadius: isMobile ? 0 : '12px 12px 0 0', padding: '12px 16px', display: 'flex', gap: 10, overflowX: 'auto'
+         }}>
+           {attachments.map(att => (
+             <div key={att.id} style={{ position: 'relative' }}>
+               <img src={att.previewUrl} alt="preview" style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover' }} />
+               <button onClick={() => removeAttachment(att.id)} style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', cursor: 'pointer' }}><X size={12} /></button>
              </div>
-             <button
-               onClick={removeAllAttachments}
-               style={{
-                 background: 'none',
-                 border: 'none',
-                 color: '#667085',
-                 fontSize: 12,
-                 fontWeight: 400,
-                 cursor: 'pointer',
-                 padding: '2px 4px',
-                 borderRadius: 4,
-                 transition: 'all 0.2s ease'
-               }}
-               onMouseEnter={(e) => e.target.style.color = 'var(--text-primary)'}
-               onMouseLeave={(e) => e.target.style.color = '#667085'}
-             >
-               Xoá tất cả
-             </button>
-          </div>
-          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
-            {attachments.map(att => (
-              <div key={att.id} style={{ position: 'relative', flexShrink: 0 }}>
-                <img 
-                  src={att.previewUrl} 
-                  alt="preview" 
-                  style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--border)' }} 
-                />
-                <button
-                  onClick={() => removeAttachment(att.id)}
-                  style={{
-                    position: 'absolute', top: -6, right: -6,
-                    width: 20, height: 20, borderRadius: '50%',
-                    background: 'rgba(0,0,0,0.6)', color: '#fff',
-                    border: 'none', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-            {/* Add more button */}
-            <button
-              onClick={() => imageInputRef.current?.click()}
-              style={{
-                width: 64, height: 64, borderRadius: 8,
-                border: '2px dashed var(--border)',
-                background: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--text-muted)', flexShrink: 0
-              }}
-            >
-              <span style={{ fontSize: 24 }}>+</span>
-            </button>
-          </div>
-        </div>
+           ))}
+         </div>
       )}
 
-      {/* Emoji Picker */}
       {showEmoji && (
-        <div
-          ref={emojiPickerRef}
-          style={{
-            position: 'absolute',
-            bottom: 'calc(100% + 4px)',
-            left: isMobile ? 10 : 16,
-            right: isMobile ? 10 : 'auto',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: 12,
-            padding: 12,
-            display: 'grid',
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            gap: isMobile ? 4 : 3,
-            zIndex: 200,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
-            width: isMobile ? 'auto' : 288,
-            animation: 'fadeInUp 0.15s ease',
-          }}
-        >
-          <div style={{
-            gridColumn: '1 / -1', fontSize: 11, fontWeight: 700,
-            color: 'var(--text-muted)', marginBottom: 6, paddingBottom: 6,
-            borderBottom: '1px solid var(--border)',
-            textTransform: 'uppercase', letterSpacing: '0.5px',
-          }}>
-            Biểu tượng cảm xúc
-          </div>
+        <div ref={emojiPickerRef} style={{ position: 'absolute', bottom: 'calc(100% + 4px)', left: isMobile ? 10 : 16, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 12, padding: 12, display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 4, zIndex: 1000, boxShadow: '0 8px 32px rgba(0,0,0,0.35)' }}>
           {EMOJIS.map(emoji => (
-            <button key={emoji} onClick={() => insertEmoji(emoji)}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontSize: isMobile ? 22 : 20, padding: isMobile ? '6px' : '5px',
-                borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                lineHeight: 1, transition: 'transform 0.1s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.2)'}
-              onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-              onTouchStart={e => e.currentTarget.style.transform = 'scale(1.25)'}
-              onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
-            >
-              {emoji}
-            </button>
+            <button key={emoji} onClick={() => insertEmoji(emoji)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, padding: 5 }}>{emoji}</button>
           ))}
         </div>
       )}
 
       {/* Input container */}
       <div style={{
-        display: 'flex', alignItems: 'flex-end', gap: isMobile ? 4 : 6,
-        background: 'var(--input-bg)',
-        borderRadius: isMobile ? 24 : 10,
-        padding: isMobile ? '6px 6px 6px 14px' : '8px 10px',
-        border: `1.5px solid ${focused ? 'var(--accent)' : 'transparent'}`,
+        display: 'flex', alignItems: 'flex-end', gap: 6,
+        background: isMobile ? 'var(--input-bg)' : 'transparent', 
+        borderRadius: isMobile ? 24 : 0,
+        padding: isMobile ? '8px 10px' : '10px 16px',
+        border: isMobile ? `1.5px solid ${focused ? 'var(--accent)' : 'transparent'}` : 'none',
         transition: 'border-color 0.15s',
-        boxShadow: isMobile ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
       }}>
-        {/* Desktop: Attach file button */}
-        {!isMobile && (
-          <button
-            title="Đính kèm file"
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 6,
-              flexShrink: 0, display: 'flex', alignItems: 'center',
-              transition: 'color 0.12s', marginBottom: 3,
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-          >
-            <Paperclip size={18} />
-          </button>
-        )}
-
-        {/* Desktop: Image button */}
-        {!isMobile && (
-          <button
-            title="Gửi ảnh"
-            onClick={() => imageInputRef.current?.click()}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 6,
-              flexShrink: 0, display: 'flex', alignItems: 'center',
-              transition: 'color 0.12s', marginBottom: 3,
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-          >
-            <Image size={18} />
-          </button>
-        )}
-
         {/* Textarea */}
         <textarea
           ref={textareaRef}
@@ -609,86 +521,71 @@ export default function MessageInput({ onSend, placeholder, isMobile, conversati
           onPaste={handlePaste}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder={placeholder || 'Nhắn tin...'}
+          placeholder={placeholder || 'Nhập @, tin nhắn...'}
           rows={1}
           style={{
             flex: 1, background: 'none', border: 'none', outline: 'none',
-            color: 'var(--text-primary)', fontSize: isMobile ? 16 : 15,
-            resize: 'none', lineHeight: 1.5,
-            maxHeight: isMobile ? 100 : 128,
-            overflow: 'auto', fontFamily: 'inherit',
-            scrollbarWidth: 'thin',
-            padding: isMobile ? '4px 0' : 0,
+            color: 'var(--text-primary)', fontSize: 15,
+            padding: 0,
+            resize: 'none', lineHeight: 1.5, maxHeight: 128, overflow: 'auto',
           }}
         />
 
-        {/* Emoji */}
-        <button onClick={() => setShowEmoji(v => !v)} title="Biểu tượng cảm xúc"
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: showEmoji ? 'var(--accent)' : 'var(--text-muted)',
-            padding: '2px 4px', borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center',
-            transition: 'color 0.12s', marginBottom: isMobile ? 0 : 3,
-            minWidth: 32, minHeight: 32, justifyContent: 'center',
-          }}
-        >
-          <Smile size={isMobile ? 20 : 18} />
-        </button>
+        {/* --- ICONS PHẢI --- */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+           {/* Voice/Mic icon */}
+           {!canSend && (
+             <button
+               title="Ghi âm"
+               onClick={startRecording}
+               style={{
+                 background: 'none', border: 'none', cursor: 'pointer',
+                 color: isRecording ? '#ed4245' : 'var(--text-muted)',
+                 padding: '6px', borderRadius: 6, transition: 'all 0.12s',
+               }}
+               onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+               onMouseLeave={e => { e.currentTarget.style.color = isRecording ? '#ed4245' : 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}
+             >
+               <Mic size={20} />
+             </button>
+           )}
 
-        {/* Mobile: image button when no text */}
-        {isMobile && !canSend && (
-          <button
-            title="Gửi ảnh"
-            onClick={() => imageInputRef.current?.click()}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 6,
-              flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              minWidth: 32, minHeight: 32,
-            }}
-          >
-            <Image size={20} />
-          </button>
-        )}
+           {/* Emoji icon (Chỉ hiện ở mobile, web đã đưa lên toolbar) */}
+           {isMobile && (
+             <button 
+               onClick={() => setShowEmoji(v => !v)} 
+               title="Biểu tượng cảm xúc"
+               style={{
+                 background: 'none', border: 'none', cursor: 'pointer',
+                 color: showEmoji ? 'var(--accent)' : 'var(--text-muted)',
+                 padding: '4px', borderRadius: 6,
+               }}
+             >
+               <Smile size={20} />
+             </button>
+           )}
 
-        {/* Send / Mic */}
-        {canSend ? (
-          <button onClick={handleSend} title="Gửi"
-            style={{
-              background: 'var(--accent)', border: 'none', cursor: 'pointer',
-              color: '#fff',
-              borderRadius: isMobile ? '50%' : 8,
-              width: isMobile ? 36 : 'auto',
-              height: isMobile ? 36 : 'auto',
-              padding: isMobile ? 0 : '7px 12px',
-              flexShrink: 0, transition: 'background 0.12s, transform 0.1s',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-hover)'; e.currentTarget.style.transform = 'scale(1.05)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.transform = 'scale(1)'; }}
-            onTouchStart={e => e.currentTarget.style.transform = 'scale(0.92)'}
-            onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            <Send size={isMobile ? 17 : 15} />
-          </button>
-        ) : (
-          <button
-            title="Ghi âm"
-            onClick={startRecording}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 6,
-              flexShrink: 0, display: 'flex', alignItems: 'center',
-              marginBottom: isMobile ? 0 : 3, transition: 'color 0.12s',
-              minWidth: 32, minHeight: 32, justifyContent: 'center',
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-          >
-            <Mic size={isMobile ? 20 : 18} />
-          </button>
-        )}
+           {/* Send button (Khi có text hoặc ảnh) */}
+           {canSend && (
+             <button 
+               onClick={handleSend} 
+               style={{ 
+                 background: 'none', border: 'none', 
+                 color: 'var(--accent)', cursor: 'pointer',
+                 padding: '6px', borderRadius: 8, marginLeft: 4,
+                 display: 'flex', alignItems: 'center', justifyContent: 'center'
+               }}
+             >
+               <Send size={22} style={{ transform: 'rotate(-45deg)', marginTop: -2 }} />
+             </button>
+           )}
+        </div>
       </div>
+      <CreatePollModal 
+        isOpen={showPollModal} 
+        onClose={() => setShowPollModal(false)}
+        onCreate={(data) => onSend({ type: 'poll', ...data })}
+      />
     </div>
   );
 }

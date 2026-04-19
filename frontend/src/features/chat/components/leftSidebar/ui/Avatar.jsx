@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const AVATAR_COLORS = [
   '#5865f2', '#eb459e', '#00b4d8', '#57f287',
@@ -33,20 +33,17 @@ const Avatar = ({
   online = null,
   status = 'online'
 }) => {
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [avatar]);
+
+  const showFallback = !avatar || imgError;
+
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      {avatar ? (
-        <img
-          src={avatar}
-          alt={name || 'User'}
-          style={{
-            width: size,
-            height: size,
-            borderRadius: '50%',
-            objectFit: 'cover'
-          }}
-        />
-      ) : (
+      {showFallback ? (
         <div
           style={{
             width: size,
@@ -64,6 +61,18 @@ const Avatar = ({
         >
           {getInitials(name)}
         </div>
+      ) : (
+        <img
+          src={avatar}
+          alt={name || 'User'}
+          onError={() => setImgError(true)}
+          style={{
+            width: size,
+            height: size,
+            borderRadius: '50%',
+            objectFit: 'cover'
+          }}
+        />
       )}
 
       {online !== null && (

@@ -1,28 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image } from 'react-native';
 import { getAvatarColor, getInitials } from '../../../theme';
 
-/**
- * Avatar dùng chung cho cả màn hình chat.
- * Hiển thị ảnh thật nếu có, ngược lại dùng chữ cái đầu với màu nền tự động.
- * Có thể hiển thị chấm trạng thái online/offline ở góc dưới phải.
- *
- * @param {string}  name    - Tên người dùng (dùng để tạo chữ cái đầu và màu nền)
- * @param {string}  avatar  - URL ảnh đại diện (tuỳ chọn)
- * @param {number}  size    - Kích thước avatar (mặc định 36)
- * @param {boolean} online  - null = không hiển thị chấm, true/false = online/offline
- */
 const Avatar = ({ name, avatar, size = 36, online = null, THEME, styles }) => {
-  // Tính màu nền dựa trên tên người dùng
+  const [imgError, setImgError] = useState(false);
   const bg = getAvatarColor(name);
 
   return (
     <View style={{ width: size, height: size }}>
-      {/* Ảnh đại diện hoặc vòng tròn chữ cái đầu */}
-      {avatar ? (
+      {avatar && !imgError ? (
         <Image
           source={{ uri: avatar }}
           style={{ width: size, height: size, borderRadius: size / 2 }}
+          onError={() => setImgError(true)}
         />
       ) : (
         <View
@@ -37,7 +27,6 @@ const Avatar = ({ name, avatar, size = 36, online = null, THEME, styles }) => {
         </View>
       )}
 
-      {/* Chấm trạng thái online/offline */}
       {online !== null && (
         <View
           style={[
