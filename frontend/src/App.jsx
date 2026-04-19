@@ -24,9 +24,10 @@ import ChangePassword from './features/auth/ChangePassword';
 import FriendsPage from './features/friends/FriendsPage';
 import SidebarNav from './components/SidebarNav';
 import NotificationToast from './features/notifications/components/NotificationToast';
+import StoriesPage from './features/stories/StoriesPage';
 
 // Các route có Sidebar bên trái kiểu AppShell (Zalo)
-const APP_SHELL_ROUTES = ['/chat', '/friends', '/user'];
+const APP_SHELL_ROUTES = ['/chat', '/friends', '/user', '/stories'];
 
 const ThemeSyncHandler = () => {
   const { user } = useAuth();
@@ -126,6 +127,15 @@ const App = () => {
                   element={
                     <ProtectedRoute>
                       <FriendsPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/stories"
+                  element={
+                    <ProtectedRoute>
+                      <StoriesPage />
                     </ProtectedRoute>
                   }
                 />

@@ -54,13 +54,13 @@ const ActionSheet = ({
       action: 'forward',
       show: msg.type !== 'poll' && msg.type !== 'reminder',
     },
-    {
-      icon: <Feather name="copy" size={20} color={THEME.textPrimary} />,
-      label: 'Sao chép tin nhắn',
-      action: 'copy',
-      // Chỉ hiện với tin nhắn văn bản chưa thu hồi
-      show: msg.type === 'text' && !isRevoked,
-    },
+    // {
+    //   icon: <Feather name="copy" size={20} color={THEME.textPrimary} />,
+    //   label: 'Sao chép tin nhắn',
+    //   action: 'copy',
+    //   // Chỉ hiện với tin nhắn văn bản chưa thu hồi
+    //   show: msg.type === 'text' && !isRevoked,
+    // },
     {
       icon: <Feather name="bookmark" size={20} color={isPinned ? '#faa61a' : THEME.textPrimary} />,
       label: isPinned ? 'Bỏ ghim' : 'Ghim tin nhắn',
@@ -103,13 +103,13 @@ const ActionSheet = ({
               {(reactionTypes.length > 0
                 ? reactionTypes
                 : [
-                    { emoji: '👍' },
-                    { emoji: '❤️' },
-                    { emoji: '😂' },
-                    { emoji: '😮' },
-                    { emoji: '😢' },
-                    { emoji: '🔥' },
-                  ]
+                  { emoji: '👍' },
+                  { emoji: '❤️' },
+                  { emoji: '😂' },
+                  { emoji: '😮' },
+                  { emoji: '😢' },
+                  { emoji: '🔥' },
+                ]
               ).map((r) => (
                 <TouchableOpacity
                   key={r.emoji}

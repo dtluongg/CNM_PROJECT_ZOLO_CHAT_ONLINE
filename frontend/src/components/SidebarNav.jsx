@@ -13,6 +13,23 @@ const getInitials = (name) => {
   return p.length === 1 ? p[0][0].toUpperCase() : (p[0][0] + p[p.length - 1][0]).toUpperCase();
 };
 
+const TinIcon = ({ size = 24, strokeWidth = 2, ...props }) => (
+    <svg 
+        width={size} 
+        height={size} 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth={strokeWidth} 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        {...props}
+    >
+        <rect x="3" y="5" width="9" height="14" rx="2" />
+        <rect x="14" y="8" width="7" height="8" rx="2" />
+    </svg>
+);
+
 const SidebarNav = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -24,6 +41,7 @@ const SidebarNav = () => {
     // Kiểm tra tab hiện tại
     const isChat = location.pathname.startsWith('/chat');
     const isFriends = location.pathname.startsWith('/friends');
+    const isStories = location.pathname.startsWith('/stories');
 
     const handleNavigate = (path) => {
         navigate(path);
@@ -67,11 +85,12 @@ const SidebarNav = () => {
             </div>
 
             {/* Navigation Icons */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, width: '100%', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 26, flex: 1, width: '100%', alignItems: 'center' }}>
                 
                 {/* Tin Nhắn */}
                 <button 
                     onClick={() => handleNavigate('/chat')}
+                    title="Tin nhắn"
                     style={{
                         width: 44, height: 44,
                         borderRadius: 12,
@@ -87,6 +106,7 @@ const SidebarNav = () => {
                 {/* Notification Center */}
                 <button
                     onClick={() => setShowNotificationCenter((v) => !v)}
+                    title="Thông báo"
                     style={{
                         position: 'relative',
                         width: 44, height: 44,
@@ -113,6 +133,7 @@ const SidebarNav = () => {
                 {/* Danh bạ */}
                 <button 
                     onClick={() => handleNavigate('/friends')}
+                    title="Danh bạ"
                     style={{
                         width: 44, height: 44,
                         borderRadius: 12,
@@ -125,8 +146,25 @@ const SidebarNav = () => {
                     <Users strokeWidth={isFriends ? 2.5 : 2} size={24} />
                 </button>
 
+                {/* Bản tin (Custom Tin Icon) */}
+                <button 
+                    onClick={() => handleNavigate('/stories')}
+                    title="Bản tin"
+                    style={{
+                        width: 44, height: 44, borderRadius: 12,
+                        backgroundColor: isStories ? 'var(--bg-hover)' : 'transparent',
+                        color: isStories ? 'var(--accent)' : 'var(--text-muted)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: 'none', cursor: 'pointer',
+                        transition: 'all 0.2s',
+                    }}
+                >
+                    <TinIcon strokeWidth={isStories ? 2.5 : 2} size={24} />
+                </button>
+
                 {/* Đám mây (Static for UI) */}
                 <button 
+                    title="Truyền file"
                     style={{
                         width: 44, height: 44, borderRadius: 12, backgroundColor: 'transparent',
                         color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -138,6 +176,7 @@ const SidebarNav = () => {
                 
                 {/* Công cụ (Static for UI) */}
                 <button 
+                    title="Công cụ"
                     style={{
                         width: 44, height: 44, borderRadius: 12, backgroundColor: 'transparent',
                         color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -154,6 +193,7 @@ const SidebarNav = () => {
                 {/* Cài đặt */}
                 <button 
                     onClick={() => setShowSettings(true)}
+                    title="Cài đặt"
                     style={{
                         width: 44, height: 44, borderRadius: 12, backgroundColor: showSettings ? 'var(--bg-hover)' : 'transparent',
                         color: showSettings ? 'var(--accent)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
