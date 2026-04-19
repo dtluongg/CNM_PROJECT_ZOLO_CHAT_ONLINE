@@ -133,12 +133,7 @@ const Chat = () => {
     const openConversationId = location.state?.openConversationId;
     if (peer && openConversationId) applyDmOverride(openConversationId, peer);
   }, [location.state, applyDmOverride]);
-    // Thêm useEffect này trong Chat.jsx
-    useEffect(() => {
-      if (!activeConversation?.id) return;
-      if (activeConversation.type !== 'group') return;
-      loadMessages(activeConversation.id, activeTopic?._id || null);
-    }, [activeTopic?._id, activeConversation?.id]);
+
 
   useEffect(() => {
     const pendingPeer = location.state?.pendingPeer;
@@ -146,6 +141,13 @@ const Chat = () => {
     applyPendingPeer(pendingPeer);
     if (isMobile) { setMobileView('chat'); setMobileTab('messages'); }
   }, [location.state, isMobile, applyPendingPeer]);
+
+    useEffect(() => {
+      if (!activeConversation?.id) return;
+      if (activeConversation.type !== 'group') return;
+      loadMessages(activeConversation.id, activeTopic?._id || null);
+      fetchMyPermissions(activeConversation.id, currentUser?._id?.toString());
+    }, [activeTopic?._id, activeConversation?.id]);
 
   useEffect(() => { fetchConversations(); }, [fetchConversations]);
 
@@ -174,7 +176,8 @@ const Chat = () => {
     else fetchDmBlockStatus(null);
 
     await loadMessages(conv.id);
-    if (conv.type === 'group') fetchMyPermissions(conv.id);
+    if (conv.type === 'group') fetchMyPermissions(conv.id, currentUser?._id?.toString());
+
     else setMyPermissions(null);
 
   }, [isMobile, fetchDmBlockStatus, loadMessages, setActiveConversation, setConversations, socketRef]);
