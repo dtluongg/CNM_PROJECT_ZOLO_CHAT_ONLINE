@@ -33,6 +33,7 @@ export default function LeftSidebar({
   onOpenCreateGroup,
   activeTopic,
   onTopicSelect,
+  topicsVersion = 0,
   isMobile = false,
 }) {
   const { user, logout } = useAuth();
@@ -52,29 +53,27 @@ export default function LeftSidebar({
   const isGroupView = activeConv?.type === 'group' && !collapsed;
 
   useEffect(() => {
-    if (!isGroupView || !activeConv?.id) {
-      setTopics([]);
-      return;
-    }
-    let cancelled = false;
-    setTopicsLoading(true);
-    conversationApi.listTopics(activeConv.id)
-      .then(res => {
-        if (!cancelled) {
-          setTopics(Array.isArray(res?.data?.data) ? res.data.data : []);
-          // Fetch voice room status for all channels after topics load
-          fetchStatusBatch(activeConv.id);
-        }
-      })
-      .catch(() => { if (!cancelled) setTopics([]); })
-      .finally(() => { if (!cancelled) setTopicsLoading(false); });
+      if (!isGroupView || !activeConv?.id) {
+          setTopics([]);
+          return;
+      }
+      let cancelled = false;
+      setTopicsLoading(true);
+      conversationApi.listTopics(activeConv.id)
+          .then(res => {
+              if (!cancelled) {
+                  setTopics(Array.isArray(res?.data?.data) ? res.data.data : []);
+                  fetchStatusBatch(activeConv.id);
+              }
+          })
+          .catch(() => { if (!cancelled) setTopics([]); })
+          .finally(() => { if (!cancelled) setTopicsLoading(false); });
 
-    // Check if current user can manage topics
-    const role = activeConv?.myMembership?.role;
-    setCanManage(role === 'owner' || role === 'admin' || !!activeConv?.myMembership?.canManageMembers);
+      const role = activeConv?.myMembership?.role;
+      setCanManage(role === 'owner' || role === 'admin' || !!activeConv?.myMembership?.canManageMembers);
 
-    return () => { cancelled = true; };
-  }, [activeConv?.id, isGroupView]);
+      return () => { cancelled = true; };
+  }, [activeConv?.id, isGroupView, topicsVersion]); // ← thêm topicsVersion
 
   // Refresh topics when a new one is added from outside
   const reloadTopics = useCallback(async () => {

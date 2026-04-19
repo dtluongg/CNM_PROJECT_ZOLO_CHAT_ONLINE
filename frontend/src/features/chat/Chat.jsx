@@ -36,6 +36,7 @@ const Chat = () => {
   const [showUserSearch, setShowUserSearch]   = useState(false);
   const [typingUsers, setTypingUsers]         = useState({});
   const [activeTopic, setActiveTopic]         = useState(null);
+  const [topicsVersion, setTopicsVersion] = useState(0);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -258,6 +259,7 @@ const Chat = () => {
     onVideoCall: handleVideoCall,
     activeTopic,
     onTopicSelect: setActiveTopic,
+    onTopicsChanged: () => setTopicsVersion(v => v + 1), // ← thêm dòng này
   };
 
   // ── MOBILE LAYOUT ────────────────────────────────────────────────────────
@@ -285,6 +287,7 @@ const Chat = () => {
               onOpenCreateGroup={handleOpenCreateGroup}
               activeTopic={activeTopic}
               onTopicSelect={setActiveTopic}
+              topicsVersion={topicsVersion}
               isMobile
             />
           </div>
@@ -341,6 +344,7 @@ const Chat = () => {
         onOpenCreateGroup={handleOpenCreateGroup}
         activeTopic={activeTopic}
         onTopicSelect={setActiveTopic}
+        topicsVersion={topicsVersion}
       />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>

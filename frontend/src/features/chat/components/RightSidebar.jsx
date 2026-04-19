@@ -47,6 +47,7 @@ export default function RightSidebar({
     onVideoCall,
     activeTopic,
     onTopicSelect,
+    onTopicsChanged,
 }) {
     const [tab, setTab] = useState("info");
     const [showMemberModal, setShowMemberModal] = useState(false);
@@ -1250,16 +1251,17 @@ export default function RightSidebar({
                     )}
 
                     {/* ==================== TAB TOPICS ==================== */}
-                    {tab === "topics" && conversation?.type === "group" && (
-                        <div>
-                            <TopicManager
-                                conversation={conversation}
-                                canManage={canManageMembers}
-                                activeTopic={activeTopic}
-                                onTopicSelect={onTopicSelect}
-                            />
-                        </div>
-                    )}
+                        {tab === "topics" && conversation?.type === "group" && (
+                            <div>
+                                <TopicManager
+                                    conversation={conversation}
+                                    canManage={canManageMembers}
+                                    activeTopic={activeTopic}
+                                    onTopicSelect={onTopicSelect}
+                                    onTopicsChanged={onTopicsChanged} // ← thêm
+                                />
+                            </div>
+                        )}
 
                     {/* ==================== TAB SETTINGS ==================== */}
                     {tab === "settings" && conversation?.type === "group" && canManageMembers && (

@@ -16,7 +16,7 @@ import conversationApi from '../../api/conversationApi';
 
 const CATEGORY_EMOJIS = ['💬', '📢', '📚', '🎮', '🔧', '🎵', '📌', '🎉'];
 
-export default function TopicManager({ conversation, canManage, onTopicSelect, activeTopic }) {
+export default function TopicManager({ conversation, canManage, onTopicSelect, activeTopic, onTopicsChanged }) {
     const [topics, setTopics]               = useState([]);
     const [loading, setLoading]             = useState(false);
     const [showForm, setShowForm]           = useState(false);
@@ -70,6 +70,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
             }
             setShowForm(false);
             await loadTopics();
+            onTopicsChanged?.(); // ← thêm dòng này
         } catch (err) {
             window.alert(err.response?.data?.message || 'Không thể lưu kênh');
         } finally {
@@ -82,6 +83,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
         try {
             await conversationApi.deleteTopic(conversation.id, topic._id);
             await loadTopics();
+            onTopicsChanged?.(); // ← thêm dòng này
             if (activeTopic?._id === topic._id) onTopicSelect(null);
         } catch (err) {
             window.alert(err.response?.data?.message || 'Không thể xóa kênh');
