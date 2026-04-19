@@ -16,9 +16,12 @@ import {
     UserCog,
     Trash2,
     FileText,
+    Camera,
+    Save,
 } from "lucide-react";
 
 import conversationApi from "../api/conversationApi";
+import MemberManagementModal from './MemberManagementModal';
 import friendApi from "../../friends/api/friendApi";
 import messageApi from "../api/messageApi";
 
@@ -28,6 +31,7 @@ import SectionHeader from "./rightSidebar/ui/SectionHeader";
 import ActionButton from "./rightSidebar/ui/ActionButton";
 import RoleChip from "./rightSidebar/ui/RoleChip";
 import AvatarDisplay from "./rightSidebar/ui/AvatarDisplay";
+import TopicManager from "./rightSidebar/TopicManager";
 
 import { getAvatarColor } from "./rightSidebar/utils/avatarUtils";
 
@@ -41,8 +45,11 @@ export default function RightSidebar({
     onBlockToggled,
     onPhoneCall,
     onVideoCall,
+    activeTopic,
+    onTopicSelect,
 }) {
     const [tab, setTab] = useState("info");
+    const [showMemberModal, setShowMemberModal] = useState(false);
     const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
     const { user } = useAuth();
     const { getConversationSetting, updateConversationSetting } =
@@ -72,6 +79,13 @@ export default function RightSidebar({
     const [nicknameBusy, setNicknameBusy] = useState(false);
     const [notifSetting, setNotifSetting] = useState(null);
     const [notifBusy, setNotifBusy] = useState(false);
+
+    // ── Group Settings State ─────────────────────────────
+    const [groupSettingsForm, setGroupSettingsForm] = useState({ name: '', groupType: 'general', description: '' });
+    const [groupAvatarFile, setGroupAvatarFile] = useState(null);
+    const [groupAvatarPreview, setGroupAvatarPreview] = useState(null);
+    const [savingGroupSettings, setSavingGroupSettings] = useState(false);
+    const groupAvatarInputRef = React.useRef(null);
 
     const myUserId = (user?._id || user?.id || "").toString();
     const accentColor =
@@ -172,6 +186,18 @@ export default function RightSidebar({
     }, [conversation?.otherUserId]);
 
     // ── Effects ──────────────────────────────────────────
+    useEffect(() => {
+        if (conversation?.type === 'group') {
+            setGroupSettingsForm({
+                name: conversation.name || '',
+                groupType: conversation.groupType || 'general',
+                description: conversation.raw?.description || conversation.description || '',
+            });
+            setGroupAvatarFile(null);
+            setGroupAvatarPreview(null);
+        }
+    }, [conversation?.id, conversation?.type]);
+
     useEffect(() => {
         setEditingMemberId(null);
         setSelectedAddIds([]);
@@ -422,6 +448,35 @@ export default function RightSidebar({
         }
     };
 
+    const handleSaveGroupSettings = async () => {
+        if (!conversation?.id) return;
+        try {
+            setSavingGroupSettings(true);
+            let avatarUrl = conversation.avatar || '';
+            if (groupAvatarFile) {
+                const fd = new FormData();
+                fd.append('file', groupAvatarFile);
+                const uploadRes = await messageApi.uploadImage(fd);
+                avatarUrl = uploadRes?.data?.file?.url
+                         || uploadRes?.data?.data?.url
+                         || uploadRes?.data?.url
+                         || avatarUrl;
+            }
+            await conversationApi.updateGroupInfo(conversation.id, {
+                name: groupSettingsForm.name.trim(),
+                groupType: groupSettingsForm.groupType,
+                description: groupSettingsForm.description,
+                avatar: avatarUrl,
+            });
+            if (onGroupUpdated) await onGroupUpdated();
+            window.alert('Đã cập nhật thông tin nhóm');
+        } catch (error) {
+            window.alert(error.response?.data?.message || 'Không thể cập nhật nhóm');
+        } finally {
+            setSavingGroupSettings(false);
+        }
+    };
+
     if (!conversation) return null;
 
     return (
@@ -506,10 +561,16 @@ export default function RightSidebar({
                 >
                     {[
                         { key: "info", label: "Thông tin" },
+                        ...(conversation?.type === "group"
+                            ? [{ key: "topics", label: "Kênh" }]
+                            : []),
                         { key: "media", label: "Media" },
                         { key: "files", label: "File" },
                         ...(conversation?.type === "dm"
                             ? [{ key: "calls", label: "Cuộc gọi" }]
+                            : []),
+                        ...(conversation?.type === "group" && canManageMembers
+                            ? [{ key: "settings", label: "Cài đặt" }]
                             : []),
                     ].map((t) => (
                         <button
@@ -610,6 +671,7 @@ export default function RightSidebar({
                                         </span>
                                     </div>
                                     {conversation.type === "group" && (
+                                        <>
                                         <div
                                             style={{
                                                 display: "flex",
@@ -617,471 +679,88 @@ export default function RightSidebar({
                                                 gap: 8,
                                             }}
                                         >
-                                            <span
-                                                style={{
-                                                    fontSize: 12,
-                                                    color: "var(--text-muted)",
-                                                }}
-                                            >
-                                                Số thành viên
-                                            </span>
-                                            <span
-                                                style={{
-                                                    fontSize: 12,
-                                                    fontWeight: 700,
-                                                    color: "var(--text-primary)",
-                                                }}
-                                            >
-                                                {members.length ||
-                                                    conversation.memberCount ||
-                                                    conversation.members ||
-                                                    0}
+                                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Số thành viên</span>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
+                                                {members.length || conversation.memberCount || conversation.members || 0}
                                             </span>
                                         </div>
+                                        {conversation.groupType && (
+                                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Loại nhóm</span>
+                                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                                                    {({ study: '📚 Học tập', gaming: '🎮 Gaming', general: '💬 Chung', project: '📌 Dự án', other: '🗂️ Khác' })[conversation.groupType] || conversation.groupType}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {conversation.description && (
+                                            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
+                                                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Mô tả</span>
+                                                <span style={{ fontSize: 12, color: "var(--text-primary)", fontStyle: "italic" }}>{conversation.description}</span>
+                                            </div>
+                                        )}
+                                        </>
                                     )}
                                 </div>
                             </div>
 
                             {/* Thành viên nhóm */}
+                            {/* Thành viên nhóm */}
                             {conversation.type === "group" && (
                                 <div style={{ marginBottom: 16 }}>
-                                    <SectionHeader title="Thành viên nhóm" />
-                                    {loadingMembers && (
-                                        <div
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, marginTop: 4 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                                            Thành viên nhóm
+                                        </div>
+                                        <button
+                                            onClick={() => setShowMemberModal(true)}
                                             style={{
-                                                fontSize: 12,
-                                                color: "var(--text-muted)",
-                                                marginBottom: 8,
+                                                fontSize: 11, fontWeight: 600, color: 'var(--accent)',
+                                                background: 'none', border: 'none', cursor: 'pointer',
+                                                padding: '2px 6px', borderRadius: 4
                                             }}
                                         >
-                                            Đang tải thành viên...
-                                        </div>
-                                    )}
-                                    {!!memberError && (
-                                        <div
-                                            style={{
-                                                fontSize: 12,
-                                                color: "#ed4245",
-                                                marginBottom: 8,
-                                            }}
-                                        >
-                                            {memberError}
-                                        </div>
-                                    )}
+                                            Xem tất cả ({members.length || 0})
+                                        </button>
+                                    </div>
 
-                                    {!loadingMembers &&
-                                        members.map((m) => {
-                                            const uid = (
-                                                m.user?._id || ""
-                                            ).toString();
-                                            const isSelf = uid === myUserId;
-                                            const canEditThisMember =
-                                                canManageMembers &&
-                                                !isSelf &&
-                                                m.role !== "owner";
-                                            const isEditing =
-                                                editingMemberId === uid;
-
-                                            return (
-                                                <div
-                                                    key={uid}
-                                                    style={{
-                                                        background:
-                                                            "var(--bg-tertiary)",
-                                                        borderRadius: 8,
-                                                        padding: "9px 10px",
-                                                        marginBottom: 8,
-                                                        border: "1px solid var(--border)",
-                                                    }}
-                                                >
-                                                    <div
-                                                        style={{
-                                                            display: "flex",
-                                                            alignItems:
-                                                                "center",
-                                                            justifyContent:
-                                                                "space-between",
-                                                            gap: 10,
-                                                        }}
-                                                    >
-                                                        <div
-                                                            style={{
-                                                                minWidth: 0,
-                                                            }}
-                                                        >
-                                                            <div
-                                                                style={{
-                                                                    fontSize: 13,
-                                                                    fontWeight: 700,
-                                                                    color: "var(--text-primary)",
-                                                                    display:
-                                                                        "flex",
-                                                                    alignItems:
-                                                                        "center",
-                                                                    gap: 8,
-                                                                }}
-                                                            >
-                                                                <span>
-                                                                    {m.user
-                                                                        ?.displayName ||
-                                                                        "Unknown"}
-                                                                </span>
-                                                                <RoleChip
-                                                                    role={
-                                                                        m.role
-                                                                    }
-                                                                />
-                                                                {isSelf && (
-                                                                    <span
-                                                                        style={{
-                                                                            fontSize: 11,
-                                                                            color: "var(--text-muted)",
-                                                                        }}
-                                                                    >
-                                                                        (bạn)
-                                                                    </span>
-                                                                )}
+                                    {/* Chỉ preview 3 member đầu */}
+                                    {loadingMembers ? (
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Đang tải...</div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            {members.slice(0, 3).map((m) => {
+                                                const uid = (m.user?._id || '').toString();
+                                                const rc = { owner: { color: '#faa61a', label: '👑' }, admin: { color: '#5865f2', label: '🛡️' }, member: { color: 'var(--text-muted)', label: '' } };
+                                                const role = rc[m.role] || rc.member;
+                                                return (
+                                                    <div key={uid} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
+                                                        {m.user?.avatar ? (
+                                                            <img src={m.user.avatar} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
+                                                        ) : (
+                                                            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11, fontWeight: 700 }}>
+                                                                {(m.user?.displayName || '?')[0].toUpperCase()}
                                                             </div>
-                                                            <div
-                                                                style={{
-                                                                    fontSize: 11,
-                                                                    color: "var(--text-muted)",
-                                                                    marginTop: 3,
-                                                                }}
-                                                            >
-                                                                send:
-                                                                {m.canSendMessages
-                                                                    ? "Y"
-                                                                    : "N"}{" "}
-                                                                | invite:
-                                                                {m.canInviteMembers
-                                                                    ? "Y"
-                                                                    : "N"}{" "}
-                                                                | manage:
-                                                                {m.canManageMembers
-                                                                    ? "Y"
-                                                                    : "N"}
-                                                            </div>
-                                                        </div>
-
-                                                        <div
-                                                            style={{
-                                                                display: "flex",
-                                                                gap: 6,
-                                                            }}
-                                                        >
-                                                            {canEditThisMember && (
-                                                                <button
-                                                                    onClick={() =>
-                                                                        startEditMember(
-                                                                            m,
-                                                                        )
-                                                                    }
-                                                                    style={{
-                                                                        background:
-                                                                            "var(--bg-hover)",
-                                                                        color: "var(--text-primary)",
-                                                                        border: "none",
-                                                                        borderRadius: 6,
-                                                                        padding:
-                                                                            "5px 8px",
-                                                                        cursor: "pointer",
-                                                                        fontSize: 11,
-                                                                        fontWeight: 700,
-                                                                    }}
-                                                                >
-                                                                    <UserCog
-                                                                        size={
-                                                                            12
-                                                                        }
-                                                                    />
-                                                                </button>
-                                                            )}
-                                                            {canEditThisMember && (
-                                                                <button
-                                                                    onClick={() =>
-                                                                        handleKickMember(
-                                                                            m,
-                                                                        )
-                                                                    }
-                                                                    disabled={
-                                                                        busyAction ===
-                                                                        `kick-${uid}`
-                                                                    }
-                                                                    style={{
-                                                                        background:
-                                                                            "#ed424520",
-                                                                        color: "#ed4245",
-                                                                        border: "none",
-                                                                        borderRadius: 6,
-                                                                        padding:
-                                                                            "5px 8px",
-                                                                        cursor: "pointer",
-                                                                        fontSize: 11,
-                                                                        fontWeight: 700,
-                                                                        opacity:
-                                                                            busyAction ===
-                                                                            `kick-${uid}`
-                                                                                ? 0.6
-                                                                                : 1,
-                                                                    }}
-                                                                >
-                                                                    <Trash2
-                                                                        size={
-                                                                            12
-                                                                        }
-                                                                    />
-                                                                </button>
-                                                            )}
-                                                            {isOwner &&
-                                                                !isSelf &&
-                                                                m.role !==
-                                                                    "owner" && (
-                                                                    <button
-                                                                        onClick={() =>
-                                                                            handleTransferOwner(
-                                                                                m,
-                                                                            )
-                                                                        }
-                                                                        disabled={
-                                                                            busyAction ===
-                                                                            `transfer-${uid}`
-                                                                        }
-                                                                        style={{
-                                                                            background:
-                                                                                "rgba(250,166,26,0.2)",
-                                                                            color: "#faa61a",
-                                                                            border: "none",
-                                                                            borderRadius: 6,
-                                                                            padding:
-                                                                                "5px 8px",
-                                                                            cursor: "pointer",
-                                                                            fontSize: 11,
-                                                                            fontWeight: 700,
-                                                                            opacity:
-                                                                                busyAction ===
-                                                                                `transfer-${uid}`
-                                                                                    ? 0.6
-                                                                                    : 1,
-                                                                        }}
-                                                                    >
-                                                                        <Crown
-                                                                            size={
-                                                                                12
-                                                                            }
-                                                                        />
-                                                                    </button>
-                                                                )}
-                                                        </div>
+                                                        )}
+                                                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>
+                                                            {m.user?.displayName || 'Unknown'}
+                                                            {uid === myUserId && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>(bạn)</span>}
+                                                        </span>
+                                                        <span style={{ fontSize: 12 }}>{role.label}</span>
                                                     </div>
-
-                                                    {/* ── Inline Edit Panel ── */}
-                                                    {isEditing && (
-                                                        <div
-                                                            style={{
-                                                                marginTop: 10,
-                                                                borderTop:
-                                                                    "1px solid var(--border)",
-                                                                paddingTop: 10,
-                                                            }}
-                                                        >
-                                                            <div
-                                                                style={{
-                                                                    display:
-                                                                        "grid",
-                                                                    gap: 8,
-                                                                }}
-                                                            >
-                                                                <label
-                                                                    style={{
-                                                                        fontSize: 12,
-                                                                        color: "var(--text-secondary)",
-                                                                        display:
-                                                                            "flex",
-                                                                        alignItems:
-                                                                            "center",
-                                                                        justifyContent:
-                                                                            "space-between",
-                                                                    }}
-                                                                >
-                                                                    <span>
-                                                                        Role
-                                                                    </span>
-                                                                    <select
-                                                                        value={
-                                                                            editRole
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            setEditRole(
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                            )
-                                                                        }
-                                                                        disabled={
-                                                                            !isOwner
-                                                                        }
-                                                                        style={{
-                                                                            background:
-                                                                                "var(--bg-primary)",
-                                                                            color: "var(--text-primary)",
-                                                                            border: "1px solid var(--border)",
-                                                                            borderRadius: 6,
-                                                                            padding:
-                                                                                "4px 6px",
-                                                                            fontSize: 12,
-                                                                        }}
-                                                                    >
-                                                                        <option value="member">
-                                                                            member
-                                                                        </option>
-                                                                        <option value="admin">
-                                                                            admin
-                                                                        </option>
-                                                                    </select>
-                                                                </label>
-                                                                <label
-                                                                    style={{
-                                                                        fontSize: 12,
-                                                                        color: "var(--text-secondary)",
-                                                                    }}
-                                                                >
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={
-                                                                            editCanSend
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            setEditCanSend(
-                                                                                e
-                                                                                    .target
-                                                                                    .checked,
-                                                                            )
-                                                                        }
-                                                                    />{" "}
-                                                                    canSendMessages
-                                                                </label>
-                                                                <label
-                                                                    style={{
-                                                                        fontSize: 12,
-                                                                        color: "var(--text-secondary)",
-                                                                    }}
-                                                                >
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={
-                                                                            editCanInvite
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            setEditCanInvite(
-                                                                                e
-                                                                                    .target
-                                                                                    .checked,
-                                                                            )
-                                                                        }
-                                                                    />{" "}
-                                                                    canInviteMembers
-                                                                </label>
-                                                                <label
-                                                                    style={{
-                                                                        fontSize: 12,
-                                                                        color: "var(--text-secondary)",
-                                                                    }}
-                                                                >
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={
-                                                                            editCanManage
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            setEditCanManage(
-                                                                                e
-                                                                                    .target
-                                                                                    .checked,
-                                                                            )
-                                                                        }
-                                                                        disabled={
-                                                                            !isOwner
-                                                                        }
-                                                                    />{" "}
-                                                                    canManageMembers
-                                                                </label>
-                                                                <div
-                                                                    style={{
-                                                                        display:
-                                                                            "flex",
-                                                                        gap: 8,
-                                                                        justifyContent:
-                                                                            "flex-end",
-                                                                    }}
-                                                                >
-                                                                    <button
-                                                                        onClick={() =>
-                                                                            setEditingMemberId(
-                                                                                null,
-                                                                            )
-                                                                        }
-                                                                        style={{
-                                                                            border: "none",
-                                                                            borderRadius: 6,
-                                                                            padding:
-                                                                                "6px 10px",
-                                                                            background:
-                                                                                "var(--bg-hover)",
-                                                                            color: "var(--text-primary)",
-                                                                            cursor: "pointer",
-                                                                            fontSize: 12,
-                                                                            fontWeight: 700,
-                                                                        }}
-                                                                    >
-                                                                        Hủy
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={
-                                                                            saveEditMember
-                                                                        }
-                                                                        disabled={
-                                                                            busyAction ===
-                                                                            `edit-${uid}`
-                                                                        }
-                                                                        style={{
-                                                                            border: "none",
-                                                                            borderRadius: 6,
-                                                                            padding:
-                                                                                "6px 10px",
-                                                                            background:
-                                                                                "var(--accent)",
-                                                                            color: "#fff",
-                                                                            cursor: "pointer",
-                                                                            fontSize: 12,
-                                                                            fontWeight: 700,
-                                                                            opacity:
-                                                                                busyAction ===
-                                                                                `edit-${uid}`
-                                                                                    ? 0.6
-                                                                                    : 1,
-                                                                        }}
-                                                                    >
-                                                                        Lưu
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
+                                                );
+                                            })}
+                                            {members.length > 3 && (
+                                                <button
+                                                    onClick={() => setShowMemberModal(true)}
+                                                    style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: '4px 8px' }}
+                                                >
+                                                    +{members.length - 3} thành viên khác...
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             )}
-
                             {/* Thêm thành viên */}
                             {conversation.type === "group" &&
                                 canInviteMembers && (
@@ -1570,6 +1249,137 @@ export default function RightSidebar({
                         </div>
                     )}
 
+                    {/* ==================== TAB TOPICS ==================== */}
+                    {tab === "topics" && conversation?.type === "group" && (
+                        <div>
+                            <TopicManager
+                                conversation={conversation}
+                                canManage={canManageMembers}
+                                activeTopic={activeTopic}
+                                onTopicSelect={onTopicSelect}
+                            />
+                        </div>
+                    )}
+
+                    {/* ==================== TAB SETTINGS ==================== */}
+                    {tab === "settings" && conversation?.type === "group" && canManageMembers && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <SectionHeader title="Cài đặt nhóm" />
+
+                            {/* Avatar */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div
+                                    onClick={() => groupAvatarInputRef.current?.click()}
+                                    style={{
+                                        width: 60, height: 60, borderRadius: '50%', flexShrink: 0,
+                                        background: groupAvatarPreview || conversation.avatar ? 'transparent' : 'var(--bg-hover)',
+                                        border: '2px dashed var(--border)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        cursor: 'pointer', overflow: 'hidden', position: 'relative',
+                                    }}
+                                    title="Đổi ảnh đại diện nhóm"
+                                >
+                                    {(groupAvatarPreview || conversation.avatar) ? (
+                                        <img src={groupAvatarPreview || conversation.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                        <Camera size={20} style={{ color: 'var(--text-muted)' }} />
+                                    )}
+                                </div>
+                                <input
+                                    ref={groupAvatarInputRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                    style={{ display: 'none' }}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        setGroupAvatarFile(file);
+                                        setGroupAvatarPreview(URL.createObjectURL(file));
+                                    }}
+                                />
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                    Nhấn để thay đổi ảnh đại diện nhóm
+                                </div>
+                            </div>
+
+                            {/* Name */}
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>Tên nhóm</div>
+                                <input
+                                    value={groupSettingsForm.name}
+                                    onChange={(e) => setGroupSettingsForm((p) => ({ ...p, name: e.target.value }))}
+                                    placeholder="Tên nhóm..."
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box',
+                                        background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                        borderRadius: 8, color: 'var(--text-primary)',
+                                        padding: '8px 10px', outline: 'none', fontSize: 13,
+                                    }}
+                                />
+                            </div>
+
+                            {/* Group type */}
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>Loại nhóm</div>
+                                <select
+                                    value={groupSettingsForm.groupType}
+                                    onChange={(e) => setGroupSettingsForm((p) => ({ ...p, groupType: e.target.value }))}
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box',
+                                        background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                        borderRadius: 8, color: 'var(--text-primary)',
+                                        padding: '8px 10px', outline: 'none', fontSize: 13, cursor: 'pointer',
+                                    }}
+                                >
+                                    {[
+                                        { value: 'general', label: '💬 Thảo luận chung' },
+                                        { value: 'study',   label: '📚 Học tập' },
+                                        { value: 'gaming',  label: '🎮 Gaming' },
+                                        { value: 'project', label: '📌 Dự án / Làm việc' },
+                                        { value: 'other',   label: '🗂️ Khác' },
+                                    ].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>Mô tả nhóm</div>
+                                <textarea
+                                    value={groupSettingsForm.description}
+                                    onChange={(e) => setGroupSettingsForm((p) => ({ ...p, description: e.target.value }))}
+                                    placeholder="Mô tả ngắn về nhóm..."
+                                    maxLength={200}
+                                    rows={3}
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box',
+                                        background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                        borderRadius: 8, color: 'var(--text-primary)',
+                                        padding: '8px 10px', outline: 'none', fontSize: 13,
+                                        resize: 'none', fontFamily: 'inherit',
+                                    }}
+                                />
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
+                                    {groupSettingsForm.description.length}/200
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleSaveGroupSettings}
+                                disabled={savingGroupSettings || !groupSettingsForm.name.trim()}
+                                style={{
+                                    background: 'var(--accent)', border: 'none', borderRadius: 8,
+                                    padding: '9px 16px', cursor: 'pointer',
+                                    color: '#fff', fontWeight: 700, fontSize: 13,
+                                    opacity: (savingGroupSettings || !groupSettingsForm.name.trim()) ? 0.6 : 1,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                }}
+                            >
+                                <Save size={14} />
+                                {savingGroupSettings ? 'Đang lưu...' : 'Lưu thay đổi'}
+                            </button>
+                        </div>
+                    )}
+
                     {/* ==================== TAB CALLS ==================== */}
                     {tab === "calls" && conversation?.type === "dm" && (
                         <div>
@@ -1581,8 +1391,19 @@ export default function RightSidebar({
                             />
                         </div>
                     )}
-                </div>
-            </div>
-        </div>
-    );
-}
+                 </div>
+                            </div>
+                            {/* ← xóa </div> thừa ở đây */}
+
+                            {showMemberModal && (
+                                <MemberManagementModal
+                                    visible={showMemberModal}
+                                    onClose={() => setShowMemberModal(false)}
+                                    conversation={conversation}
+                                    currentUserId={myUserId}
+                                    onRefresh={() => { loadMembers(); if (onGroupUpdated) onGroupUpdated(); }}
+                                />
+                            )}
+                        </div>
+                    );
+                }

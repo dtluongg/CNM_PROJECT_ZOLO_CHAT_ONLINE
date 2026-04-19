@@ -29,17 +29,8 @@ const getAvatarSrc = (avatar) => {
     return `${API_URL}/${avatar}`;
 };
 
-// Parse payload an toàn: xử lý cả trường hợp là string JSON (Android) lẫn object (Web)
-const parsePayload = (payload) => {
-    if (!payload) return {};
-    if (typeof payload === 'string') {
-        try { return JSON.parse(payload); } catch { return {}; }
-    }
-    return payload;
-};
-
 const SystemMessageBubble = ({ msg, currentUserId, THEME }) => {
-    const payload = parsePayload(msg.payload);
+    const payload = msg.payload || {};
 
     const isVideo =
         payload.callType === 'video' ||
@@ -98,25 +89,11 @@ const SystemMessageBubble = ({ msg, currentUserId, THEME }) => {
         label = msg.content || 'Cuộc gọi';
     }
 
-    // Xác định xem đây là thông báo cuộc gọi hay thông báo hệ thống chung
-    const isCall = !!(status || payload.callType || msg.callType);
-    const isReminder = 
-        payload.event === 'reminder_triggered' || 
-        msg.content?.startsWith('Nhắc hẹn:');
-
     const color = isBad ? '#ed4245' : THEME.textMuted;
     const bg = isBad ? '#ed424512' : THEME.bgSecondary;
     const border = isBad ? '#ed424540' : THEME.border;
 
-    // Màu sắc đồng bộ với bản Web cho Nhắc hẹn
-    const reminderColor = '#faa61a';
-    const reminderBorder = '#faa61a60';
-
     const MiniAvatar = ({ name, avatar }) => {
-        // Tránh hiện dấu ? dư thừa cho các tin nhắn không phải cuộc gọi
-        if (!isCall || (!name && !avatar)) return null;
-        if (name === '?' && !avatar) return null;
-
         const [imgError, setImgError] = useState(false);
         const avatarSrc = getAvatarSrc(avatar);
 
@@ -171,28 +148,20 @@ const SystemMessageBubble = ({ msg, currentUserId, THEME }) => {
                     alignItems: 'center',
                     backgroundColor: bg,
                     borderWidth: 1,
-                    borderColor: isReminder ? reminderBorder : border,
+                    borderColor: border,
                     borderRadius: 30,
-                    paddingVertical: isCall ? 8 : 10,
-                    paddingHorizontal: isCall ? 12 : 24,
-                    gap: isCall ? 8 : 0,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    gap: 8,
                 }}
             >
-                {isCall && <MiniAvatar name={callerName} avatar={callerAvatar} />}
+                <MiniAvatar name={callerName} avatar={callerAvatar} />
 
                 <View style={{ alignItems: 'center', gap: 2 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-                        <Feather 
-                            name={isReminder ? 'bell' : (isVideo ? 'video' : 'phone')} 
-                            size={14} 
-                            color={isReminder ? reminderColor : color} 
-                        />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Feather name={isVideo ? 'video' : 'phone'} size={12} color={color} />
 
-                        <Text style={{ 
-                            fontSize: 13, 
-                            fontWeight: '700', 
-                            color: isReminder ? reminderColor : color 
-                        }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color }}>
                             {label}
                         </Text>
                     </View>
@@ -202,7 +171,7 @@ const SystemMessageBubble = ({ msg, currentUserId, THEME }) => {
                     </Text>
                 </View>
 
-                {isCall && <MiniAvatar name={calleeName} avatar={calleeAvatar} />}
+                <MiniAvatar name={calleeName} avatar={calleeAvatar} />
             </View>
         </View>
     );

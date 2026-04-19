@@ -27,7 +27,6 @@ import UnreadDivider from '../components/UnreadDivider';
 import AiSummaryCard from '../components/AiSummaryCard';
 import PinnedBar from '../components/PinnedBar';
 import CreatePollModal from '../components/CreatePollModal';
-import CreateReminderModal from '../components/CreateReminderModal';
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import useMessages from '../hooks/useMessages';
 import useSocket from '../hooks/useSocket';
@@ -59,6 +58,7 @@ export default function MessageScreen({ route, navigation }) {
   const currentUserId = user?._id?.toString() || null;
 
   // ── State UI ────────────────────────────────────────────────────────────
+  const [activeTopic, setActiveTopic] = useState(null);
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -68,7 +68,6 @@ export default function MessageScreen({ route, navigation }) {
   const [reactionTypes, setReactionTypes] = useState([]);
   const [pinnedMessages, setPinnedMessages] = useState(conversation.pinnedMessages || []);
   const [showPollModal, setShowPollModal] = useState(false);
-  const [showReminderModal, setShowReminderModal] = useState(false);
 
   useEffect(() => {
     setPinnedMessages(conversation.pinnedMessages || []);
@@ -106,7 +105,7 @@ export default function MessageScreen({ route, navigation }) {
   });
 
   // ── Hooks quản lý tin nhắn ──────────────────────────────────────────────
-  const msgHook = useMessages(conversation.id, currentUserId);
+  const msgHook = useMessages(conversation.id, currentUserId, activeTopic?._id || null);
 
   // ── Hook ghi âm ─────────────────────────────────────────────────────────
   const { isRecording, recordingSec, startRecording, stopRecording, cancelRecording } =
@@ -138,9 +137,6 @@ export default function MessageScreen({ route, navigation }) {
     onDeletedForMe: (messageId) => msgHook.deleteMessage(messageId),
     onPinnedMessagesChange: (newPins) => setPinnedMessages(newPins),
     onUpdatePoll: (updatedMsg) => msgHook.updatePoll(updatedMsg),
-    onReminderAlert: ({ reminderId }) => {
-      msgHook.triggerReminder(reminderId);
-    },
   });
 
   // ── Setup khi mount ─────────────────────────────────────────────────────
@@ -325,7 +321,7 @@ export default function MessageScreen({ route, navigation }) {
     }
 
     try {
-      const res = await messageApi.sendText(conversation.id, trimmed, replyId);
+      const res = await messageApi.sendText(conversation.id, trimmed, replyId, activeTopic?._id || null);
       msgHook.replaceTemp(tempId, res.data.data);
     } catch (err) {
       console.error('sendText error:', err);
@@ -361,35 +357,6 @@ export default function MessageScreen({ route, navigation }) {
       await messageApi.votePoll(messageId, voteData);
     } catch (err) {
       console.error('handlePollVote error:', err);
-    }
-  };
-
-  // ── Nhắc hẹn (Reminder) ──────────────────────────────────────────────
-  const handleCreateReminder = async ({ content, reminderTime }) => {
-    const tempId = `temp_rem_${Date.now()}`;
-    const now = new Date().toISOString();
-    const tempMsg = {
-      _id: tempId,
-      senderId: currentUserId,
-      senderName: user?.displayName || 'Tôi',
-      avatar: user?.avatar || null,
-      type: 'reminder',
-      content: content.trim(),
-      payload: { reminderTime },
-      time: fmtTime(now),
-      createdAt: now,
-    };
-
-    msgHook.addTempMessage(tempMsg);
-    setShowReminderModal(false);
-
-    try {
-      const res = await messageApi.createReminder(conversation.id, { content, reminderTime });
-      msgHook.replaceTemp(tempId, res.data.data);
-    } catch (err) {
-      console.error('handleCreateReminder error:', err);
-      msgHook.removeTempMessage(tempId);
-      Alert.alert('Lỗi', 'Không thể tạo nhắc hẹn');
     }
   };
 
@@ -448,12 +415,12 @@ export default function MessageScreen({ route, navigation }) {
     try {
       const pinToReplace = conversation.pinnedMessages[selectedIndex];
       const oldMsgId = pinToReplace.messageId._id || pinToReplace.messageId.id;
-      
+
       // Bỏ ghim cái cũ
       await messageApi.unpinMessage(conversation.id, oldMsgId.toString());
       // Ghim cái mới
       await messageApi.pinMessage(conversation.id, pendingPinMsgId.toString());
-      
+
       setShowPinLimitModal(false);
       setPendingPinMsgId(null);
     } catch (err) {
@@ -468,8 +435,8 @@ export default function MessageScreen({ route, navigation }) {
       'Bạn có chắc muốn bỏ ghim nội dung này không?',
       [
         { text: 'Không', style: 'cancel' },
-        { 
-          text: 'Bỏ ghim', 
+        {
+          text: 'Bỏ ghim',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -545,7 +512,7 @@ export default function MessageScreen({ route, navigation }) {
       type: msg.type === 'system' ? 'system' : 'msg',
       msg,
       key: `msg-${msgKey || i}`,
-      isMine: (msg.senderId?._id || msg.senderId) === currentUserId,
+      isMine: msg.senderId === currentUserId,
       showHeader: msg.type === 'system' ? false : !sameGroup,
     });
   });
@@ -628,7 +595,9 @@ export default function MessageScreen({ route, navigation }) {
         {/* Tên + trạng thái */}
         <View style={{ flex: 1 }}>
           <Text style={styles.headerName} numberOfLines={1}>
-            {conversation.type === 'group' ? `# ${conversation.name}` : conversation.name}
+            {conversation.type === 'group'
+              ? (activeTopic ? `${activeTopic.channelType === 'voice' ? '🔊' : '#'}${activeTopic.name} · ${conversation.name}` : `# chung · ${conversation.name}`)
+              : conversation.name}
           </Text>
           <Text style={[styles.headerStatus, { color: isOnline ? THEME.statusOnline : THEME.textMuted }]}>
             {statusText}
@@ -664,7 +633,28 @@ export default function MessageScreen({ route, navigation }) {
         </View>
       </View>
 
-      <PinnedBar 
+      {/* ── Channel bar (group only) ───────────────────────────────────── */}
+      {conversation.type === 'group' && (
+        <TouchableOpacity
+          onPress={() => { setInfoTab('channels'); setShowInfoPanel(true); }}
+          style={{
+            flexDirection: 'row', alignItems: 'center', gap: 6,
+            paddingHorizontal: 14, paddingVertical: 6,
+            backgroundColor: THEME.bgSecondary,
+            borderBottomWidth: 1, borderBottomColor: THEME.border,
+          }}
+        >
+          <Text style={{ fontSize: 13, color: THEME.accent }}>
+            {activeTopic?.channelType === 'voice' ? '🔊' : activeTopic?.channelType === 'system' ? '📋' : '#'}
+          </Text>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: THEME.accent, flex: 1 }}>
+            {activeTopic ? activeTopic.name : 'chung'}
+          </Text>
+          <Feather name="chevron-down" size={14} color={THEME.textMuted} />
+        </TouchableOpacity>
+      )}
+
+      <PinnedBar
         pinnedMessages={pinnedMessages}
         onJump={handleJumpToMessage}
         onUnpin={handleUnpin}
@@ -672,7 +662,7 @@ export default function MessageScreen({ route, navigation }) {
 
       {/* ── Body: danh sách tin nhắn + thanh input ────────────────────────── */}
       <View style={{ flex: 1 }}>
-        <PinLimitModal 
+        <PinLimitModal
         isOpen={showPinLimitModal}
         onClose={() => { setShowPinLimitModal(false); setPendingPinMsgId(null); }}
         pinnedMessages={conversation.pinnedMessages || []}
@@ -894,7 +884,6 @@ export default function MessageScreen({ route, navigation }) {
                 onSend={handleSend}
                 onPickFile={() => pickAndSendFile(replyingMessage?._id || replyingMessage?.id)}
                 onPickImage={() => pickAndSendImage(replyingMessage?._id || replyingMessage?.id)}
-                onPickReminder={() => setShowReminderModal(true)}
                 onStartRecord={startRecording}
                 onToggleEmoji={() => setShowEmoji(!showEmoji)}
                 onPickPoll={() => setShowPollModal(true)}
@@ -907,17 +896,10 @@ export default function MessageScreen({ route, navigation }) {
               />
             )
           )}
-          <CreatePollModal 
+          <CreatePollModal
             visible={showPollModal}
             onClose={() => setShowPollModal(false)}
             onCreate={handleCreatePoll}
-            THEME={THEME}
-          />
-          <CreateReminderModal
-            visible={showReminderModal}
-            onClose={() => setShowReminderModal(false)}
-            onCreate={handleCreateReminder}
-            isGroup={conversation.type === 'group'}
             THEME={THEME}
           />
         </View>
@@ -943,6 +925,8 @@ export default function MessageScreen({ route, navigation }) {
         onImagePress={(url) => { setShowInfoPanel(false); setTimeout(() => setPreviewImage(url), 300); }}
         onFilePress={openFile}
         onViewProfile={() => { setShowInfoPanel(false); navigation.push('UserProfile', { userId: conversation.otherUserId }); }}
+        activeTopic={activeTopic}
+        onTopicSelect={(topic) => { setActiveTopic(topic); }}
         THEME={THEME}
         styles={styles}
       />

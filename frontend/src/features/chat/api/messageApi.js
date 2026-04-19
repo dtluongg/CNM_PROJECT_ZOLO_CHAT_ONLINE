@@ -12,31 +12,34 @@ import apiClient from '../../../services/apiClient';
 const messageApi = {
   // ── Lấy tin nhắn (cursor pagination) ─────────────────────────────
   // before: messageId cũ nhất đang hiển thị (để load thêm tin cũ hơn)
-  getMessages: (conversationId, { before, limit = 30 } = {}) => {
+  // topicId: lọc theo kênh (optional, null = kênh chung)
+  getMessages: (conversationId, { before, limit = 30, topicId } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (before) params.set('before', before);
+    if (topicId) params.set('topicId', topicId);
     return apiClient.get(`/messages/${conversationId}?${params}`);
   },
 
   // ── Gửi text message ─────────────────────────────────────────────
-  sendText: (conversationId, content, replyToMessageId = null) =>
+  sendText: (conversationId, content, replyToMessageId = null, topicId = null) =>
     apiClient.post(`/messages/${conversationId}`, {
       type: 'text',
       content,
       replyToMessageId,
+      topicId,
     }),
 
   // ── Gửi voice message (sau khi upload xong) ──────────────────────
-  sendVoice: (conversationId, attachmentId, replyToMessageId = null) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'voice', attachmentId, replyToMessageId }),
+  sendVoice: (conversationId, attachmentId, replyToMessageId = null, topicId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'voice', attachmentId, replyToMessageId, topicId }),
 
   // ── Gửi image message (sau khi upload xong) ──────────────────────
-  sendImage: (conversationId, attachmentId, replyToMessageId = null) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'image', attachmentId, replyToMessageId }),
+  sendImage: (conversationId, attachmentId, replyToMessageId = null, topicId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'image', attachmentId, replyToMessageId, topicId }),
 
   // ── Gửi file message (sau khi upload xong) ───────────────────────
-  sendFile: (conversationId, attachmentId, replyToMessageId = null) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId, replyToMessageId }),
+  sendFile: (conversationId, attachmentId, replyToMessageId = null, topicId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId, replyToMessageId, topicId }),
 
   // ── Upload voice blob lên S3 ──────────────────────────────────────
   // formData phải chứa field "voice" (blob) và "duration" (số giây, optional)
@@ -110,14 +113,6 @@ const messageApi = {
 
   votePoll: (messageId, { optionId, optionIds, newOptions, votedNewOptions } = {}) =>
     apiClient.patch(`/messages/poll/${messageId}/vote`, { optionId, optionIds, newOptions, votedNewOptions }),
-
-  // ── Nhắc hẹn (Reminder) ─────────────────────────────────────────────
-  createReminder: (conversationId, { content, reminderTime }) =>
-    apiClient.post(`/messages/${conversationId}`, {
-      type: 'reminder',
-      content,
-      payload: { reminderTime }
-    }),
 };
 
 

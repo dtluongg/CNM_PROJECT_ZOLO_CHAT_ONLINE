@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  TextInput, ScrollView, StatusBar,
+  TextInput, ScrollView, StatusBar, Modal, Pressable,
+  ActivityIndicator, Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { io } from 'socket.io-client';
 import { STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
 import { useTheme } from '../context/ThemeContext';
@@ -11,7 +13,17 @@ import { usePresence } from '../context/PresenceContext';
 import ProfileScreen from '../features/user/screens/ProfileScreen';
 import FriendsScreen from '../features/friends/screens/FriendsScreen';
 import conversationApi from '../features/chat/api/conversationApi';
+import messageApi from '../features/chat/api/messageApi';
+import friendApi from '../features/friends/api/friendApi';
 import { SOCKET_URL } from '../config/env';
+
+const GROUP_TYPES = [
+  { value: 'general', label: '💬 Thảo luận chung' },
+  { value: 'study',   label: '📚 Học tập' },
+  { value: 'gaming',  label: '🎮 Gaming' },
+  { value: 'project', label: '📌 Dự án / Làm việc' },
+  { value: 'other',   label: '🗂️ Khác' },
+];
 
 
 const formatTime = (iso) => {
@@ -39,17 +51,259 @@ const mapConv = (item) => {
     type: item.type,
     online: false,
     memberCount: item.totalMembers || 0,
-    // ── Cần cho AI Summary feature ──────────────────────────────────
-    myMembership: item.myMembership || null,   // có lastReadMessageId, unreadCount
-    aiSummary:    item.myMembership?.aiSummary || null,  // summary đã lưu trong DB
+    groupType: item.groupType || 'general',
+    description: item.description || '',
+    myMembership: item.myMembership || null,
+    aiSummary: item.myMembership?.aiSummary || null,
     pinnedMessages: item.pinnedMessages || [],
   };
 };
 
 // ─────────────────────────────────────────────
+// CreateGroupSheet
+// ─────────────────────────────────────────────
+function CreateGroupSheet({ visible, onClose, onCreated, THEME, styles, userId }) {
+  const [step, setStep] = useState('form'); // 'form' | 'friends'
+  const [groupName, setGroupName] = useState('');
+  const [groupType, setGroupType] = useState('general');
+  const [description, setDescription] = useState('');
+  const [avatarUri, setAvatarUri] = useState(null);
+  const [friends, setFriends] = useState([]);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    setStep('form');
+    setGroupName('');
+    setGroupType('general');
+    setDescription('');
+    setAvatarUri(null);
+    setSelectedIds([]);
+    setLoadingFriends(true);
+    friendApi.getFriendList()
+      .then(res => setFriends(res?.data?.success ? (res.data.data || []) : []))
+      .catch(() => setFriends([]))
+      .finally(() => setLoadingFriends(false));
+  }, [visible]);
+
+  const pickAvatar = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Cần quyền', 'Vui lòng cấp quyền truy cập ảnh.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true, aspect: [1, 1], quality: 0.85,
+    });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
+
+  const toggleFriend = (id) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const handleCreate = async () => {
+    if (!groupName.trim()) { Alert.alert('Lỗi', 'Vui lòng nhập tên nhóm'); return; }
+    if (selectedIds.length < 2) { Alert.alert('Lỗi', 'Chọn tối thiểu 2 bạn bè'); return; }
+    try {
+      setCreating(true);
+      let avatarUrl = '';
+      if (avatarUri) {
+        const ext = avatarUri.split('?')[0].split('.').pop()?.toLowerCase() || 'jpg';
+        const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+        const formData = new FormData();
+        formData.append('file', { uri: avatarUri, name: `avatar.${ext}`, type: mime });
+        const uploadRes = await messageApi.uploadImage(formData);
+        avatarUrl = uploadRes?.data?.file?.url || '';
+      }
+      await conversationApi.createGroupConversation({
+        name: groupName.trim(), avatar: avatarUrl,
+        memberIds: selectedIds, groupType, description,
+      });
+      onCreated();
+      onClose();
+    } catch (err) {
+      Alert.alert('Lỗi', err.response?.data?.message || err.message || 'Không thể tạo nhóm');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: THEME.bgPrimary }}>
+        {/* Header */}
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+          paddingHorizontal: 16, paddingVertical: 14,
+          borderBottomWidth: 1, borderBottomColor: THEME.border,
+          backgroundColor: THEME.bgSecondary,
+        }}>
+          <TouchableOpacity onPress={onClose} disabled={creating}>
+            <Text style={{ color: THEME.textMuted, fontSize: 15 }}>Hủy</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: THEME.textPrimary }}>Tạo nhóm chat</Text>
+          <TouchableOpacity
+            onPress={handleCreate}
+            disabled={creating || !groupName.trim() || selectedIds.length < 2}
+          >
+            {creating
+              ? <ActivityIndicator size="small" color={THEME.accent} />
+              : <Text style={{ color: (!groupName.trim() || selectedIds.length < 2) ? THEME.textMuted : THEME.accent, fontWeight: '700', fontSize: 15 }}>Tạo</Text>
+            }
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+          {/* Avatar + Name */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 }}>
+            <TouchableOpacity onPress={pickAvatar} style={{
+              width: 72, height: 72, borderRadius: 36,
+              backgroundColor: THEME.bgHover,
+              borderWidth: 2, borderColor: THEME.border, borderStyle: 'dashed',
+              alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+            }}>
+              {avatarUri
+                ? <Image source={{ uri: avatarUri }} style={{ width: 72, height: 72, borderRadius: 36 }} />
+                : <Text style={{ fontSize: 28 }}>📷</Text>
+              }
+            </TouchableOpacity>
+            <TextInput
+              value={groupName}
+              onChangeText={setGroupName}
+              placeholder="Tên nhóm..."
+              placeholderTextColor={THEME.textMuted}
+              style={{
+                flex: 1, backgroundColor: THEME.bgSecondary,
+                borderWidth: 1, borderColor: THEME.border, borderRadius: 10,
+                paddingHorizontal: 14, paddingVertical: 12,
+                fontSize: 16, color: THEME.textPrimary,
+              }}
+            />
+          </View>
+
+          {/* Group Type */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: THEME.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8 }}>Loại nhóm</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+              {GROUP_TYPES.map(t => (
+                <TouchableOpacity
+                  key={t.value}
+                  onPress={() => setGroupType(t.value)}
+                  style={{
+                    marginRight: 8, paddingHorizontal: 14, paddingVertical: 9,
+                    borderRadius: 20, borderWidth: 1.5,
+                    borderColor: groupType === t.value ? THEME.accent : THEME.border,
+                    backgroundColor: groupType === t.value ? THEME.accent + '22' : THEME.bgSecondary,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, color: groupType === t.value ? THEME.accent : THEME.textSecondary, fontWeight: groupType === t.value ? '700' : '500' }}>
+                    {t.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Description */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: THEME.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.8 }}>Mô tả (tùy chọn)</Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Mô tả ngắn về nhóm..."
+              placeholderTextColor={THEME.textMuted}
+              multiline
+              numberOfLines={2}
+              maxLength={200}
+              style={{
+                backgroundColor: THEME.bgSecondary,
+                borderWidth: 1, borderColor: THEME.border, borderRadius: 10,
+                paddingHorizontal: 14, paddingVertical: 10,
+                fontSize: 14, color: THEME.textPrimary, textAlignVertical: 'top',
+              }}
+            />
+            <Text style={{ fontSize: 11, color: THEME.textMuted, textAlign: 'right', marginTop: 3 }}>
+              {description.length}/200
+            </Text>
+          </View>
+
+          {/* Friend Selection */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: THEME.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+              Thêm thành viên {selectedIds.length > 0 ? `(${selectedIds.length} đã chọn)` : '(tối thiểu 2)'}
+            </Text>
+
+            {/* Selected chips */}
+            {selectedIds.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                {friends.filter(f => selectedIds.includes(f.friendId)).map(f => (
+                  <TouchableOpacity
+                    key={f.friendId}
+                    onPress={() => toggleFriend(f.friendId)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', gap: 5,
+                      backgroundColor: THEME.accent, borderRadius: 20,
+                      paddingHorizontal: 12, paddingVertical: 6, marginRight: 6,
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{f.displayName}</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>✕</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            {loadingFriends && (
+              <View style={{ padding: 16, alignItems: 'center' }}>
+                <ActivityIndicator color={THEME.accent} />
+                <Text style={{ color: THEME.textMuted, fontSize: 13, marginTop: 8 }}>Đang tải bạn bè...</Text>
+              </View>
+            )}
+            {!loadingFriends && friends.length === 0 && (
+              <Text style={{ color: THEME.textMuted, fontSize: 13, padding: 12 }}>Chưa có bạn bè.</Text>
+            )}
+            {!loadingFriends && friends.map(f => {
+              const checked = selectedIds.includes(f.friendId);
+              return (
+                <TouchableOpacity
+                  key={f.friendId}
+                  onPress={() => toggleFriend(f.friendId)}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 12,
+                    paddingVertical: 11, paddingHorizontal: 4,
+                    borderBottomWidth: 1, borderBottomColor: THEME.border,
+                    backgroundColor: checked ? THEME.accent + '15' : 'transparent',
+                  }}
+                >
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 6,
+                    borderWidth: 2, borderColor: checked ? THEME.accent : THEME.border,
+                    backgroundColor: checked ? THEME.accent : 'transparent',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {checked && <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>✓</Text>}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: THEME.textPrimary }}>{f.displayName}</Text>
+                    <Text style={{ fontSize: 12, color: THEME.textMuted }}>{f.email}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Shared components
 // ─────────────────────────────────────────────
 const Avatar = ({ name, avatar, size = 44, status = null, online = null, THEME, styles }) => {
+  const [imgError, setImgError] = React.useState(false);
   const bg = getAvatarColor(name);
   const dotSize = Math.floor(size * 0.28);
   const statusColor = online === false
@@ -58,8 +312,8 @@ const Avatar = ({ name, avatar, size = 44, status = null, online = null, THEME, 
 
   return (
     <View style={{ width: size, height: size }}>
-      {avatar
-        ? <Image source={{ uri: avatar }} style={{ width: size, height: size, borderRadius: size / 2 }} />
+      {avatar && !imgError
+        ? <Image source={{ uri: avatar }} style={{ width: size, height: size, borderRadius: size / 2 }} onError={() => setImgError(true)} />
         : (
           <View style={[styles.avatarCircle, { width: size, height: size, borderRadius: size / 2, backgroundColor: bg }]}>
             <Text style={[styles.avatarText, { fontSize: size * 0.38 }]}>{getInitials(name)}</Text>
@@ -80,8 +334,9 @@ const Avatar = ({ name, avatar, size = 44, status = null, online = null, THEME, 
 // ─────────────────────────────────────────────
 // CHATS TAB
 // ─────────────────────────────────────────────
-function ChatsTab({ navigation, conversations, onUpdateConversations, THEME, styles }) {
+function ChatsTab({ navigation, conversations, onUpdateConversations, onRefetch, THEME, styles, userId }) {
   const [search, setSearch] = useState('');
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
 
   const filtered = conversations.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
@@ -153,12 +408,29 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, THEME, sty
       {/* Header */}
       <View style={styles.chatHeader}>
         <Text style={styles.headerTitle}>💬 ZoloChat</Text>
-        {totalUnread > 0 && (
-          <View style={styles.headerBadge}>
-            <Text style={styles.headerBadgeText}>{totalUnread}</Text>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {totalUnread > 0 && (
+            <View style={styles.headerBadge}>
+              <Text style={styles.headerBadgeText}>{totalUnread}</Text>
+            </View>
+          )}
+          <TouchableOpacity
+            onPress={() => setShowCreateGroup(true)}
+            style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: THEME.accent + '22', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ fontSize: 20, color: THEME.accent, lineHeight: 22 }}>+</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      <CreateGroupSheet
+        visible={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
+        onCreated={onRefetch}
+        THEME={THEME}
+        styles={styles}
+        userId={userId}
+      />
 
       {/* Search */}
       <View style={styles.searchContainer}>
@@ -245,7 +517,7 @@ function BottomTabBar({ activeTab, onTabChange, unreadTotal, THEME, styles }) {
 // ─────────────────────────────────────────────
 export default function MainTabScreen({ navigation, route }) {
   const { theme: THEME } = useTheme();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const styles = useStyles(THEME);
 
   const [activeTab, setActiveTab] = useState('chats');
@@ -305,7 +577,7 @@ export default function MainTabScreen({ navigation, route }) {
   const renderContent = () => {
     switch (activeTab) {
       case 'chats':
-        return <ChatsTab navigation={navigation} conversations={conversations} onUpdateConversations={setConversations} THEME={THEME} styles={styles} />;
+        return <ChatsTab navigation={navigation} conversations={conversations} onUpdateConversations={setConversations} onRefetch={fetchConversations} THEME={THEME} styles={styles} userId={user?._id?.toString() || ''} />;
       case 'friends':
         return <FriendsScreen navigation={navigation} />;
       case 'profile':

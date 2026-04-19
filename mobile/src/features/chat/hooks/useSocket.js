@@ -52,7 +52,7 @@ const useSocket = (token, conversationId, currentUserId, handlers) => {
 
     // ── Tin nhắn mới ───────────────────────────────────────────────────
     socket.on('chat:new-message', ({ conversationId: cid, message }) => {
-      if (cid?.toString() !== conversationId?.toString()) return;
+      if (cid !== conversationId) return;
       handlersRef.current.onNewMessage?.(message);
     });
 
@@ -82,7 +82,7 @@ const useSocket = (token, conversationId, currentUserId, handlers) => {
 
     // ── Chỉnh sửa tin nhắn ────────────────────────────────────────────
     socket.on('chat:message-edited', ({ conversationId: cid, message }) => {
-      if (cid?.toString() !== conversationId?.toString()) return;
+      if (cid !== conversationId) return;
       handlersRef.current.onEdited?.(message);
     });
 
@@ -113,12 +113,6 @@ const useSocket = (token, conversationId, currentUserId, handlers) => {
     socket.on('chat:update-poll', (updatedMsg) => {
       if (updatedMsg.conversationId !== conversationId) return;
       handlersRef.current.onUpdatePoll?.(updatedMsg);
-    });
-
-    // ── Báo thức Nhắc hẹn ──────────────────────────────────────────────
-    socket.on('chat:reminder-alert', (data) => {
-      if (data.conversationId?.toString() !== conversationId?.toString()) return;
-      handlersRef.current.onReminderAlert?.(data);
     });
 
     // Rời phòng và ngắt kết nối khi unmount

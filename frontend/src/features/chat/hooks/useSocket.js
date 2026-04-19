@@ -16,21 +16,18 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
  * @param {function} options.onMessageEdited    - (conversationId, msg) => void
  * @param {function} options.onUnreadReset      - (conversationId) => void
  */
-export const useSocket = (options) => {
-  const {
-    token,
-    currentUserId,
-    activeConvRef,
-    ...handlers
-  } = options;
-
+export const useSocket = ({
+  token,
+  currentUserId,
+  activeConvRef,
+  onNewMessage,
+  onTyping,
+  onStopTyping,
+  onMessageRevoked,
+  onMessageEdited,
+  onUnreadReset,
+}) => {
   const socketRef = useRef(null);
-  const handlersRef = useRef(handlers);
-
-  // Sync handlers to ref so listeners always use the latest ones
-  useEffect(() => {
-    handlersRef.current = handlers;
-  }, [handlers]);
 
   useEffect(() => {
     const accessToken = token || localStorage.getItem('accessToken');
@@ -47,33 +44,29 @@ export const useSocket = (options) => {
 
     socket.on('chat:new-message', ({ conversationId, message }) => {
       const msg = normalizeMsg(message);
-      handlersRef.current.onNewMessage?.(conversationId, msg, activeConvRef);
+      onNewMessage?.(conversationId, msg, activeConvRef);
     });
 
     socket.on('chat:typing', ({ conversationId, userId, displayName }) => {
       if (userId === currentUserId) return;
-      handlersRef.current.onTyping?.(conversationId, userId, displayName);
+      onTyping?.(conversationId, userId, displayName);
     });
 
     socket.on('chat:stop-typing', ({ conversationId }) => {
-      handlersRef.current.onStopTyping?.(conversationId);
+      onStopTyping?.(conversationId);
     });
 
     socket.on('chat:message-revoked', ({ conversationId, messageId }) => {
-      handlersRef.current.onMessageRevoked?.(conversationId, messageId);
+      onMessageRevoked?.(conversationId, messageId);
     });
 
     socket.on('chat:message-edited', ({ conversationId, message }) => {
       const msg = normalizeMsg(message);
-      handlersRef.current.onMessageEdited?.(conversationId, msg);
+      onMessageEdited?.(conversationId, msg);
     });
 
     socket.on('chat:unread-reset', ({ conversationId }) => {
-      handlersRef.current.onUnreadReset?.(conversationId);
-    });
-    
-    socket.on('chat:reminder-alert', (data) => {
-      handlersRef.current.onReminderAlert?.(data);
+      onUnreadReset?.(conversationId);
     });
 
     return () => {

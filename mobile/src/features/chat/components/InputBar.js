@@ -24,7 +24,6 @@ const InputBar = ({
   onPickFile,
   onPickImage,
   onPickPoll,
-  onPickReminder,
   onStartRecord,
   onToggleEmoji,
   inputRef,
@@ -64,12 +63,6 @@ const InputBar = ({
           <Feather name="bar-chart-2" size={20} color={THEME.textMuted} />
         </TouchableOpacity>
       )}
-      <TouchableOpacity 
-        style={[styles.toolbarBtn, { marginLeft: isGroup ? 10 : 0 }]} 
-        onPress={onPickReminder}
-      >
-        <Feather name="clock" size={20} color={THEME.textMuted} />
-      </TouchableOpacity>
     </View>
 
     {/* Row 2: Bottom Input Row */}

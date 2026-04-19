@@ -43,10 +43,9 @@ const conversationRouter = require('./src/routes/conversationRouter');
 const messageRouter      = require('./src/routes/messageRouter');
 const reactionRouter     = require('./src/routes/reactionRouter');
 const notificationRouter = require('./src/routes/notificationRouter');
-const { initReminderCron } = require('./src/services/reminderService');
+const groupRoleRouter = require('./src/routes/groupRoleRouter');
 
-
-
+//
 app.use('/backend/api/users',         userRouter);
 app.use('/backend/api/auth',          authRouter);
 app.use('/backend/api/friends',       friendRouter);
@@ -57,13 +56,11 @@ app.use('/backend/api/conversations', conversationRouter);
 app.use('/backend/api/messages',      messageRouter);
 app.use('/backend/api/reactions',     reactionRouter);
 app.use('/backend/api/notifications', notificationRouter);
-
+app.use('/backend/api/conversations/:id', groupRoleRouter);
 
 // ── SOCKET ──
 const { initSocket } = require('./src/socket/socketManager');
 initSocket(server);
-initReminderCron();
-
 
 // ── ERROR HANDLER ──
 const errorHandler = require('./src/middlewares/errorHandler');

@@ -1,8 +1,39 @@
 const mongoose = require('mongoose');
 const Conversation = require('../models/conversationModel');
 const ConversationMember = require('../models/conversationMemberModel');
+const ConversationTopic = require('../models/conversationTopicModel');
 const Friendship = require('../models/friendshipModel');
 const User = require('../models/userModel');
+
+const DEFAULT_CHANNELS = {
+    study: [
+        { name: 'học-tập-chung',    emoji: '📚', categoryName: '📚 Học tập', channelType: 'text',  position: 0 },
+        { name: 'hỏi-bài',          emoji: '❓', categoryName: '📚 Học tập', channelType: 'text',  position: 1 },
+        { name: 'chia-sẻ-tài-liệu', emoji: '📄', categoryName: '📚 Học tập', channelType: 'text',  position: 2 },
+        { name: 'nhật-ký-nhóm',     emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
+    ],
+    gaming: [
+        { name: 'tìm-team',    emoji: '🎮', categoryName: '🎮 Gaming', channelType: 'text',  position: 0 },
+        { name: 'meme-game',   emoji: '😂', categoryName: '🎮 Gaming', channelType: 'text',  position: 1 },
+        { name: 'voice-gaming',emoji: '🔊', categoryName: '🎮 Gaming', channelType: 'voice', position: 2 },
+        { name: 'nhật-ký-nhóm', emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
+    ],
+    general: [
+        { name: 'thảo-luận', emoji: '💬', categoryName: '💬 Chat chung', channelType: 'text', position: 0 },
+        { name: 'off-topic',  emoji: '🎭', categoryName: '💬 Chat chung', channelType: 'text', position: 1 },
+        { name: 'nhật-ký-nhóm', emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
+    ],
+    project: [
+        { name: 'kế-hoạch', emoji: '📌', categoryName: '📌 Dự án', channelType: 'text',  position: 0 },
+        { name: 'báo-cáo',  emoji: '📊', categoryName: '📌 Dự án', channelType: 'text',  position: 1 },
+        { name: 'họp-nhóm', emoji: '🔊', categoryName: '📌 Dự án', channelType: 'voice', position: 2 },
+        { name: 'nhật-ký-nhóm', emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
+    ],
+    other: [
+        { name: 'thảo-luận', emoji: '💬', categoryName: '💬 Chat chung', channelType: 'text', position: 0 },
+        { name: 'nhật-ký-nhóm', emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
+    ],
+};
 
 // Chuyển id string sang ObjectId để dùng trong aggregate/query có kiểu chặt chẽ.
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
@@ -61,6 +92,8 @@ const pickConversationFields = (conversation) => ({
     type: conversation.type,
     name: conversation.name,
     avatar: conversation.avatar,
+    groupType: conversation.groupType || 'general',
+    description: conversation.description || '',
     createdBy: conversation.createdBy,
     lastMessageId: conversation.lastMessageId,
     lastMessagePreview: conversation.lastMessagePreview,
@@ -253,7 +286,7 @@ const createDmConversation = async (userId, targetUserId, initialMessage = '') =
 
 // Tạo group trong transaction: tạo conversation + owner + danh sách member ban đầu.
 const createGroupConversation = async (userId, payload) => {
-    const { name, avatar, memberIds = [] } = payload;
+    const { name, avatar, memberIds = [], groupType = 'general', description = '' } = payload;
 
     if (!name || !name.trim()) {
         const err = new Error('Tên nhóm là bắt buộc');
@@ -270,12 +303,15 @@ const createGroupConversation = async (userId, payload) => {
         let createdConversation = null;
 
         await session.withTransaction(async () => {
+            const VALID_GROUP_TYPES = ['study', 'gaming', 'general', 'project', 'other'];
             const conversation = await Conversation.create(
                 [
                     {
                         type: 'group',
                         name: name.trim(),
                         avatar: avatar || '',
+                        groupType: VALID_GROUP_TYPES.includes(groupType) ? groupType : 'general',
+                        description: (description || '').toString().slice(0, 200),
                         createdBy: toObjectId(userId),
                     },
                 ],
@@ -306,6 +342,19 @@ const createGroupConversation = async (userId, payload) => {
             await ConversationMember.create(members, { session, ordered: true });
         });
 
+        const channels = DEFAULT_CHANNELS[createdConversation.groupType] || DEFAULT_CHANNELS.general;
+        await ConversationTopic.insertMany(
+            channels.map((ch) => ({
+                conversationId: createdConversation._id,
+                name: ch.name,
+                emoji: ch.emoji,
+                categoryName: ch.categoryName,
+                channelType: ch.channelType,
+                position: ch.position,
+                createdBy: toObjectId(userId),
+            }))
+        );
+
         return createdConversation;
     } finally {
         session.endSession();
@@ -318,7 +367,7 @@ const createGroupConversation = async (userId, payload) => {
 const createConversation = async (req, res, next) => {
     try {
         const userId = getCurrentUserId(req);
-        const { type, name, avatar, targetUserId, memberIds, initialMessage } = req.body;
+        const { type, name, avatar, targetUserId, memberIds, initialMessage, groupType, description } = req.body;
 
         if (!userId) {
             return res.status(401).json({ message: 'Chưa xác thực người dùng' });
@@ -437,7 +486,7 @@ const createConversation = async (req, res, next) => {
             }
         }
 
-        const newGroup = await createGroupConversation(userId, { name, avatar, memberIds: uniqueMemberIds });
+        const newGroup = await createGroupConversation(userId, { name, avatar, memberIds: uniqueMemberIds, groupType, description });
 
         return res.status(201).json({
             message: 'Tạo nhóm thành công',
@@ -633,7 +682,7 @@ const updateConversationInfo = async (req, res, next) => {
         const userId = getCurrentUserId(req);
         const { id } = req.params;
         const conversationId = id;
-        const { name, avatar } = req.body;
+        const { name, avatar, groupType, description } = req.body;
 
         ensureValidObjectId(conversationId, 'conversationId');
 
@@ -656,6 +705,7 @@ const updateConversationInfo = async (req, res, next) => {
             return res.status(403).json({ message: 'Bạn không có quyền cập nhật thông tin nhóm' });
         }
 
+        const VALID_GROUP_TYPES = ['study', 'gaming', 'general', 'project', 'other'];
         const updates = {};
         if (name !== undefined) {
             if (!name || !name.trim()) {
@@ -666,6 +716,17 @@ const updateConversationInfo = async (req, res, next) => {
 
         if (avatar !== undefined) {
             updates.avatar = avatar || '';
+        }
+
+        if (groupType !== undefined) {
+            if (!VALID_GROUP_TYPES.includes(groupType)) {
+                return res.status(400).json({ message: 'groupType không hợp lệ' });
+            }
+            updates.groupType = groupType;
+        }
+
+        if (description !== undefined) {
+            updates.description = (description || '').toString().slice(0, 200);
         }
 
         if (!Object.keys(updates).length) {
@@ -896,7 +957,7 @@ const unpinMessage = async (req, res, next) => {
         // Xóa khỏi danh sách ghim
         const initialLength = conversation.pinnedMessages.length;
         conversation.pinnedMessages = conversation.pinnedMessages.filter(p => p.messageId.toString() !== messageId);
-        
+
         if (conversation.pinnedMessages.length === initialLength) {
             return res.status(404).json({ message: 'Tin nhắn không nằm trong danh sách ghim' });
         }

@@ -5,7 +5,7 @@ import FriendsSidebar   from './components/FriendsSidebar';
 import FriendsList      from './components/FriendsList';
 import FriendRequests   from './components/FriendRequests';
 import BlockedList      from './components/BlockedList';
-import CreateGroupModal from './components/CreateGroupModal';
+import CreateGroupModal from '../chat/components/CreateGroupModal';
 
 import { useFriendsData }    from './hooks/useFriendsData';
 import { filterFriends }     from './utils/friendHelpers';
@@ -31,6 +31,10 @@ const FriendsPage = () => {
     handleCreateDmFromFriend,
     showCreateGroup, setShowCreateGroup,
     groupName, setGroupName,
+    groupType, setGroupType,                 // ← thêm
+    groupDescription, setGroupDescription,   // ← thêm
+    groupAvatarPreview,                      // ← thêm
+    handleAvatarFileChange,                  // ← thêm
     selectedFriendIds,
     creatingChat,
     toggleSelectFriend,
@@ -98,13 +102,25 @@ const FriendsPage = () => {
 
       {showCreateGroup && (
         <CreateGroupModal
+          // ─── thông tin nhóm ───
           groupName={groupName}
           setGroupName={setGroupName}
+          groupType={groupType}                        // cần thêm vào useFriendsData
+          setGroupType={setGroupType}                  // cần thêm vào useFriendsData
+          groupDescription={groupDescription}          // cần thêm vào useFriendsData
+          setGroupDescription={setGroupDescription}    // cần thêm vào useFriendsData
+          groupAvatarPreview={groupAvatarPreview}      // cần thêm vào useFriendsData
+          onAvatarFileChange={handleAvatarFileChange}  // cần thêm vào useFriendsData
+
+          // ─── danh sách bạn ───
           selectedFriendIds={selectedFriendIds}
-          filteredFriends={filteredFriends}
-          creatingChat={creatingChat}
+          friendsForGroup={friends}          // map filteredFriends → friendsForGroup
+          loadingFriends={loading}
+
+          // ─── actions ───
+          creatingGroup={creatingChat}       // đổi tên prop creatingChat → creatingGroup
           onToggleSelectFriend={toggleSelectFriend}
-          onConfirm={handleCreateGroupConversation}
+          onCreateGroup={handleCreateGroupConversation}   // onConfirm → onCreateGroup
           onClose={() => setShowCreateGroup(false)}
         />
       )}
