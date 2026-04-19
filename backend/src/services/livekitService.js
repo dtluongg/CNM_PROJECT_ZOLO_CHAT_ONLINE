@@ -11,6 +11,7 @@ const createVoiceRoomToken = async (roomName, userId, displayName, avatar = null
     ttl: '4h',
   });
 
+  // livekitService.js — thêm vào addGrant:
   at.addGrant({
     roomJoin: true,
     room: roomName,

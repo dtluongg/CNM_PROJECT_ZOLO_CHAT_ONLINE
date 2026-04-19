@@ -20,16 +20,24 @@ export function VoiceRoomProvider({ children }) {
     speaking, liveParts, localVideoTrack, screenTrack,
   } = useVoiceRoom();
 
-  // Merge backend participant list with LiveKit speaking state
+  // VoiceRoomContext.js
   const getMergedParticipants = useCallback((topicId) => {
     const key  = topicId || '__general__';
     const info = roomInfoMap[key];
     if (!info?.participants) return [];
-    return info.participants.map(p => ({
-      ...p,
-      isSpeaking: speaking.has(p.userId),
-      livePart:   liveParts.find(lp => lp.identity === p.userId),
-    }));
+
+    return info.participants.map(p => {
+      const livePart = liveParts.find(lp => lp.identity === p.userId);
+      return {
+        ...p,
+        isSpeaking: speaking.has(p.userId),
+        isMuted:    livePart?.isMuted ?? false,
+        hasCamera:  livePart?.hasCamera ?? false,  // 👈 lấy từ LiveKit, không từ backend
+        isLocal:    livePart?.isLocal ?? false,
+        identity:   p.userId, // ParticipantCard cần field này
+        displayName: p.displayName,
+      };
+    });
   }, [roomInfoMap, speaking, liveParts]);
 
   const fetchStatus = useCallback(async (conversationId, topicId = null) => {
