@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { usePresence, formatLastSeen } from "../../../context/PresenceContext";
 import { useNotifications } from "../../../context/NotificationContext";
+import MuteConversationModal from './MuteConversationModal';
 import {
     X,
     MessageCircle,
@@ -47,7 +48,8 @@ export default function RightSidebar({
     const { user } = useAuth();
     const { getConversationSetting, updateConversationSetting } =
         useNotifications();
-
+    // State điều khiển Modal tắt thông báo
+    const [showMuteModal, setShowMuteModal] = useState(false);
     const [members, setMembers] = useState([]);
     const [loadingMembers, setLoadingMembers] = useState(false);
     const [memberError, setMemberError] = useState("");
@@ -83,10 +85,10 @@ export default function RightSidebar({
 
     const presStatus = conversation?.otherUserId
         ? getPresenceStatus(conversation.otherUserId) ||
-          (isOnline ? "online" : null)
+        (isOnline ? "online" : null)
         : isOnline
-          ? conversation?.status || "online"
-          : null;
+            ? conversation?.status || "online"
+            : null;
 
     const myMember = useMemo(
         () => members.find((m) => (m.user?._id || "").toString() === myUserId),
@@ -116,7 +118,7 @@ export default function RightSidebar({
         } catch (error) {
             setMemberError(
                 error.response?.data?.message ||
-                    "Không thể tải danh sách thành viên",
+                "Không thể tải danh sách thành viên",
             );
             setMembers([]);
         } finally {
@@ -283,7 +285,7 @@ export default function RightSidebar({
         } catch (error) {
             window.alert(
                 error.response?.data?.message ||
-                    "Không thể cập nhật thành viên",
+                "Không thể cập nhật thành viên",
             );
         } finally {
             setBusyAction("");
@@ -415,7 +417,7 @@ export default function RightSidebar({
         } catch (error) {
             window.alert(
                 error?.response?.data?.message ||
-                    "Không thể cập nhật cài đặt thông báo",
+                "Không thể cập nhật cài đặt thông báo",
             );
         } finally {
             setNotifBusy(false);
@@ -821,7 +823,7 @@ export default function RightSidebar({
                                                                         fontWeight: 700,
                                                                         opacity:
                                                                             busyAction ===
-                                                                            `kick-${uid}`
+                                                                                `kick-${uid}`
                                                                                 ? 0.6
                                                                                 : 1,
                                                                     }}
@@ -836,7 +838,7 @@ export default function RightSidebar({
                                                             {isOwner &&
                                                                 !isSelf &&
                                                                 m.role !==
-                                                                    "owner" && (
+                                                                "owner" && (
                                                                     <button
                                                                         onClick={() =>
                                                                             handleTransferOwner(
@@ -860,7 +862,7 @@ export default function RightSidebar({
                                                                             fontWeight: 700,
                                                                             opacity:
                                                                                 busyAction ===
-                                                                                `transfer-${uid}`
+                                                                                    `transfer-${uid}`
                                                                                     ? 0.6
                                                                                     : 1,
                                                                         }}
@@ -1065,7 +1067,7 @@ export default function RightSidebar({
                                                                             fontWeight: 700,
                                                                             opacity:
                                                                                 busyAction ===
-                                                                                `edit-${uid}`
+                                                                                    `edit-${uid}`
                                                                                     ? 0.6
                                                                                     : 1,
                                                                         }}
@@ -1161,7 +1163,7 @@ export default function RightSidebar({
                                                 onClick={handleAddMembers}
                                                 disabled={
                                                     selectedAddIds.length ===
-                                                        0 ||
+                                                    0 ||
                                                     busyAction === "add-members"
                                                 }
                                                 style={{
@@ -1177,7 +1179,7 @@ export default function RightSidebar({
                                                     opacity:
                                                         selectedAddIds.length ===
                                                             0 ||
-                                                        busyAction ===
+                                                            busyAction ===
                                                             "add-members"
                                                             ? 0.6
                                                             : 1,
@@ -1204,7 +1206,7 @@ export default function RightSidebar({
                                     icon={<MessageCircle size={15} />}
                                     label="Nhắn tin"
                                     variant="primary"
-                                    onClick={() => {}}
+                                    onClick={() => { }}
                                 />
                                 {conversation.type === "dm" &&
                                     onViewProfile && (
@@ -1238,12 +1240,16 @@ export default function RightSidebar({
                                 />
                                 <ActionButton
                                     icon={<BellOff size={15} />}
-                                    label={
-                                        notifSetting?.isMuted
-                                            ? "Bật thông báo"
-                                            : "Tắt thông báo"
-                                    }
-                                    onClick={handleToggleMuteConversation}
+                                    label={notifSetting?.isMuted ? "Bật thông báo" : "Tắt thông báo"}
+                                    onClick={() => {
+                                        if (notifSetting?.isMuted) {
+                                            // Đang tắt -> Bấm để mở lại (gọi hàm cũ của bạn)
+                                            handleToggleMuteConversation();
+                                        } else {
+                                            // Đang mở -> Bấm để hiện Popup chọn thời gian
+                                            setShowMuteModal(true);
+                                        }
+                                    }}
                                     disabled={notifBusy}
                                 />
 
@@ -1583,6 +1589,16 @@ export default function RightSidebar({
                     )}
                 </div>
             </div>
+            {/* Gọi Modal Tắt thông báo */}
+            <MuteConversationModal
+                isOpen={showMuteModal}
+                onClose={() => setShowMuteModal(false)}
+                conversationId={conversation?.id}
+                onSuccess={() => {
+                    // Cập nhật lại state của Sidebar khi API gọi thành công
+                    setNotifSetting(prev => ({ ...prev, isMuted: true }));
+                }}
+            />
         </div>
     );
 }

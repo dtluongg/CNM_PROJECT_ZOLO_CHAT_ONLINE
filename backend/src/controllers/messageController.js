@@ -15,7 +15,7 @@ const MessageReaction = require('../models/messageReactionModel');
 const MessageRead = require('../models/messageReadModel');
 const { getIO } = require('../socket/socketManager');
 const { notifyNewMessage } = require('../services/notificationService');
-
+const { handleMentionsNotification } = require('../services/notificationService');
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -78,8 +78,8 @@ const sendMessage = async (req, res) => {
         }
 
         await requireMembership(conversationId, userId);
-
-        const { type = 'text', content = '', attachmentId, replyToMessageId, forwardFromMessageId } = req.body;
+        // ---> thêm mentions vào cuối
+        const { type = 'text', content = '', attachmentId, replyToMessageId, forwardFromMessageId, mentions } = req.body;
 
         const ALLOWED_TYPES = ['text', 'voice', 'image', 'file'];
         if (!ALLOWED_TYPES.includes(type)) {
@@ -200,13 +200,23 @@ const sendMessage = async (req, res) => {
         } catch (notifyErr) {
             console.error('notifyNewMessage error:', notifyErr.message);
         }
-
+        // ── BỔ SUNG: XỬ LÝ THÔNG BÁO TAG TÊN (MENTION) ────────────────
+        // Chạy ngầm (không dùng await) để API trả về nhanh chóng
+        if (mentions && Array.isArray(mentions) && mentions.length > 0) {
+            handleMentionsNotification({
+                senderId: userId,
+                conversationId: conversationId,
+                messageId: message._id, // Dùng ID của tin nhắn vừa được create ở trên
+                mentions: mentions
+            });
+        }
         return res.status(201).json({ message: 'Gửi tin nhắn thành công', data: formatted });
     } catch (err) {
         if (err.statusCode) return res.status(err.statusCode).json({ message: err.message });
         console.error('sendMessage error:', err);
         return res.status(500).json({ message: 'Lỗi server khi gửi tin nhắn' });
     }
+
 };
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -526,12 +536,12 @@ const markAsRead = async (req, res) => {
             await ConversationMember.findOneAndUpdate(
                 { conversationId, userId },
                 {
-                  unreadCount: 0,
-                  lastReadMessageId: messageId,
-                  'aiSummary.summary': null,       // Xóa summary vì đã đọc hết
-                  'aiSummary.summarizedAt': null,
-                  'aiSummary.unreadCount': 0,
-                  'aiSummary.fromMessageId': null,
+                    unreadCount: 0,
+                    lastReadMessageId: messageId,
+                    'aiSummary.summary': null,       // Xóa summary vì đã đọc hết
+                    'aiSummary.summarizedAt': null,
+                    'aiSummary.unreadCount': 0,
+                    'aiSummary.fromMessageId': null,
                 }
             );
         }
