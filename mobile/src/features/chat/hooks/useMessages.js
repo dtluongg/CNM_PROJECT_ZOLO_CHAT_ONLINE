@@ -159,20 +159,7 @@ const useMessages = (conversationId, currentUserId, topicId = null) => {
   const applyEdit = useCallback((messageId, newContent) => {
     setMessages((prev) =>
       prev.map((m) =>
-        (m._id || m.id)?.toString() === messageId?.toString()
-          ? { ...m, content: newContent, edited: true }
-          : m
-      )
-    );
-  }, []);
-
-  // Cập nhật Poll (bình chọn)
-  const updatePoll = useCallback((updatedMsg) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        (m._id || m.id)?.toString() === updatedMsg._id?.toString()
-          ? { ...m, ...normalizeMsg(updatedMsg) }
-          : m
+        m._id?.toString() === messageId ? { ...m, content: newContent, edited: true } : m
       )
     );
   }, []);
@@ -192,7 +179,6 @@ const useMessages = (conversationId, currentUserId, topicId = null) => {
     removeTempMessage,
     markBlocked,
     applyEdit,
-    updatePoll,
   };
 };
 

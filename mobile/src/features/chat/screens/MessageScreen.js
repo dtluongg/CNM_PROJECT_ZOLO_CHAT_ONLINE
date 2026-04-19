@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  Keyboard, Alert, StatusBar, Platform,
+  Keyboard, Alert, StatusBar, Platform, Modal, Pressable,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../context/AuthContext';
@@ -26,7 +26,6 @@ import SystemMessageBubble from '../components/SystemMessageBubble';
 import UnreadDivider from '../components/UnreadDivider';
 import AiSummaryCard from '../components/AiSummaryCard';
 import PinnedBar from '../components/PinnedBar';
-import CreatePollModal from '../components/CreatePollModal';
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import useMessages from '../hooks/useMessages';
 import useSocket from '../hooks/useSocket';
@@ -58,7 +57,6 @@ export default function MessageScreen({ route, navigation }) {
   const currentUserId = user?._id?.toString() || null;
 
   // ── State UI ────────────────────────────────────────────────────────────
-  const [activeTopic, setActiveTopic] = useState(null);
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -67,7 +65,6 @@ export default function MessageScreen({ route, navigation }) {
   const [replyingMessage, setReplyingMessage] = useState(null);
   const [reactionTypes, setReactionTypes] = useState([]);
   const [pinnedMessages, setPinnedMessages] = useState(conversation.pinnedMessages || []);
-  const [showPollModal, setShowPollModal] = useState(false);
 
   useEffect(() => {
     setPinnedMessages(conversation.pinnedMessages || []);
@@ -80,6 +77,11 @@ export default function MessageScreen({ route, navigation }) {
   const [currentReadByList, setCurrentReadByList] = useState([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [forwardingMsg, setForwardingMsg] = useState(null);
+
+  // State topics / channels (group only)
+  const [topics, setTopics] = useState([]);
+  const [activeTopic, setActiveTopic] = useState(null);
+  const [showChannelSheet, setShowChannelSheet] = useState(false);
 
   // State info panel (modal 3 chấm)
   const [showInfoPanel, setShowInfoPanel] = useState(false);
@@ -104,6 +106,36 @@ export default function MessageScreen({ route, navigation }) {
     aiSummary: conversation.aiSummary || null,
   });
 
+  // ── Load topics cho group conversation ─────────────────────────────────
+  useEffect(() => {
+    if (conversation.type !== 'group') return;
+    conversationApi.listTopics(conversation.id)
+      .then(res => {
+        const list = res.data?.topics || res.data?.data || [];
+
+        setTopics(list);
+        // Tự chọn kênh text đầu tiên nếu có
+        const firstText = list.find(t => !t.channelType || t.channelType === 'text');
+        if (firstText) setActiveTopic(firstText);
+      })
+      .catch(() => setTopics([]));
+  }, [conversation.id, conversation.type]);
+  useEffect(() => {
+    if (conversation.type !== 'group') return;
+    conversationApi.listTopics(conversation.id)
+      .then(res => {
+        const list = res.data?.topics || res.data?.data || [];
+        console.log('Topics loaded:', list.length, list); // 👈 xem có data không
+        setTopics(list);
+        const firstText = list.find(t => !t.channelType || t.channelType === 'text');
+        if (firstText) setActiveTopic(firstText);
+      })
+      .catch((err) => {
+        console.log('Topics error:', err); // 👈 xem lỗi gì
+        setTopics([]);
+      });
+  }, [conversation.id, conversation.type]);
+
   // ── Hooks quản lý tin nhắn ──────────────────────────────────────────────
   const msgHook = useMessages(conversation.id, currentUserId, activeTopic?._id || null);
 
@@ -113,7 +145,7 @@ export default function MessageScreen({ route, navigation }) {
       msgHook.addMessage(msg);
       setReplyingMessage(null);
       setEditingMessage(null);
-    });
+    }, activeTopic?._id || null);
 
   // ── Hook xử lý file ─────────────────────────────────────────────────────
   const { pickAndSendImage, pickAndSendFile, openFile } = useFileHandler(
@@ -122,7 +154,8 @@ export default function MessageScreen({ route, navigation }) {
       msgHook.addMessage(msg);
       setReplyingMessage(null);
       setEditingMessage(null);
-    }
+    },
+    activeTopic?._id || null
   );
 
   // ── Hook socket ─────────────────────────────────────────────────────────
@@ -136,7 +169,6 @@ export default function MessageScreen({ route, navigation }) {
     onRead: (data) => msgHook.markRead(data),
     onDeletedForMe: (messageId) => msgHook.deleteMessage(messageId),
     onPinnedMessagesChange: (newPins) => setPinnedMessages(newPins),
-    onUpdatePoll: (updatedMsg) => msgHook.updatePoll(updatedMsg),
   });
 
   // ── Setup khi mount ─────────────────────────────────────────────────────
@@ -237,6 +269,28 @@ export default function MessageScreen({ route, navigation }) {
   useEffect(() => {
     fetchBlockStatus();
   }, [fetchBlockStatus]);
+
+  // ── Rời nhóm ────────────────────────────────────────────────────────────
+  const handleLeaveGroup = async () => {
+    try {
+      await conversationApi.leaveConversation(conversation.id);
+      setShowInfoPanel(false);
+      navigation.goBack();
+    } catch (err) {
+      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể rời nhóm.');
+    }
+  };
+
+  // ── Giải tán nhóm ───────────────────────────────────────────────────────
+  const handleDisbandGroup = async () => {
+    try {
+      await conversationApi.disbandConversation(conversation.id);
+      setShowInfoPanel(false);
+      navigation.goBack();
+    } catch (err) {
+      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể giải tán nhóm.');
+    }
+  };
 
   // ── Chặn / bỏ chặn người dùng ──────────────────────────────────────────
   const handleBlockUser = async () => {
@@ -340,24 +394,6 @@ export default function MessageScreen({ route, navigation }) {
     setReplyingMessage(msg);
     setEditingMessage(null);
     setTimeout(() => inputRef.current?.focus(), 100);
-  };
-
-  // ── Bình chọn (Poll) ──────────────────────────────────────────────────
-  const handleCreatePoll = async ({ topic, options, multipleChoice }) => {
-    try {
-      await messageApi.createPoll(conversation.id, { topic, options, multipleChoice });
-    } catch (err) {
-      console.error('handleCreatePoll error:', err);
-      Alert.alert('Lỗi', 'Không thể tạo bình chọn');
-    }
-  };
-
-  const handlePollVote = async (messageId, voteData) => {
-    try {
-      await messageApi.votePoll(messageId, voteData);
-    } catch (err) {
-      console.error('handlePollVote error:', err);
-    }
   };
 
   // ── React emoji ─────────────────────────────────────────────────────────
@@ -595,9 +631,7 @@ export default function MessageScreen({ route, navigation }) {
         {/* Tên + trạng thái */}
         <View style={{ flex: 1 }}>
           <Text style={styles.headerName} numberOfLines={1}>
-            {conversation.type === 'group'
-              ? (activeTopic ? `${activeTopic.channelType === 'voice' ? '🔊' : '#'}${activeTopic.name} · ${conversation.name}` : `# chung · ${conversation.name}`)
-              : conversation.name}
+            {conversation.type === 'group' ? `# ${conversation.name}` : conversation.name}
           </Text>
           <Text style={[styles.headerStatus, { color: isOnline ? THEME.statusOnline : THEME.textMuted }]}>
             {statusText}
@@ -633,22 +667,28 @@ export default function MessageScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* ── Channel bar (group only) ───────────────────────────────────── */}
-      {conversation.type === 'group' && (
+      {/* ── Channel bar (group only) ──────────────────────────────────────── */}
+      {conversation.type === 'group' && topics.length > 0 && (
         <TouchableOpacity
-          onPress={() => { setInfoTab('channels'); setShowInfoPanel(true); }}
+          onPress={() => setShowChannelSheet(true)}
           style={{
-            flexDirection: 'row', alignItems: 'center', gap: 6,
-            paddingHorizontal: 14, paddingVertical: 6,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingVertical: 7,
             backgroundColor: THEME.bgSecondary,
-            borderBottomWidth: 1, borderBottomColor: THEME.border,
+            borderBottomWidth: 1,
+            borderBottomColor: THEME.border,
+            gap: 6,
           }}
         >
-          <Text style={{ fontSize: 13, color: THEME.accent }}>
-            {activeTopic?.channelType === 'voice' ? '🔊' : activeTopic?.channelType === 'system' ? '📋' : '#'}
-          </Text>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: THEME.accent, flex: 1 }}>
-            {activeTopic ? activeTopic.name : 'chung'}
+          <Feather
+            name={activeTopic?.channelType === 'voice' ? 'volume-2' : 'hash'}
+            size={14}
+            color={THEME.accent}
+          />
+          <Text style={{ fontSize: 13, fontWeight: '700', color: THEME.textPrimary, flex: 1 }}>
+            {activeTopic?.name || 'chung'}
           </Text>
           <Feather name="chevron-down" size={14} color={THEME.textMuted} />
         </TouchableOpacity>
@@ -781,7 +821,6 @@ export default function MessageScreen({ route, navigation }) {
                 onPin={handlePin}
                 onUnpin={handleUnpin}
                 isPinned={pinnedMessages.some(p => (p.messageId?._id || p.messageId?.id || p.messageId)?.toString() === (item.msg?._id || item.msg?.id)?.toString())}
-                onVote={(optId) => handlePollVote(item.msg?._id || item.msg?.id, optId)}
               />
             );
           }}
@@ -876,7 +915,6 @@ export default function MessageScreen({ route, navigation }) {
             ) : (
               <InputBar
                 text={text}
-                isGroup={conversation.type === 'group'}
                 onChangeText={(v) => {
                   setText(v);
                   if (v.trim()) emitTyping();
@@ -885,8 +923,7 @@ export default function MessageScreen({ route, navigation }) {
                 onPickFile={() => pickAndSendFile(replyingMessage?._id || replyingMessage?.id)}
                 onPickImage={() => pickAndSendImage(replyingMessage?._id || replyingMessage?.id)}
                 onStartRecord={startRecording}
-                onToggleEmoji={() => setShowEmoji(!showEmoji)}
-                onPickPoll={() => setShowPollModal(true)}
+                onToggleEmoji={() => setShowEmoji((v) => !v)}
                 inputRef={inputRef}
                 placeholder={`Nhắn tin ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
                 THEME={THEME}
@@ -896,12 +933,6 @@ export default function MessageScreen({ route, navigation }) {
               />
             )
           )}
-          <CreatePollModal
-            visible={showPollModal}
-            onClose={() => setShowPollModal(false)}
-            onCreate={handleCreatePoll}
-            THEME={THEME}
-          />
         </View>
       </View>
 
@@ -925,8 +956,8 @@ export default function MessageScreen({ route, navigation }) {
         onImagePress={(url) => { setShowInfoPanel(false); setTimeout(() => setPreviewImage(url), 300); }}
         onFilePress={openFile}
         onViewProfile={() => { setShowInfoPanel(false); navigation.push('UserProfile', { userId: conversation.otherUserId }); }}
-        activeTopic={activeTopic}
-        onTopicSelect={(topic) => { setActiveTopic(topic); }}
+        onLeaveGroup={handleLeaveGroup}
+        onDisbandGroup={handleDisbandGroup}
         THEME={THEME}
         styles={styles}
       />
@@ -976,6 +1007,101 @@ export default function MessageScreen({ route, navigation }) {
         onDownload={openFile}
         THEME={THEME}
       />
+
+      {/* ── Channel picker sheet ──────────────────────────────────────────── */}
+      <Modal
+        visible={showChannelSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowChannelSheet(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          onPress={() => setShowChannelSheet(false)}
+        >
+          <View
+            style={{ backgroundColor: THEME.bgSecondary, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 32 }}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={{ width: 40, height: 4, backgroundColor: THEME.border, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 12 }} />
+            <Text style={{ fontSize: 15, fontWeight: '800', color: THEME.textPrimary, paddingHorizontal: 20, marginBottom: 10 }}>
+              Chọn kênh
+            </Text>
+            {topics.map(topic => {
+              const isActive = activeTopic?._id === topic._id;
+              const isVoice = topic.channelType === 'voice';
+              return (
+                <TouchableOpacity
+                  key={topic._id}
+                  onPress={() => {
+                    if (!isVoice) {
+                      setActiveTopic(topic);
+                      setShowChannelSheet(false);
+                    }
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 20,
+                    paddingVertical: 12,
+                    backgroundColor: isActive ? THEME.accent + '18' : 'transparent',
+                    gap: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 17,
+                      backgroundColor: isVoice ? '#22c55e18' : THEME.accent + '18',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Feather
+                      name={isVoice ? 'volume-2' : 'hash'}
+                      size={16}
+                      color={isVoice ? '#22c55e' : THEME.accent}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: isActive ? '700' : '500', color: THEME.textPrimary }}>
+                      {topic.name}
+                    </Text>
+                    {isVoice && (
+                      <Text style={{ fontSize: 11, color: '#22c55e', marginTop: 1 }}>Kênh thoại</Text>
+                    )}
+                  </View>
+                  {isActive && <Feather name="check" size={16} color={THEME.accent} />}
+                </TouchableOpacity>
+              );
+            })}
+            {/* Option for no topic (general) */}
+            <TouchableOpacity
+              onPress={() => { setActiveTopic(null); setShowChannelSheet(false); }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 20,
+                paddingVertical: 12,
+                backgroundColor: !activeTopic ? THEME.accent + '18' : 'transparent',
+                gap: 12,
+                marginTop: 4,
+                borderTopWidth: 1,
+                borderTopColor: THEME.border,
+              }}
+            >
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: THEME.bgPrimary, justifyContent: 'center', alignItems: 'center' }}>
+                <Feather name="message-square" size={16} color={THEME.textMuted} />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: !activeTopic ? '700' : '500', color: THEME.textPrimary }}>
+                Tất cả tin nhắn
+              </Text>
+              {!activeTopic && <Feather name="check" size={16} color={THEME.accent} />}
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

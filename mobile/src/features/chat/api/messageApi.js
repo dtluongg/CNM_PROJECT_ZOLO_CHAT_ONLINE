@@ -17,7 +17,7 @@ const rnUploadConfig = Platform.OS !== 'web'
   : {};
 
 const messageApi = {
-  getMessages: (conversationId, { before, limit = 30, topicId = null } = {}) => {
+  getMessages: (conversationId, { before, limit = 30, topicId } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (before) params.set('before', before);
     if (topicId) params.set('topicId', topicId);
@@ -29,18 +29,18 @@ const messageApi = {
       type: 'text',
       content,
       replyToMessageId,
-      ...(topicId ? { topicId } : {}),
+      topicId,
     }),
 
   // GỬI TIN NHẮN MEDIA (CÓ TRẢ LỜI)
-  sendVoice: (conversationId, attachmentId, replyToMessageId = null) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'voice', attachmentId, replyToMessageId }),
+  sendVoice: (conversationId, attachmentId, replyToMessageId = null, topicId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'voice', attachmentId, replyToMessageId, topicId }),
 
-  sendImage: (conversationId, attachmentId, replyToMessageId = null) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'image', attachmentId, replyToMessageId }),
+  sendImage: (conversationId, attachmentId, replyToMessageId = null, topicId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'image', attachmentId, replyToMessageId, topicId }),
 
-  sendFile: (conversationId, attachmentId, replyToMessageId = null) =>
-    apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId, replyToMessageId }),
+  sendFile: (conversationId, attachmentId, replyToMessageId = null, topicId = null) =>
+    apiClient.post(`/messages/${conversationId}`, { type: 'file', attachmentId, replyToMessageId, topicId }),
 
   uploadVoice: (formData) => apiClient.post('/voice/upload', formData, rnUploadConfig),
   uploadFile: (formData) => apiClient.post('/uploads/file', formData, rnUploadConfig),
@@ -85,13 +85,6 @@ const messageApi = {
 
   unpinMessage: (conversationId, messageId) =>
     apiClient.post(`/conversations/${conversationId}/unpin/${messageId}`),
-
-  // ── Bình chọn (Poll) ────────────────────────────────────────────────
-  createPoll: (conversationId, { topic, options, multipleChoice }) =>
-    apiClient.post(`/messages/${conversationId}/poll`, { topic, options, multipleChoice }),
-
-  votePoll: (messageId, { optionId, optionIds, newOptions, votedNewOptions } = {}) =>
-    apiClient.patch(`/messages/poll/${messageId}/vote`, { optionId, optionIds, newOptions, votedNewOptions }),
 };
 
 export default messageApi;

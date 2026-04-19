@@ -7,29 +7,9 @@ import { Feather } from '@expo/vector-icons';
 import Avatar from './Avatar';
 import CallHistoryTab from '../../call/components/CallHistoryTab';
 import conversationApi from '../api/conversationApi';
+import { useAuth } from '../../../context/AuthContext';
+import { getAvatarColor, getInitials } from '../../../theme';
 
-/**
- * Panel thông tin cuộc trò chuyện (mở bằng nút 3 chấm trên header).
- * Gồm 3 tab: Thông tin, Ảnh đã chia sẻ, File đã chia sẻ.
- * Hỗ trợ chặn / bỏ chặn người dùng trong chat đơn.
- *
- * @param {boolean}  visible         - Có hiển thị không
- * @param {function} onClose         - Callback đóng panel
- * @param {string}   infoTab         - Tab đang chọn: 'info' | 'media' | 'files'
- * @param {function} onTabChange     - Callback khi đổi tab
- * @param {object}   conversation    - Thông tin cuộc hội thoại
- * @param {boolean}  isOnline        - Trạng thái online của người kia
- * @param {object}   mediaData       - { images: [], files: [] }
- * @param {boolean}  loadingMedia    - Đang tải media hay không
- * @param {object}   blockStatus     - { iBlocked, theyBlockedMe }
- * @param {boolean}  blockConfirm    - Đang hiển thị xác nhận chặn
- * @param {function} onBlockConfirm  - Callback mở/đóng confirm chặn
- * @param {boolean}  blockBusy       - Đang xử lý API chặn
- * @param {function} onBlockUser     - Callback thực hiện chặn / bỏ chặn
- * @param {function} onImagePress    - Callback xem ảnh toàn màn hình
- * @param {function} onFilePress     - Callback tải file
- * @param {function} onViewProfile   - Callback xem hồ sơ người dùng
- */
 const InfoPanel = ({
   visible,
   onClose,
@@ -47,32 +27,126 @@ const InfoPanel = ({
   onImagePress,
   onFilePress,
   onViewProfile,
-  activeTopic,
-  onTopicSelect,
+  onLeaveGroup,
+  onDisbandGroup,
   THEME,
   styles,
 }) => {
-  const [topics, setTopics] = useState([]);
-  const [loadingTopics, setLoadingTopics] = useState(false);
+  const { user: currentUser } = useAuth();
+  const myUserId = currentUser?._id || currentUser?.id;
 
-  useEffect(() => {
-    if (!visible || infoTab !== 'channels' || !conversation?.id || conversation?.type !== 'group') return;
-    let cancelled = false;
-    setLoadingTopics(true);
-    conversationApi.listTopics(conversation.id)
-      .then(res => { if (!cancelled) setTopics(Array.isArray(res?.data?.data) ? res.data.data : []); })
-      .catch(() => { if (!cancelled) setTopics([]); })
-      .finally(() => { if (!cancelled) setLoadingTopics(false); });
-    return () => { cancelled = true; };
-  }, [visible, infoTab, conversation?.id]);
+  const [members, setMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [memberBusy, setMemberBusy] = useState(null); // userId being acted on
+
+  const isGroup = conversation?.type === 'group';
 
   const tabs = [
-    { key: 'info',     label: 'Thông tin' },
-    ...(conversation?.type === 'group' ? [{ key: 'channels', label: 'Kênh' }] : []),
-    { key: 'media',    label: 'Ảnh' },
-    { key: 'files',    label: 'File' },
+    { key: 'info',  label: 'Thông tin' },
+    { key: 'media', label: 'Ảnh' },
+    { key: 'files', label: 'File' },
     ...(conversation?.type === 'dm' ? [{ key: 'calls', label: 'Cuộc gọi' }] : []),
+    ...(isGroup ? [{ key: 'members', label: 'Thành viên' }] : []),
   ];
+
+    // Sửa loadMembers
+    const loadMembers = useCallback(async () => {
+      if (!conversation?._id && !conversation?.id) return;
+      setLoadingMembers(true);
+      try {
+        const convId = conversation._id || conversation.id;
+        const res = await conversationApi.getConversationMembers(convId);
+        const raw = res.data?.data || res.data?.members || res.data || [];
+        setMembers(Array.isArray(raw) ? raw : []);
+      } catch (e) {
+        console.warn('loadMembers error', e);
+        setMembers([]);
+      } finally {
+        setLoadingMembers(false);
+      }
+    }, [conversation?._id, conversation?.id]);
+
+  useEffect(() => {
+    if (visible && infoTab === 'members' && isGroup) {
+      loadMembers();
+    }
+  }, [visible, infoTab, isGroup, loadMembers]);
+
+  const myMember = members.find(m => (m.user?._id || m.user) === myUserId);
+  const myRole = myMember?.role || 'member';
+  const isOwner = myRole === 'owner';
+  const isAdmin = myRole === 'admin' || isOwner;
+
+  const handleKick = (member) => {
+    const name = member.user?.displayName || member.user?.username || 'thành viên';
+    Alert.alert('Xoá thành viên', `Bạn có chắc muốn xoá ${name} khỏi nhóm?`, [
+      { text: 'Huỷ', style: 'cancel' },
+      {
+        text: 'Xoá',
+        style: 'destructive',
+        onPress: async () => {
+          const targetId = member.user?._id;
+          const convId = conversation._id || conversation.id;
+          setMemberBusy(targetId);
+          try {
+            await conversationApi.kickConversationMember(convId, targetId);
+            setMembers(prev => prev.filter(m => (m.userId?._id || m.userId) !== targetId));
+          } catch (e) {
+            Alert.alert('Lỗi', 'Không thể xoá thành viên. Thử lại sau.');
+          } finally {
+            setMemberBusy(null);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleToggleAdmin = (member) => {
+    const targetId = member.user?._id;
+    const name = member.user?.displayName || member.user?.username || 'thành viên';
+    const newRole = member.role === 'admin' ? 'member' : 'admin';
+    const action = newRole === 'admin' ? `Thêm ${name} làm quản trị?` : `Gỡ quyền admin của ${name}?`;
+    Alert.alert('Cập nhật quyền', action, [
+      { text: 'Huỷ', style: 'cancel' },
+      {
+        text: 'Xác nhận',
+        onPress: async () => {
+          const convId = conversation._id || conversation.id;
+          setMemberBusy(targetId);
+          try {
+            await conversationApi.updateConversationMember(convId, targetId, { role: newRole });
+            setMembers(prev => prev.map(m =>
+              (m.userId?._id || m.userId) === targetId ? { ...m, role: newRole } : m
+            ));
+          } catch (e) {
+            Alert.alert('Lỗi', 'Không thể cập nhật quyền. Thử lại sau.');
+          } finally {
+            setMemberBusy(null);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleLeave = () => {
+    Alert.alert('Rời nhóm', 'Bạn có chắc muốn rời khỏi nhóm này?', [
+      { text: 'Huỷ', style: 'cancel' },
+      { text: 'Rời nhóm', style: 'destructive', onPress: () => onLeaveGroup?.() },
+    ]);
+  };
+
+  const handleDisband = () => {
+    Alert.alert('Giải tán nhóm', 'Hành động này không thể hoàn tác. Xác nhận giải tán nhóm?', [
+      { text: 'Huỷ', style: 'cancel' },
+      { text: 'Giải tán', style: 'destructive', onPress: () => onDisbandGroup?.() },
+    ]);
+  };
+
+  const getRoleLabel = (role) => {
+    if (role === 'owner') return { label: '👑', color: '#f59e0b' };
+    if (role === 'admin') return { label: '⭐', color: '#3b82f6' };
+    return { label: '👤', color: '#6b7280' };
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -99,6 +173,11 @@ const InfoPanel = ({
             {conversation.type === 'dm' && (
               <Text style={{ fontSize: 12, color: isOnline ? THEME.statusOnline : THEME.textMuted, marginTop: 2 }}>
                 {isOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}
+              </Text>
+            )}
+            {isGroup && (
+              <Text style={{ fontSize: 12, color: THEME.textMuted, marginTop: 2 }}>
+                {members.length > 0 ? `${members.length} thành viên` : 'Nhóm chat'}
               </Text>
             )}
           </View>
@@ -128,7 +207,7 @@ const InfoPanel = ({
               >
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: infoTab === t.key ? '700' : '500',
                     color: infoTab === t.key ? THEME.textPrimary : THEME.textMuted,
                   }}
@@ -140,10 +219,10 @@ const InfoPanel = ({
           </View>
 
           <ScrollView
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ flexGrow: 1 }}
-                  showsVerticalScrollIndicator={false}
-                >
+            style={{ flex: 1 }}
+            contentContainerStyle={{ flexGrow: 1 }}
+            showsVerticalScrollIndicator={false}
+          >
 
             {/* ── Tab Thông tin ── */}
             {infoTab === 'info' && (
@@ -193,7 +272,6 @@ const InfoPanel = ({
                 {conversation.type === 'dm' && conversation.otherUserId && (
                   <>
                     {blockStatus?.iBlocked ? (
-                      // Đã chặn → nút bỏ chặn
                       <TouchableOpacity
                         onPress={onBlockUser}
                         disabled={blockBusy}
@@ -215,7 +293,6 @@ const InfoPanel = ({
                         </Text>
                       </TouchableOpacity>
                     ) : !blockConfirm ? (
-                      // Chưa chặn → nút chặn
                       <TouchableOpacity
                         onPress={() => onBlockConfirm(true)}
                         style={{
@@ -235,7 +312,6 @@ const InfoPanel = ({
                         </Text>
                       </TouchableOpacity>
                     ) : (
-                      // Xác nhận chặn
                       <View
                         style={{
                           backgroundColor: 'rgba(237,66,69,0.12)',
@@ -284,6 +360,52 @@ const InfoPanel = ({
                       </View>
                     )}
                   </>
+                )}
+
+                {/* Rời nhóm / giải tán (chỉ group) */}
+                {isGroup && (
+                  <View style={{ marginTop: 4, gap: 10 }}>
+                    {!isOwner && (
+                      <TouchableOpacity
+                        onPress={handleLeave}
+                        style={{
+                          backgroundColor: 'rgba(237,66,69,0.12)',
+                          borderRadius: 12,
+                          padding: 14,
+                          alignItems: 'center',
+                          flexDirection: 'row',
+                          gap: 10,
+                          borderWidth: 1,
+                          borderColor: 'rgba(237,66,69,0.3)',
+                        }}
+                      >
+                        <Feather name="log-out" size={18} color="#ed4245" />
+                        <Text style={{ color: '#ed4245', fontWeight: '700', fontSize: 15 }}>
+                          Rời nhóm
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {isOwner && (
+                      <TouchableOpacity
+                        onPress={handleDisband}
+                        style={{
+                          backgroundColor: 'rgba(237,66,69,0.12)',
+                          borderRadius: 12,
+                          padding: 14,
+                          alignItems: 'center',
+                          flexDirection: 'row',
+                          gap: 10,
+                          borderWidth: 1,
+                          borderColor: 'rgba(237,66,69,0.3)',
+                        }}
+                      >
+                        <Feather name="trash-2" size={18} color="#ed4245" />
+                        <Text style={{ color: '#ed4245', fontWeight: '700', fontSize: 15 }}>
+                          Giải tán nhóm
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 )}
               </View>
             )}
@@ -364,7 +486,6 @@ const InfoPanel = ({
                         borderColor: THEME.border,
                       }}
                     >
-                      {/* Icon loại file */}
                       <View
                         style={{
                           width: 40,
@@ -389,8 +510,6 @@ const InfoPanel = ({
                           color={THEME.accent}
                         />
                       </View>
-
-                      {/* Tên file + dung lượng */}
                       <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
                         <Text
                           style={{ fontSize: 13, fontWeight: '600', color: THEME.textPrimary }}
@@ -402,8 +521,6 @@ const InfoPanel = ({
                           {file.fileSize ? `${(file.fileSize / 1024).toFixed(0)} KB` : ''} · Nhấn để tải
                         </Text>
                       </View>
-
-                      {/* Nút download */}
                       <View
                         style={{
                           width: 32,
@@ -420,98 +537,152 @@ const InfoPanel = ({
                   ))}
               </View>
             )}
-            {/* ── Tab Kênh ── */}
-            {infoTab === 'channels' && conversation?.type === 'group' && (
+
+            {/* ── Tab Cuộc gọi ── */}
+            {infoTab === 'calls' && conversation?.type === 'dm' && (
               <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
-                {/* #chung */}
-                <TouchableOpacity
-                  onPress={() => { onTopicSelect && onTopicSelect(null); onClose(); }}
-                  style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 10,
-                    paddingVertical: 12, paddingHorizontal: 12,
-                    borderRadius: 10, marginBottom: 4,
-                    backgroundColor: !activeTopic ? THEME.accent + '22' : THEME.bgPrimary,
-                    borderWidth: 1,
-                    borderColor: !activeTopic ? THEME.accent : THEME.border,
-                  }}
-                >
-                  <Text style={{ fontSize: 16, color: !activeTopic ? THEME.accent : THEME.textMuted }}>#</Text>
-                  <Text style={{ fontSize: 14, fontWeight: !activeTopic ? '700' : '500', color: !activeTopic ? THEME.accent : THEME.textPrimary }}>
-                    chung
-                  </Text>
-                  {!activeTopic && <Text style={{ marginLeft: 'auto', fontSize: 11, color: THEME.accent }}>● đang xem</Text>}
-                </TouchableOpacity>
-
-                {loadingTopics && (
-                  <View style={{ alignItems: 'center', padding: 16 }}>
-                    <ActivityIndicator color={THEME.accent} />
-                    <Text style={{ color: THEME.textMuted, fontSize: 13, marginTop: 8 }}>Đang tải kênh...</Text>
-                  </View>
-                )}
-
-                {!loadingTopics && topics.length === 0 && (
-                  <Text style={{ color: THEME.textMuted, fontSize: 13, padding: 12, fontStyle: 'italic' }}>
-                    Chưa có kênh nào.
-                  </Text>
-                )}
-
-                {!loadingTopics && (() => {
-                  const grouped = topics.reduce((acc, t) => {
-                    const cat = t.categoryName || '';
-                    if (!acc[cat]) acc[cat] = [];
-                    acc[cat].push(t);
-                    return acc;
-                  }, {});
-                  return Object.entries(grouped).map(([cat, catTopics]) => (
-                    <View key={cat} style={{ marginTop: cat ? 12 : 0 }}>
-                      {!!cat && (
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: THEME.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4, marginLeft: 4 }}>
-                          {cat}
-                        </Text>
-                      )}
-                      {catTopics.map(topic => {
-                        const isActive = activeTopic?._id === topic._id;
-                        const icon = topic.channelType === 'voice' ? '🔊' : topic.channelType === 'system' ? '📋' : '#';
-                        return (
-                          <TouchableOpacity
-                            key={topic._id}
-                            onPress={() => { if (!topic.isLocked) { onTopicSelect && onTopicSelect(topic); onClose(); } }}
-                            disabled={!!topic.isLocked}
-                            style={{
-                              flexDirection: 'row', alignItems: 'center', gap: 10,
-                              paddingVertical: 11, paddingHorizontal: 12,
-                              borderRadius: 10, marginBottom: 4,
-                              backgroundColor: isActive ? THEME.accent + '22' : THEME.bgPrimary,
-                              borderWidth: 1,
-                              borderColor: isActive ? THEME.accent : THEME.border,
-                              opacity: topic.isLocked ? 0.5 : 1,
-                            }}
-                          >
-                            <Text style={{ fontSize: 15, color: isActive ? THEME.accent : THEME.textMuted }}>{icon}</Text>
-                            <Text style={{ flex: 1, fontSize: 14, fontWeight: isActive ? '700' : '500', color: isActive ? THEME.accent : THEME.textPrimary }} numberOfLines={1}>
-                              {topic.name}
-                            </Text>
-                            {topic.isLocked && <Text style={{ fontSize: 12, color: THEME.textMuted }}>🔒</Text>}
-                            {isActive && <Text style={{ fontSize: 11, color: THEME.accent }}>● đang xem</Text>}
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  ));
-                })()}
+                <CallHistoryTab
+                  otherUserId={conversation.otherUserId}
+                  otherUserName={conversation.name}
+                  otherUserAvatar={conversation.avatar}
+                />
               </View>
             )}
 
-            {/* ── Tab Cuộc gọi ── */}
-                        {infoTab === 'calls' && conversation?.type === 'dm' && (
-                          <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
-                            <CallHistoryTab
-                              otherUserId={conversation.otherUserId}
-                              otherUserName={conversation.name}
-                              otherUserAvatar={conversation.avatar}
+            {/* ── Tab Thành viên ── */}
+            {infoTab === 'members' && isGroup && (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
+                {loadingMembers ? (
+                  <ActivityIndicator color={THEME.accent} style={{ marginVertical: 24 }} />
+                ) : (
+                  <>
+                    {members.length === 0 && (
+                      <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>
+                        Không có thành viên nào
+                      </Text>
+                    )}
+                    {members.map((member) => {
+                        const uid = member.user?._id || member._id;           // ← user thay vì userId
+                        const uname = member.user?.displayName || member.user?.username || 'Người dùng';
+                        const uavatar = member.user?.avatar;
+                        const role = member.role || 'member';
+                        const roleInfo = getRoleLabel(role);
+                        const isMe = uid === myUserId;
+                        const isBusy = memberBusy === uid;
+                        const canKick = isAdmin && !isMe && role !== 'owner' && (isOwner || role === 'member');
+                        const canToggleAdmin = isOwner && !isMe && role !== 'owner';
+
+                      return (
+                        <View
+                          key={member._id}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            backgroundColor: THEME.bgPrimary,
+                            borderRadius: 10,
+                            marginBottom: 6,
+                          }}
+                        >
+                          {/* Avatar */}
+                          {uavatar ? (
+                            <Image
+                              source={{ uri: uavatar }}
+                              style={{ width: 38, height: 38, borderRadius: 19, marginRight: 10 }}
                             />
+                          ) : (
+                            <View
+                              style={{
+                                width: 38,
+                                height: 38,
+                                borderRadius: 19,
+                                marginRight: 10,
+                                backgroundColor: getAvatarColor(uname),
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>
+                                {getInitials(uname)}
+                              </Text>
+                            </View>
+                          )}
+
+                          {/* Name + role */}
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ fontSize: 14, fontWeight: '600', color: THEME.textPrimary }}>
+                                {uname}
+                              </Text>
+                              {isMe && (
+                                <Text style={{ fontSize: 11, color: THEME.textMuted }}>(bạn)</Text>
+                              )}
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                              <Text style={{ fontSize: 12 }}>{roleInfo.label}</Text>
+                              <Text style={{ fontSize: 11, color: roleInfo.color }}>
+                                {role === 'owner' ? 'Chủ nhóm' : role === 'admin' ? 'Quản trị' : 'Thành viên'}
+                              </Text>
+                            </View>
                           </View>
-                        )}
+
+                          {/* Actions */}
+                          {!isMe && (
+                            <View style={{ flexDirection: 'row', gap: 6 }}>
+                              {canToggleAdmin && (
+                                <TouchableOpacity
+                                  onPress={() => handleToggleAdmin(member)}
+                                  disabled={isBusy}
+                                  style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    backgroundColor: role === 'admin' ? THEME.accent + '25' : THEME.bgHover,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  {isBusy ? (
+                                    <ActivityIndicator size="small" color={THEME.accent} />
+                                  ) : (
+                                    <Feather
+                                      name="shield"
+                                      size={15}
+                                      color={role === 'admin' ? THEME.accent : THEME.textMuted}
+                                    />
+                                  )}
+                                </TouchableOpacity>
+                              )}
+                              {canKick && (
+                                <TouchableOpacity
+                                  onPress={() => handleKick(member)}
+                                  disabled={isBusy}
+                                  style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    backgroundColor: 'rgba(237,66,69,0.12)',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  {isBusy ? (
+                                    <ActivityIndicator size="small" color="#ed4245" />
+                                  ) : (
+                                    <Feather name="user-x" size={15} color="#ed4245" />
+                                  )}
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
+              </View>
+            )}
           </ScrollView>
         </View>
       </Pressable>

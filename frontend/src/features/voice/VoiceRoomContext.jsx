@@ -6,14 +6,16 @@ const VoiceRoomContext = createContext(null);
 
 export function VoiceRoomProvider({ children }) {
   // Room info per topicId (or '__general__' for no-topic rooms)
-  const [roomInfoMap,   setRoomInfoMap]  = useState({});  // topicId → roomInfo
-  const [inRoom,        setInRoom]       = useState(false);
-  const [activeKey,     setActiveKey]    = useState(null); // which room user is currently in
-  const [loading,       setLoading]      = useState(false);
-  const [error,         setError]        = useState(null);
+  const [roomInfoMap,         setRoomInfoMap]         = useState({});
+  const [inRoom,              setInRoom]              = useState(false);
+  const [activeKey,           setActiveKey]           = useState(null);
+  const [activeConversationId, setActiveConversationId] = useState(null);
+  const [loading,             setLoading]             = useState(false);
+  const [error,               setError]               = useState(null);
 
   const {
     connect, disconnect, toggleMute, toggleCamera, toggleScreenShare,
+    getRemoteCameraTrack,
     connected, isMuted, isCameraOff, isScreenSharing,
     speaking, liveParts, localVideoTrack, screenTrack,
   } = useVoiceRoom();
@@ -65,6 +67,7 @@ export function VoiceRoomProvider({ children }) {
       const { token, livekitUrl } = res.data;
       const key  = topicId || '__general__';
       setActiveKey(key);
+      setActiveConversationId(conversationId);
       setInRoom(true);
       await connect({ livekitUrl, token });
       await fetchStatus(conversationId, topicId);
@@ -82,6 +85,7 @@ export function VoiceRoomProvider({ children }) {
       const { token, livekitUrl } = res.data;
       const key  = topicId || '__general__';
       setActiveKey(key);
+      setActiveConversationId(conversationId);
       setInRoom(true);
       await connect({ livekitUrl, token });
       await fetchStatus(conversationId, topicId);
@@ -99,6 +103,7 @@ export function VoiceRoomProvider({ children }) {
       await voiceRoomApi.leave(conversationId, topicId);
       const key = topicId || '__general__';
       setActiveKey(null);
+      setActiveConversationId(null);
       setInRoom(false);
       await fetchStatus(conversationId, topicId);
     } catch (err) {
@@ -115,13 +120,14 @@ export function VoiceRoomProvider({ children }) {
     <VoiceRoomContext.Provider value={{
       // State accessors
       getRoomInfo, getMergedParticipants, isInRoom,
-      inRoom, activeKey, loading, error,
+      inRoom, activeKey, activeConversationId, loading, error,
       // LiveKit state
       connected, isMuted, isCameraOff, isScreenSharing,
       liveParts, localVideoTrack, screenTrack,
       // Actions
       createRoom, joinRoom, leaveRoom,
       toggleMute, toggleCamera, toggleScreenShare,
+      getRemoteCameraTrack,
       fetchStatus, fetchStatusBatch,
     }}>
       {children}

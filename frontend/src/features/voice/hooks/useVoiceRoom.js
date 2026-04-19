@@ -2,10 +2,9 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { Room, RoomEvent, Track } from 'livekit-client';
 
 export function useVoiceRoom() {
-  const roomRef         = useRef(null);
-  const audioEls        = useRef({}); // identity → <audio>
-  const videoEls        = useRef({}); // identity → <video> (camera)
-  const screenEls       = useRef({}); // identity → <video> (screen share)
+  const roomRef          = useRef(null);
+  const audioEls         = useRef({});   // identity → <audio>
+  const cameraTrackMap   = useRef({});   // identity → camera Track (remote)
 
   const [connected,       setConnected]       = useState(false);
   const [isMuted,         setIsMuted]         = useState(false);
@@ -14,7 +13,8 @@ export function useVoiceRoom() {
   const [speaking,        setSpeaking]        = useState(new Set());
   const [liveParts,       setLiveParts]       = useState([]);
   const [localVideoTrack, setLocalVideoTrack] = useState(null);
-  const [screenTrack,     setScreenTrack]     = useState(null); // remote or local
+  const [screenTrack,     setScreenTrack]     = useState(null);
+  const [, forceUpdate]  = useState(0); // to trigger re-render when cameraTrackMap changes
 
   const refreshParticipants = useCallback((room) => {
     const snap = [
@@ -26,6 +26,7 @@ export function useVoiceRoom() {
         hasCamera: room.localParticipant.isCameraEnabled,
         hasScreen: room.localParticipant.isScreenShareEnabled,
         isSpeaking: room.localParticipant.isSpeaking,
+        isMuted:   !room.localParticipant.isMicrophoneEnabled,
       },
       ...Array.from(room.remoteParticipants.values()).map(p => ({
         identity:  p.identity,
@@ -35,21 +36,10 @@ export function useVoiceRoom() {
         hasCamera: p.isCameraEnabled,
         hasScreen: p.isScreenShareEnabled,
         isSpeaking: p.isSpeaking,
+        isMuted:   !p.isMicrophoneEnabled,
       })),
     ];
     setLiveParts(snap);
-  }, []);
-
-  const attachAudio = useCallback((identity, track) => {
-    if (track.kind !== Track.Kind.Audio) return;
-    let el = audioEls.current[identity];
-    if (!el) {
-      el = document.createElement('audio');
-      el.autoplay = true;
-      document.body.appendChild(el);
-      audioEls.current[identity] = el;
-    }
-    track.attach(el);
   }, []);
 
   const connect = useCallback(async ({ livekitUrl, token }) => {
@@ -60,53 +50,70 @@ export function useVoiceRoom() {
     room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
       if (track.source === Track.Source.ScreenShare) {
         setScreenTrack(track);
-      } else {
-        attachAudio(participant.identity, track);
+      } else if (track.source === Track.Source.Camera) {
+        cameraTrackMap.current[participant.identity] = track;
+        forceUpdate(n => n + 1);
+      } else if (track.kind === Track.Kind.Audio) {
+        let el = audioEls.current[participant.identity];
+        if (!el) {
+          el = document.createElement('audio');
+          el.autoplay = true;
+          document.body.appendChild(el);
+          audioEls.current[participant.identity] = el;
+        }
+        track.attach(el);
       }
       refreshParticipants(room);
     });
+
     room.on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
       if (track.source === Track.Source.ScreenShare) {
         setScreenTrack(null);
-      } else {
+      } else if (track.source === Track.Source.Camera) {
+        delete cameraTrackMap.current[participant.identity];
+        forceUpdate(n => n + 1);
+      } else if (track.kind === Track.Kind.Audio) {
         const el = audioEls.current[participant.identity];
         if (el) { el.srcObject = null; el.remove(); delete audioEls.current[participant.identity]; }
       }
       refreshParticipants(room);
     });
+
     room.on(RoomEvent.LocalTrackPublished, (_pub) => {
       const cam = room.localParticipant.getTrackPublication(Track.Source.Camera);
-      setLocalVideoTrack(cam?.track || null);
+      setLocalVideoTrack(cam?.videoTrack || cam?.track || null);
       setIsCameraOff(!room.localParticipant.isCameraEnabled);
       setIsScreenSharing(room.localParticipant.isScreenShareEnabled);
       refreshParticipants(room);
     });
-    room.on(RoomEvent.LocalTrackUnpublished, () => {
+
+    room.on(RoomEvent.LocalTrackUnpublished, (_pub) => {
       const cam = room.localParticipant.getTrackPublication(Track.Source.Camera);
-      setLocalVideoTrack(cam?.track || null);
+      setLocalVideoTrack(cam?.videoTrack || cam?.track || null);
       setIsCameraOff(!room.localParticipant.isCameraEnabled);
       setIsScreenSharing(room.localParticipant.isScreenShareEnabled);
       refreshParticipants(room);
     });
+
     room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
       setSpeaking(new Set(speakers.map(s => s.identity)));
     });
+
     room.on(RoomEvent.ParticipantConnected,    () => refreshParticipants(room));
     room.on(RoomEvent.ParticipantDisconnected, (p) => {
-      ['audio', 'video', 'screen'].forEach(k => {
-        const map = { audio: audioEls, video: videoEls, screen: screenEls }[k];
-        const el  = map.current[p.identity];
-        if (el) { el.srcObject = null; el.remove(); delete map.current[p.identity]; }
-      });
+      const el = audioEls.current[p.identity];
+      if (el) { el.srcObject = null; el.remove(); delete audioEls.current[p.identity]; }
+      delete cameraTrackMap.current[p.identity];
       refreshParticipants(room);
     });
+
     room.on(RoomEvent.Disconnected, () => {
       setConnected(false); setIsMuted(false); setIsCameraOff(true);
       setIsScreenSharing(false); setSpeaking(new Set()); setLiveParts([]);
       setLocalVideoTrack(null); setScreenTrack(null);
-      Object.keys(audioEls.current).forEach(id => {
-        audioEls.current[id]?.remove(); delete audioEls.current[id];
-      });
+      cameraTrackMap.current = {};
+      Object.values(audioEls.current).forEach(el => { el.srcObject = null; el.remove(); });
+      audioEls.current = {};
     });
 
     await room.connect(livekitUrl, token);
@@ -114,7 +121,7 @@ export function useVoiceRoom() {
     setConnected(true);
     setIsMuted(false);
     refreshParticipants(room);
-  }, [attachAudio, refreshParticipants]);
+  }, [refreshParticipants]);
 
   const disconnect = useCallback(async () => {
     if (!roomRef.current) return;
@@ -133,27 +140,34 @@ export function useVoiceRoom() {
   const toggleCamera = useCallback(async () => {
     const room = roomRef.current;
     if (!room) return;
-    const enabled = room.localParticipant.isCameraEnabled;
-    await room.localParticipant.setCameraEnabled(!enabled);
-    if (!enabled) {
-      // just turned on
-      const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
-      setLocalVideoTrack(pub?.track || null);
-    } else {
-      setLocalVideoTrack(null);
+    try {
+      const enabled = room.localParticipant.isCameraEnabled;
+      await room.localParticipant.setCameraEnabled(!enabled);
+      const cam = room.localParticipant.getTrackPublication(Track.Source.Camera);
+      setLocalVideoTrack(!enabled ? (cam?.videoTrack || cam?.track || null) : null);
+      setIsCameraOff(enabled);
+      refreshParticipants(room);
+    } catch (e) {
+      console.warn('[VoiceRoom] Camera toggle failed:', e.message);
     }
-    setIsCameraOff(enabled);
-    refreshParticipants(room);
   }, [refreshParticipants]);
 
   const toggleScreenShare = useCallback(async () => {
     const room = roomRef.current;
     if (!room) return;
-    const enabled = room.localParticipant.isScreenShareEnabled;
-    await room.localParticipant.setScreenShareEnabled(!enabled);
-    setIsScreenSharing(!enabled);
-    refreshParticipants(room);
+    try {
+      const enabled = room.localParticipant.isScreenShareEnabled;
+      await room.localParticipant.setScreenShareEnabled(!enabled);
+      setIsScreenSharing(!enabled);
+      refreshParticipants(room);
+    } catch (e) {
+      console.warn('[VoiceRoom] Screen share failed:', e.message);
+    }
   }, [refreshParticipants]);
+
+  const getRemoteCameraTrack = useCallback((identity) => {
+    return cameraTrackMap.current[identity] || null;
+  }, []);
 
   useEffect(() => {
     return () => { roomRef.current?.disconnect(); };
@@ -161,6 +175,7 @@ export function useVoiceRoom() {
 
   return {
     connect, disconnect, toggleMute, toggleCamera, toggleScreenShare,
+    getRemoteCameraTrack,
     connected, isMuted, isCameraOff, isScreenSharing,
     speaking, liveParts, localVideoTrack, screenTrack,
   };

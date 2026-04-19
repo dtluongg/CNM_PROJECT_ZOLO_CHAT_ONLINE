@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import messageApi from '../api/messageApi';
 
-const useFileHandler = (conversationId, onMessageSent) => {
+const useFileHandler = (conversationId, onMessageSent, topicId = null) => {
   const isSharingRef = useRef(false);
 
   const pickAndSendImage = async (replyToMessageId = null) => {
@@ -39,7 +39,7 @@ const useFileHandler = (conversationId, onMessageSent) => {
       }
 
       const up = await messageApi.uploadImage(fd);
-      const res = await messageApi.sendImage(conversationId, up.data.file.fileId, replyToMessageId);
+      const res = await messageApi.sendImage(conversationId, up.data.file.fileId, replyToMessageId, topicId);
       onMessageSent?.(res.data.data);
     } catch (err) {
       console.error('pickAndSendImage error:', err);
@@ -68,7 +68,7 @@ const useFileHandler = (conversationId, onMessageSent) => {
       }
 
       const up = await messageApi.uploadFile(fd);
-      const res = await messageApi.sendFile(conversationId, up.data.file.fileId, replyToMessageId);
+      const res = await messageApi.sendFile(conversationId, up.data.file.fileId, replyToMessageId, topicId);
       onMessageSent?.(res.data.data);
     } catch (err) {
       console.error('pickAndSendFile error:', err);

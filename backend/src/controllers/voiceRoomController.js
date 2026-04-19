@@ -17,9 +17,7 @@ const createVoiceRoom = async (req, res) => {
     const userId = req.user._id;
 
     const member = await ConversationMember.findOne({ conversationId, userId }).lean();
-    if (!member || !['owner', 'admin'].includes(member.role)) {
-      return res.status(403).json({ message: 'Chỉ Owner/Admin mới có thể tạo phòng thoại' });
-    }
+    if (!member) return res.status(403).json({ message: 'Bạn không phải thành viên nhóm' });
 
     const existing = await findActiveRoom(topicId, conversationId);
     if (existing) {

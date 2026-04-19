@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock , Volume2 } from 'lucide-react';
+import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock, Volume2 } from 'lucide-react';
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
 import conversationApi from '../api/conversationApi';
@@ -265,6 +265,18 @@ export default function ChatArea({
       </div>
     );
   }
+  // ── Voice channel: render full-screen voice view ──────────
+  if (activeTopic?.channelType === 'voice') {
+    return (
+      <VoiceChannelView
+        topic={activeTopic}
+        conversation={conversation}
+        currentUserId={currentUserId}
+        onExitChannel={() => onTopicSelect && onTopicSelect(null)}
+        isMobile={isMobile}
+      />
+    );
+  }
 
   // ── Filter messages by active topic (groups only) ─────────
   const visibleMessages = (conversation?.type === 'group' && activeTopic)
@@ -399,7 +411,10 @@ export default function ChatArea({
             {conversation.type === 'group' ? (
               <>
                 <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                  <span style={{ color: 'var(--accent)', marginRight: 1 }}>#</span>
+                  {activeTopic?.channelType === 'voice'
+                                      ? <Volume2 size={13} style={{ color: '#57f287', marginRight: 3, display: 'inline', verticalAlign: 'middle' }} />
+                                      : <span style={{ color: 'var(--accent)', marginRight: 1 }}>#</span>
+                                    }
                   {activeTopic ? activeTopic.name : 'chung'}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1 }}>
@@ -507,7 +522,10 @@ export default function ChatArea({
           padding: '5px 16px', background: 'var(--bg-secondary)',
           borderBottom: '1px solid var(--border)', flexShrink: 0,
         }}>
-          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>#</span>
+          {activeTopic.channelType === 'voice'
+            ? <Volume2 size={13} style={{ color: 'var(--text-muted)' }} />
+            : <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>#</span>
+          }
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{activeTopic.name}</span>
           {activeTopic.description && (
             <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>— {activeTopic.description}</span>
@@ -744,29 +762,37 @@ export default function ChatArea({
                 <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 10px' }}>Đang tải kênh...</div>
               )}
 
-              {sheetTopics.map(topic => (
-                <div
-                  key={topic._id}
-                  onClick={() => { if (!topic.isLocked) { onTopicSelect && onTopicSelect(topic); setShowChannelSheet(false); } }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '11px 10px', borderRadius: 10,
-                    cursor: topic.isLocked ? 'not-allowed' : 'pointer',
-                    background: activeTopic?._id === topic._id ? 'var(--accent)' : 'transparent',
-                    opacity: topic.isLocked ? 0.5 : 1,
-                    marginBottom: 2,
-                  }}
-                >
-                  <Hash size={18} style={{ color: activeTopic?._id === topic._id ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 15, fontWeight: activeTopic?._id === topic._id ? 700 : 500, color: activeTopic?._id === topic._id ? '#fff' : 'var(--text-primary)', flex: 1 }}>
-                    {topic.name}
-                  </span>
-                  {topic.isLocked && <Lock size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
-                  {topic.categoryName && (
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{topic.categoryName}</span>
-                  )}
-                </div>
-              ))}
+              {sheetTopics.map(topic => {
+                              const isActive = activeTopic?._id === topic._id;
+                              const isVoice  = topic.channelType === 'voice';
+                              return (
+                                <div
+                                  key={topic._id}
+                                  onClick={() => { if (!topic.isLocked) { onTopicSelect && onTopicSelect(topic); setShowChannelSheet(false); } }}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 10,
+                                    padding: '11px 10px', borderRadius: 10,
+                                    cursor: topic.isLocked ? 'not-allowed' : 'pointer',
+                                    background: isActive ? 'var(--accent)' : 'transparent',
+                                    opacity: topic.isLocked ? 0.5 : 1,
+                                    marginBottom: 2,
+                                  }}
+                                >
+                                  {isVoice
+                                    ? <Volume2 size={18} style={{ color: isActive ? '#fff' : '#57f287', flexShrink: 0 }} />
+                                    : <Hash size={18} style={{ color: isActive ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
+                                  }
+                                  <span style={{ fontSize: 15, fontWeight: isActive ? 700 : 500, color: isActive ? '#fff' : 'var(--text-primary)', flex: 1 }}>
+                                    {topic.name}
+                                  </span>
+                                  {isVoice && !isActive && (
+                                    <span style={{ fontSize: 11, color: '#57f287', background: 'rgba(87,242,135,0.15)', borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>Thoại</span>
+                                  )}
+                                  {topic.isLocked && <Lock size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+                                </div>
+                              );
+                            })}
+
 
               {!sheetLoading && sheetTopics.length === 0 && (
                 <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 10px', fontStyle: 'italic' }}>
