@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middlewares/verifyToken');
+const { checkCanInvite } = require('../middlewares/checkTopicPermission');
+const { createJoinRequest, listJoinRequests, reviewJoinRequest } = require('../controllers/joinRequestController');
 
 const {
     createDmConversationEndpoint,
@@ -25,65 +27,60 @@ const {
     transferOwner,
 } = require('../controllers/conversationMemberController');
 
+const {
+    listRoles,
+    createRole,
+    updateRole,
+    deleteRole,
+    assignMemberRole,
+    updateMemberTopicOverrides,
+    getEffectivePermissions,
+} = require('../controllers/groupRoleController');
+
 const { listTopics, createTopic, updateTopic, deleteTopic } = require('../controllers/topicController');
 
-// Mọi endpoint conversation đều yêu cầu đăng nhập.
 router.use(verifyToken);
 
-// Tạo DM theo chuẩn endpoint tường minh
-router.post('/dm', createDmConversationEndpoint);
-
-// Tạo Group theo chuẩn endpoint tường minh
+// ── Conversation CRUD ────────────────────────────────────────────────
+router.post('/dm',    createDmConversationEndpoint);
 router.post('/group', createGroupConversationEndpoint);
-
-// Danh sách conversation của user hiện tại
-// Query archive hỗ trợ: exclude | only | all
-router.get('/', listMyConversations);
-
-// Chi tiết 1 conversation
-router.get('/:id', getConversationById);
-
-// Cập nhật thông tin group (name/avatar)
-router.patch('/:id', updateConversationInfo);
-
-// Khóa/mở khóa group conversation
-router.patch('/:id/lock', setConversationLock);
-
-// Archive/unarchive conversation theo từng user
+router.get('/',       listMyConversations);
+router.get('/:id',    getConversationById);
+router.patch('/:id',  updateConversationInfo);
+router.patch('/:id/lock',    setConversationLock);
 router.patch('/:id/archive', setConversationArchived);
+router.delete('/:id',        deleteConversationForMe);
 
-// Xóa cuộc trò chuyện phía tôi (không ảnh hưởng thành viên khác)
-router.delete('/:id', deleteConversationForMe);
+// ── Members ──────────────────────────────────────────────────────────
+router.get('/:id/members',              listConversationMembers);
+router.post('/:id/members',             checkCanInvite, addConversationMembers);
+router.post('/:id/leave',               leaveConversation);
+router.post('/:id/disband',             disbandConversation);
+router.delete('/:id/members/:userId',   kickConversationMember);
+router.patch('/:id/transfer-owner',     transferOwner);
 
-// Lấy danh sách thành viên trong group (includeLeft=true để lấy cả thành viên đã rời)
-router.get('/:id/members', listConversationMembers);
+// ── Member permissions (specific routes trước /:userId/role chung) ───
+router.get('/:id/members/:userId/effective-permissions', getEffectivePermissions);
+router.patch('/:id/members/:userId/role-assign',         assignMemberRole);
+router.patch('/:id/members/:userId/topic-overrides',     updateMemberTopicOverrides);
+router.patch('/:id/members/:userId/role',                updateMember);
 
-// Thêm thành viên vào group (1 hoặc nhiều user)
-router.post('/:id/members', addConversationMembers);
+// ── Custom Roles ─────────────────────────────────────────────────────
+router.get('/:id/roles',           listRoles);
+router.post('/:id/roles',          createRole);
+router.patch('/:id/roles/:roleId', updateRole);
+router.delete('/:id/roles/:roleId',deleteRole);
 
-// Thành viên tự rời nhóm
-router.post('/:id/leave', leaveConversation);
-
-// Owner giải tán nhóm
-router.post('/:id/disband', disbandConversation);
-
-// Owner/Admin đuổi thành viên (admin chỉ đuổi member thường)
-router.delete('/:id/members/:userId', kickConversationMember);
-
-// Owner chuyển quyền owner cho thành viên khác
-router.patch('/:id/transfer-owner', transferOwner);
-
-// Endpoint chuẩn để cập nhật role + quyền đặc biệt
-router.patch('/:id/members/:userId/role', updateMember);
-
-// Ghim/Bỏ ghim tin nhắn
-router.post('/:id/pin/:messageId', pinMessage);
+// ── Pin/Unpin ────────────────────────────────────────────────────────
+router.post('/:id/pin/:messageId',   pinMessage);
 router.post('/:id/unpin/:messageId', unpinMessage);
 
-// Topics (kênh con trong nhóm)
-router.get('/:id/topics', listTopics);
-router.post('/:id/topics', createTopic);
-router.patch('/:id/topics/:topicId', updateTopic);
-router.delete('/:id/topics/:topicId', deleteTopic);
-
+// ── Topics ───────────────────────────────────────────────────────────
+router.get('/:id/topics',              listTopics);
+router.post('/:id/topics',             createTopic);
+router.patch('/:id/topics/:topicId',   updateTopic);
+router.delete('/:id/topics/:topicId',  deleteTopic);
+router.post('/:id/join-requests',                    createJoinRequest);
+router.get('/:id/join-requests',                     listJoinRequests);
+router.patch('/:id/join-requests/:requestId',        reviewJoinRequest);
 module.exports = router;

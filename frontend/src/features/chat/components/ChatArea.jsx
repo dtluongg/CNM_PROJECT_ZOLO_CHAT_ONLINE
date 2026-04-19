@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback ,useMemo } from 'react';
 import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock, Volume2 } from 'lucide-react';
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
@@ -68,6 +68,7 @@ export default function ChatArea({
   onPollVote,
   activeTopic,
   onTopicSelect,
+  myPermissions,
 }) {
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
 
@@ -229,6 +230,21 @@ export default function ChatArea({
       window.alert(err?.response?.data?.message || 'Không thể bỏ ghim tin nhắn');
     }
   };
+    const canSendInActiveTopic = useMemo(() => {
+      if (!myPermissions) return true; // chưa load → cho phép tạm
+      if (conversation?.type !== 'group') return true; // DM luôn được gửi
+      if (!activeTopic) {
+        // Kênh chung — check globalPermissions
+        return myPermissions.globalPermissions?.canSendMessages !== false;
+      }
+      // Kênh cụ thể — check topicPermissions
+      const topicPerm = myPermissions.topicPermissions?.find(
+        t => t._id?.toString() === activeTopic._id?.toString()
+      );
+      if (!topicPerm) return true; // không có entry → cho phép
+      return topicPerm.canSend !== false;
+    }, [myPermissions, activeTopic, conversation?.type]);
+
 
   const openChannelSheet = useCallback(async () => {
     if (!conversation?.id) return;
@@ -666,30 +682,46 @@ export default function ChatArea({
         </div>
       )}
 
-      {!(conversation.type === 'dm' && blockStatus?.iBlocked) &&  activeTopic?.channelType !== 'voice' && (
-        <MessageInput
-          onSend={async (payload) => {
-            const enriched = (conversation.type === 'group' && activeTopic)
-              ? { ...payload, topicId: activeTopic._id }
-              : payload;
-            await onSendMessage(enriched);
-            if (payload.isEdit) setEditingMessage(null);
-            setReplyingMessage(null);
-          }}
-          placeholder={
-            conversation.type === 'group'
-              ? `Nhắn tin tới #${activeTopic ? activeTopic.name : 'chung'}...`
-              : `Nhắn tin tới ${conversation.name}...`
-          }
-          isMobile={isMobile}
-          isGroup={conversation.type === 'group'}
-          conversationId={conversation.id}
-          socket={socket}
-          editingMessage={editingMessage}
-          replyingMessage={replyingMessage}
-          onCancelEdit={() => setEditingMessage(null)}
-          onCancelReply={() => setReplyingMessage(null)}
-        />
+      {!(conversation.type === 'dm' && blockStatus?.iBlocked) && activeTopic?.channelType !== 'voice' && (
+        canSendInActiveTopic ? (
+          <MessageInput
+            onSend={async (payload) => {
+              const enriched = (conversation.type === 'group' && activeTopic)
+                ? { ...payload, topicId: activeTopic._id }
+                : payload;
+              await onSendMessage(enriched);
+              if (payload.isEdit) setEditingMessage(null);
+              setReplyingMessage(null);
+            }}
+            placeholder={
+              conversation.type === 'group'
+                ? `Nhắn tin tới #${activeTopic ? activeTopic.name : 'chung'}...`
+                : `Nhắn tin tới ${conversation.name}...`
+            }
+            isMobile={isMobile}
+            isGroup={conversation.type === 'group'}
+            conversationId={conversation.id}
+            socket={socket}
+            editingMessage={editingMessage}
+            replyingMessage={replyingMessage}
+            onCancelEdit={() => setEditingMessage(null)}
+            onCancelReply={() => setReplyingMessage(null)}
+          />
+        ) : (
+          // Không có quyền gửi tin trong kênh này
+          <div style={{
+            padding: '12px 16px',
+            background: 'var(--bg-secondary)',
+            borderTop: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: 10,
+            flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 18 }}>🔒</span>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              Bạn không có quyền gửi tin nhắn trong kênh{activeTopic ? ` #${activeTopic.name}` : ' này'}.
+            </span>
+          </div>
+        )
       )}
   </>}{/* end voice conditional */}
 

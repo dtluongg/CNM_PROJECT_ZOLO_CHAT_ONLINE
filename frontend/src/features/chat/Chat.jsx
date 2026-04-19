@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import apiClient from '../../services/apiClient';
 
 import LeftSidebar      from './components/LeftSidebar';
 import ChatArea         from './components/ChatArea';
@@ -37,6 +38,8 @@ const Chat = () => {
   const [typingUsers, setTypingUsers]         = useState({});
   const [activeTopic, setActiveTopic]         = useState(null);
   const [topicsVersion, setTopicsVersion] = useState(0);
+  const [myPermissions, setMyPermissions] = useState(null);
+
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -165,6 +168,9 @@ const Chat = () => {
     else fetchDmBlockStatus(null);
 
     await loadMessages(conv.id);
+    if (conv.type === 'group') fetchMyPermissions(conv.id);
+    else setMyPermissions(null);
+
   }, [isMobile, fetchDmBlockStatus, loadMessages, setActiveConversation, setConversations, socketRef]);
 
   // ── Voice Room ──────────────────────────────────────────────────────────
@@ -245,6 +251,7 @@ const Chat = () => {
     onPollVote: handlePollVote,
     activeTopic,
     onTopicSelect: setActiveTopic,
+    myPermissions,
   };
 
   const rightSidebarProps = {
@@ -258,9 +265,25 @@ const Chat = () => {
     onPhoneCall: handlePhoneCall,
     onVideoCall: handleVideoCall,
     activeTopic,
+    myPermissions,
     onTopicSelect: setActiveTopic,
-    onTopicsChanged: () => setTopicsVersion(v => v + 1), // ← thêm dòng này
+      onPermissionsChanged: () => activeConversation?.id && fetchMyPermissions(activeConversation.id),
+
   };
+    const fetchMyPermissions = useCallback(async (conversationId, userId) => {
+      if (!conversationId || !userId) return;
+      try {
+        const res = await apiClient.get(
+          `/conversations/${conversationId}/members/${userId}/effective-permissions`
+        );
+        console.log('[myPermissions]', res.data?.data); // 👈 xem data có không
+        setMyPermissions(res.data?.data || null);
+      } catch (err) {
+        console.error('[myPermissions] error:', err.response?.data);
+        setMyPermissions(null);
+      }
+    }, []);
+
 
   // ── MOBILE LAYOUT ────────────────────────────────────────────────────────
   if (isMobile) {

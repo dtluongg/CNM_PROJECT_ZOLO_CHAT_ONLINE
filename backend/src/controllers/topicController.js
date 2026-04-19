@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const ConversationTopic = require('../models/conversationTopicModel');
 const ConversationMember = require('../models/conversationMemberModel');
 const Conversation = require('../models/conversationModel');
+const GroupRole = require('../models/groupRoleModel');
 
 const isValidId = (id) => id && mongoose.Types.ObjectId.isValid(id);
 
@@ -42,7 +43,7 @@ const requireMembership = async (conversationId, userId) => {
     return member;
 };
 
-// GET /conversations/:id/topics
+
 const listTopics = async (req, res, next) => {
     try {
         const userId = getCurrentUserId(req);
@@ -56,13 +57,52 @@ const listTopics = async (req, res, next) => {
         if (!conversation) return res.status(404).json({ message: 'Không tìm thấy nhóm' });
         if (conversation.type !== 'group') return res.status(400).json({ message: 'Chỉ nhóm mới có topics' });
 
-        await requireMembership(conversationId, userId);
+        const member = await ConversationMember.findOne({
+            conversationId, userId, leftAt: null, isDeleted: { $ne: true },
+        }).lean();
+        if (!member) return res.status(403).json({ message: 'Bạn không thuộc nhóm này' });
 
         const topics = await ConversationTopic.find({ conversationId })
             .sort({ categoryName: 1, position: 1 })
             .lean();
 
-        return res.status(200).json({ data: topics });
+        // owner/admin thấy tất cả
+        if (member.role === 'owner' || member.role === 'admin') {
+            return res.status(200).json({ data: topics });
+        }
+
+        // Lấy custom role nếu có
+        let allowedTopicIds = [];
+        let hasCustomRole   = false;
+
+        if (member.customRoleId) {
+            const role = await GroupRole.findById(member.customRoleId).lean();
+            if (role) {
+                hasCustomRole   = true;
+                allowedTopicIds = (role.allowedTopicIds || []).map(id => id.toString());
+            }
+        }
+
+        // Lọc topic theo quyền
+        const filtered = topics.filter(topic => {
+            const tid = topic._id.toString();
+
+            // Personal override ưu tiên cao nhất
+            const override = (member.topicOverrides || []).find(
+                o => o.topicId?.toString() === tid
+            );
+            if (override) return override.canAccess;
+
+            // Custom role — allowedTopicIds rỗng = được xem tất cả
+            if (hasCustomRole) {
+                return allowedTopicIds.length === 0 || allowedTopicIds.includes(tid);
+            }
+
+            // Member thường không có custom role — xem tất cả
+            return true;
+        });
+
+        return res.status(200).json({ data: filtered });
     } catch (error) {
         next(error);
     }

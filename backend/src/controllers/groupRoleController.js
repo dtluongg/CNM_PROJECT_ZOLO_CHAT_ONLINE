@@ -355,89 +355,72 @@ const updateMemberTopicOverrides = async (req, res, next) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /conversations/:id/members/:userId/effective-permissions
-// Tính toán quyền thực tế của 1 member theo thứ tự ưu tiên:
-// Override cá nhân > Custom role > Role hệ thống (owner/admin/member)
-// ─────────────────────────────────────────────────────────────────────────────
 const getEffectivePermissions = async (req, res, next) => {
-    try {
-        const callerId = getCurrentUserId(req);
-        const { id: conversationId, userId: targetUserId } = req.params;
+  try {
+    const callerId     = getCurrentUserId(req);
+    const { id: conversationId, userId: targetUserId } = req.params;
 
-        if (!isValidId(conversationId) || !isValidId(targetUserId)) {
-            return res.status(400).json({ message: 'ID không hợp lệ' });
-        }
+    const callerMember = await ConversationMember.findOne({ conversationId, userId: callerId, leftAt: null });
+    if (!callerMember) return res.status(403).json({ message: 'Bạn không thuộc nhóm này' });
 
-        // Caller phải là member
-        const callerMember = await ConversationMember.findOne({ conversationId, userId: callerId, leftAt: null });
-        if (!callerMember) return res.status(403).json({ message: 'Bạn không thuộc nhóm này' });
+    const member = await ConversationMember.findOne({ conversationId, userId: targetUserId, leftAt: null })
+      .populate('customRoleId');
+    if (!member) return res.status(404).json({ message: 'Không tìm thấy thành viên' });
 
-        const member = await ConversationMember.findOne({ conversationId, userId: targetUserId, leftAt: null })
-            .populate('customRoleId');
-        if (!member) return res.status(404).json({ message: 'Không tìm thấy thành viên' });
+    const allTopics = await ConversationTopic.find({ conversationId }).select('_id name channelType emoji').lean();
 
-        // Lấy tất cả kênh của nhóm
-        const allTopics = await ConversationTopic.find({ conversationId }).select('_id name channelType').lean();
+    const effectiveTopics = allTopics.map(topic => {
+      const tid = topic._id.toString();
 
-        const effectiveTopics = allTopics.map(topic => {
-            const tid = topic._id.toString();
+      // owner/admin full quyền
+      if (member.role === 'owner' || member.role === 'admin') {
+        return { ...topic, canAccess: true, canSend: true, source: 'system_role' };
+      }
 
-            // 1. Kiểm tra override cá nhân
-            const personalOverride = member.topicOverrides?.find(o => o.topicId.toString() === tid);
-            if (personalOverride) {
-                return { ...topic, canAccess: personalOverride.canAccess, canSend: personalOverride.canSend, source: 'personal_override' };
-            }
+      // Custom role
+      if (member.customRoleId) {
+        const cr = member.customRoleId;
+        const allowedIds  = (cr.allowedTopicIds  || []).map(id => id.toString());
+        const sendableIds = (cr.sendableTopicIds || []).map(id => id.toString());
 
-            // owner/admin luôn có full quyền
-            if (member.role === 'owner' || member.role === 'admin') {
-                return { ...topic, canAccess: true, canSend: true, source: 'system_role' };
-            }
+        const canAccess = allowedIds.length === 0 || allowedIds.includes(tid);
+        const canSend   = canAccess
+          && sendableIds.length > 0
+          && sendableIds.includes(tid)
+          && cr.permissions?.canSendMessages !== false;
 
-            // 2. Kiểm tra custom role
-            if (member.customRoleId) {
-                const cr = member.customRoleId;
-                const allowedIds = (cr.allowedTopicIds || []).map(id => id.toString());
-                const sendableIds = (cr.sendableTopicIds || []).map(id => id.toString());
+        return { ...topic, canAccess, canSend, source: 'custom_role' };
+      }
 
-                // allowedTopicIds rỗng = được vào tất cả
-                const canAccess = allowedIds.length === 0 || allowedIds.includes(tid);
-                // sendableTopicIds rỗng = được gửi ở tất cả kênh được truy cập
-                const canSend = canAccess && (sendableIds.length === 0 || sendableIds.includes(tid))
-                    && cr.permissions?.canSendMessages !== false;
+      // Default
+      return {
+        ...topic,
+        canAccess: true,
+        canSend: member.canSendMessages !== false,
+        source: 'default',
+      };
+    });
 
-                return { ...topic, canAccess, canSend, source: 'custom_role' };
-            }
-
-            // 3. Default: member thường theo permissions cá nhân
-            return {
-                ...topic,
-                canAccess: true,
-                canSend: member.canSendMessages !== false,
-                source: 'default',
-            };
-        });
-
-        return res.status(200).json({
-            data: {
-                userId: targetUserId,
-                systemRole: member.role,
-                customRole: member.customRoleId ? {
-                    _id:  member.customRoleId._id,
-                    name: member.customRoleId.name,
-                    color: member.customRoleId.color,
-                } : null,
-                globalPermissions: {
-                    canSendMessages:  member.role === 'owner' || member.role === 'admin' || (member.customRoleId?.permissions?.canSendMessages ?? member.canSendMessages),
-                    canInviteMembers: member.role === 'owner' || member.canInviteMembers || member.customRoleId?.permissions?.canInviteMembers,
-                    canManageMembers: member.role === 'owner' || member.role === 'admin' || member.canManageMembers || member.customRoleId?.permissions?.canManageMembers,
-                },
-                topicPermissions: effectiveTopics,
-            },
-        });
-    } catch (error) {
-        next(error);
-    }
+    return res.status(200).json({
+      data: {
+        userId:      targetUserId,
+        systemRole:  member.role,
+        customRole:  member.customRoleId ? {
+          _id:   member.customRoleId._id,
+          name:  member.customRoleId.name,
+          color: member.customRoleId.color,
+        } : null,
+        globalPermissions: {
+          canSendMessages:  member.role === 'owner' || member.role === 'admin' || member.canSendMessages,
+          canInviteMembers: member.role === 'owner' || member.role === 'admin' || member.customRoleId?.permissions?.canInviteMembers,
+          canManageMembers: member.role === 'owner' || member.role === 'admin' || member.canManageMembers,
+        },
+        topicPermissions: effectiveTopics,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
 };
 
 module.exports = {
