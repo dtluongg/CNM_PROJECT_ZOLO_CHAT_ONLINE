@@ -16,8 +16,8 @@ const NotificationSetting = require('../models/notificationSettingModel');
 const { getIO } = require('../socket/socketManager');
 
 // Tạo system message và phát socket khi có thay đổi thành viên.
-// event: 'member_join' | 'member_leave' | 'member_kick'
-async function emitMemberSystemMessage(conversationId, actorId, targetId, event, reason = null) {
+// event: 'member_join' | 'member_leave' | 'member_kick' | 'member_role_updated' | 'member_owner_transferred'
+async function emitMemberSystemMessage(conversationId, actorId, targetId, event, extra = null) {
     try {
         const io = getIO();
         const [actor, target, members, systemTopic] = await Promise.all([
@@ -27,13 +27,26 @@ async function emitMemberSystemMessage(conversationId, actorId, targetId, event,
             ConversationTopic.findOne({ conversationId, channelType: 'system' }).select('_id').lean(),
         ]);
 
+        const actorName  = actor?.displayName  || '?';
+        const targetName = target?.displayName || '?';
+
         let content;
+        let extraPayload = {};
         if (event === 'member_join') {
-            content = `${actor?.displayName || '?'} đã được thêm vào nhóm`;
+            content = `${targetName} đã được thêm vào nhóm bởi ${actorName}`;
         } else if (event === 'member_leave') {
-            content = `${actor?.displayName || '?'} đã rời khỏi nhóm`;
+            content = `${actorName} đã rời khỏi nhóm`;
+        } else if (event === 'member_kick') {
+            content = `${targetName} đã bị xóa khỏi nhóm`;
+            extraPayload.reason = extra || null;
+        } else if (event === 'member_role_updated') {
+            const roleLabel = extra === 'admin' ? 'Quản trị viên' : 'Thành viên';
+            content = `${actorName} đã đặt ${targetName} làm ${roleLabel}`;
+            extraPayload.newRole = extra || null;
+        } else if (event === 'member_owner_transferred') {
+            content = `${actorName} đã chuyển quyền chủ nhóm cho ${targetName}`;
         } else {
-            content = `${target?.displayName || '?'} đã bị xóa khỏi nhóm`;
+            content = `${actorName} đã thực hiện thay đổi`;
         }
 
         let topicId = systemTopic?._id || null;
@@ -58,13 +71,13 @@ async function emitMemberSystemMessage(conversationId, actorId, targetId, event,
             ...(topicId ? { topicId } : {}),
             payload: {
                 event,
-                actorId: actorId.toString(),
-                actorName: actor?.displayName || '?',
-                actorAvatar: actor?.avatar || null,
-                targetId: targetId?.toString() || null,
-                targetName: target?.displayName || null,
+                actorId:     actorId.toString(),
+                actorName,
+                actorAvatar: actor?.avatar  || null,
+                targetId:    targetId?.toString() || null,
+                targetName:  target?.displayName  || null,
                 targetAvatar: target?.avatar || null,
-                reason: reason || null,
+                ...extraPayload,
             },
         });
 
@@ -80,6 +93,7 @@ async function emitMemberSystemMessage(conversationId, actorId, targetId, event,
             senderId: actorId.toString(),
             type: 'system',
             content,
+            topicId: topicId?.toString() || null,
             payload: msg.payload,
             createdAt: msg.createdAt,
             time: new Date(msg.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
@@ -715,6 +729,10 @@ const updateMember = async (req, res, next) => {
 
         await targetMember.save();
 
+        if (hasRoleUpdate) {
+            emitMemberSystemMessage(conversationId, userId, memberUserId, 'member_role_updated', role);
+        }
+
         return res.status(200).json({
             message: 'Cập nhật thành viên thành công',
             data: {
@@ -790,6 +808,8 @@ const transferOwner = async (req, res, next) => {
             await currentOwner.save({ session });
             await newOwnerMember.save({ session });
         });
+
+        emitMemberSystemMessage(conversationId, userId, newOwnerUserId, 'member_owner_transferred');
 
         return res.status(200).json({
             message: 'Chuyển quyền owner thành công',

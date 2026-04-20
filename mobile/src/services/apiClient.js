@@ -64,6 +64,7 @@ apiClient.interceptors.response.use(
     } catch {}
 
     // 3. All failed → force logout
+    try { await supabase.auth.signOut(); } catch {}
     await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'currentUser']);
     if (_logoutCallback) _logoutCallback();
     return Promise.reject(error);

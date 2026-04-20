@@ -125,16 +125,29 @@ const Chat = () => {
         c.id === conversationId ? { ...c, unread: 0 } : c
       ));
     },
-    onConversationDisbanded: (conversationId) => {
-      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
-      setMessages((prev) => {
-        const next = { ...prev };
-        delete next[conversationId];
-        return next;
-      });
-      setActiveConversation((prev) => (prev?.id === conversationId ? null : prev));
-      if (isMobile) setMobileView('list');
-    },
+     onConversationUpdated: (conversationId, changes) => {
+          // Update sidebar list
+          setConversations((prev) => prev.map((c) => {
+            if (c.id !== conversationId) return c;
+            const patch = {};
+            if (changes.name)        patch.name   = changes.name.newValue;
+            if (changes.avatar)      patch.avatar  = changes.avatar.newValue;
+            if (changes.description) patch.description = changes.description.newValue;
+            if (changes.groupType)   patch.groupType   = changes.groupType.newValue;
+            return { ...c, ...patch };
+          }));
+          // Update active conversation header in real-time
+          setActiveConversation((prev) => {
+            if (!prev || prev.id !== conversationId) return prev;
+            const patch = {};
+            if (changes.name)        patch.name        = changes.name.newValue;
+            if (changes.avatar)      patch.avatar       = changes.avatar.newValue;
+            if (changes.description) patch.description  = changes.description.newValue;
+            if (changes.groupType)   patch.groupType    = changes.groupType.newValue;
+            return { ...prev, ...patch };
+          });
+        },
+
   });
 
   // ── location state effects ────────────────────────────────────────────────

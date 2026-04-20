@@ -117,10 +117,18 @@ export function useVoiceRoom() {
     });
 
     await room.connect(livekitUrl, token);
-    await room.localParticipant.setMicrophoneEnabled(true);
+
+    // Set connected BEFORE enabling mic — mic error must not block the UI.
     setConnected(true);
     setIsMuted(false);
     refreshParticipants(room);
+
+    try {
+      await room.localParticipant.setMicrophoneEnabled(true);
+    } catch (e) {
+      console.warn('[VoiceRoom] setMicrophoneEnabled failed:', e?.message);
+      setIsMuted(true);
+    }
   }, [refreshParticipants]);
 
   const disconnect = useCallback(async () => {

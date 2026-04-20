@@ -1,6 +1,5 @@
 const ConversationMember = require('../models/conversationMemberModel');
 const GroupRole = require('../models/groupRoleModel');
-const Conversation = require('../models/conversationModel');
 
 // Tính quyền thực tế theo thứ tự: personalOverride > customRole > systemRole
 const getEffectiveTopicPermission = async (member, topicId) => {
@@ -11,26 +10,29 @@ const getEffectiveTopicPermission = async (member, topicId) => {
     return { canAccess: true, canSend: true };
   }
 
-  const canSendGlobally = member.canSendMessages !== false;
-
   // 2. Custom role
   if (member.customRoleId) {
     const role = await GroupRole.findById(member.customRoleId).lean();
     if (role) {
       const allowedIds  = (role.allowedTopicIds  || []).map(id => id.toString());
       const sendableIds = (role.sendableTopicIds || []).map(id => id.toString());
+      console.log('[role] name:', role.name);
+      console.log('[role] allowedIds:', allowedIds);
+      console.log('[role] sendableIds:', sendableIds); // 👈 xem cái này
+      console.log('[role] checking tid:', tid);
 
-      let canAccess = allowedIds.length === 0 || allowedIds.includes(tid);
-      let canSend   = canAccess
-        && canSendGlobally
-        && role.permissions?.canSendMessages !== false
-        && (sendableIds.length === 0 || sendableIds.includes(tid));
+      // Empty allowedTopicIds = wildcard (can access all)
+      const canAccess = allowedIds.length === 0 || allowedIds.includes(tid);
 
-      // Personal override có độ ưu tiên cao hơn custom role trên từng topic.
-      const override = (member.topicOverrides || []).find(o => o.topicId?.toString() === tid);
-      if (override) {
-        canAccess = !!override.canAccess;
-        canSend = canAccess && !!override.canSend && canSendGlobally;
+      let canSend = false;
+      if (canAccess) {
+        if (sendableIds.length === 0) {
+          // Empty sendableTopicIds = follow global canSendMessages flag (wildcard)
+          canSend = role.permissions?.canSendMessages !== false;
+        } else {
+          // Explicit list: must be included AND have global send permission
+          canSend = sendableIds.includes(tid) && role.permissions?.canSendMessages !== false;
+        }
       }
 
       return { canAccess, canSend };
@@ -38,6 +40,7 @@ const getEffectiveTopicPermission = async (member, topicId) => {
   }
 
   // 3. Default member không có custom role
+  const canSendGlobally = member.canSendMessages !== false;
   let canAccess = true;
   let canSend = canSendGlobally;
 

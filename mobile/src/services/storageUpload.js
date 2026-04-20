@@ -79,3 +79,32 @@ export async function uploadImageToSupabase(uri, folder, userId) {
     throw error;
   }
 }
+
+/**
+ * Hàm upload tổng quát cho Stories (hỗ trợ cả ảnh và video)
+ */
+export async function uploadToSupabase(uri, fileName, bucketName = 'stories') {
+  try {
+    const fileData = await getFileData(uri);
+    const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+    
+    // Xác định mime type cơ bản
+    const isVideo = ['mp4', 'mov', 'avi'].includes(fileExt);
+    const contentType = isVideo ? `video/${fileExt}` : `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
+
+    const { error } = await supabase.storage
+      .from(bucketName)
+      .upload(fileName, fileData, {
+        upsert: true,
+        contentType
+      });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+    return data.publicUrl;
+  } catch (error) {
+    console.error('[uploadToSupabase] Error:', error.message);
+    throw error;
+  }
+}

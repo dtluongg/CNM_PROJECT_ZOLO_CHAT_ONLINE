@@ -26,6 +26,8 @@ import SystemMessageBubble from '../components/SystemMessageBubble';
 import UnreadDivider from '../components/UnreadDivider';
 import AiSummaryCard from '../components/AiSummaryCard';
 import PinnedBar from '../components/PinnedBar';
+import VoiceRoomPanel from '../../voice/components/VoiceRoomPanel';
+import { useVoiceRoomContext } from '../../voice/VoiceRoomContext';
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import useMessages from '../hooks/useMessages';
 import useSocket from '../hooks/useSocket';
@@ -53,6 +55,7 @@ export default function MessageScreen({ route, navigation }) {
   const { theme: THEME } = useTheme();
   const { isUserOnline, getLastSeen } = usePresence();
   const { initiateCall } = useCall();
+  const { isInRoom, fetchStatusBatch } = useVoiceRoomContext();
   const styles = useStyles(THEME);
   const currentUserId = user?._id?.toString() || null;
 
@@ -87,12 +90,14 @@ export default function MessageScreen({ route, navigation }) {
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [showPinLimitModal, setShowPinLimitModal] = useState(false);
   const [pendingPinMsgId, setPendingPinMsgId] = useState(null);
-  const [infoTab, setInfoTab] = useState('info');
+  const [infoTab, setInfoTab] = useState('overview');
   const [mediaData, setMediaData] = useState({ images: [], files: [] });
   const [loadingMedia, setLoadingMedia] = useState(false);
   const [blockConfirm, setBlockConfirm] = useState(false);
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockStatus, setBlockStatus] = useState(null);
+  // Effective permission for the active topic (null = loading, default full access)
+  const [topicPerm, setTopicPerm] = useState({ canAccess: true, canSend: true });
 
   const flatRef = useRef(null);
   const inputRef = useRef(null);
@@ -249,10 +254,30 @@ export default function MessageScreen({ route, navigation }) {
   }, [conversation.id]);
 
   useEffect(() => {
-    if (showInfoPanel && (infoTab === 'media' || infoTab === 'files')) {
+    if (showInfoPanel && infoTab === 'content') {
       loadMediaData();
     }
   }, [showInfoPanel, infoTab, loadMediaData]);
+
+  // ── Quyền truy cập kênh hiện tại ────────────────────────────────────────
+  useEffect(() => {
+    if (!activeTopic || conversation.type !== 'group' || !currentUserId) {
+      setTopicPerm({ canAccess: true, canSend: true });
+      return;
+    }
+    let cancelled = false;
+    conversationApi.getEffectivePermissions(conversation.id, currentUserId)
+      .then(res => {
+        if (cancelled) return;
+        const perms = res.data?.data?.topicPermissions || [];
+        const found = perms.find(p => p._id === activeTopic._id || p._id === activeTopic._id?.toString());
+        setTopicPerm(found ? { canAccess: found.canAccess, canSend: found.canSend } : { canAccess: true, canSend: true });
+      })
+      .catch(() => {
+        if (!cancelled) setTopicPerm({ canAccess: true, canSend: true });
+      });
+    return () => { cancelled = true; };
+  }, [activeTopic?._id, conversation.id, currentUserId, conversation.type]);
 
   // ── Lấy trạng thái chặn ─────────────────────────────────────────────────
   const fetchBlockStatus = useCallback(async () => {
@@ -380,9 +405,17 @@ export default function MessageScreen({ route, navigation }) {
     } catch (err) {
       console.error('sendText error:', err);
       if (err?.response?.status === 403) {
-        // Tin nhắn bị chặn — giữ lại và đánh dấu
-        msgHook.markBlocked(tempId);
-        await fetchBlockStatus();
+        const msg403 = err.response?.data?.message || '';
+        if (msg403.includes('chặn') || msg403.includes('block') || conversation.type === 'dm') {
+          // Bị chặn bởi người dùng — giữ tin và đánh dấu
+          msgHook.markBlocked(tempId);
+          await fetchBlockStatus();
+        } else {
+          // Không có quyền kênh — xoá tin tạm + refresh quyền
+          msgHook.removeTempMessage(tempId);
+          Alert.alert('Không có quyền', msg403 || 'Bạn không có quyền gửi tin nhắn trong kênh này.');
+          setTopicPerm(p => ({ ...p, canSend: false }));
+        }
       } else {
         msgHook.removeTempMessage(tempId);
       }
@@ -660,7 +693,7 @@ export default function MessageScreen({ route, navigation }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerBtn}
-            onPress={() => { setInfoTab('info'); setShowInfoPanel(true); }}
+            onPress={() => { setInfoTab('overview'); setShowInfoPanel(true); }}
           >
             <Feather name="more-horizontal" size={22} color={THEME.textMuted} />
           </TouchableOpacity>
@@ -826,55 +859,27 @@ export default function MessageScreen({ route, navigation }) {
           }}
         />
 
-        {/* ── Banner cảnh báo bị chặn ── */}
+        {/* ── Toast chặn người dùng ── */}
         {conversation.type === 'dm' && blockStatus?.iBlocked && (
-          <View
-            style={{
-              backgroundColor: THEME.bgSecondary,
-              borderTopWidth: 1,
-              borderTopColor: THEME.border,
-              padding: 12,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 10,
-            }}
-          >
-            <Text style={{ color: THEME.textMuted, fontSize: 13 }}>Bạn đã chặn người này.</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: THEME.bgSecondary, borderTopWidth: 1, borderTopColor: THEME.border }}>
+            <Feather name="slash" size={13} color={THEME.textMuted} />
+            <Text style={{ color: THEME.textMuted, fontSize: 12 }}>Bạn đã chặn người này</Text>
             <TouchableOpacity
               onPress={async () => {
-                try {
-                  await friendApi.blockFriend(conversation.otherUserId);
-                  await fetchBlockStatus();
-                } catch {
-                  Alert.alert('Lỗi', 'Không thể bỏ chặn');
-                }
+                try { await friendApi.blockFriend(conversation.otherUserId); await fetchBlockStatus(); }
+                catch { Alert.alert('Lỗi', 'Không thể bỏ chặn'); }
               }}
-              style={{
-                backgroundColor: THEME.accent,
-                borderRadius: 8,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-              }}
+              style={{ backgroundColor: THEME.accent + '22', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: THEME.accent + '44' }}
             >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Bỏ chặn</Text>
+              <Text style={{ color: THEME.accent, fontWeight: '700', fontSize: 11 }}>Bỏ chặn</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {conversation.type === 'dm' && blockStatus?.theyBlockedMe && (
-          <View
-            style={{
-              backgroundColor: '#fef3c7',
-              borderTopWidth: 1,
-              borderTopColor: '#fcd34d',
-              padding: 8,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ color: '#92400e', fontSize: 12 }}>
-              Bạn đã bị người này chặn. Tin nhắn sẽ không được nhận.
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: 'rgba(250,166,26,0.08)', borderTopWidth: 1, borderTopColor: 'rgba(250,166,26,0.2)' }}>
+            <Feather name="alert-triangle" size={13} color="#faa61a" />
+            <Text style={{ color: '#faa61a', fontSize: 12 }}>Bạn đã bị chặn — tin nhắn sẽ không được gửi</Text>
           </View>
         )}
 
@@ -897,6 +902,15 @@ export default function MessageScreen({ route, navigation }) {
                 <Text style={{ fontSize: 18, color: THEME.textMuted }}>✕</Text>
               </TouchableOpacity>
             </View>
+          )}
+
+          {/* Voice room panel – hiển thị khi đang trong kênh thoại của nhóm này */}
+          {conversation.type === 'group' && (
+            <VoiceRoomPanel
+              conversation={conversation}
+              topics={topics}
+              navigation={navigation}
+            />
           )}
 
           {/* Bộ chọn emoji */}
@@ -930,6 +944,12 @@ export default function MessageScreen({ route, navigation }) {
                 styles={styles}
                 replyingMessage={replyingMessage}
                 onCancelReply={() => setReplyingMessage(null)}
+                isGroup={conversation.type === 'group'}
+                disabled={activeTopic && !topicPerm.canSend}
+                disabledMessage={!topicPerm.canAccess
+                  ? 'Bạn không có quyền xem kênh này'
+                  : 'Bạn chỉ có thể xem, không thể gửi tin nhắn trong kênh này'
+                }
               />
             )
           )}
@@ -958,6 +978,11 @@ export default function MessageScreen({ route, navigation }) {
         onViewProfile={() => { setShowInfoPanel(false); navigation.push('UserProfile', { userId: conversation.otherUserId }); }}
         onLeaveGroup={handleLeaveGroup}
         onDisbandGroup={handleDisbandGroup}
+        topics={topics}
+        setTopics={setTopics}
+        onConversationUpdate={(updated) => {
+          // Cập nhật tên nhóm trên header nếu cần
+        }}
         THEME={THEME}
         styles={styles}
       />
@@ -1034,7 +1059,10 @@ export default function MessageScreen({ route, navigation }) {
                 <TouchableOpacity
                   key={topic._id}
                   onPress={() => {
-                    if (!isVoice) {
+                    if (isVoice) {
+                      setShowChannelSheet(false);
+                      navigation.push('VoiceChannel', { conversation, topic });
+                    } else {
                       setActiveTopic(topic);
                       setShowChannelSheet(false);
                     }
@@ -1068,11 +1096,14 @@ export default function MessageScreen({ route, navigation }) {
                     <Text style={{ fontSize: 14, fontWeight: isActive ? '700' : '500', color: THEME.textPrimary }}>
                       {topic.name}
                     </Text>
-                    {isVoice && (
-                      <Text style={{ fontSize: 11, color: '#22c55e', marginTop: 1 }}>Kênh thoại</Text>
-                    )}
+                    <Text style={{ fontSize: 11, color: isVoice ? '#22c55e' : THEME.textMuted, marginTop: 1 }}>
+                      {isVoice ? 'Nhấn để vào phòng thoại' : 'Kênh văn bản'}
+                    </Text>
                   </View>
-                  {isActive && <Feather name="check" size={16} color={THEME.accent} />}
+                  {isVoice
+                    ? <Feather name="log-in" size={16} color="#22c55e" />
+                    : isActive && <Feather name="check" size={16} color={THEME.accent} />
+                  }
                 </TouchableOpacity>
               );
             })}

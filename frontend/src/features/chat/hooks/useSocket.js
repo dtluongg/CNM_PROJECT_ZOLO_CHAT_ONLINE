@@ -76,6 +76,10 @@ export const useSocket = ({
       onConversationDisbanded?.(conversationId);
     });
 
+    socket.on('conversation:updated', ({ conversationId, changes }) => {
+      onConversationUpdated?.(conversationId, changes);
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;

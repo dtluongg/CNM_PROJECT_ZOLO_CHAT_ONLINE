@@ -4,6 +4,7 @@
     "icon": "./public/logo.png",
     "slug": "chatapp-mobile",
     "version": "1.0.0",
+    "jsEngine": "hermes",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "updates": {
@@ -58,6 +59,11 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6ea44905-01b0-4a2b-91cc-b20ac5a746ee"
+      }
+    }
   }
 }

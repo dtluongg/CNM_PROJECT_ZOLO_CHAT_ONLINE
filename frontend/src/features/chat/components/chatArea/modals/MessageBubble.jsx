@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 import PollMessage from '../ui/PollMessage';
+import ReminderMessage from '../ui/ReminderMessage';
+
 
 const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245'];
 
@@ -35,11 +37,11 @@ const MessageBubble = ({
   isPinned,
   onVote,
 }) => {
-  const observerRef    = useRef(null);
-  const menuRef        = useRef(null);
+  const observerRef = useRef(null);
+  const menuRef = useRef(null);
   const actionButtonRef = useRef(null);
 
-  const [hover, setHover]             = useState(false);
+  const [hover, setHover] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [showEmojiBar, setShowEmojiBar] = useState(false);
   const [menuPlacement, setMenuPlacement] = useState('down');
@@ -99,6 +101,9 @@ const MessageBubble = ({
     } else if (msg.replyToMessageId.type === 'poll') {
       const pollTopic = msg.replyToMessageId.payload?.topic || msg.replyToMessageId.content || 'Bình chọn';
       repliedContent = `Bình chọn: ${pollTopic}`;
+    } else if (msg.replyToMessageId.type === 'reminder') {
+      const reminderTopic = msg.replyToMessageId.payload?.content || msg.replyToMessageId.content || 'Nhắc hẹn';
+      repliedContent = `Nhắc hẹn: ${reminderTopic}`;
     } else {
       repliedContent = `[${msg.replyToMessageId.type}]`;
     }
@@ -109,7 +114,7 @@ const MessageBubble = ({
     const textColor = isMine ? 'rgba(255, 255, 255, 0.8)' : 'var(--text-secondary)';
 
     return (
-      <div 
+      <div
         onClick={(e) => { e.stopPropagation(); onJumpToMessage && onJumpToMessage(msg.replyToMessageId._id || msg.replyToMessageId.id); }}
         style={{
           background: replyBg,
@@ -132,6 +137,53 @@ const MessageBubble = ({
         <div style={{ fontWeight: 700, color: nameColor, marginBottom: 2, fontSize: 13 }}>{repliedBy}</div>
         <div style={{ color: textColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4, fontSize: 12 }}>
           {repliedContent}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Render Story Reply Context (Outside Bubble) ─────────────────────────
+  const renderStoryContext = () => {
+    if (msg.payload?.type !== 'story_reply' || msg.revoked || msg.recalled) return null;
+    const isVideo = msg.payload.mediaType === 'video';
+    const storyHeader = isMine ? 'Bạn đã trả lời tin' : `${msg.senderName} đã trả lời tin của bạn`;
+
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        marginBottom: 8,
+        alignItems: isMine ? 'flex-end' : 'flex-start'
+      }}>
+        {/* Header row with reply icon */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          color: 'var(--text-muted)',
+          fontSize: 12,
+          fontWeight: 500
+        }}>
+          <Reply size={14} style={{ transform: 'scaleX(-1)' }} />
+          <span>{storyHeader}</span>
+        </div>
+
+        {/* Story Preview Area */}
+        <div style={{
+          width: 120,
+          height: 180,
+          borderRadius: 12,
+          overflow: 'hidden',
+          position: 'relative',
+          background: '#1a1a1a',
+        }}>
+          {isVideo ? (
+            <video src={msg.payload.mediaUrl} className="w-full h-full object-cover" muted loop />
+          ) : (
+            <img src={msg.payload.mediaUrl} className="w-full h-full object-cover" alt="Story preview" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
         </div>
       </div>
     );
@@ -171,8 +223,8 @@ const MessageBubble = ({
     }
     if (msg.type === 'file') {
       const fileName = msg.payload?.fileName || msg.content || '';
-      const fileUrl  = msg.payload?.url || msg.content;
-      const isVideo  = /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(fileName);
+      const fileUrl = msg.payload?.url || msg.content;
+      const isVideo = /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(fileName);
       if (isVideo) {
         return (
           <video
@@ -192,14 +244,32 @@ const MessageBubble = ({
     }
     if (msg.type === 'poll') {
       return (
-        <PollMessage 
-          message={msg} 
-          currentUserId={currentUserId} 
-          onVote={(optionId) => onVote && onVote(msg._id || msg.id, optionId)} 
+        <PollMessage
+          message={msg}
+          currentUserId={currentUserId}
+          onVote={(optionId) => onVote && onVote(msg._id || msg.id, optionId)}
           isPinned={isPinned}
         />
       );
     }
+    if (msg.type === 'reminder') {
+      return (
+        <ReminderMessage
+          message={msg}
+          isMine={isMine}
+          isPinned={isPinned}
+        />
+      );
+    }
+
+    if (msg.payload?.type === 'story_reply') {
+      return (
+        <div style={{ fontSize: 14, fontWeight: 500, padding: '2px 0' }}>
+          {msg.content}
+        </div>
+      );
+    }
+
     return (
       <>
         {msg.content}
@@ -212,149 +282,182 @@ const MessageBubble = ({
     );
   };
 
-   const isBeingRepliedTo = replyingTargetId === (msg._id || msg.id);
+  const isBeingRepliedTo = replyingTargetId === (msg._id || msg.id);
+  // Duplicate showMenu was here, removed.
 
-   return (
-     <div
-       ref={observerRef}
-       style={{
-         display: 'flex',
-         flexDirection: isMine ? 'row-reverse' : 'row',
-         gap: isMobile ? 8 : 10,
-         padding: showHeader
-           ? (isMobile ? '8px 12px 2px' : '8px 16px 2px')
-           : (isMobile ? '2px 12px' : '2px 16px'),
-         alignItems: 'flex-start',
-         position: 'relative',
-         transition: 'all 0.3s ease',
-         background: isBeingRepliedTo ? 'rgba(var(--accent-rgb), 0.05)' : 'transparent',
-       }}
-       onMouseEnter={() => { if (!isMobile) setHover(true); }}
-       onMouseLeave={() => { if (!isMobile) { setHover(false); setShowEmojiBar(false); } }}
-       onTouchStart={handleTouchStart}
-       onTouchEnd={handleTouchEnd}
-     >
-       {/* Avatar */}
-       <div style={{ width: isMobile ? 34 : 36, flexShrink: 0, marginTop: showHeader ? 2 : 0 }}>
-         {showHeader && !isMine && (
-           <div
-             onClick={() => onAvatarClick?.(msg.senderId)}
-             style={{ cursor: onAvatarClick ? 'pointer' : 'default' }}
-           >
-             <Avatar name={msg.senderName} avatar={msg.avatar} size={isMobile ? 34 : 36} />
-           </div>
-         )}
-       </div>
+  return (
+    <div
+      ref={observerRef}
+      style={{
+        display: 'flex',
+        flexDirection: isMine ? 'row-reverse' : 'row',
+        gap: isMobile ? 8 : 10,
+        padding: showHeader
+          ? (isMobile ? '8px 12px 2px' : '8px 16px 2px')
+          : (isMobile ? '2px 12px' : '2px 16px'),
+        alignItems: 'flex-start',
+        position: 'relative',
+        transition: 'all 0.3s ease',
+        background: isBeingRepliedTo ? 'rgba(var(--accent-rgb), 0.05)' : 'transparent',
+        zIndex: showMenu ? 9999 : 1, // Final absolute priority fix
+      }}
+      onMouseEnter={() => { if (!isMobile) setHover(true); }}
+      onMouseLeave={() => { if (!isMobile) { setHover(false); setShowEmojiBar(false); } }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Avatar */}
+      <div style={{ width: isMobile ? 34 : 36, flexShrink: 0, marginTop: showHeader ? 2 : 0 }}>
+        {showHeader && !isMine && (
+          <div
+            onClick={() => onAvatarClick?.(msg.senderId)}
+            style={{ cursor: onAvatarClick ? 'pointer' : 'default' }}
+          >
+            <Avatar name={msg.senderName} avatar={msg.avatar} size={isMobile ? 34 : 36} />
+          </div>
+        )}
+      </div>
 
-       <div style={{
-         maxWidth, display: 'flex', flexDirection: 'column',
-         alignItems: isMine ? 'flex-end' : 'flex-start', position: 'relative',
-       }}>
-         {/* Header (tên + giờ) */}
-         {showHeader && (
-           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 3 }}>
-             {!isMine && (
-               <span style={{ fontSize: isMobile ? 13 : 14, fontWeight: 700, color: senderColor }}>
-                 {msg.senderName}
-               </span>
-             )}
-             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{msg.time}</span>
-           </div>
-         )}
-
-         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexDirection: isMine ? 'row-reverse' : 'row' }}>
-           {/* Bubble */}
-            <div style={{
-              background: msg.type === 'poll' ? 'transparent' : (isMine ? 'var(--bubble-self)' : 'var(--bubble-other)'),
-              color: isMine ? '#fff' : 'var(--text-primary)',
-              padding: msg.type === 'poll' ? 0 : (isMobile ? '9px 14px' : '8px 14px'),
-              borderRadius: msg.type === 'poll' ? 0 : 20,
-              fontSize: isMobile ? 15 : 14, lineHeight: 1.5,
-              wordBreak: 'break-word',
-              boxShadow: msg.type === 'poll' ? 'none' : (isBeingRepliedTo ? '0 0 0 2px var(--accent), 0 4px 12px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.12)'),
-              maxWidth: '100%',
-              transform: isBeingRepliedTo ? 'scale(1.02)' : 'scale(1)',
-              transition: 'all 0.2s ease-out',
-              position: 'relative'
-            }}>
-             {isPinned && msg.type !== 'poll' && (
-               <div style={{ 
-                 display: 'flex', alignItems: 'center', gap: 6, 
-                 marginBottom: 4, paddingBottom: 4, 
-                 borderBottom: `1px solid ${ (msg.type === 'poll' || !isMine) ? 'var(--border)' : 'rgba(255,255,255,0.2)' }`,
-                 opacity: 0.9, fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-                 color: (msg.type === 'poll' || msg.type === 'image' || msg.type === 'video' || !isMine) ? 'var(--accent)' : '#fff'
-               }}>
-                 <span>📌</span>
-                 <span>Ghim tin nhắn</span>
-               </div>
-             )}
-             {renderRepliedContext()}
-             {renderContent()}
-
-            {/* Standalone Reaction Trigger (Web Hover) */}
-            {hover && !isMobile && !(msg.revoked || msg.recalled || msg.type === 'poll') && (
-              <div
-                onClick={(e) => { e.stopPropagation(); setShowEmojiBar(p => !p); }}
-                style={{
-                  position: 'absolute',
-                  bottom: -14,
-                  right: -10, // Locked to right corner
-                  width: 28, height: 28,
-                  background: '#ffffff',
-                  border: '1px solid #e1e4e8',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-                  zIndex: 10,
-                  color: '#5f6368',
-                  transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#f1f3f4'; e.currentTarget.style.color = 'var(--accent)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#5f6368'; }}
-              >
-                <ThumbsUp size={14} />
-              </div>
+      <div style={{
+        maxWidth, display: 'flex', flexDirection: 'column',
+        alignItems: isMine ? 'flex-end' : 'flex-start', position: 'relative',
+      }}>
+        {/* Header (tên + giờ) */}
+        {showHeader && (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 3 }}>
+            {!isMine && (
+              <span style={{ fontSize: isMobile ? 13 : 14, fontWeight: 700, color: senderColor }}>
+                {msg.senderName}
+              </span>
             )}
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{msg.time}</span>
+          </div>
+        )}
 
-             {/* Emoji bar (desktop hover) - Anchored to the standalone button */}
-            {showEmojiBar && !isMobile && !(msg.revoked || msg.recalled || msg.type === 'poll') && (
+        {/* Render Story Context (Outside Bubble) */}
+        {renderStoryContext()}
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          flexDirection: isMine ? 'row-reverse' : 'row',
+          marginTop: 0,
+          zIndex: (msg.payload?.type === 'story_reply' && !msg.revoked && !msg.recalled) ? 2 : 1,
+          position: 'relative'
+        }}>
+          {/* Bubble */}
+          <div style={{
+            background: (msg.type === 'poll' || msg.type === 'reminder') ? 'transparent' : (isMine ? 'var(--bubble-self)' : 'var(--bubble-other)'),
+
+            color: isMine ? '#fff' : 'var(--text-primary)',
+            padding: (msg.type === 'poll' || msg.type === 'reminder') ? 0 : (isMobile ? '9px 14px' : '8px 14px'),
+            borderRadius: (msg.type === 'poll' || msg.type === 'reminder') ? 0 : 20,
+
+            fontSize: isMobile ? 15 : 14, lineHeight: 1.5,
+            wordBreak: 'break-word',
+            boxShadow: (msg.type === 'poll' || msg.type === 'reminder') ? 'none' : (isBeingRepliedTo ? '0 0 0 2px var(--accent), 0 4px 12px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.12)'),
+
+            maxWidth: '100%',
+            transform: isBeingRepliedTo ? 'scale(1.02)' : 'scale(1)',
+            transition: 'all 0.2s ease-out',
+            position: 'relative',
+            marginLeft: (msg.payload?.type === 'story_reply' && !isMine) ? 8 : 0,
+            marginRight: (msg.payload?.type === 'story_reply' && isMine) ? 8 : 0,
+          }}>
+            {isPinned && msg.type !== 'poll' && msg.type !== 'reminder' && (
               <div style={{
-                position: 'absolute', 
-                bottom: 35, 
-                right: -10, // Anchor to the right
-                background: '#ffffff', border: '1px solid #e1e4e8', borderRadius: 24,
-                padding: '6px 12px', display: 'flex', gap: 12,
-                boxShadow: '0 4px 15px rgba(0,0,0,0.15)', zIndex: 2000,
-                animation: 'fadeInUp 0.1s ease'
+                display: 'flex', alignItems: 'center', gap: 6,
+                marginBottom: 4, paddingBottom: 4,
+                borderBottom: `1px solid ${(msg.type === 'poll' || !isMine) ? 'var(--border)' : 'rgba(255,255,255,0.2)'}`,
+                opacity: 0.9, fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                color: (msg.type === 'poll' || msg.type === 'image' || msg.type === 'video' || !isMine) ? 'var(--accent)' : '#fff'
               }}>
-                {(reactionTypes?.length > 0 ? reactionTypes : [
-                  { emoji: '👍' }, { emoji: '❤️' }, { emoji: '😂' },
-                  { emoji: '😮' }, { emoji: '😢' }, { emoji: '😡' },
-                ]).map(r => (
-                  <span
-                    key={r.emoji || r.code}
-                    title={r.label}
-                    style={{ fontSize: 18, cursor: 'pointer', transition: 'transform 0.1s' }}
-                    onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.3)'}
-                    onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                    onClick={() => { onReact(msg, r.emoji); setShowEmojiBar(false); }}
-                  >
-                    {r.emoji}
-                  </span>
-                ))}
+                <span>📌</span>
+                <span>Ghim tin nhắn</span>
+              </div>
+            )}
+            {renderRepliedContext()}
+            {renderContent()}
+
+            {/* Standalone Reaction Trigger (Web Hover) - Smart positioning like Zalo */}
+            {hover && !isMobile && !(msg.revoked || msg.recalled || msg.type === 'poll' || msg.type === 'reminder') && (
+              <div style={{
+                position: 'absolute',
+                bottom: -15,
+                // Inner corner positioning
+                ...(isMine ? { left: -10 } : { right: -10 }),
+                display: 'block', // Use block to handle absolute children manually
+                zIndex: 10001
+              }}>
+                <div
+                  onClick={(e) => { e.stopPropagation(); setShowEmojiBar(p => !p); }}
+                  style={{
+                    width: 26, height: 26,
+                    background: '#ffffff',
+                    border: '1px solid #e1e4e8',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                    color: '#8e9297',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#f8f9fa'; e.currentTarget.style.color = 'var(--accent)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#8e9297'; }}
+                >
+                  <ThumbsUp size={14} />
+                </div>
+
+                {/* Emoji bar (desktop hover) - Floating precisely above the button and expanding INWARD */}
+                {showEmojiBar && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 32, // Floating gap
+                    // If my message (right), align bar's right edge to button and expand LEFT
+                    // If friend's message (left), align bar's left edge to button and expand RIGHT
+                    ...(isMine ? { right: 0 } : { left: 0 }),
+                    background: '#ffffff',
+                    border: '1px solid #e1e4e8',
+                    borderRadius: 30,
+                    padding: '5px 14px',
+                    display: 'flex',
+                    gap: 14,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                    animation: 'fadeInUp 0.1s ease',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {(reactionTypes?.length > 0 ? reactionTypes : [
+                      { emoji: '👍' }, { emoji: '❤️' }, { emoji: '😂' },
+                      { emoji: '😮' }, { emoji: '😢' }, { emoji: '😡' },
+                    ]).map(r => (
+                      <span
+                        key={r.emoji || r.code}
+                        title={r.label}
+                        style={{ fontSize: 20, cursor: 'pointer', transition: 'transform 0.1s' }}
+                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.25)'}
+                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                        onClick={() => { onReact(msg, r.emoji); setShowEmojiBar(false); }}
+                      >
+                        {r.emoji}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Reactions summary - Synchronized Bottom-Right */}
-            {msg.reactions && Object.keys(msg.reactions).length > 0 && msg.type !== 'poll' && (
+            {/* Reactions summary - Synchronized and opposite to Trigger */}
+            {msg.reactions && Object.keys(msg.reactions).length > 0 && msg.type !== 'poll' && msg.type !== 'reminder' && (
               <div
                 onClick={(e) => { e.stopPropagation(); onShowDetails(msg); }}
                 style={{
-                  position: 'absolute', bottom: -12, right: (hover && !isMobile) ? 22 : -10,
+                  position: 'absolute',
+                  bottom: -12,
+                  // Place opposite to the Reaction Trigger to avoid overlap
+                  ...(isMine ? { right: -10 } : { left: -10 }),
                   display: 'flex', alignItems: 'center', gap: 4,
                   background: '#fff', border: '1px solid #e1e4e8', borderRadius: 12,
                   padding: '2px 8px', fontSize: 13, cursor: 'pointer',
@@ -385,7 +488,7 @@ const MessageBubble = ({
               {[
                 ...(!(msg.revoked || msg.recalled) ? [
                   { content: <Quote size={13} />, title: 'Trả lời', onClick: () => onReply(msg) },
-                  ...(msg.type !== 'poll' ? [{ content: <CornerUpRight size={13} />, title: 'Chuyển tiếp', onClick: () => onForward(msg) }] : []),
+                  ...(msg.type !== 'poll' && msg.type !== 'reminder' ? [{ content: <CornerUpRight size={13} />, title: 'Chuyển tiếp', onClick: () => onForward(msg) }] : []),
                 ] : []),
                 {
                   content: <MoreHorizontal size={14} />, title: 'Thêm',
@@ -421,35 +524,35 @@ const MessageBubble = ({
               style={{
                 position: 'absolute',
                 ...(menuPlacement === 'up' ? { bottom: '110%', marginBottom: 6 } : { top: '110%', marginTop: 6 }),
-                right: isMine ? 0 : 'auto', left: isMine ? 'auto' : 0,
+                right: isMine ? -10 : 'auto', left: isMine ? 'auto' : -10,
                 background: '#fff', borderRadius: 10,
                 boxShadow: menuPlacement === 'up' ? '0 -4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)',
-                padding: '6px 0', zIndex: 999, minWidth: 180, border: '1px solid #eee',
+                padding: '6px 0', zIndex: 10001, minWidth: 180, border: '1px solid #eee',
               }}
             >
-              {isMine && msg.type !== 'poll' && (
+              {isMine && msg.type !== 'poll' && msg.type !== 'reminder' && (
                 <div onClick={() => { onRecall(msg); setOpenMenuId(null); }}
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#ed4245', fontWeight: 600 }}>
                   ↩️ Thu hồi
                 </div>
               )}
 
-              {msg.type !== 'poll' && (
+              {msg.type !== 'poll' && msg.type !== 'reminder' && (
                 <div onClick={() => { onDelete(msg); setOpenMenuId(null); }}
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#ed4245' }}>
                   🗑️ Xóa
                 </div>
               )}
-              {isMine && msg.type !== 'poll' && (
+              {isMine && msg.type !== 'poll' && msg.type !== 'reminder' && (
                 <div onClick={() => { onEdit(msg); setOpenMenuId(null); }}
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#000' }}>
                   ✏️ Chỉnh sửa tin nhắn
                 </div>
               )}
               {!(msg.revoked || msg.recalled) && (
-                <div 
+                <div
                   onClick={() => { isPinned ? onUnpin(msg._id || msg.id) : onPin(msg._id || msg.id); setOpenMenuId(null); }}
-                  style={{ 
+                  style={{
                     padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#000',
                     display: 'flex', alignItems: 'center', gap: 10
                   }}
@@ -535,8 +638,8 @@ const MessageBubble = ({
               { icon: <Reply size={20} />, label: 'Trả lời', onClick: () => { onReply(msg); setShowActions(false); }, show: true },
               { icon: <CornerUpRight size={20} />, label: 'Chuyển tiếp', onClick: () => { onForward(msg); setShowActions(false); }, show: msg.type !== 'poll' },
               { icon: <Copy size={20} />, label: 'Sao chép', show: msg.type === 'text' },
-              { 
-                icon: <Pin size={20} />, 
+              {
+                icon: <Pin size={20} />,
                 label: isPinned ? 'Bỏ ghim' : 'Ghim tin nhắn',
                 onClick: () => { isPinned ? onUnpin(msg._id || msg.id) : onPin(msg._id || msg.id); setShowActions(false); },
                 show: true

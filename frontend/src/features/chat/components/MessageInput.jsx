@@ -484,14 +484,34 @@ export default function MessageInput({ onSend, placeholder, isMobile, isGroup, c
       {attachments.length > 0 && (
          <div style={{
             background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderBottom: 'none',
-            borderRadius: isMobile ? 0 : '12px 12px 0 0', padding: '12px 16px', display: 'flex', gap: 10, overflowX: 'auto'
+            borderRadius: isMobile ? 0 : '12px 12px 0 0', padding: '12px 16px'
          }}>
-           {attachments.map(att => (
-             <div key={att.id} style={{ position: 'relative' }}>
-               <img src={att.previewUrl} alt="preview" style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover' }} />
-               <button onClick={() => removeAttachment(att.id)} style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', cursor: 'pointer' }}><X size={12} /></button>
-             </div>
-           ))}
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+               {attachments.length} ảnh
+             </span>
+             <button
+               onClick={removeAllAttachments}
+               style={{
+                 background: 'none', border: 'none', color: 'var(--text-primary)', 
+                 fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                 padding: '4px 8px', borderRadius: 6, transition: 'all 0.15s'
+               }}
+               onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+               onMouseLeave={e => e.currentTarget.style.background = 'none'}
+             >
+               Xóa tất cả
+             </button>
+           </div>
+
+           <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
+             {attachments.map(att => (
+               <div key={att.id} style={{ position: 'relative', flexShrink: 0 }}>
+                 <img src={att.previewUrl} alt="preview" style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--border)' }} />
+                 <button onClick={() => removeAttachment(att.id)} style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={12} /></button>
+               </div>
+             ))}
+           </div>
          </div>
       )}
 
