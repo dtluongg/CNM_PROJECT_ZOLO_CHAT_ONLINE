@@ -20,25 +20,36 @@ export function VoiceRoomProvider({ children }) {
     speaking, liveParts, localVideoTrack, screenTrack,
   } = useVoiceRoom();
 
-  // VoiceRoomContext.js
   const getMergedParticipants = useCallback((topicId) => {
     const key  = topicId || '__general__';
     const info = roomInfoMap[key];
-    if (!info?.participants) return [];
+    const backendMap = {};
+    (info?.participants || []).forEach(p => { backendMap[p.userId] = p; });
 
-    return info.participants.map(p => {
-      const livePart = liveParts.find(lp => lp.identity === p.userId);
-      return {
-        ...p,
-        isSpeaking: speaking.has(p.userId),
-        isMuted:    livePart?.isMuted ?? false,
-        hasCamera:  livePart?.hasCamera ?? false,  // 👈 lấy từ LiveKit, không từ backend
-        isLocal:    livePart?.isLocal ?? false,
-        identity:   p.userId, // ParticipantCard cần field này
-        displayName: p.displayName,
-      };
-    });
-  }, [roomInfoMap, speaking, liveParts]);
+    if (liveParts.length > 0) {
+      return liveParts.map(lp => {
+        const bd = backendMap[lp.identity] || {};
+        return {
+          userId:      lp.identity,
+          identity:    lp.identity,
+          displayName: bd.displayName || lp.name || 'Người dùng',
+          avatar:      bd.avatar      || lp.metadata?.avatar || null,
+          isSpeaking:  speaking.has(lp.identity),
+          isMuted:     lp.isMuted   ?? false,
+          hasCamera:   lp.hasCamera ?? false,
+          isLocal:     lp.isLocal   ?? false,
+        };
+      });
+    }
+    return (info?.participants || []).map(p => ({
+      ...p,
+      identity:   p.userId,
+      isSpeaking: false,
+      isMuted:    false,
+      hasCamera:  false,
+      isLocal:    false,
+    }));
+  }, [liveParts, speaking, roomInfoMap]);
 
   const fetchStatus = useCallback(async (conversationId, topicId = null) => {
     try {
@@ -80,7 +91,9 @@ export function VoiceRoomProvider({ children }) {
       await connect({ livekitUrl, token });
       await fetchStatus(conversationId, topicId);
     } catch (err) {
-      setError(err.response?.data?.message || 'Không thể tạo phòng thoại');
+      console.error('[VoiceRoom] createRoom error:', err);
+      setError(err.response?.data?.message || err.message || 'Không thể tạo phòng thoại');
+      setInRoom(false);
     } finally {
       setLoading(false);
     }
@@ -98,7 +111,9 @@ export function VoiceRoomProvider({ children }) {
       await connect({ livekitUrl, token });
       await fetchStatus(conversationId, topicId);
     } catch (err) {
-      setError(err.response?.data?.message || 'Không thể tham gia phòng thoại');
+      console.error('[VoiceRoom] joinRoom error:', err);
+      setError(err.response?.data?.message || err.message || 'Không thể tham gia phòng thoại');
+      setInRoom(false);
     } finally {
       setLoading(false);
     }

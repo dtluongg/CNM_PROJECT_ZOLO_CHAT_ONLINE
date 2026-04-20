@@ -4,6 +4,7 @@ import {
   PhoneOff, Volume2, Loader,
 } from 'lucide-react';
 import { useVoiceRoomContext } from '../VoiceRoomContext';
+import MediaPermissionModal from './MediaPermissionModal';
 
 const COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245','#9b59b6','#e67e22'];
 const avatarBg = (name) => COLORS[(name || '?').charCodeAt(0) % COLORS.length];
@@ -135,11 +136,16 @@ export default function VoiceChannelView({ topic, conversation, currentUserId, o
   const screenRef    = useRef(null);
   const autoJoinDone = useRef(false);
 
+  // Permission gate: null = not yet decided, true = confirmed, false = cancelled
+  const [permGranted, setPermGranted] = useState(null);
+
   useEffect(() => {
     if (conversation?.id && topicId) fetchStatus(conversation.id, topicId);
   }, [topicId, conversation?.id, fetchStatus]);
 
   useEffect(() => {
+    // Wait for user to confirm permissions before joining
+    if (permGranted !== true) return;
     if (!conversation?.id || !topicId || inThisRoom || loading || autoJoinDone.current) return;
     autoJoinDone.current = true;
     const doJoin = async () => {
@@ -149,7 +155,7 @@ export default function VoiceChannelView({ topic, conversation, currentUserId, o
       else createRoom(conversation.id, topicId);
     };
     doJoin();
-  }, [conversation?.id, topicId]); // intentionally minimal deps
+  }, [permGranted, conversation?.id, topicId]); // intentionally minimal deps
 
   useEffect(() => {
     const el = screenRef.current;
@@ -179,6 +185,15 @@ export default function VoiceChannelView({ topic, conversation, currentUserId, o
       Math.floor((vw - sidebarOffset - gridPad - gap * (cols - 1)) / cols)
     )
   );
+
+  if (permGranted === null) {
+    return (
+      <MediaPermissionModal
+        onConfirm={() => setPermGranted(true)}
+        onCancel={() => { setPermGranted(false); onExitChannel?.(); }}
+      />
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#1a1b1e', overflow: 'hidden' }}>
@@ -272,7 +287,7 @@ export default function VoiceChannelView({ topic, conversation, currentUserId, o
                     ))}
                   </div>
                 )}
-                <button onClick={() => { autoJoinDone.current = false; }}
+                <button onClick={() => { autoJoinDone.current = false; setPermGranted(null); }}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 10, background: '#57f287', color: '#000', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
                   <Volume2 size={16} /> Tham gia lại
                 </button>

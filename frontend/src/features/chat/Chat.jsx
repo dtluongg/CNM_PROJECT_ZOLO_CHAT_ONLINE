@@ -125,6 +125,29 @@ const Chat = () => {
         c.id === conversationId ? { ...c, unread: 0 } : c
       ));
     },
+     onConversationUpdated: (conversationId, changes) => {
+          // Update sidebar list
+          setConversations((prev) => prev.map((c) => {
+            if (c.id !== conversationId) return c;
+            const patch = {};
+            if (changes.name)        patch.name   = changes.name.newValue;
+            if (changes.avatar)      patch.avatar  = changes.avatar.newValue;
+            if (changes.description) patch.description = changes.description.newValue;
+            if (changes.groupType)   patch.groupType   = changes.groupType.newValue;
+            return { ...c, ...patch };
+          }));
+          // Update active conversation header in real-time
+          setActiveConversation((prev) => {
+            if (!prev || prev.id !== conversationId) return prev;
+            const patch = {};
+            if (changes.name)        patch.name        = changes.name.newValue;
+            if (changes.avatar)      patch.avatar       = changes.avatar.newValue;
+            if (changes.description) patch.description  = changes.description.newValue;
+            if (changes.groupType)   patch.groupType    = changes.groupType.newValue;
+            return { ...prev, ...patch };
+          });
+        },
+
   });
 
   // ── location state effects ────────────────────────────────────────────────

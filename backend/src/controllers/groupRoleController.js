@@ -372,27 +372,40 @@ const getEffectivePermissions = async (req, res, next) => {
     const effectiveTopics = allTopics.map(topic => {
       const tid = topic._id.toString();
 
-      // owner/admin full quyền
+      // 1. Personal override — highest priority
+      const override = (member.topicOverrides || []).find(o => o.topicId?.toString() === tid);
+      if (override) {
+        return {
+          ...topic,
+          canAccess: override.canAccess,
+          canSend:   override.canSend && member.canSendMessages !== false,
+          source:    'override',
+        };
+      }
+
+      // 2. owner/admin full quyền
       if (member.role === 'owner' || member.role === 'admin') {
         return { ...topic, canAccess: true, canSend: true, source: 'system_role' };
       }
 
-      // Custom role
+      // 3. Custom role
       if (member.customRoleId) {
         const cr = member.customRoleId;
         const allowedIds  = (cr.allowedTopicIds  || []).map(id => id.toString());
         const sendableIds = (cr.sendableTopicIds || []).map(id => id.toString());
 
         const canAccess = allowedIds.length === 0 || allowedIds.includes(tid);
-        const canSend   = canAccess
-          && sendableIds.length > 0
-          && sendableIds.includes(tid)
-          && cr.permissions?.canSendMessages !== false;
+        let canSend = false;
+        if (canAccess) {
+          canSend = sendableIds.length === 0
+            ? cr.permissions?.canSendMessages !== false
+            : sendableIds.includes(tid) && cr.permissions?.canSendMessages !== false;
+        }
 
         return { ...topic, canAccess, canSend, source: 'custom_role' };
       }
 
-      // Default
+      // 4. Default member
       return {
         ...topic,
         canAccess: true,
