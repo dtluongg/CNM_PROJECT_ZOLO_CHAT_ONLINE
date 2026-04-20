@@ -134,12 +134,17 @@ const upsertNotificationSetting = async (req, res, next) => {
 
         const { isMuted, muteUntil, mentionConfig, pushEnabled } = req.body;
         const updates = {};
-
+        // 1. Xử lý isMuted
         if (isMuted !== undefined) {
             if (typeof isMuted !== 'boolean') {
                 return res.status(400).json({ message: 'isMuted phải là boolean' });
             }
             updates.isMuted = isMuted;
+            // [BỔ SUNG AN TOÀN]: Nếu user muốn MỞ LẠI thông báo, tự động xóa mốc thời gian tắt
+            if (isMuted === false) {
+                updates.muteUntil = null;
+            }
+            //
         }
 
         if (pushEnabled !== undefined) {
@@ -164,7 +169,11 @@ const upsertNotificationSetting = async (req, res, next) => {
                 if (Number.isNaN(parsed.getTime())) {
                     return res.status(400).json({ message: 'muteUntil không hợp lệ' });
                 }
-                updates.muteUntil = parsed;
+                // Chỉ cập nhật nếu ở trên chưa bị ép về null do isMuted === false
+                if (updates.muteUntil !== null) {
+                    updates.muteUntil = parsed;
+                }
+                //
             }
         }
 
@@ -186,7 +195,54 @@ const upsertNotificationSetting = async (req, res, next) => {
         next(error);
     }
 };
+/**
+ * Xử lý tạo thông báo khi có người bị tag (Mention)
+ * Chặn hoàn toàn nếu người nhận đang bật chế độ Mute
+ */
+const handleMentionsNotification = async ({ senderId, conversationId, messageId, mentions }) => {
+    try {
+        const now = new Date();
 
+        for (const userId of mentions) {
+            // 1. Bỏ qua nếu tự tag chính mình
+            if (userId.toString() === senderId.toString()) continue;
+
+            // 2. Kiểm tra cài đặt thông báo của user bị tag trong hội thoại này
+            const setting = await NotificationSetting.findOne({ userId, conversationId }).lean();
+
+            if (setting) {
+                // Kiểm tra các trường hợp đang bị Mute
+                const isMutedForever = setting.isMuted && setting.muteUntil === null;
+                const isMutedTemporarily = setting.isMuted && setting.muteUntil && new Date(setting.muteUntil) > now;
+                const isMentionDisabled = setting.mentionConfig === 'none';
+
+                // Nếu rơi vào 1 trong 3 trường hợp trên -> Chặn hoàn toàn, không tạo thông báo
+                if (isMutedForever || isMutedTemporarily || isMentionDisabled) {
+                    console.log(`[Notification] Bỏ qua gửi thông báo tag cho user ${userId} do đang tắt thông báo.`);
+                    continue;
+                }
+            }
+
+            // 3. Đủ điều kiện nhận -> Lưu thông báo vào Database
+            await Notification.create({
+                userId: userId,
+                actorId: senderId,
+                type: 'mention',
+                conversationId: conversationId,
+                messageId: messageId,
+                content: 'đã nhắc đến bạn trong một tin nhắn',
+                isRead: false
+            });
+
+            // 4. Cập nhật số lượng Unread qua Socket (Gọi hàm bạn đã viết)
+            if (typeof exports.emitUnreadCount === 'function') {
+                await exports.emitUnreadCount(userId);
+            }
+        }
+    } catch (error) {
+        console.error('Lỗi khi xử lý handleMentionsNotification:', error);
+    }
+};
 module.exports = {
     listMyNotifications,
     getUnreadCount,
@@ -194,4 +250,5 @@ module.exports = {
     markAllNotificationsAsRead,
     getNotificationSetting,
     upsertNotificationSetting,
+    handleMentionsNotification,
 };

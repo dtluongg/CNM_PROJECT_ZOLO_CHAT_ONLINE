@@ -6,7 +6,7 @@ const dns = require('node:dns');
 const cookieParser = require('cookie-parser');
 
 dotenv.config();
-// dns.setServers(['1.1.1.1']);
+dns.setServers(['1.1.1.1']);
 
 const app = express();
 const server = http.createServer(app);
@@ -43,6 +43,8 @@ const conversationRouter = require('./src/routes/conversationRouter');
 const messageRouter      = require('./src/routes/messageRouter');
 const reactionRouter     = require('./src/routes/reactionRouter');
 const notificationRouter = require('./src/routes/notificationRouter');
+const groupRoleRouter = require('./src/routes/groupRoleRouter');
+const voiceRoomRouter    = require('./src/routes/voiceRoomRouter');
 const storyRouter        = require('./src/routes/storyRoutes');
 const { initReminderCron } = require('./src/services/reminderService');
 
@@ -60,6 +62,8 @@ app.use('/backend/api/reactions',     reactionRouter);
 app.use('/backend/api/notifications', notificationRouter);
 app.use('/backend/api/stories',       storyRouter);
 
+app.use('/backend/api/conversations/:id', groupRoleRouter);
+app.use('/backend/api/voice-rooms',   voiceRoomRouter);
 
 // ── SOCKET ──
 const { initSocket } = require('./src/socket/socketManager');

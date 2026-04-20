@@ -16,23 +16,27 @@ export const useMessages = ({
 }) => {
   const [messages, setMessages] = useState({});
 
-  const loadMessages = useCallback(async (convId) => {
-    if (messages[convId]) return;
+  const loadMessages = useCallback(async (convId, topicId = null) => {
+    // Key riêng cho từng topic
+    const stateKey = topicId ? `${convId}__${topicId}` : convId;
+    if (messages[stateKey]) return;
     try {
-      const res  = await messageApi.getMessages(convId);
+      const res  = await messageApi.getMessages(convId, { topicId: topicId || undefined });
       const msgs = (res.data.messages || []).map(normalizeMsg);
-      setMessages((prev) => ({ ...prev, [convId]: msgs }));
+      setMessages((prev) => ({ ...prev, [stateKey]: msgs }));
     } catch (err) {
       console.error('Load messages error:', err);
-      setMessages((prev) => ({ ...prev, [convId]: [] }));
+      setMessages((prev) => ({ ...prev, [stateKey]: [] }));
     }
   }, [messages]);
 
   const addMessage = useCallback((convId, msg) => {
+    const topicId = msg.topicId?.toString?.() || msg.topicId || null;
+    const stateKey = topicId ? `${convId}__${topicId}` : convId;
     setMessages((prev) => {
-      const list = prev[convId] || [];
+      const list = prev[stateKey] || [];
       if (list.some((m) => m._id?.toString() === msg._id?.toString())) return prev;
-      return { ...prev, [convId]: [...list, msg] };
+      return { ...prev, [stateKey]: [...list, msg] };
     });
   }, []);
 
@@ -118,7 +122,7 @@ export const useMessages = ({
     }
 
     try {
-      const { replyToMessageId } = payload;
+      const { replyToMessageId, topicId = null } = payload;
 
       // ── TEXT ─────────────────────────────────────────────────────────────
       if (payload.type === 'text' && !payload.isEdit) {
@@ -130,12 +134,13 @@ export const useMessages = ({
         const tempMsg = {
           _id: tempId, senderId: myId, senderName: myName, avatar: myAvatar,
           type: 'text', content: content.trim(), payload: {},
+          topicId: topicId || null,
           time: fmtTime(now), createdAt: now,
-          replyToMessageId: replyToMessageId || null, // Include for optimistic update
+          replyToMessageId: replyToMessageId || null,
         };
         setMessages((prev) => ({ ...prev, [convId]: [...(prev[convId] || []), tempMsg] }));
 
-        const res    = await messageApi.sendText(convId, content.trim(), replyToMessageId);
+        const res    = await messageApi.sendText(convId, content.trim(), replyToMessageId, topicId);
         const real   = normalizeMsg(res.data.data);
         const realId = real._id?.toString();
 
@@ -169,7 +174,7 @@ export const useMessages = ({
         if (duration) fd.append('duration', String(Math.round(duration)));
 
         const up  = await messageApi.uploadVoice(fd);
-        const res = await messageApi.sendVoice(convId, up.data.voice.fileId, replyToMessageId);
+        const res = await messageApi.sendVoice(convId, up.data.voice.fileId, replyToMessageId, topicId);
         const msg = normalizeMsg(res.data.data);
         addMessage(convId, msg);
         updateConversationPreview(convId, { lastMessage: msg.content, time: msg.time });
@@ -183,7 +188,7 @@ export const useMessages = ({
         fd.append('file', payload.file);
 
         const up  = await messageApi.uploadImage(fd);
-        const res = await messageApi.sendImage(convId, up.data.file.fileId, replyToMessageId);
+        const res = await messageApi.sendImage(convId, up.data.file.fileId, replyToMessageId, topicId);
         const msg = normalizeMsg(res.data.data);
         addMessage(convId, msg);
         updateConversationPreview(convId, { lastMessage: '[Hình ảnh]', time: msg.time });
@@ -197,7 +202,7 @@ export const useMessages = ({
         fd.append('file', payload.file);
 
         const up  = await messageApi.uploadFile(fd);
-        const res = await messageApi.sendFile(convId, up.data.file.fileId, replyToMessageId);
+        const res = await messageApi.sendFile(convId, up.data.file.fileId, replyToMessageId, topicId);
         const msg = normalizeMsg(res.data.data);
         addMessage(convId, msg);
         updateConversationPreview(convId, { lastMessage: msg.content, time: msg.time });
@@ -215,50 +220,27 @@ export const useMessages = ({
         setActiveConversation((prev) =>
           prev?.id === convId ? { ...prev, lastMessage: msg.content, time: msg.time } : prev
         );
-
-      // ── REMINDER ─────────────────────────────────────────────────────────
-      } else if (payload.type === 'reminder') {
-        const { content, reminderTime } = payload;
-        const tempId = `temp_${Date.now()}`;
-        const now = new Date().toISOString();
-        const tempMsg = {
-          _id: tempId, senderId: myId, senderName: myName, avatar: myAvatar,
-          type: 'reminder', content: content.trim(), 
-          payload: { reminderTime },
-          time: fmtTime(now), createdAt: now
-        };
-        setMessages((prev) => ({ ...prev, [convId]: [...(prev[convId] || []), tempMsg] }));
-
-        const res = await messageApi.createReminder(convId, { content, reminderTime });
-        const real = normalizeMsg(res.data.data);
-        const realId = real._id?.toString();
-        
-        setMessages((prev) => {
-          const list = prev[convId] || [];
-          // Deduplicate: remove real message if it already arrived via socket
-          const cleaned = list.filter((m) => (m._id || m.id)?.toString() !== realId);
-          return { ...prev, [convId]: cleaned.map((m) => (m._id === tempId ? real : m)) };
-        });
-
-        updateConversationPreview(convId, { lastMessage: '[Nhắc hẹn]', time: real.time });
-        setActiveConversation((prev) =>
-          prev?.id === convId ? { ...prev, lastMessage: '[Nhắc hẹn]', time: real.time } : prev
-        );
       }
 
     } catch (err) {
       console.error('handleSendMessage error:', err);
       if (err?.response?.status === 403) {
-        if (payload.type === 'text') {
+        if (payload.type === 'text' && resolvedConversation?.type === 'dm') {
           setMessages((prev) => ({
             ...prev,
             [convId]: (prev[convId] || []).map((m) =>
               m._id?.startsWith('temp_') ? { ...m, blocked: true } : m
             ),
           }));
+        } else if (payload.type === 'text') {
+          // Group permission errors (vd: nhóm khóa) không phải trạng thái "bị chặn người dùng".
+          setMessages((prev) => ({
+            ...prev,
+            [convId]: (prev[convId] || []).filter((m) => !m._id?.startsWith('temp_')),
+          }));
         }
         const otherUserId = resolvedConversation?.otherUserId || activeConversation?.otherUserId;
-        if (otherUserId) fetchDmBlockStatus(otherUserId);
+        if (resolvedConversation?.type === 'dm' && otherUserId) fetchDmBlockStatus(otherUserId);
       } else if (payload.type === 'text') {
         setMessages((prev) => ({
           ...prev,

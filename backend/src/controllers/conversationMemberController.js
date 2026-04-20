@@ -1,12 +1,117 @@
 const mongoose = require('mongoose');
 const Conversation = require('../models/conversationModel');
 const ConversationMember = require('../models/conversationMemberModel');
+const ConversationTopic = require('../models/conversationTopicModel');
+const GroupRole = require('../models/groupRoleModel');
 const User = require('../models/userModel');
+const Message = require('../models/messageModel');
+const MessageReaction = require('../models/messageReactionModel');
+const MessageRead = require('../models/messageReadModel');
+const Attachment = require('../models/attachmentModel');
+const JoinRequest = require('../models/joinRequestModel');
+const VoiceRoom = require('../models/voiceRoomModel');
+const Call = require('../models/callModel');
+const Notification = require('../models/notificationModel');
+const NotificationSetting = require('../models/notificationSettingModel');
+const { getIO } = require('../socket/socketManager');
 
-// Lấy userId hiện tại từ middleware auth (hỗ trợ cả _id và id).
+// Tạo system message và phát socket khi có thay đổi thành viên.
+// event: 'member_join' | 'member_leave' | 'member_kick' | 'member_role_updated' | 'member_owner_transferred'
+async function emitMemberSystemMessage(conversationId, actorId, targetId, event, extra = null) {
+    try {
+        const io = getIO();
+        const [actor, target, members, systemTopic] = await Promise.all([
+            User.findById(actorId).select('displayName avatar').lean(),
+            targetId ? User.findById(targetId).select('displayName avatar').lean() : null,
+            ConversationMember.find({ conversationId, leftAt: null }).select('userId').lean(),
+            ConversationTopic.findOne({ conversationId, channelType: 'system' }).select('_id').lean(),
+        ]);
+
+        const actorName  = actor?.displayName  || '?';
+        const targetName = target?.displayName || '?';
+
+        let content;
+        let extraPayload = {};
+        if (event === 'member_join') {
+            content = `${targetName} đã được thêm vào nhóm bởi ${actorName}`;
+        } else if (event === 'member_leave') {
+            content = `${actorName} đã rời khỏi nhóm`;
+        } else if (event === 'member_kick') {
+            content = `${targetName} đã bị xóa khỏi nhóm`;
+            extraPayload.reason = extra || null;
+        } else if (event === 'member_role_updated') {
+            const roleLabel = extra === 'admin' ? 'Quản trị viên' : 'Thành viên';
+            content = `${actorName} đã đặt ${targetName} làm ${roleLabel}`;
+            extraPayload.newRole = extra || null;
+        } else if (event === 'member_owner_transferred') {
+            content = `${actorName} đã chuyển quyền chủ nhóm cho ${targetName}`;
+        } else {
+            content = `${actorName} đã thực hiện thay đổi`;
+        }
+
+        let topicId = systemTopic?._id || null;
+        if (!topicId) {
+            const newTopic = await ConversationTopic.create({
+                conversationId,
+                name: 'nhật-ký-nhóm',
+                emoji: '📋',
+                categoryName: '🔔 Hệ thống',
+                channelType: 'system',
+                position: 99,
+                createdBy: actorId,
+            });
+            topicId = newTopic._id;
+        }
+
+        const msg = await Message.create({
+            conversationId,
+            senderId: actorId,
+            type: 'system',
+            content,
+            ...(topicId ? { topicId } : {}),
+            payload: {
+                event,
+                actorId:     actorId.toString(),
+                actorName,
+                actorAvatar: actor?.avatar  || null,
+                targetId:    targetId?.toString() || null,
+                targetName:  target?.displayName  || null,
+                targetAvatar: target?.avatar || null,
+                ...extraPayload,
+            },
+        });
+
+        await Conversation.findByIdAndUpdate(conversationId, {
+            lastMessageId: msg._id,
+            lastMessagePreview: content,
+            lastMessageTime: msg.createdAt,
+        });
+
+        const formatted = {
+            _id: msg._id,
+            conversationId: conversationId.toString(),
+            senderId: actorId.toString(),
+            type: 'system',
+            content,
+            topicId: topicId?.toString() || null,
+            payload: msg.payload,
+            createdAt: msg.createdAt,
+            time: new Date(msg.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        const recipientIds = new Set(members.map(m => m.userId.toString()));
+        if (targetId) recipientIds.add(targetId.toString());
+
+        recipientIds.forEach(uid => {
+            io.to(`user:${uid}`).emit('chat:new-message', { conversationId: conversationId.toString(), message: formatted });
+        });
+    } catch (err) {
+        console.error('emitMemberSystemMessage error:', err);
+    }
+}
+
 const getCurrentUserId = (req) => (req.user?._id || req.user?.id || '').toString();
 
-// Validate ObjectId để tránh query sai định dạng.
 const ensureValidObjectId = (value, fieldName) => {
     if (!value || !mongoose.Types.ObjectId.isValid(value)) {
         const err = new Error(`${fieldName} không hợp lệ`);
@@ -15,7 +120,6 @@ const ensureValidObjectId = (value, fieldName) => {
     }
 };
 
-// Lấy conversation theo id và đảm bảo tồn tại.
 const requireConversation = async (conversationId) => {
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
@@ -26,7 +130,6 @@ const requireConversation = async (conversationId) => {
     return conversation;
 };
 
-// Đảm bảo conversation là group (không áp dụng member-management cho DM).
 const ensureGroupConversation = (conversation) => {
     if (conversation.type !== 'group') {
         const err = new Error('Chức năng này chỉ áp dụng cho nhóm chat');
@@ -35,40 +138,81 @@ const ensureGroupConversation = (conversation) => {
     }
 };
 
-// Lấy membership active của user hiện tại trong group.
 const requireActiveMembership = async (conversationId, userId) => {
     const myMember = await ConversationMember.findOne({
         conversationId,
         userId,
         leftAt: null,
     });
-
     if (!myMember) {
         const err = new Error('Bạn không thuộc nhóm này');
         err.statusCode = 403;
         throw err;
     }
-
     return myMember;
 };
 
-// Kiểm tra vai trò owner/admin để áp dụng policy quyền rõ ràng.
 const isOwner = (member) => member.role === 'owner';
 const isAdmin = (member) => member.role === 'admin';
 
-// API thêm thành viên vào nhóm (hỗ trợ thêm 1 hoặc nhiều user).
-// Body hỗ trợ:
-// - memberUserId: string (thêm 1 người)
-// - memberUserIds: string[] (thêm nhiều người)
-// Policy: owner luôn thêm được; admin/member thêm được khi có canInviteMembers = true.
+const canInviteMembersInGroup = async (member) => {
+    if (!member) return false;
+    if (isOwner(member) || isAdmin(member)) return true;
+    if (member.canInviteMembers === true) return true;
+
+    if (member.customRoleId) {
+        const role = await GroupRole.findById(member.customRoleId).select('permissions.canInviteMembers').lean();
+        if (role?.permissions?.canInviteMembers === true) return true;
+    }
+
+    return false;
+};
+
+const emitJoinRequestToAdmins = async (conversationId, requesterId, targetUserIds, createdRequests, message = '') => {
+    try {
+        if (!createdRequests.length) return;
+
+        const io = getIO();
+        const admins = await ConversationMember.find({
+            conversationId,
+            leftAt: null,
+            $or: [{ role: 'owner' }, { role: 'admin' }],
+        }).select('userId').lean();
+
+        const requester = await User.findById(requesterId).select('displayName avatar').lean();
+        const targets = await User.find({ _id: { $in: targetUserIds } }).select('_id displayName avatar').lean();
+        const targetMap = new Map(targets.map((u) => [u._id.toString(), u]));
+
+        for (const request of createdRequests) {
+            const target = targetMap.get(request.userId.toString());
+            admins.forEach(({ userId: adminId }) => {
+                io.to(`user:${adminId.toString()}`).emit('join-request:new', {
+                    conversationId: conversationId.toString(),
+                    request: {
+                        _id: request._id,
+                        userId: request.userId,
+                        requestedBy: requesterId,
+                        requesterName: requester?.displayName,
+                        targetName: target?.displayName,
+                        message,
+                        createdAt: request.createdAt,
+                    },
+                });
+            });
+        }
+    } catch (err) {
+        console.error('emitJoinRequestToAdmins error:', err);
+    }
+};
+
+// API thêm thành viên vào nhóm
 const addConversationMembers = async (req, res, next) => {
     const session = await mongoose.startSession();
-
     try {
         const userId = getCurrentUserId(req);
         const { id } = req.params;
         const conversationId = id;
-        const { memberUserId, memberUserIds } = req.body;
+        const { memberUserId, memberUserIds, message = '' } = req.body;
 
         ensureValidObjectId(conversationId, 'conversationId');
 
@@ -89,6 +233,10 @@ const addConversationMembers = async (req, res, next) => {
             ensureValidObjectId(id, 'memberUserIds');
         }
 
+        let addedUserIds = [];
+        let rejoinedUserIds = [];
+        let createdJoinRequests = [];
+
         await session.withTransaction(async () => {
             const conversation = await Conversation.findById(conversationId).session(session);
             if (!conversation) {
@@ -106,9 +254,7 @@ const addConversationMembers = async (req, res, next) => {
             }
 
             const myMember = await ConversationMember.findOne({
-                conversationId,
-                userId,
-                leftAt: null,
+                conversationId, userId, leftAt: null,
             }).session(session);
 
             if (!myMember) {
@@ -117,8 +263,16 @@ const addConversationMembers = async (req, res, next) => {
                 throw err;
             }
 
-            if (!isOwner(myMember) && !myMember.canInviteMembers) {
+            const canInvite = await canInviteMembersInGroup(myMember);
+            if (!canInvite) {
                 const err = new Error('Bạn không có quyền thêm thành viên vào nhóm');
+                err.statusCode = 403;
+                throw err;
+            }
+
+            const inviteMode = conversation.inviteMode || 'open_invite';
+            if (inviteMode === 'admin_only' && !isOwner(myMember) && !isAdmin(myMember)) {
+                const err = new Error('Nhóm đang ở chế độ Admin Only, chỉ owner/admin mới được mời trực tiếp');
                 err.statusCode = 403;
                 throw err;
             }
@@ -139,34 +293,71 @@ const addConversationMembers = async (req, res, next) => {
                 existingMembers.map((member) => [member.userId.toString(), member])
             );
 
+            // approval_required: member thường chỉ tạo yêu cầu chờ duyệt, không thêm trực tiếp
+            if (inviteMode === 'approval_required' && !isOwner(myMember) && !isAdmin(myMember)) {
+                const pendingRequests = await JoinRequest.find({
+                    conversationId,
+                    userId: { $in: normalizedIds },
+                    status: 'pending',
+                }).session(session).lean();
+
+                const pendingSet = new Set(pendingRequests.map((r) => r.userId.toString()));
+                const toRequestIds = [];
+                const skippedActive = [];
+                const skippedPending = [];
+
+                for (const targetId of normalizedIds) {
+                    const existed = existingMemberMap.get(targetId);
+                    if (existed && existed.leftAt === null) {
+                        skippedActive.push(targetId);
+                        continue;
+                    }
+                    if (pendingSet.has(targetId)) {
+                        skippedPending.push(targetId);
+                        continue;
+                    }
+                    toRequestIds.push(targetId);
+                }
+
+                if (toRequestIds.length) {
+                    createdJoinRequests = await JoinRequest.insertMany(
+                        toRequestIds.map((targetId) => ({
+                            conversationId,
+                            userId: targetId,
+                            requestedBy: userId,
+                            message,
+                        })),
+                        { session, ordered: true }
+                    );
+                }
+
+                return res.status(200).json({
+                    message: 'Đã gửi yêu cầu thêm thành viên, chờ admin/owner duyệt',
+                    data: {
+                        requestedUserIds: toRequestIds,
+                        skippedActiveUserIds: skippedActive,
+                        skippedPendingUserIds: skippedPending,
+                    },
+                });
+            }
+
             const toInsert = [];
             const toRejoin = [];
-            const skipped = [];
+            const skipped  = [];
             const now = new Date();
 
             for (const targetId of normalizedIds) {
                 const existed = existingMemberMap.get(targetId);
-
                 if (!existed) {
                     toInsert.push({
-                        conversationId,
-                        userId: targetId,
-                        role: 'member',
-                        joinedAt: now,
-                        leftAt: null,
-                        canSendMessages: true,
-                        canInviteMembers: true,
-                        canManageMembers: false,
-                        isArchived: false,
+                        conversationId, userId: targetId, role: 'member',
+                        joinedAt: now, leftAt: null,
+                        canSendMessages: true, canInviteMembers: true,
+                        canManageMembers: false, isArchived: false,
                     });
                     continue;
                 }
-
-                if (existed.leftAt === null) {
-                    skipped.push(targetId);
-                    continue;
-                }
-
+                if (existed.leftAt === null) { skipped.push(targetId); continue; }
                 existed.leftAt = null;
                 existed.role = 'member';
                 existed.joinedAt = now;
@@ -180,20 +371,32 @@ const addConversationMembers = async (req, res, next) => {
             for (const memberDoc of toRejoin) {
                 await memberDoc.save({ session });
             }
-
             if (toInsert.length) {
                 await ConversationMember.insertMany(toInsert, { session, ordered: true });
             }
 
+            addedUserIds    = toInsert.map((item) => item.userId.toString());
+            rejoinedUserIds = toRejoin.map((item) => item.userId.toString());
+
             res.status(200).json({
                 message: 'Thêm thành viên vào nhóm thành công',
-                data: {
-                    addedUserIds: toInsert.map((item) => item.userId),
-                    rejoinedUserIds: toRejoin.map((item) => item.userId.toString()),
-                    skippedUserIds: skipped,
-                },
+                data: { addedUserIds, rejoinedUserIds, skippedUserIds: skipped },
             });
         });
+
+        if (createdJoinRequests.length) {
+            await emitJoinRequestToAdmins(
+                conversationId,
+                userId,
+                createdJoinRequests.map((r) => r.userId.toString()),
+                createdJoinRequests,
+                message
+            );
+        }
+
+        for (const targetId of [...addedUserIds, ...rejoinedUserIds]) {
+            await emitMemberSystemMessage(conversationId, userId, targetId, 'member_join');
+        }
     } catch (error) {
         next(error);
     } finally {
@@ -201,8 +404,7 @@ const addConversationMembers = async (req, res, next) => {
     }
 };
 
-// API lấy danh sách tất cả thành viên trong nhóm.
-// Mặc định chỉ trả member đang active; hỗ trợ includeLeft=true để lấy cả member đã rời.
+// ─── FIX CHÍNH: populate customRoleId để frontend biết member đang dùng role nào ───
 const listConversationMembers = async (req, res, next) => {
     try {
         const userId = getCurrentUserId(req);
@@ -218,27 +420,29 @@ const listConversationMembers = async (req, res, next) => {
         await requireActiveMembership(conversationId, userId);
 
         const filter = { conversationId };
-        if (!includeLeft) {
-            filter.leftAt = null;
-        }
+        if (!includeLeft) filter.leftAt = null;
 
         const members = await ConversationMember.find(filter)
             .populate('userId', '_id displayName username email avatar status statusText')
+            // FIX KEY: populate customRoleId để frontend render đúng badge role
+            .populate('customRoleId', '_id name color permissions')
             .sort({ role: 1, joinedAt: 1 })
             .lean();
 
         const data = members.map((member) => ({
-            _id: member._id,
-            conversationId: member.conversationId,
-            role: member.role,
-            joinedAt: member.joinedAt,
-            leftAt: member.leftAt,
-            unreadCount: member.unreadCount,
-            canSendMessages: member.canSendMessages,
+            _id:              member._id,
+            conversationId:   member.conversationId,
+            role:             member.role,
+            // FIX KEY: trả về object customRoleId đã populate (hoặc null)
+            customRoleId:     member.customRoleId || null,
+            joinedAt:         member.joinedAt,
+            leftAt:           member.leftAt,
+            unreadCount:      member.unreadCount,
+            canSendMessages:  member.canSendMessages,
             canInviteMembers: member.canInviteMembers,
             canManageMembers: member.canManageMembers,
-            isArchived: member.isArchived,
-            user: member.userId,
+            isArchived:       member.isArchived,
+            user:             member.userId,
         }));
 
         return res.status(200).json({
@@ -250,15 +454,14 @@ const listConversationMembers = async (req, res, next) => {
     }
 };
 
-// API giải tán nhóm.
-// Theo yêu cầu: owner có thể giải tán -> khóa nhóm và cho toàn bộ thành viên rời nhóm (leftAt != null).
+// API giải tán nhóm
 const disbandConversation = async (req, res, next) => {
     const session = await mongoose.startSession();
-
     try {
         const userId = getCurrentUserId(req);
         const { id } = req.params;
         const conversationId = id;
+        let affectedUserIds = [];
 
         ensureValidObjectId(conversationId, 'conversationId');
 
@@ -273,9 +476,7 @@ const disbandConversation = async (req, res, next) => {
             ensureGroupConversation(conversation);
 
             const myMember = await ConversationMember.findOne({
-                conversationId,
-                userId,
-                leftAt: null,
+                conversationId, userId, leftAt: null,
             }).session(session);
 
             if (!myMember) {
@@ -283,32 +484,58 @@ const disbandConversation = async (req, res, next) => {
                 err.statusCode = 403;
                 throw err;
             }
-
             if (!isOwner(myMember)) {
                 const err = new Error('Bạn không có quyền giải tán nhóm');
                 err.statusCode = 403;
                 throw err;
             }
 
-            const now = new Date();
-            conversation.isLocked = true;
-            await conversation.save({ session });
+            const members = await ConversationMember.find({ conversationId })
+                .select('userId')
+                .session(session)
+                .lean();
+            affectedUserIds = [...new Set(members.map((m) => m.userId?.toString()).filter(Boolean))];
 
-            await ConversationMember.updateMany(
-                { conversationId, leftAt: null },
-                {
-                    $set: {
-                        leftAt: now,
-                        canSendMessages: false,
-                    },
-                },
-                { session }
-            );
+            const messages = await Message.find({ conversationId })
+                .select('_id')
+                .session(session)
+                .lean();
+            const messageIds = messages.map((m) => m._id);
+
+            if (messageIds.length) {
+                await MessageReaction.deleteMany({ messageId: { $in: messageIds } }, { session });
+                await MessageRead.deleteMany({ messageId: { $in: messageIds } }, { session });
+                await Attachment.deleteMany({ messageId: { $in: messageIds } }, { session });
+                await Notification.deleteMany({
+                    $or: [
+                        { conversationId },
+                        { messageId: { $in: messageIds } },
+                    ],
+                }, { session });
+            } else {
+                await Notification.deleteMany({ conversationId }, { session });
+            }
+
+            await MessageRead.deleteMany({ conversationId }, { session });
+            await NotificationSetting.deleteMany({ conversationId }, { session });
+            await VoiceRoom.deleteMany({ conversationId }, { session });
+            await Call.deleteMany({ conversationId }, { session });
+            await JoinRequest.deleteMany({ conversationId }, { session });
+            await GroupRole.deleteMany({ conversationId }, { session });
+            await ConversationTopic.deleteMany({ conversationId }, { session });
+            await Message.deleteMany({ conversationId }, { session });
+            await ConversationMember.deleteMany({ conversationId }, { session });
+            await Conversation.deleteOne({ _id: conversationId }, { session });
         });
 
-        return res.status(200).json({
-            message: 'Giải tán nhóm thành công',
-        });
+        const io = getIO();
+        if (io) {
+            for (const targetUserId of affectedUserIds) {
+                io.to(`user:${targetUserId}`).emit('chat:conversation-disbanded', { conversationId });
+            }
+        }
+
+        return res.status(200).json({ message: 'Giải tán nhóm thành công. Toàn bộ dữ liệu hội thoại đã được xóa.' });
     } catch (error) {
         next(error);
     } finally {
@@ -316,11 +543,9 @@ const disbandConversation = async (req, res, next) => {
     }
 };
 
-// API thành viên tự rời nhóm.
-// Nếu owner là người cuối cùng thì cho rời và khóa nhóm; nếu còn người khác thì yêu cầu chuyển quyền hoặc giải tán.
+// API thành viên tự rời nhóm
 const leaveConversation = async (req, res, next) => {
     const session = await mongoose.startSession();
-
     try {
         const userId = getCurrentUserId(req);
         const { id } = req.params;
@@ -339,9 +564,7 @@ const leaveConversation = async (req, res, next) => {
             ensureGroupConversation(conversation);
 
             const myMember = await ConversationMember.findOne({
-                conversationId,
-                userId,
-                leftAt: null,
+                conversationId, userId, leftAt: null,
             }).session(session);
 
             if (!myMember) {
@@ -351,8 +574,7 @@ const leaveConversation = async (req, res, next) => {
             }
 
             const activeCount = await ConversationMember.countDocuments({
-                conversationId,
-                leftAt: null,
+                conversationId, leftAt: null,
             }).session(session);
 
             if (myMember.role === 'owner' && activeCount > 1) {
@@ -371,9 +593,9 @@ const leaveConversation = async (req, res, next) => {
             }
         });
 
-        return res.status(200).json({
-            message: 'Rời nhóm thành công',
-        });
+        emitMemberSystemMessage(conversationId, userId, null, 'member_leave');
+
+        return res.status(200).json({ message: 'Rời nhóm thành công' });
     } catch (error) {
         next(error);
     } finally {
@@ -381,14 +603,12 @@ const leaveConversation = async (req, res, next) => {
     }
 };
 
-// API đuổi một thành viên khỏi nhóm.
-// Policy:
-// - owner: được đuổi admin và member (không đuổi owner).
-// - admin: chỉ được đuổi member thường.
+// API đuổi thành viên
 const kickConversationMember = async (req, res, next) => {
     try {
         const userId = getCurrentUserId(req);
         const { id, userId: memberUserId } = req.params;
+        const { reason } = req.body;
         const conversationId = id;
 
         ensureValidObjectId(conversationId, 'conversationId');
@@ -407,19 +627,15 @@ const kickConversationMember = async (req, res, next) => {
         }
 
         const targetMember = await ConversationMember.findOne({
-            conversationId,
-            userId: memberUserId,
-            leftAt: null,
+            conversationId, userId: memberUserId, leftAt: null,
         });
 
         if (!targetMember) {
             return res.status(404).json({ message: 'Không tìm thấy thành viên cần đuổi trong nhóm' });
         }
-
         if (targetMember.role === 'owner') {
             return res.status(403).json({ message: 'Không thể đuổi owner khỏi nhóm' });
         }
-
         if (isAdmin(myMember) && targetMember.role !== 'member') {
             return res.status(403).json({ message: 'Admin chỉ được đuổi member thường' });
         }
@@ -428,38 +644,27 @@ const kickConversationMember = async (req, res, next) => {
         targetMember.canSendMessages = false;
         await targetMember.save();
 
-        return res.status(200).json({
-            message: 'Đuổi thành viên khỏi nhóm thành công',
-        });
+        emitMemberSystemMessage(conversationId, userId, memberUserId, 'member_kick', reason || null);
+
+        return res.status(200).json({ message: 'Đuổi thành viên khỏi nhóm thành công' });
     } catch (error) {
         next(error);
     }
 };
 
-// API cập nhật thông tin quản trị của 1 thành viên trong nhóm.
-// Hỗ trợ cập nhật role và/hoặc các quyền đặc biệt trong cùng 1 lần gọi.
-// Body hỗ trợ: role, canSendMessages, canInviteMembers, canManageMembers.
-// Policy:
-// - owner: full quyền (đổi role admin/member + chỉnh mọi quyền đặc biệt).
-// - admin: chỉ chỉnh quyền đặc biệt của member thường, không đổi role.
+// API cập nhật thông tin thành viên
 const updateMember = async (req, res, next) => {
     try {
         const userId = getCurrentUserId(req);
         const { id, userId: memberUserId } = req.params;
         const conversationId = id;
-        const {
-            role,
-            canSendMessages,
-            canInviteMembers,
-            canManageMembers,
-        } = req.body;
+        const { role, canSendMessages, canInviteMembers, canManageMembers } = req.body;
 
         ensureValidObjectId(conversationId, 'conversationId');
         ensureValidObjectId(memberUserId, 'memberUserId');
 
-        const hasRoleUpdate = role !== undefined;
-        const hasPermissionUpdate = [canSendMessages, canInviteMembers, canManageMembers]
-            .some((value) => value !== undefined);
+        const hasRoleUpdate       = role !== undefined;
+        const hasPermissionUpdate = [canSendMessages, canInviteMembers, canManageMembers].some(v => v !== undefined);
 
         if (!hasRoleUpdate && !hasPermissionUpdate) {
             return res.status(400).json({
@@ -471,15 +676,12 @@ const updateMember = async (req, res, next) => {
             return res.status(400).json({ message: 'role chỉ nhận admin hoặc member' });
         }
 
-        if (canSendMessages !== undefined && typeof canSendMessages !== 'boolean') {
+        if (canSendMessages !== undefined && typeof canSendMessages !== 'boolean')
             return res.status(400).json({ message: 'canSendMessages phải là boolean' });
-        }
-        if (canInviteMembers !== undefined && typeof canInviteMembers !== 'boolean') {
+        if (canInviteMembers !== undefined && typeof canInviteMembers !== 'boolean')
             return res.status(400).json({ message: 'canInviteMembers phải là boolean' });
-        }
-        if (canManageMembers !== undefined && typeof canManageMembers !== 'boolean') {
+        if (canManageMembers !== undefined && typeof canManageMembers !== 'boolean')
             return res.status(400).json({ message: 'canManageMembers phải là boolean' });
-        }
 
         const conversation = await requireConversation(conversationId);
         ensureGroupConversation(conversation);
@@ -490,30 +692,20 @@ const updateMember = async (req, res, next) => {
         }
 
         const targetMember = await ConversationMember.findOne({
-            conversationId,
-            userId: memberUserId,
-            leftAt: null,
+            conversationId, userId: memberUserId, leftAt: null,
         });
 
-        if (!targetMember) {
-            return res.status(404).json({ message: 'Không tìm thấy thành viên trong nhóm' });
-        }
+        if (!targetMember) return res.status(404).json({ message: 'Không tìm thấy thành viên trong nhóm' });
+        if (targetMember.role === 'owner') return res.status(403).json({ message: 'Không thể thay đổi chức vụ của owner' });
 
-        if (targetMember.role === 'owner') {
-            return res.status(403).json({ message: 'Không thể thay đổi chức vụ của owner' });
-        }
-
-        // Admin không được đổi role, chỉ owner mới có quyền này.
         if (hasRoleUpdate && !isOwner(myMember)) {
             return res.status(403).json({ message: 'Chỉ owner mới có quyền thay đổi role admin/member' });
         }
 
-        // Admin chỉ được chỉnh quyền đặc biệt của member thường.
         if (isAdmin(myMember)) {
             if (targetMember.role !== 'member') {
                 return res.status(403).json({ message: 'Admin chỉ được chỉnh quyền của member thường' });
             }
-
             if (canManageMembers !== undefined) {
                 return res.status(403).json({ message: 'Admin không được cấp quyền quản lý thành viên' });
             }
@@ -521,13 +713,11 @@ const updateMember = async (req, res, next) => {
 
         if (hasRoleUpdate) {
             targetMember.role = role;
-
-            // Đồng bộ mặc định theo role nếu client không truyền quyền cụ thể.
             if (role === 'admin') {
+                targetMember.customRoleId = null;
                 if (canManageMembers === undefined) targetMember.canManageMembers = true;
                 if (canInviteMembers === undefined) targetMember.canInviteMembers = true;
             }
-
             if (role === 'member') {
                 if (canManageMembers === undefined) targetMember.canManageMembers = false;
             }
@@ -539,13 +729,17 @@ const updateMember = async (req, res, next) => {
 
         await targetMember.save();
 
+        if (hasRoleUpdate) {
+            emitMemberSystemMessage(conversationId, userId, memberUserId, 'member_role_updated', role);
+        }
+
         return res.status(200).json({
             message: 'Cập nhật thành viên thành công',
             data: {
                 conversationId: targetMember.conversationId,
-                userId: targetMember.userId,
-                role: targetMember.role,
-                canSendMessages: targetMember.canSendMessages,
+                userId:         targetMember.userId,
+                role:           targetMember.role,
+                canSendMessages:  targetMember.canSendMessages,
                 canManageMembers: targetMember.canManageMembers,
                 canInviteMembers: targetMember.canInviteMembers,
             },
@@ -555,12 +749,9 @@ const updateMember = async (req, res, next) => {
     }
 };
 
-// API chuyển quyền owner cho thành viên khác.
-// Policy: chỉ owner hiện tại được chuyển; người nhận phải là member active trong cùng nhóm.
-// Sau khi chuyển: owner cũ trở thành admin để có thể tiếp tục quản trị hoặc rời nhóm.
+// API chuyển quyền owner
 const transferOwner = async (req, res, next) => {
     const session = await mongoose.startSession();
-
     try {
         const userId = getCurrentUserId(req);
         const { id } = req.params;
@@ -581,10 +772,7 @@ const transferOwner = async (req, res, next) => {
             ensureGroupConversation(conversation);
 
             const currentOwner = await ConversationMember.findOne({
-                conversationId,
-                userId,
-                leftAt: null,
-                role: 'owner',
+                conversationId, userId, leftAt: null, role: 'owner',
             }).session(session);
 
             if (!currentOwner) {
@@ -600,9 +788,7 @@ const transferOwner = async (req, res, next) => {
             }
 
             const newOwnerMember = await ConversationMember.findOne({
-                conversationId,
-                userId: newOwnerUserId,
-                leftAt: null,
+                conversationId, userId: newOwnerUserId, leftAt: null,
             }).session(session);
 
             if (!newOwnerMember) {
@@ -611,7 +797,6 @@ const transferOwner = async (req, res, next) => {
                 throw err;
             }
 
-            // Chuyển quyền owner.
             currentOwner.role = 'admin';
             currentOwner.canManageMembers = true;
             currentOwner.canInviteMembers = true;
@@ -624,12 +809,11 @@ const transferOwner = async (req, res, next) => {
             await newOwnerMember.save({ session });
         });
 
+        emitMemberSystemMessage(conversationId, userId, newOwnerUserId, 'member_owner_transferred');
+
         return res.status(200).json({
             message: 'Chuyển quyền owner thành công',
-            data: {
-                previousOwnerUserId: userId,
-                newOwnerUserId,
-            },
+            data: { previousOwnerUserId: userId, newOwnerUserId },
         });
     } catch (error) {
         next(error);

@@ -157,11 +157,11 @@ const MessageBubble = ({
         alignItems: isMine ? 'flex-end' : 'flex-start'
       }}>
         {/* Header row with reply icon */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 6, 
-          color: 'var(--text-muted)', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          color: 'var(--text-muted)',
           fontSize: 12,
           fontWeight: 500
         }}>
@@ -418,13 +418,13 @@ const MessageBubble = ({
                     // If my message (right), align bar's right edge to button and expand LEFT
                     // If friend's message (left), align bar's left edge to button and expand RIGHT
                     ...(isMine ? { right: 0 } : { left: 0 }),
-                    background: '#ffffff', 
-                    border: '1px solid #e1e4e8', 
+                    background: '#ffffff',
+                    border: '1px solid #e1e4e8',
                     borderRadius: 30,
-                    padding: '5px 14px', 
-                    display: 'flex', 
+                    padding: '5px 14px',
+                    display: 'flex',
                     gap: 14,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)', 
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                     animation: 'fadeInUp 0.1s ease',
                     whiteSpace: 'nowrap'
                   }}>
@@ -453,8 +453,8 @@ const MessageBubble = ({
               <div
                 onClick={(e) => { e.stopPropagation(); onShowDetails(msg); }}
                 style={{
-                  position: 'absolute', 
-                  bottom: -12, 
+                  position: 'absolute',
+                  bottom: -12,
                   // Place opposite to the Reaction Trigger to avoid overlap
                   ...(isMine ? { right: -10 } : { left: -10 }),
                   display: 'flex', alignItems: 'center', gap: 4,

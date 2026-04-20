@@ -1,211 +1,309 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { getAvatarColor, getInitials } from '../../../theme';
 
-const getAvatarSrc = (avatar) => {
-    if (!avatar) return null;
-
-    if (
-        avatar.startsWith('http://') ||
-        avatar.startsWith('https://') ||
-        avatar.startsWith('data:') ||
-        avatar.startsWith('file:') ||
-        avatar.startsWith('content:') ||
-        avatar.startsWith('blob:')
-    ) {
-        return avatar;
-    }
-
-    const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
-
-    if (!API_URL) {
-        return avatar;
-    }
-
-    if (avatar.startsWith('/')) {
-        return `${API_URL}${avatar}`;
-    }
-
-    return `${API_URL}/${avatar}`;
+const GROUP_TYPE_LABELS = {
+  study:   '📚 Học tập',
+  gaming:  '🎮 Gaming',
+  general: '💬 Chung',
+  project: '💼 Dự án',
+  other:   '✨ Khác',
 };
 
-// Parse payload an toàn: xử lý cả trường hợp là string JSON (Android) lẫn object (Web)
-const parsePayload = (payload) => {
-    if (!payload) return {};
-    if (typeof payload === 'string') {
-        try { return JSON.parse(payload); } catch { return {}; }
-    }
-    return payload;
+const MiniAvatar = ({ name, avatar, size = 22 }) => {
+  const [imgError, setImgError] = useState(false);
+  const bg = getAvatarColor(name);
+  const initials = getInitials(name);
+  return avatar && !imgError ? (
+    <Image
+      source={{ uri: avatar }}
+      style={{ width: size, height: size, borderRadius: size / 2 }}
+      onError={() => setImgError(true)}
+    />
+  ) : (
+    <View style={{
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: bg, alignItems: 'center', justifyContent: 'center',
+    }}>
+      <Text style={{ fontSize: size * 0.38, color: '#fff', fontWeight: '700' }}>
+        {initials}
+      </Text>
+    </View>
+  );
 };
 
-const SystemMessageBubble = ({ msg, currentUserId, THEME }) => {
-    const payload = parsePayload(msg.payload);
+const SystemMessageBubble = ({ msg }) => {
+  const event = msg.payload?.event;
 
-    const isVideo =
-        payload.callType === 'video' ||
-        msg.callType === 'video';
+  // ── Tham gia nhóm ─────────────────────────────────────────────────────────
+  if (event === 'member_join') {
+    const actorName    = msg.payload?.actorName    || '?';
+    const actorAvatar  = msg.payload?.actorAvatar  || null;
+    const targetName   = msg.payload?.targetName   || '?';
+    const targetAvatar = msg.payload?.targetAvatar || null;
+    return (
+      <View style={{ alignItems: 'center', marginVertical: 10, marginHorizontal: 16 }}>
+        <View style={{
+          flexDirection: 'column', alignItems: 'center',
+          backgroundColor: '#5865f210', borderWidth: 1, borderColor: '#5865f230',
+          borderRadius: 14, paddingVertical: 14, paddingHorizontal: 24, minWidth: 220,
+        }}>
+          <Text style={{ fontSize: 24, marginBottom: 8 }}>🎉</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <MiniAvatar name={targetName} avatar={targetAvatar} />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#5865f2' }}>
+              {targetName} đã tham gia nhóm!
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+            <Feather name="user-plus" size={10} color="#888" />
+            <Text style={{ fontSize: 11, color: '#888' }}>
+              Được mời bởi <Text style={{ fontWeight: '700' }}>{actorName}</Text>
+            </Text>
+          </View>
+          <Text style={{ fontSize: 10, color: '#888', opacity: 0.7 }}>{msg.time}</Text>
+        </View>
+      </View>
+    );
+  }
 
-    const status =
-        payload.status ||
-        msg.status;
+  // ── Rời nhóm ──────────────────────────────────────────────────────────────
+  if (event === 'member_leave') {
+    const actorName   = msg.payload?.actorName   || '?';
+    const actorAvatar = msg.payload?.actorAvatar || null;
+    return (
+      <View style={{ alignItems: 'center', marginVertical: 6, marginHorizontal: 16 }}>
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: 8,
+          backgroundColor: '#f0f0f5', borderWidth: 1, borderColor: '#e0e0e8',
+          borderRadius: 30, paddingVertical: 7, paddingHorizontal: 14,
+        }}>
+          <MiniAvatar name={actorName} avatar={actorAvatar} />
+          <Feather name="log-out" size={12} color="#888" />
+          <Text style={{ fontSize: 12, color: '#666' }}>{actorName} đã rời khỏi nhóm</Text>
+          <Text style={{ fontSize: 10, color: '#888', opacity: 0.6 }}>{msg.time}</Text>
+        </View>
+      </View>
+    );
+  }
 
-    const isMissed = status === 'missed';
-    const isRejected = status === 'rejected';
-    const isBad = isMissed || isRejected;
+  // ── Bị kick ───────────────────────────────────────────────────────────────
+  if (event === 'member_kick') {
+    const targetName   = msg.payload?.targetName   || '?';
+    const targetAvatar = msg.payload?.targetAvatar || null;
+    const reason       = msg.payload?.reason       || null;
+    return (
+      <View style={{ alignItems: 'center', marginVertical: 6, marginHorizontal: 16 }}>
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: 8,
+          backgroundColor: '#ed424512', borderWidth: 1, borderColor: '#ed424540',
+          borderRadius: 30, paddingVertical: 7, paddingHorizontal: 14,
+        }}>
+          <MiniAvatar name={targetName} avatar={targetAvatar} />
+          <Feather name="user-x" size={12} color="#ed4245" />
+          <View style={{ flexDirection: 'column' }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#ed4245' }}>
+              {targetName} đã bị xóa khỏi nhóm
+            </Text>
+            {reason && (
+              <Text style={{ fontSize: 10, color: '#ed4245', opacity: 0.75 }}>
+                Lý do: {reason}
+              </Text>
+            )}
+          </View>
+          <Text style={{ fontSize: 10, color: '#ed4245', opacity: 0.6 }}>{msg.time}</Text>
+        </View>
+      </View>
+    );
+  }
 
-    const callerName =
-        msg.callerName ||
-        payload.callerName ||
-        msg.caller?.displayName ||
-        msg.callerId?.displayName ||
-        '?';
+  // ── Thay đổi chức vụ ─────────────────────────────────────────────────────
+  if (event === 'member_role_updated') {
+    const actorName    = msg.payload?.actorName    || '?';
+    const targetName   = msg.payload?.targetName   || '?';
+    const targetAvatar = msg.payload?.targetAvatar || null;
+    const newRole      = msg.payload?.newRole;
+    const isAdminRole  = newRole === 'admin';
+    return (
+      <View style={{ alignItems: 'center', marginVertical: 6, marginHorizontal: 16 }}>
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: 8,
+          backgroundColor: isAdminRole ? '#f0b13212' : '#f0f0f5',
+          borderWidth: 1, borderColor: isAdminRole ? '#f0b13240' : '#e0e0e8',
+          borderRadius: 30, paddingVertical: 7, paddingHorizontal: 14,
+        }}>
+          <MiniAvatar name={targetName} avatar={targetAvatar} />
+          <Feather name="shield" size={12} color={isAdminRole ? '#f0b132' : '#888'} />
+          <View style={{ flexDirection: 'column' }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: isAdminRole ? '#f0b132' : '#666' }}>
+              {targetName} được đặt làm {isAdminRole ? 'Quản trị viên' : 'Thành viên'}
+            </Text>
+            <Text style={{ fontSize: 10, color: '#888' }}>bởi {actorName}</Text>
+          </View>
+          <Text style={{ fontSize: 10, color: '#888', opacity: 0.6 }}>{msg.time}</Text>
+        </View>
+      </View>
+    );
+  }
 
-    const callerAvatar =
-        msg.callerAvatar ||
-        payload.callerAvatar ||
-        msg.caller?.avatar ||
-        msg.callerId?.avatar ||
-        null;
+  // ── Chuyển quyền chủ nhóm ─────────────────────────────────────────────────
+  if (event === 'member_owner_transferred') {
+    const actorName    = msg.payload?.actorName    || '?';
+    const targetName   = msg.payload?.targetName   || '?';
+    const targetAvatar = msg.payload?.targetAvatar || null;
+    return (
+      <View style={{ alignItems: 'center', marginVertical: 10, marginHorizontal: 16 }}>
+        <View style={{
+          flexDirection: 'column', alignItems: 'center',
+          backgroundColor: '#ffd70012', borderWidth: 1, borderColor: '#ffd70040',
+          borderRadius: 14, paddingVertical: 14, paddingHorizontal: 24, minWidth: 220,
+        }}>
+          <Text style={{ fontSize: 24, marginBottom: 8 }}>👑</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <MiniAvatar name={targetName} avatar={targetAvatar} />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#f0b132' }}>
+              {targetName} là chủ nhóm mới!
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+            <Feather name="award" size={10} color="#888" />
+            <Text style={{ fontSize: 11, color: '#888' }}>
+              Chuyển từ <Text style={{ fontWeight: '700' }}>{actorName}</Text>
+            </Text>
+          </View>
+          <Text style={{ fontSize: 10, color: '#888', opacity: 0.7 }}>{msg.time}</Text>
+        </View>
+      </View>
+    );
+  }
 
-    const calleeName =
-        msg.calleeName ||
-        payload.calleeName ||
-        msg.callee?.displayName ||
-        msg.calleeId?.displayName ||
-        '?';
+  // ── Cập nhật thông tin nhóm ───────────────────────────────────────────────
+  if (event === 'group_info_updated') {
+    const actorName   = msg.payload?.actorName   || '?';
+    const actorAvatar = msg.payload?.actorAvatar || null;
+    const changes     = msg.payload?.changes || {};
 
-    const calleeAvatar =
-        msg.calleeAvatar ||
-        payload.calleeAvatar ||
-        msg.callee?.avatar ||
-        msg.calleeId?.avatar ||
-        null;
-
-    let label;
-
-    if (status === 'ended') {
-        const dur = payload.duration ?? msg.duration ?? 0;
-        const m = Math.floor(dur / 60);
-        const s = dur % 60;
-        const durStr = m > 0 ? `${m} phút ${s} giây` : `${s} giây`;
-
-        label = `Cuộc gọi ${isVideo ? 'video' : 'thoại'} · ${durStr}`;
-    } else if (isMissed) {
-        label = 'Cuộc gọi nhỡ';
-    } else if (isRejected) {
-        label = 'Cuộc gọi bị từ chối';
-    } else {
-        label = msg.content || 'Cuộc gọi';
+    const changeRows = [];
+    if (changes.name) {
+      changeRows.push(
+        <View key="name" style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Feather name="edit-3" size={10} color="#666" />
+          <Text style={{ fontSize: 11, color: '#555' }}>
+            Tên nhóm: <Text style={{ fontWeight: '700' }}>{changes.name.newValue}</Text>
+          </Text>
+        </View>
+      );
     }
-
-    // Xác định xem đây là thông báo cuộc gọi hay thông báo hệ thống chung
-    const isCall = !!(status || payload.callType || msg.callType);
-    const isReminder = 
-        payload.event === 'reminder_triggered' || 
-        msg.content?.startsWith('Nhắc hẹn:');
-
-    const color = isBad ? '#ed4245' : THEME.textMuted;
-    const bg = isBad ? '#ed424512' : THEME.bgSecondary;
-    const border = isBad ? '#ed424540' : THEME.border;
-
-    // Màu sắc đồng bộ với bản Web cho Nhắc hẹn
-    const reminderColor = '#faa61a';
-    const reminderBorder = '#faa61a60';
-
-    const MiniAvatar = ({ name, avatar }) => {
-        // Tránh hiện dấu ? dư thừa cho các tin nhắn không phải cuộc gọi
-        if (!isCall || (!name && !avatar)) return null;
-        if (name === '?' && !avatar) return null;
-
-        const [imgError, setImgError] = useState(false);
-        const avatarSrc = getAvatarSrc(avatar);
-
-        useEffect(() => {
-            setImgError(false);
-        }, [avatarSrc]);
-
-        if (avatarSrc && !imgError) {
-            return (
-                <Image
-                    source={{ uri: avatarSrc }}
-                    onError={() => setImgError(true)}
-                    style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 14,
-                        backgroundColor: THEME.bgSecondary,
-                    }}
-                />
-            );
-        }
-
-        return (
-            <View
-                style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    backgroundColor: THEME.accent,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}
-            >
-                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>
-                    {(name || '?')[0].toUpperCase()}
-                </Text>
-            </View>
-        );
-    };
+    if (changes.avatar) {
+      changeRows.push(
+        <View key="avatar" style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Feather name="image" size={10} color="#666" />
+          <Text style={{ fontSize: 11, color: '#555' }}>Đã cập nhật ảnh nhóm</Text>
+          {changes.avatar.newValue && (
+            <Image
+              source={{ uri: changes.avatar.newValue }}
+              style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: '#ddd' }}
+            />
+          )}
+        </View>
+      );
+    }
+    if (changes.description) {
+      changeRows.push(
+        <View key="desc" style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Feather name="info" size={10} color="#666" />
+          <Text style={{ fontSize: 11, color: '#555' }}>
+            Mô tả: <Text style={{ fontStyle: 'italic' }}>{changes.description.newValue || '(trống)'}</Text>
+          </Text>
+        </View>
+      );
+    }
+    if (changes.groupType) {
+      changeRows.push(
+        <View key="type" style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Feather name="tag" size={10} color="#666" />
+          <Text style={{ fontSize: 11, color: '#555' }}>
+            Loại nhóm: <Text style={{ fontWeight: '700' }}>
+              {GROUP_TYPE_LABELS[changes.groupType.newValue] || changes.groupType.newValue}
+            </Text>
+          </Text>
+        </View>
+      );
+    }
 
     return (
-        <View
-            style={{
-                alignItems: 'center',
-                marginVertical: 10,
-                marginHorizontal: 12,
-            }}
-        >
-            <View
-                style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: bg,
-                    borderWidth: 1,
-                    borderColor: isReminder ? reminderBorder : border,
-                    borderRadius: 30,
-                    paddingVertical: isCall ? 8 : 10,
-                    paddingHorizontal: isCall ? 12 : 24,
-                    gap: isCall ? 8 : 0,
-                }}
-            >
-                {isCall && <MiniAvatar name={callerName} avatar={callerAvatar} />}
-
-                <View style={{ alignItems: 'center', gap: 2 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-                        <Feather 
-                            name={isReminder ? 'bell' : (isVideo ? 'video' : 'phone')} 
-                            size={14} 
-                            color={isReminder ? reminderColor : color} 
-                        />
-
-                        <Text style={{ 
-                            fontSize: 13, 
-                            fontWeight: '700', 
-                            color: isReminder ? reminderColor : color 
-                        }}>
-                            {label}
-                        </Text>
-                    </View>
-
-                    <Text style={{ fontSize: 10, color: THEME.textMuted, opacity: 0.7 }}>
-                        {msg.time}
-                    </Text>
-                </View>
-
-                {isCall && <MiniAvatar name={calleeName} avatar={calleeAvatar} />}
+      <View style={{ alignItems: 'center', marginVertical: 6, marginHorizontal: 16 }}>
+        <View style={{
+          flexDirection: 'column', alignItems: 'flex-start', gap: 6,
+          backgroundColor: 'rgba(88,101,242,0.07)', borderWidth: 1, borderColor: 'rgba(88,101,242,0.2)',
+          borderRadius: 12, paddingVertical: 10, paddingHorizontal: 16, maxWidth: 300,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' }}>
+            <MiniAvatar name={actorName} avatar={actorAvatar} />
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#5865f2', flex: 1 }}>
+              {actorName} đã cập nhật nhóm
+            </Text>
+            <Text style={{ fontSize: 10, color: '#888', opacity: 0.7 }}>{msg.time}</Text>
+          </View>
+          {changeRows.length > 0 && (
+            <View style={{ flexDirection: 'column', gap: 4, paddingLeft: 4 }}>
+              {changeRows}
             </View>
+          )}
         </View>
+      </View>
     );
+  }
+
+  // ── Cuộc gọi ──────────────────────────────────────────────────────────────
+  const isVideo    = msg.payload?.callType === 'video';
+  const status     = msg.payload?.status;
+  const isMissed   = status === 'missed';
+  const isRejected = status === 'rejected';
+  const isBad      = isMissed || isRejected;
+
+  const callerName   = msg.callerName   || msg.payload?.callerName   || '?';
+  const callerAvatar = msg.callerAvatar || msg.payload?.callerAvatar || null;
+  const calleeName   = msg.calleeName   || msg.payload?.calleeName   || '?';
+  const calleeAvatar = msg.calleeAvatar || msg.payload?.calleeAvatar || null;
+
+  let label;
+  if (status === 'ended') {
+    const dur = msg.payload?.duration || 0;
+    const m = Math.floor(dur / 60), s = dur % 60;
+    label = `Cuộc gọi ${isVideo ? 'video' : 'thoại'} · ${m > 0 ? `${m} phút ${s} giây` : `${s} giây`}`;
+  } else if (isMissed) {
+    label = 'Cuộc gọi nhỡ';
+  } else if (isRejected) {
+    label = 'Cuộc gọi bị từ chối';
+  } else {
+    label = msg.content;
+  }
+
+  const color  = isBad ? '#ed4245' : '#888';
+  const bgCall = isBad ? '#ed424512' : '#f0f0f5';
+  const borderCall = isBad ? '#ed424540' : '#e0e0e8';
+
+  return (
+    <View style={{ alignItems: 'center', marginVertical: 6, marginHorizontal: 16 }}>
+      <View style={{
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        backgroundColor: bgCall, borderWidth: 1, borderColor: borderCall,
+        borderRadius: 30, paddingVertical: 8, paddingHorizontal: 14,
+      }}>
+        <MiniAvatar name={callerName} avatar={callerAvatar} />
+        <View style={{ flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <Feather name={isVideo ? 'video' : 'phone'} size={12} color={color} />
+            <Text style={{ fontSize: 12, fontWeight: '600', color }}>{label}</Text>
+          </View>
+          <Text style={{ fontSize: 10, color: '#888', opacity: 0.7 }}>{msg.time}</Text>
+        </View>
+        <MiniAvatar name={calleeName} avatar={calleeAvatar} />
+      </View>
+    </View>
+  );
 };
 
 export default SystemMessageBubble;

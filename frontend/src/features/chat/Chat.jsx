@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import apiClient from '../../services/apiClient';
 
 import LeftSidebar      from './components/LeftSidebar';
 import ChatArea         from './components/ChatArea';
@@ -17,6 +18,8 @@ import { useMessages }       from './hooks/useMessages';
 import { useBlockStatus }    from './hooks/useBlockStatus';
 import { useGroupActions }   from './hooks/useGroupActions';
 import { useNotifications }  from '../../context/NotificationContext';
+import { VoiceRoomProvider } from '../voice/VoiceRoomContext';
+import VoiceRoomPanel        from '../voice/components/VoiceRoomPanel';
 
 const Chat = () => {
   const { user: currentUser, token } = useAuth();
@@ -33,6 +36,10 @@ const Chat = () => {
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showUserSearch, setShowUserSearch]   = useState(false);
   const [typingUsers, setTypingUsers]         = useState({});
+  const [activeTopic, setActiveTopic]         = useState(null);
+  const [topicsVersion, setTopicsVersion] = useState(0);
+  const [myPermissions, setMyPermissions] = useState(null);
+
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -58,6 +65,9 @@ const Chat = () => {
   // Keep a ref for socket callbacks
   const activeConvRef = useRef(null);
   useEffect(() => { activeConvRef.current = activeConversation; }, [activeConversation]);
+
+  // Reset active topic when switching conversations
+  useEffect(() => { setActiveTopic(null); }, [activeConversation?.id]);
 
   // ── Messages ─────────────────────────────────────────────────────────────
   const {
@@ -115,23 +125,29 @@ const Chat = () => {
         c.id === conversationId ? { ...c, unread: 0 } : c
       ));
     },
-    onReminderAlert: ({ conversationId, reminderId }) => {
-      setMessages((prev) => {
-        const list = prev[conversationId];
-        if (!list) return prev;
-        return {
-          ...prev,
-          [conversationId]: list.map((m) => {
-            const mId = (m._id || m.id)?.toString();
-            if (mId !== reminderId) return m;
-            return {
-              ...m,
-              payload: { ...(m.payload || {}), isTriggered: true }
-            };
-          })
-        };
-      });
-    },
+     onConversationUpdated: (conversationId, changes) => {
+          // Update sidebar list
+          setConversations((prev) => prev.map((c) => {
+            if (c.id !== conversationId) return c;
+            const patch = {};
+            if (changes.name)        patch.name   = changes.name.newValue;
+            if (changes.avatar)      patch.avatar  = changes.avatar.newValue;
+            if (changes.description) patch.description = changes.description.newValue;
+            if (changes.groupType)   patch.groupType   = changes.groupType.newValue;
+            return { ...c, ...patch };
+          }));
+          // Update active conversation header in real-time
+          setActiveConversation((prev) => {
+            if (!prev || prev.id !== conversationId) return prev;
+            const patch = {};
+            if (changes.name)        patch.name        = changes.name.newValue;
+            if (changes.avatar)      patch.avatar       = changes.avatar.newValue;
+            if (changes.description) patch.description  = changes.description.newValue;
+            if (changes.groupType)   patch.groupType    = changes.groupType.newValue;
+            return { ...prev, ...patch };
+          });
+        },
+
   });
 
   // ── location state effects ────────────────────────────────────────────────
@@ -141,12 +157,20 @@ const Chat = () => {
     if (peer && openConversationId) applyDmOverride(openConversationId, peer);
   }, [location.state, applyDmOverride]);
 
+
   useEffect(() => {
     const pendingPeer = location.state?.pendingPeer;
     if (!pendingPeer?.id) return;
     applyPendingPeer(pendingPeer);
     if (isMobile) { setMobileView('chat'); setMobileTab('messages'); }
   }, [location.state, isMobile, applyPendingPeer]);
+
+    useEffect(() => {
+      if (!activeConversation?.id) return;
+      if (activeConversation.type !== 'group') return;
+      loadMessages(activeConversation.id, activeTopic?._id || null);
+      fetchMyPermissions(activeConversation.id, currentUser?._id?.toString());
+    }, [activeTopic?._id, activeConversation?.id]);
 
   useEffect(() => { fetchConversations(); }, [fetchConversations]);
 
@@ -162,6 +186,11 @@ const Chat = () => {
       socketRef.current.emit('chat:leave', { conversationId: activeConvRef.current.id });
     }
     setActiveConversation(conv);
+    if (!conv) {
+      if (isMobile) setMobileView('list');
+      fetchDmBlockStatus(null);
+      return;
+    }
     setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, unread: 0 } : c)));
 
     if (socketRef.current) socketRef.current.emit('chat:join', { conversationId: conv.id });
@@ -170,7 +199,16 @@ const Chat = () => {
     else fetchDmBlockStatus(null);
 
     await loadMessages(conv.id);
+    if (conv.type === 'group') fetchMyPermissions(conv.id, currentUser?._id?.toString());
+
+    else setMyPermissions(null);
+
   }, [isMobile, fetchDmBlockStatus, loadMessages, setActiveConversation, setConversations, socketRef]);
+
+  // ── Voice Room ──────────────────────────────────────────────────────────
+  const [showVoicePanel,    setShowVoicePanel]    = useState(false);
+  const [voiceRoomActive,   setVoiceRoomActive]   = useState(false);
+  const handleVoiceRoom = useCallback(() => setShowVoicePanel(v => !v), []);
 
   // ── Calls ────────────────────────────────────────────────────────────────
   const handlePhoneCall = useCallback(() => {
@@ -201,6 +239,9 @@ const Chat = () => {
   const {
     showCreateGroupModal, setShowCreateGroupModal,
     friendsForGroup, groupName, setGroupName,
+    groupType, setGroupType,
+    groupDescription, setGroupDescription,
+    groupAvatarPreview, handleAvatarFileChange,
     selectedFriendIds, loadingFriends, creatingGroup,
     handleOpenCreateGroup, toggleSelectFriend,
     handleCreateGroup, handleLeaveGroup,
@@ -215,7 +256,15 @@ const Chat = () => {
 
   // ── Derived values ───────────────────────────────────────────────────────
   const unreadTotal      = conversations.reduce((s, c) => s + (c.unread || 0), 0);
-  const activeMessages   = activeConversation ? messages[activeConversation.id] || [] : [];
+  const activeMessages = (() => {
+    if (!activeConversation) return [];
+    if (activeConversation.type === 'group' && activeTopic?._id) {
+      const key = `${activeConversation.id}__${activeTopic._id}`;
+      return messages[key] || [];
+    }
+    return messages[activeConversation.id] || [];
+  })();
+
   const activeTypingUser = activeConversation ? typingUsers[activeConversation.id] || null : null;
   const currentUserId    = currentUser?._id?.toString() || null;
 
@@ -237,7 +286,12 @@ const Chat = () => {
     onBlockStatusChanged: () => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId),
     onPhoneCall: handlePhoneCall,
     onVideoCall: handleVideoCall,
+    onVoiceRoom: handleVoiceRoom,
+    voiceRoomActive,
     onPollVote: handlePollVote,
+    activeTopic,
+    onTopicSelect: setActiveTopic,
+    myPermissions,
   };
 
   const rightSidebarProps = {
@@ -250,11 +304,31 @@ const Chat = () => {
     onBlockToggled: () => activeConversation?.otherUserId && fetchDmBlockStatus(activeConversation.otherUserId),
     onPhoneCall: handlePhoneCall,
     onVideoCall: handleVideoCall,
+    activeTopic,
+    myPermissions,
+    onTopicSelect: setActiveTopic,
+      onPermissionsChanged: () => activeConversation?.id && fetchMyPermissions(activeConversation.id),
+
   };
+    const fetchMyPermissions = useCallback(async (conversationId, userId) => {
+      if (!conversationId || !userId) return;
+      try {
+        const res = await apiClient.get(
+          `/conversations/${conversationId}/members/${userId}/effective-permissions`
+        );
+        console.log('[myPermissions]', res.data?.data); // 👈 xem data có không
+        setMyPermissions(res.data?.data || null);
+      } catch (err) {
+        console.error('[myPermissions] error:', err.response?.data);
+        setMyPermissions(null);
+      }
+    }, []);
+
 
   // ── MOBILE LAYOUT ────────────────────────────────────────────────────────
   if (isMobile) {
     return (
+      <VoiceRoomProvider>
       <div style={{
         width: '100vw', height: '100%', background: 'var(--bg-primary)',
         position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -274,6 +348,9 @@ const Chat = () => {
               onOpenSettings={() => setShowProfileSettings(true)}
               onOpenSearch={() => setShowUserSearch(true)}
               onOpenCreateGroup={handleOpenCreateGroup}
+              activeTopic={activeTopic}
+              onTopicSelect={setActiveTopic}
+              topicsVersion={topicsVersion}
               isMobile
             />
           </div>
@@ -303,12 +380,20 @@ const Chat = () => {
             <RightSidebar {...rightSidebarProps} isMobile />
           </div>
         )}
+        <VoiceRoomPanel
+          visible={showVoicePanel}
+          conversation={activeConversation}
+          currentUserId={currentUserId}
+          onClose={() => setShowVoicePanel(false)}
+        />
       </div>
+      </VoiceRoomProvider>
     );
   }
 
   // ── DESKTOP LAYOUT ───────────────────────────────────────────────────────
   return (
+    <VoiceRoomProvider>
     <div style={{
       width: '100%', height: '100%', background: 'var(--bg-primary)',
       position: 'relative', display: 'flex', overflow: 'hidden',
@@ -320,6 +405,9 @@ const Chat = () => {
         onOpenSettings={() => setShowProfileSettings(true)}
         onOpenSearch={() => setShowUserSearch(true)}
         onOpenCreateGroup={handleOpenCreateGroup}
+        activeTopic={activeTopic}
+        onTopicSelect={setActiveTopic}
+        topicsVersion={topicsVersion}
       />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
@@ -350,6 +438,12 @@ const Chat = () => {
         <CreateGroupModal
           groupName={groupName}
           setGroupName={setGroupName}
+          groupType={groupType}
+          setGroupType={setGroupType}
+          groupDescription={groupDescription}
+          setGroupDescription={setGroupDescription}
+          groupAvatarPreview={groupAvatarPreview}
+          onAvatarFileChange={handleAvatarFileChange}
           selectedFriendIds={selectedFriendIds}
           friendsForGroup={friendsForGroup}
           loadingFriends={loadingFriends}
@@ -359,7 +453,15 @@ const Chat = () => {
           onClose={() => setShowCreateGroupModal(false)}
         />
       )}
+
+      <VoiceRoomPanel
+        visible={showVoicePanel}
+        conversation={activeConversation}
+        currentUserId={currentUserId}
+        onClose={() => setShowVoicePanel(false)}
+      />
     </div>
+    </VoiceRoomProvider>
   );
 };
 

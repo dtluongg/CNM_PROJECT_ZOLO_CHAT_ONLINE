@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useAuth } from "../../../context/AuthContext";
+import apiClient from '../../../services/apiClient';
 import { usePresence, formatLastSeen } from "../../../context/PresenceContext";
 import { useNotifications } from "../../../context/NotificationContext";
 import {
@@ -16,9 +17,12 @@ import {
     UserCog,
     Trash2,
     FileText,
+    Camera,
+    Save,
 } from "lucide-react";
 
 import conversationApi from "../api/conversationApi";
+import MemberManagementModal from './MemberManagementModal';
 import friendApi from "../../friends/api/friendApi";
 import messageApi from "../api/messageApi";
 
@@ -28,8 +32,30 @@ import SectionHeader from "./rightSidebar/ui/SectionHeader";
 import ActionButton from "./rightSidebar/ui/ActionButton";
 import RoleChip from "./rightSidebar/ui/RoleChip";
 import AvatarDisplay from "./rightSidebar/ui/AvatarDisplay";
+import TopicManager from "./rightSidebar/TopicManager";
 
 import { getAvatarColor } from "./rightSidebar/utils/avatarUtils";
+
+const GROUP_TYPE_LABEL = {
+    study: '📚 Học tập',
+    gaming: '🎮 Gaming',
+    general: '💬 Chung',
+    project: '📌 Dự án',
+    other: '🗂️ Khác',
+    sensitive: '🔐 Nhóm nhạy cảm',
+};
+
+const INVITE_MODE_LABEL = {
+    open_invite: 'Open Invite',
+    approval_required: 'Approval Required',
+    admin_only: 'Admin Only',
+};
+
+const INVITE_MODE_HINT = {
+    open_invite: 'Người có quyền mời sẽ thêm trực tiếp vào nhóm.',
+    approval_required: 'Member gửi đề xuất thêm người, admin/owner duyệt.',
+    admin_only: 'Chỉ owner/admin mới được thêm trực tiếp.',
+};
 
 export default function RightSidebar({
     conversation,
@@ -41,8 +67,14 @@ export default function RightSidebar({
     onBlockToggled,
     onPhoneCall,
     onVideoCall,
+    activeTopic,
+    onTopicSelect,
+    onTopicsChanged,
+    myPermissions,
+    onPermissionsChanged,
 }) {
     const [tab, setTab] = useState("info");
+    const [showMemberModal, setShowMemberModal] = useState(false);
     const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
     const { user } = useAuth();
     const { getConversationSetting, updateConversationSetting } =
@@ -73,6 +105,19 @@ export default function RightSidebar({
     const [notifSetting, setNotifSetting] = useState(null);
     const [notifBusy, setNotifBusy] = useState(false);
 
+    // ── Group Settings State ─────────────────────────────
+    const [groupSettingsForm, setGroupSettingsForm] = useState({ name: '', groupType: 'general', description: '', inviteMode: 'open_invite' });
+    const [groupAvatarFile, setGroupAvatarFile] = useState(null);
+    const [groupAvatarPreview, setGroupAvatarPreview] = useState(null);
+    const [savingGroupSettings, setSavingGroupSettings] = useState(false);
+    const [savingGroupLock, setSavingGroupLock] = useState(false);
+    const groupAvatarInputRef = React.useRef(null);
+    const [joinRequestMsg, setJoinRequestMsg]   = useState('');
+    const [joinRequestBusy, setJoinRequestBusy] = useState(false);
+    const [joinRequestSent, setJoinRequestSent] = useState(false);
+    const [friendsToInvite, setFriendsToInvite] = useState([]);
+    const [selectedFriendId, setSelectedFriendId] = useState('');
+
     const myUserId = (user?._id || user?.id || "").toString();
     const accentColor =
         conversation?.usernameColor || getAvatarColor(conversation?.name);
@@ -99,8 +144,16 @@ export default function RightSidebar({
             myMember.role === "admin" ||
             myMember.canManageMembers);
     const canInviteMembers =
-        !!myMember && (myMember.role === "owner" || myMember.canInviteMembers);
+      !!myMember && (
+        myMember.role === "owner" ||
+        myMember.role === "admin" ||
+        myPermissions?.globalPermissions?.canInviteMembers === true
+      );
     const isOwner = myMember?.role === "owner";
+        const isAdmin = myMember?.role === 'admin';
+        const inviteMode = conversation?.inviteMode || 'open_invite';
+        const canOpenDirectInviteSection =
+                canInviteMembers && (inviteMode !== 'admin_only' || isOwner || isAdmin);
 
     // ── Load Members ─────────────────────────────────────
     const loadMembers = useCallback(async () => {
@@ -170,8 +223,42 @@ export default function RightSidebar({
             setDmFriendState(null);
         }
     }, [conversation?.otherUserId]);
+    const handleSendJoinRequest = async () => {
+        if (!selectedFriendId) {
+            window.alert('Vui lòng chọn người muốn giới thiệu');
+            return;
+        }
+        setJoinRequestBusy(true);
+        try {
+            await apiClient.post(`/conversations/${conversation.id}/join-requests`, {
+                targetUserId: selectedFriendId,
+                message: joinRequestMsg.trim(),
+            });
+            setJoinRequestSent(true);
+            setJoinRequestMsg('');
+            setSelectedFriendId('');
+        } catch (err) {
+            window.alert(err.response?.data?.message || 'Không thể gửi yêu cầu');
+        } finally {
+            setJoinRequestBusy(false);
+        }
+    };
+
 
     // ── Effects ──────────────────────────────────────────
+    useEffect(() => {
+        if (conversation?.type === 'group') {
+            setGroupSettingsForm({
+                name: conversation.name || '',
+                groupType: conversation.groupType || 'general',
+                description: conversation.raw?.description || conversation.description || '',
+                inviteMode: conversation.inviteMode || 'open_invite',
+            });
+            setGroupAvatarFile(null);
+            setGroupAvatarPreview(null);
+        }
+    }, [conversation?.id, conversation?.type]);
+
     useEffect(() => {
         setEditingMemberId(null);
         setSelectedAddIds([]);
@@ -187,7 +274,16 @@ export default function RightSidebar({
             .catch(() => setMediaData({ images: [], files: [] }))
             .finally(() => setLoadingMedia(false));
     }, [tab, conversation?.id]);
-
+    useEffect(() => {
+        if (!conversation?.id || conversation.type !== 'group' || canInviteMembers) return;
+        friendApi.getFriendList()
+            .then(res => {
+                const list = res?.data?.success ? res.data.data || [] : [];
+                const activeMemberIds = new Set(members.map(m => (m.user?._id || '').toString()));
+                setFriendsToInvite(list.filter(f => !activeMemberIds.has((f.friendId || '').toString())));
+            })
+            .catch(() => setFriendsToInvite([]));
+    }, [conversation?.id, canInviteMembers, members]);
     useEffect(() => {
         loadMembers();
     }, [loadMembers]);
@@ -237,11 +333,18 @@ export default function RightSidebar({
         if (!conversation.id || selectedAddIds.length === 0) return;
         try {
             setBusyAction("add-members");
-            await conversationApi.addConversationMembers(
+            const res = await conversationApi.addConversationMembers(
                 conversation.id,
                 selectedAddIds,
+                joinRequestMsg.trim(),
             );
+            const msg = res?.data?.message || '';
+            if (msg.toLowerCase().includes('chờ admin') || msg.toLowerCase().includes('yêu cầu')) {
+                window.alert(msg);
+                setJoinRequestSent(true);
+            }
             setSelectedAddIds([]);
+            setJoinRequestMsg('');
             await loadMembers();
             await loadFriendPool();
             if (onGroupUpdated) await onGroupUpdated();
@@ -422,6 +525,51 @@ export default function RightSidebar({
         }
     };
 
+    const handleSaveGroupSettings = async () => {
+        if (!conversation?.id) return;
+        try {
+            setSavingGroupSettings(true);
+            let avatarUrl = conversation.avatar || '';
+            if (groupAvatarFile) {
+                const fd = new FormData();
+                fd.append('file', groupAvatarFile);
+                const uploadRes = await messageApi.uploadImage(fd);
+                avatarUrl = uploadRes?.data?.file?.url
+                         || uploadRes?.data?.data?.url
+                         || uploadRes?.data?.url
+                         || avatarUrl;
+            }
+            await conversationApi.updateGroupInfo(conversation.id, {
+                name: groupSettingsForm.name.trim(),
+                groupType: groupSettingsForm.groupType,
+                inviteMode: groupSettingsForm.inviteMode,
+                description: groupSettingsForm.description,
+                avatar: avatarUrl,
+            });
+            if (onGroupUpdated) await onGroupUpdated();
+            window.alert('Đã cập nhật thông tin nhóm');
+        } catch (error) {
+            window.alert(error.response?.data?.message || 'Không thể cập nhật nhóm');
+        } finally {
+            setSavingGroupSettings(false);
+        }
+    };
+
+    const handleToggleGroupLock = async () => {
+        if (!conversation?.id || !isOwner) return;
+        const nextLockState = !conversation.isLocked;
+        try {
+            setSavingGroupLock(true);
+            await conversationApi.setConversationLock(conversation.id, nextLockState);
+            if (onGroupUpdated) await onGroupUpdated();
+            window.alert(nextLockState ? 'Đã khóa nhóm. Member chỉ có thể xem.' : 'Đã mở khóa nhóm. Member có thể gửi lại.');
+        } catch (error) {
+            window.alert(error.response?.data?.message || 'Không thể cập nhật trạng thái khóa nhóm');
+        } finally {
+            setSavingGroupLock(false);
+        }
+    };
+
     if (!conversation) return null;
 
     return (
@@ -506,10 +654,16 @@ export default function RightSidebar({
                 >
                     {[
                         { key: "info", label: "Thông tin" },
+                        ...(conversation?.type === "group"
+                            ? [{ key: "topics", label: "Kênh" }]
+                            : []),
                         { key: "media", label: "Media" },
                         { key: "files", label: "File" },
                         ...(conversation?.type === "dm"
                             ? [{ key: "calls", label: "Cuộc gọi" }]
+                            : []),
+                        ...(conversation?.type === "group" && canManageMembers
+                            ? [{ key: "settings", label: "Cài đặt" }]
                             : []),
                     ].map((t) => (
                         <button
@@ -610,6 +764,7 @@ export default function RightSidebar({
                                         </span>
                                     </div>
                                     {conversation.type === "group" && (
+                                        <>
                                         <div
                                             style={{
                                                 display: "flex",
@@ -617,58 +772,138 @@ export default function RightSidebar({
                                                 gap: 8,
                                             }}
                                         >
-                                            <span
-                                                style={{
-                                                    fontSize: 12,
-                                                    color: "var(--text-muted)",
-                                                }}
-                                            >
-                                                Số thành viên
-                                            </span>
-                                            <span
-                                                style={{
-                                                    fontSize: 12,
-                                                    fontWeight: 700,
-                                                    color: "var(--text-primary)",
-                                                }}
-                                            >
-                                                {members.length ||
-                                                    conversation.memberCount ||
-                                                    conversation.members ||
-                                                    0}
+                                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Số thành viên</span>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
+                                                {members.length || conversation.memberCount || conversation.members || 0}
                                             </span>
                                         </div>
+                                        {conversation.groupType && (
+                                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Loại nhóm</span>
+                                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                                                    {GROUP_TYPE_LABEL[conversation.groupType] || conversation.groupType}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {conversation.inviteMode && (
+                                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Chế độ mời</span>
+                                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                                                    {INVITE_MODE_LABEL[conversation.inviteMode] || conversation.inviteMode}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Trạng thái nhóm</span>
+                                            <span style={{
+                                                fontSize: 12,
+                                                fontWeight: 700,
+                                                color: conversation.isLocked ? '#ed4245' : '#57f287',
+                                            }}>
+                                                {conversation.isLocked ? '🔒 Đang khóa' : '🔓 Đang mở'}
+                                            </span>
+                                        </div>
+                                        {conversation.description && (
+                                            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
+                                                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Mô tả</span>
+                                                <span style={{ fontSize: 12, color: "var(--text-primary)", fontStyle: "italic" }}>{conversation.description}</span>
+                                            </div>
+                                        )}
+                                        </>
                                     )}
                                 </div>
                             </div>
 
                             {/* Thành viên nhóm */}
+                            {/* Thành viên nhóm */}
                             {conversation.type === "group" && (
                                 <div style={{ marginBottom: 16 }}>
-                                    <SectionHeader title="Thành viên nhóm" />
-                                    {loadingMembers && (
-                                        <div
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, marginTop: 4 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                                            Thành viên nhóm
+                                        </div>
+                                        <button
+                                            onClick={() => setShowMemberModal(true)}
                                             style={{
-                                                fontSize: 12,
-                                                color: "var(--text-muted)",
-                                                marginBottom: 8,
+                                                fontSize: 11, fontWeight: 600, color: 'var(--accent)',
+                                                background: 'none', border: 'none', cursor: 'pointer',
+                                                padding: '2px 6px', borderRadius: 4
                                             }}
                                         >
-                                            Đang tải thành viên...
-                                        </div>
-                                    )}
-                                    {!!memberError && (
-                                        <div
-                                            style={{
-                                                fontSize: 12,
-                                                color: "#ed4245",
-                                                marginBottom: 8,
-                                            }}
-                                        >
-                                            {memberError}
-                                        </div>
-                                    )}
+                                            Xem tất cả ({members.length || 0})
+                                        </button>
+                                    </div>
 
+                                    {/* Chỉ preview 3 member đầu */}
+                                    {loadingMembers ? (
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Đang tải...</div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            {members.slice(0, 3).map((m) => {
+                                                const uid = (m.user?._id || '').toString();
+                                                const rc = { owner: { color: '#faa61a', label: '👑' }, admin: { color: '#5865f2', label: '🛡️' }, member: { color: 'var(--text-muted)', label: '' } };
+                                                const role = rc[m.role] || rc.member;
+                                                return (
+                                                    <div key={uid} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
+                                                        {m.user?.avatar ? (
+                                                            <img src={m.user.avatar} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
+                                                        ) : (
+                                                            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11, fontWeight: 700 }}>
+                                                                {(m.user?.displayName || '?')[0].toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>
+                                                            {m.user?.displayName || 'Unknown'}
+                                                            {uid === myUserId && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>(bạn)</span>}
+                                                        </span>
+                                                        <span style={{ fontSize: 12 }}>{role.label}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {members.length > 3 && (
+                                                <button
+                                                    onClick={() => setShowMemberModal(true)}
+                                                    style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: '4px 8px' }}
+                                                >
+                                                    +{members.length - 3} thành viên khác...
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {conversation.type === 'group' && !canInviteMembers && myMember && myMember.role === 'member' && inviteMode !== 'admin_only' && (
+                                <div style={{ marginBottom: 16 }}>
+                                    <SectionHeader title="Giới thiệu thành viên" />
+                                    <div style={{
+                                        background: 'var(--bg-tertiary)', borderRadius: 8,
+                                        padding: '12px 14px', border: '1px solid var(--border)',
+                                    }}>
+                                        {joinRequestSent ? (
+                                            <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                                                <div style={{ fontSize: 24, marginBottom: 6 }}>✅</div>
+                                                <div style={{ fontSize: 13, color: '#57f287', fontWeight: 600 }}>
+                                                    Đã gửi yêu cầu!
+                                                </div>
+                                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                                                    Chờ admin hoặc chủ nhóm duyệt.
+                                                </div>
+                                                <button
+                                                    onClick={() => setJoinRequestSent(false)}
+                                                    style={{
+                                                        marginTop: 8, fontSize: 11, color: 'var(--accent)',
+                                                        background: 'none', border: 'none', cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    Giới thiệu người khác
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                                                    🔒 Bạn không có quyền mời trực tiếp.<br/>
+                                                    Chọn bạn bè để giới thiệu — admin sẽ duyệt.
+                                                </div>
                                     {!loadingMembers &&
                                         members.map((m) => {
                                             const uid = (
@@ -821,7 +1056,7 @@ export default function RightSidebar({
                                                                         fontWeight: 700,
                                                                         opacity:
                                                                             busyAction ===
-                                                                            `kick-${uid}`
+                                                                                `kick-${uid}`
                                                                                 ? 0.6
                                                                                 : 1,
                                                                     }}
@@ -836,7 +1071,7 @@ export default function RightSidebar({
                                                             {isOwner &&
                                                                 !isSelf &&
                                                                 m.role !==
-                                                                    "owner" && (
+                                                                "owner" && (
                                                                     <button
                                                                         onClick={() =>
                                                                             handleTransferOwner(
@@ -860,7 +1095,7 @@ export default function RightSidebar({
                                                                             fontWeight: 700,
                                                                             opacity:
                                                                                 busyAction ===
-                                                                                `transfer-${uid}`
+                                                                                    `transfer-${uid}`
                                                                                     ? 0.6
                                                                                     : 1,
                                                                         }}
@@ -875,6 +1110,74 @@ export default function RightSidebar({
                                                         </div>
                                                     </div>
 
+                                                {/* Chọn bạn bè */}
+                                                <select
+                                                    value={selectedFriendId}
+                                                    onChange={e => setSelectedFriendId(e.target.value)}
+                                                    style={{
+                                                        width: '100%', padding: '7px 10px', borderRadius: 8,
+                                                        fontSize: 12, border: '1px solid var(--border)',
+                                                        background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                                                        marginBottom: 8, boxSizing: 'border-box',
+                                                    }}
+                                                >
+                                                    <option value=''>— Chọn người muốn giới thiệu —</option>
+                                                    {friendsToInvite.map(f => (
+                                                        <option key={f.friendId} value={f.friendId}>
+                                                            {f.displayName || f.friendName}
+                                                        </option>
+                                                    ))}
+                                                </select>
+
+                                                {friendsToInvite.length === 0 && (
+                                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                                                        Không có bạn bè nào để giới thiệu.
+                                                    </div>
+                                                )}
+
+                                                <textarea
+                                                    value={joinRequestMsg}
+                                                    onChange={e => setJoinRequestMsg(e.target.value)}
+                                                    placeholder="Lý do giới thiệu (tùy chọn)..."
+                                                    rows={2}
+                                                    style={{
+                                                        width: '100%', boxSizing: 'border-box',
+                                                        padding: '7px 10px', borderRadius: 8, fontSize: 12,
+                                                        border: '1px solid var(--border)', background: 'var(--bg-primary)',
+                                                        color: 'var(--text-primary)', outline: 'none',
+                                                        resize: 'none', fontFamily: 'inherit', marginBottom: 8,
+                                                    }}
+                                                />
+
+                                                <button
+                                                    onClick={handleSendJoinRequest}
+                                                    disabled={joinRequestBusy || !selectedFriendId}
+                                                    style={{
+                                                        width: '100%', padding: '8px 0',
+                                                        background: 'var(--accent)', color: '#fff',
+                                                        border: 'none', borderRadius: 8, cursor: 'pointer',
+                                                        fontSize: 12, fontWeight: 700,
+                                                        opacity: (joinRequestBusy || !selectedFriendId) ? 0.6 : 1,
+                                                    }}
+                                                >
+                                                    {joinRequestBusy ? 'Đang gửi...' : '📨 Gửi yêu cầu giới thiệu'}
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                            {conversation.type === 'group' && myMember && myMember.role === 'member' && inviteMode === 'admin_only' && (
+                                <div style={{ marginBottom: 16 }}>
+                                    <SectionHeader title="Thêm thành viên" />
+                                    <div style={{
+                                        background: 'var(--bg-tertiary)', borderRadius: 8,
+                                        padding: '12px 14px', border: '1px solid var(--border)',
+                                        fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5,
+                                    }}>
+                                        🔐 Nhóm đang ở chế độ <strong>Admin Only</strong>.<br />
+                                        Chỉ owner hoặc admin mới được thêm thành viên.
+                                    </div>
                                                     {/* ── Inline Edit Panel ── */}
                                                     {isEditing && (
                                                         <div
@@ -1065,7 +1368,7 @@ export default function RightSidebar({
                                                                             fontWeight: 700,
                                                                             opacity:
                                                                                 busyAction ===
-                                                                                `edit-${uid}`
+                                                                                    `edit-${uid}`
                                                                                     ? 0.6
                                                                                     : 1,
                                                                         }}
@@ -1081,57 +1384,110 @@ export default function RightSidebar({
                                         })}
                                 </div>
                             )}
-
-                            {/* Thêm thành viên */}
-                            {conversation.type === "group" &&
-                                canInviteMembers && (
-                                    <div style={{ marginBottom: 16 }}>
-                                        <SectionHeader title="Thêm thành viên" />
-                                        <div
-                                            style={{
-                                                background:
-                                                    "var(--bg-tertiary)",
-                                                borderRadius: 8,
-                                                padding: 10,
-                                                border: "1px solid var(--border)",
-                                            }}
-                                        >
-                                            {loadingFriendPool && (
-                                                <div
+                            {/* Thêm thành viên trực tiếp — owner/admin */}
+                            {conversation.type === 'group' && canOpenDirectInviteSection && (
+                                <div style={{ marginBottom: 16 }}>
+                                    <SectionHeader title={inviteMode === 'approval_required' && myMember?.role === 'member' ? 'Đề xuất thêm thành viên' : 'Thêm thành viên'} />
+                                    <div style={{
+                                        background: 'var(--bg-tertiary)', borderRadius: 8,
+                                        padding: '12px 14px', border: '1px solid var(--border)',
+                                    }}>
+                                        {inviteMode === 'approval_required' && myMember?.role === 'member' && (
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                                                Chế độ nhóm hiện tại yêu cầu admin/owner duyệt. Chọn bạn bè rồi gửi đề xuất.
+                                            </div>
+                                        )}
+                                        {loadingFriendPool ? (
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Đang tải...</div>
+                                        ) : friendPool.length === 0 ? (
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                                Không có bạn bè nào để thêm.
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ maxHeight: 180, overflowY: 'auto', marginBottom: 10 }}>
+                                                    {friendPool.map(f => {
+                                                        const fid = (f.friendId || '').toString();
+                                                        const checked = selectedAddIds.includes(fid);
+                                                        return (
+                                                            <div key={fid} onClick={() => handleToggleAddMember(fid)} style={{
+                                                                display: 'flex', alignItems: 'center', gap: 8,
+                                                                padding: '7px 8px', borderRadius: 7, cursor: 'pointer',
+                                                                background: checked ? 'rgba(88,101,242,0.12)' : 'transparent',
+                                                                marginBottom: 2,
+                                                            }}>
+                                                                <div style={{
+                                                                    width: 16, height: 16, borderRadius: 5, flexShrink: 0,
+                                                                    border: `2px solid ${checked ? 'var(--accent)' : 'var(--border)'}`,
+                                                                    background: checked ? 'var(--accent)' : 'transparent',
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                }}>
+                                                                    {checked && <span style={{ color: '#fff', fontSize: 10, fontWeight: 900 }}>✓</span>}
+                                                                </div>
+                                                                {f.avatar ? (
+                                                                    <img src={f.avatar} alt="" style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                                                                ) : (
+                                                                    <div style={{
+                                                                        width: 26, height: 26, borderRadius: '50%', background: 'var(--accent)',
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                        color: '#fff', fontSize: 11, fontWeight: 700, flexShrink: 0,
+                                                                    }}>
+                                                                        {(f.displayName || '?')[0].toUpperCase()}
+                                                                    </div>
+                                                                )}
+                                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {f.displayName || f.friendName}
+                                                                    </div>
+                                                                    {f.email && (
+                                                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                            {f.email}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {inviteMode === 'approval_required' && myMember?.role === 'member' && (
+                                                    <textarea
+                                                        value={joinRequestMsg}
+                                                        onChange={e => setJoinRequestMsg(e.target.value)}
+                                                        placeholder="Lý do đề xuất (tùy chọn)..."
+                                                        rows={2}
+                                                        style={{
+                                                            width: '100%', boxSizing: 'border-box', marginBottom: 8,
+                                                            padding: '7px 10px', borderRadius: 8, fontSize: 12,
+                                                            border: '1px solid var(--border)', background: 'var(--bg-primary)',
+                                                            color: 'var(--text-primary)', outline: 'none', resize: 'none',
+                                                            fontFamily: 'inherit',
+                                                        }}
+                                                    />
+                                                )}
+                                                <button
+                                                    onClick={handleAddMembers}
+                                                    disabled={selectedAddIds.length === 0 || busyAction === 'add-members'}
                                                     style={{
-                                                        fontSize: 12,
-                                                        color: "var(--text-muted)",
-                                                        marginBottom: 8,
+                                                        width: '100%', padding: '8px 0',
+                                                        background: 'var(--accent)', color: '#fff',
+                                                        border: 'none', borderRadius: 8, cursor: 'pointer',
+                                                        fontSize: 12, fontWeight: 700,
+                                                        opacity: (selectedAddIds.length === 0 || busyAction === 'add-members') ? 0.5 : 1,
                                                     }}
                                                 >
-                                                    Đang tải danh sách bạn bè...
-                                                </div>
-                                            )}
-                                            {!loadingFriendPool &&
-                                                friendPool.length === 0 && (
-                                                    <div
-                                                        style={{
-                                                            fontSize: 12,
-                                                            color: "var(--text-muted)",
-                                                            marginBottom: 8,
-                                                        }}
-                                                    >
-                                                        Không còn bạn bè nào để
-                                                        thêm vào nhóm.
-                                                    </div>
-                                                )}
-                                            {!loadingFriendPool &&
-                                                friendPool
-                                                    .slice(0, 20)
-                                                    .map((f) => {
-                                                        const fid = (
-                                                            f.friendId || ""
-                                                        ).toString();
-                                                        const checked =
-                                                            selectedAddIds.includes(
-                                                                fid,
-                                                            );
-                                                        return (
+                                                    {busyAction === 'add-members'
+                                                        ? 'Đang thêm...'
+                                                        : (inviteMode === 'approval_required' && myMember?.role === 'member')
+                                                            ? (selectedAddIds.length > 0 ? `📨 Gửi đề xuất (${selectedAddIds.length})` : '📨 Gửi đề xuất')
+                                                        : selectedAddIds.length > 0
+                                                            ? `➕ Thêm ${selectedAddIds.length} người`
+                                                            : '➕ Thêm thành viên'}
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                                                             <label
                                                                 key={fid}
                                                                 style={{
@@ -1161,7 +1517,7 @@ export default function RightSidebar({
                                                 onClick={handleAddMembers}
                                                 disabled={
                                                     selectedAddIds.length ===
-                                                        0 ||
+                                                    0 ||
                                                     busyAction === "add-members"
                                                 }
                                                 style={{
@@ -1177,7 +1533,7 @@ export default function RightSidebar({
                                                     opacity:
                                                         selectedAddIds.length ===
                                                             0 ||
-                                                        busyAction ===
+                                                            busyAction ===
                                                             "add-members"
                                                             ? 0.6
                                                             : 1,
@@ -1204,7 +1560,7 @@ export default function RightSidebar({
                                     icon={<MessageCircle size={15} />}
                                     label="Nhắn tin"
                                     variant="primary"
-                                    onClick={() => {}}
+                                    onClick={() => { }}
                                 />
                                 {conversation.type === "dm" &&
                                     onViewProfile && (
@@ -1238,12 +1594,16 @@ export default function RightSidebar({
                                 />
                                 <ActionButton
                                     icon={<BellOff size={15} />}
-                                    label={
-                                        notifSetting?.isMuted
-                                            ? "Bật thông báo"
-                                            : "Tắt thông báo"
-                                    }
-                                    onClick={handleToggleMuteConversation}
+                                    label={notifSetting?.isMuted ? "Bật thông báo" : "Tắt thông báo"}
+                                    onClick={() => {
+                                        if (notifSetting?.isMuted) {
+                                            // Đang tắt -> Bấm để mở lại (gọi hàm cũ của bạn)
+                                            handleToggleMuteConversation();
+                                        } else {
+                                            // Đang mở -> Bấm để hiện Popup chọn thời gian
+                                            setShowMuteModal(true);
+                                        }
+                                    }}
                                     disabled={notifBusy}
                                 />
 
@@ -1570,6 +1930,207 @@ export default function RightSidebar({
                         </div>
                     )}
 
+                    {/* ==================== TAB TOPICS ==================== */}
+                        {tab === "topics" && conversation?.type === "group" && (
+                            <div>
+                                <TopicManager
+                                    conversation={conversation}
+                                    canManage={canManageMembers}
+                                    activeTopic={activeTopic}
+                                    onTopicSelect={onTopicSelect}
+                                    onTopicsChanged={onTopicsChanged} // ← thêm
+                                />
+                            </div>
+                        )}
+
+                    {/* ==================== TAB SETTINGS ==================== */}
+                    {tab === "settings" && conversation?.type === "group" && canManageMembers && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <SectionHeader title="Cài đặt nhóm" />
+
+                            {/* Avatar */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div
+                                    onClick={() => groupAvatarInputRef.current?.click()}
+                                    style={{
+                                        width: 60, height: 60, borderRadius: '50%', flexShrink: 0,
+                                        background: groupAvatarPreview || conversation.avatar ? 'transparent' : 'var(--bg-hover)',
+                                        border: '2px dashed var(--border)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        cursor: 'pointer', overflow: 'hidden', position: 'relative',
+                                    }}
+                                    title="Đổi ảnh đại diện nhóm"
+                                >
+                                    {(groupAvatarPreview || conversation.avatar) ? (
+                                        <img src={groupAvatarPreview || conversation.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                        <Camera size={20} style={{ color: 'var(--text-muted)' }} />
+                                    )}
+                                </div>
+                                <input
+                                    ref={groupAvatarInputRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                    style={{ display: 'none' }}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        setGroupAvatarFile(file);
+                                        setGroupAvatarPreview(URL.createObjectURL(file));
+                                    }}
+                                />
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                    Nhấn để thay đổi ảnh đại diện nhóm
+                                </div>
+                            </div>
+
+                            {/* Name */}
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>Tên nhóm</div>
+                                <input
+                                    value={groupSettingsForm.name}
+                                    onChange={(e) => setGroupSettingsForm((p) => ({ ...p, name: e.target.value }))}
+                                    placeholder="Tên nhóm..."
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box',
+                                        background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                        borderRadius: 8, color: 'var(--text-primary)',
+                                        padding: '8px 10px', outline: 'none', fontSize: 13,
+                                    }}
+                                />
+                            </div>
+
+                            {/* Group type */}
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>Loại nhóm</div>
+                                <select
+                                    value={groupSettingsForm.groupType}
+                                    onChange={(e) => setGroupSettingsForm((p) => ({ ...p, groupType: e.target.value }))}
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box',
+                                        background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                        borderRadius: 8, color: 'var(--text-primary)',
+                                        padding: '8px 10px', outline: 'none', fontSize: 13, cursor: 'pointer',
+                                    }}
+                                >
+                                    {[
+                                        { value: 'general', label: '💬 Thảo luận chung' },
+                                        { value: 'study',   label: '📚 Học tập' },
+                                        { value: 'gaming',  label: '🎮 Gaming' },
+                                        { value: 'project', label: '📌 Dự án / Làm việc' },
+                                        { value: 'other',   label: '🗂️ Khác' },
+                                        { value: 'sensitive', label: '🔐 Nhóm nhạy cảm' },
+                                    ].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                            </div>
+
+                            {/* Invite mode */}
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>Chế độ mời</div>
+                                <select
+                                    value={groupSettingsForm.inviteMode}
+                                    onChange={(e) => setGroupSettingsForm((p) => ({ ...p, inviteMode: e.target.value }))}
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box',
+                                        background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                        borderRadius: 8, color: 'var(--text-primary)',
+                                        padding: '8px 10px', outline: 'none', fontSize: 13, cursor: 'pointer',
+                                    }}
+                                >
+                                    <option value='open_invite'>Open Invite</option>
+                                    <option value='approval_required'>Approval Required</option>
+                                    <option value='admin_only'>Admin Only</option>
+                                </select>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                                    {INVITE_MODE_HINT[groupSettingsForm.inviteMode]}
+                                </div>
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>Mô tả nhóm</div>
+                                <textarea
+                                    value={groupSettingsForm.description}
+                                    onChange={(e) => setGroupSettingsForm((p) => ({ ...p, description: e.target.value }))}
+                                    placeholder="Mô tả ngắn về nhóm..."
+                                    maxLength={200}
+                                    rows={3}
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box',
+                                        background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                        borderRadius: 8, color: 'var(--text-primary)',
+                                        padding: '8px 10px', outline: 'none', fontSize: 13,
+                                        resize: 'none', fontFamily: 'inherit',
+                                    }}
+                                />
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
+                                    {groupSettingsForm.description.length}/200
+                                </div>
+                            </div>
+
+                            {/* Group lock */}
+                            <div style={{
+                                background: 'var(--bg-tertiary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 8,
+                                padding: '10px 12px',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                                    <div>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                            Khóa nhóm chat
+                                        </div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                                            Khi khóa: chỉ owner/admin gửi được, member chỉ xem.
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleToggleGroupLock}
+                                        disabled={!isOwner || savingGroupLock}
+                                        style={{
+                                            minWidth: 92,
+                                            padding: '7px 10px',
+                                            borderRadius: 8,
+                                            border: 'none',
+                                            cursor: (!isOwner || savingGroupLock) ? 'not-allowed' : 'pointer',
+                                            background: conversation.isLocked ? '#57f287' : '#ed4245',
+                                            color: conversation.isLocked ? '#000' : '#fff',
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            opacity: (!isOwner || savingGroupLock) ? 0.6 : 1,
+                                        }}
+                                    >
+                                        {savingGroupLock
+                                            ? 'Đang xử lý...'
+                                            : conversation.isLocked
+                                                ? 'Mở khóa'
+                                                : 'Khóa nhóm'}
+                                    </button>
+                                </div>
+                                {!isOwner && (
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                                        Chỉ owner mới được khóa/mở khóa nhóm.
+                                    </div>
+                                )}
+                            </div>
+
+                            <button
+                                onClick={handleSaveGroupSettings}
+                                disabled={savingGroupSettings || !groupSettingsForm.name.trim()}
+                                style={{
+                                    background: 'var(--accent)', border: 'none', borderRadius: 8,
+                                    padding: '9px 16px', cursor: 'pointer',
+                                    color: '#fff', fontWeight: 700, fontSize: 13,
+                                    opacity: (savingGroupSettings || !groupSettingsForm.name.trim()) ? 0.6 : 1,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                }}
+                            >
+                                <Save size={14} />
+                                {savingGroupSettings ? 'Đang lưu...' : 'Lưu thay đổi'}
+                            </button>
+                        </div>
+                    )}
+
                     {/* ==================== TAB CALLS ==================== */}
                     {tab === "calls" && conversation?.type === "dm" && (
                         <div>
@@ -1581,8 +2142,38 @@ export default function RightSidebar({
                             />
                         </div>
                     )}
+                 </div>
+                            </div>
+                            {/* ← xóa </div> thừa ở đây */}
+
+                            {showMemberModal && (
+                              <MemberManagementModal
+                                visible={showMemberModal}
+                                onClose={() => setShowMemberModal(false)}
+                                conversation={conversation}
+                                currentUserId={myUserId}
+                                onRefresh={() => {
+                                  loadMembers();
+                                  if (onGroupUpdated) onGroupUpdated();
+                                  onPermissionsChanged?.(); // 👈 thêm
+                                }}
+                              />
+                            )}
+                        </div>
+                    );
+                }
                 </div>
             </div>
+            {/* Gọi Modal Tắt thông báo */}
+            <MuteConversationModal
+                isOpen={showMuteModal}
+                onClose={() => setShowMuteModal(false)}
+                conversationId={conversation?.id}
+                onSuccess={() => {
+                    // Cập nhật lại state của Sidebar khi API gọi thành công
+                    setNotifSetting(prev => ({ ...prev, isMuted: true }));
+                }}
+            />
         </div>
     );
 }

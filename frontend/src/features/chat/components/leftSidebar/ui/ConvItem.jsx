@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Hash } from 'lucide-react';
+import { Hash, BellOff } from 'lucide-react';
 import Avatar from './Avatar';
 import { usePresence } from '../../../../../context/PresenceContext';
 
 const ConvItem = ({ conv, active, collapsed, isMobile, onClick }) => {
   const { isUserOnline, getPresenceStatus } = usePresence();
   const [hovered, setHovered] = useState(false);
-
+  console.log("Check Mute:", conv.name, conv.isMuted);
   const isOnline = conv.otherUserId
     ? isUserOnline(conv.otherUserId)
     : (conv.online ?? false);
@@ -71,10 +71,19 @@ const ConvItem = ({ conv, active, collapsed, isMobile, onClick }) => {
               flex: 1,
               display: 'flex',
               alignItems: 'center',
-              gap: 3,
+              gap: 4, // Tăng gap lên một chút để icon không dính sát vào tên
             }}>
               {conv.type === 'group' && <Hash size={12} style={{ opacity: 0.6, flexShrink: 0 }} />}
-              {conv.name}
+
+              {/* Tên nhóm / Người dùng */}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {conv.name}
+              </span>
+
+              {/* --- THÊM ICON MUTE TẠI ĐÂY --- */}
+              {conv.raw?.isMuted && (
+                <BellOff size={13} style={{ opacity: 0.5, flexShrink: 0 }} />
+              )}
             </span>
             <span style={{
               fontSize: 11,

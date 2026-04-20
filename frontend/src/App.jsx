@@ -5,6 +5,8 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { CallProvider } from './features/call/CallContext';
+import { VoiceRoomProvider } from './features/voice/VoiceRoomContext';
+
 import IncomingCallModal from './features/call/components/IncomingCallModal';
 import OutgoingCallScreen from './features/call/components/OutgoingCallScreen';
 import ActiveCallScreen from './features/call/components/ActiveCallScreen';
@@ -79,6 +81,7 @@ const App = () => {
           <PresenceProvider>
             <NotificationProvider>
               <CallProvider>
+              <VoiceRoomProvider>
               <CallNotification />
               <NotificationToast />
               <IncomingCallModal />
@@ -146,6 +149,7 @@ const App = () => {
                 <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Layout>
+              </VoiceRoomProvider>
               </CallProvider>
             </NotificationProvider>
           </PresenceProvider>

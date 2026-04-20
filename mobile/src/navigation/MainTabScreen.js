@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  TextInput, ScrollView, StatusBar,
+  TextInput, ScrollView, StatusBar, Modal, Pressable,
+  ActivityIndicator, Alert, FlatList,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { io } from 'socket.io-client';
 import Svg, { Rect } from 'react-native-svg';
 import { STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
@@ -13,7 +15,16 @@ import ProfileScreen from '../features/user/screens/ProfileScreen';
 import FriendsScreen from '../features/friends/screens/FriendsScreen';
 import StoriesScreen from '../features/stories/screens/StoriesScreen';
 import conversationApi from '../features/chat/api/conversationApi';
+import friendApi from '../features/friends/api/friendApi';
 import { SOCKET_URL } from '../config/env';
+
+const GROUP_TYPES = [
+  { key: 'general', label: '💬 Thảo luận' },
+  { key: 'study',   label: '📚 Học tập' },
+  { key: 'gaming',  label: '🎮 Gaming' },
+  { key: 'project', label: '📌 Dự án' },
+  { key: 'other',   label: '🗂️ Khác' },
+];
 
 
 const formatTime = (iso) => {
@@ -95,10 +106,146 @@ const TinIconMobile = ({ size = 24, color = '#fff' }) => (
 );
 
 // ─────────────────────────────────────────────
+// CREATE GROUP MODAL
+// ─────────────────────────────────────────────
+function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
+  const [step, setStep]               = useState(1); // 1=info, 2=members
+  const [groupName, setGroupName]     = useState('');
+  const [groupType, setGroupType]     = useState('general');
+  const [description, setDescription] = useState('');
+  const [avatar, setAvatar]           = useState(null);
+  const [friends, setFriends]         = useState([]);
+  const [selected, setSelected]       = useState([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [creating, setCreating]       = useState(false);
+
+  useEffect(() => {
+    if (!visible) { setStep(1); setGroupName(''); setGroupType('general'); setDescription(''); setAvatar(null); setSelected([]); return; }
+    setLoadingFriends(true);
+    friendApi.getFriendList()
+      .then(res => setFriends(res?.data?.success ? (res.data.data || []) : []))
+      .catch(() => setFriends([]))
+      .finally(() => setLoadingFriends(false));
+  }, [visible]);
+
+  const pickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1,1], quality: 0.5, base64: true });
+    if (!result.canceled && result.assets[0].base64) setAvatar(`data:image/jpeg;base64,${result.assets[0].base64}`);
+  };
+
+  const toggleFriend = (id) => setSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+
+  const handleCreate = async () => {
+    if (!groupName.trim()) { Alert.alert('Lỗi', 'Vui lòng nhập tên nhóm'); return; }
+    if (selected.length < 1) { Alert.alert('Lỗi', 'Chọn ít nhất 1 thành viên'); return; }
+    setCreating(true);
+    try {
+      const res = await conversationApi.createGroupConversation(groupName.trim(), avatar, selected, groupType, description.trim());
+      const conv = res.data?.data || res.data;
+      onCreated && onCreated(conv);
+      onClose();
+    } catch (err) {
+      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể tạo nhóm');
+    } finally { setCreating(false); }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={[styles.modalBox, { maxHeight: '90%' }]} onPress={() => {}}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>Tạo nhóm mới</Text>
+
+          {step === 1 ? (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Avatar */}
+              <TouchableOpacity onPress={pickAvatar} style={{ alignItems: 'center', marginBottom: 16 }}>
+                {avatar
+                  ? <Image source={{ uri: avatar }} style={{ width: 80, height: 80, borderRadius: 40 }} />
+                  : <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: THEME.bgHover, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 28 }}>📷</Text>
+                    </View>
+                }
+                <Text style={{ color: THEME.accent, fontSize: 13, marginTop: 6, fontWeight: '600' }}>Chọn ảnh nhóm</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.fieldLabel}>Tên nhóm *</Text>
+              <TextInput style={styles.fieldInput} value={groupName} onChangeText={setGroupName} placeholder="Nhập tên nhóm..." placeholderTextColor={THEME.textMuted} />
+
+              <Text style={styles.fieldLabel}>Loại nhóm</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                {GROUP_TYPES.map(t => (
+                  <TouchableOpacity key={t.key} onPress={() => setGroupType(t.key)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: groupType === t.key ? THEME.accent : THEME.border, backgroundColor: groupType === t.key ? THEME.accent + '20' : 'transparent' }}>
+                    <Text style={{ fontSize: 13, color: groupType === t.key ? THEME.accent : THEME.textMuted, fontWeight: '600' }}>{t.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.fieldLabel}>Mô tả (tùy chọn)</Text>
+              <TextInput style={[styles.fieldInput, { height: 72, textAlignVertical: 'top' }]} value={description} onChangeText={setDescription} placeholder="Mô tả nhóm..." placeholderTextColor={THEME.textMuted} multiline />
+
+              <View style={styles.modalBtns}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={onClose}><Text style={styles.cancelBtnText}>Hủy</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.saveBtn} onPress={() => setStep(2)}>
+                  <Text style={styles.saveBtnText}>Tiếp theo →</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          ) : (
+            <>
+              <Text style={[styles.fieldLabel, { marginBottom: 10 }]}>Chọn thành viên ({selected.length} đã chọn)</Text>
+              {loadingFriends
+                ? <ActivityIndicator color={THEME.accent} style={{ marginVertical: 24 }} />
+                : (
+                  <FlatList
+                    data={friends}
+                    keyExtractor={item => item.friendId || item._id}
+                    style={{ maxHeight: 340 }}
+                    renderItem={({ item }) => {
+                      const id = item.friendId || item._id;
+                      const name = item.displayName || item.friendName || '?';
+                      const av = item.avatar || item.friendAvatar || null;
+                      const isSelected = selected.includes(id);
+                      return (
+                        <TouchableOpacity onPress={() => toggleFriend(id)}
+                          style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 12 }}>
+                          <View style={{ width: 40, height: 40, borderRadius: 20, overflow: 'hidden', backgroundColor: getAvatarColor(name), alignItems: 'center', justifyContent: 'center' }}>
+                            {av ? <Image source={{ uri: av }} style={{ width: 40, height: 40 }} /> : <Text style={{ color: '#fff', fontWeight: '700' }}>{getInitials(name)}</Text>}
+                          </View>
+                          <Text style={{ flex: 1, fontSize: 15, color: THEME.textPrimary, fontWeight: '500' }}>{name}</Text>
+                          <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: isSelected ? THEME.accent : THEME.border, backgroundColor: isSelected ? THEME.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                            {isSelected && <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800' }}>✓</Text>}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    }}
+                    ListEmptyComponent={<Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Không có bạn bè nào</Text>}
+                  />
+                )
+              }
+              <View style={[styles.modalBtns, { marginTop: 12 }]}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setStep(1)}><Text style={styles.cancelBtnText}>← Quay lại</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.saveBtn, { opacity: creating ? 0.6 : 1 }]} onPress={handleCreate} disabled={creating}>
+                  {creating ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Tạo nhóm</Text>}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────
 // CHATS TAB
 // ─────────────────────────────────────────────
-function ChatsTab({ navigation, conversations, onUpdateConversations, THEME, styles }) {
+function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh, THEME, styles }) {
   const [search, setSearch] = useState('');
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
 
   const filtered = conversations.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
@@ -175,7 +322,20 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, THEME, sty
             <Text style={styles.headerBadgeText}>{totalUnread}</Text>
           </View>
         )}
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity onPress={() => setShowCreateGroup(true)}
+          style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: THEME.accent + '22', alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 22, color: THEME.accent, lineHeight: 24 }}>＋</Text>
+        </TouchableOpacity>
       </View>
+
+      <CreateGroupModal
+        visible={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
+        onCreated={() => { setShowCreateGroup(false); onRefresh && onRefresh(); }}
+        THEME={THEME}
+        styles={styles}
+      />
 
       {/* Search */}
       <View style={styles.searchContainer}>
@@ -329,7 +489,7 @@ export default function MainTabScreen({ navigation, route }) {
   const renderContent = () => {
     switch (activeTab) {
       case 'chats':
-        return <ChatsTab navigation={navigation} conversations={conversations} onUpdateConversations={setConversations} THEME={THEME} styles={styles} />;
+        return <ChatsTab navigation={navigation} conversations={conversations} onUpdateConversations={setConversations} onRefresh={fetchConversations} THEME={THEME} styles={styles} />;
       case 'friends':
         return <FriendsScreen navigation={navigation} />;
       case 'profile':

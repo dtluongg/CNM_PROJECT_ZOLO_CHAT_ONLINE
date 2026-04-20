@@ -5,8 +5,6 @@ import Avatar from './Avatar';
 import VoicePlayer from './VoicePlayer';
 import VideoPlayer from './VideoPlayer';
 import PollMessage from './PollMessage';
-import ReminderMessage from './ReminderMessage';
-
 
 // Màu tên người gửi trong nhóm chat, luân phiên theo tên
 const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245'];
@@ -81,10 +79,6 @@ const MessageBubble = ({
       const payload = parsePayload(msg.replyToMessageId.payload);
       const pollTopic = payload.topic || msg.replyToMessageId.content || 'Bình chọn';
       repliedContent = `Bình chọn: ${pollTopic}`;
-    } else if (msg.replyToMessageId.type === 'reminder') {
-      const payload = parsePayload(msg.replyToMessageId.payload);
-      const reminderTopic = payload.content || msg.replyToMessageId.content || 'Nhắc hẹn';
-      repliedContent = `Nhắc hẹn: ${reminderTopic}`;
     } else {
       repliedContent = `[${msg.replyToMessageId.type}]`;
     }
@@ -240,6 +234,7 @@ const MessageBubble = ({
       );
     }
 
+    // Tin nhắn văn bản (mặc định)
     if (msg.type === 'poll') {
       return (
         <PollMessage 
@@ -251,18 +246,6 @@ const MessageBubble = ({
         />
       );
     }
-    
-    if (msg.type === 'reminder') {
-      return (
-        <ReminderMessage 
-          message={msg} 
-          isMine={isMine} 
-          THEME={THEME}
-          isPinned={isPinned}
-        />
-      );
-    }
-
 
     const payload = parsePayload(msg.payload);
 
@@ -392,7 +375,6 @@ const MessageBubble = ({
                 msg.type === 'reminder' ||
                 parsePayload(msg.payload).type === 'story_reply' ||
                 /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(parsePayload(msg.payload).fileName || '')) && {
-
                 padding: 0,
                 overflow: 'hidden',
                 backgroundColor: 'transparent',
@@ -402,7 +384,7 @@ const MessageBubble = ({
               },
             ]}
           >
-            {isPinned && msg.type !== 'poll' && msg.type !== 'reminder' && (
+            {isPinned && msg.type !== 'poll' && (
               <View style={{ 
                 flexDirection: 'row', alignItems: 'center', 
                 marginBottom: 4, paddingBottom: 4, 
@@ -423,7 +405,7 @@ const MessageBubble = ({
         </Pressable>
 
         {/* Tổng hợp reaction hiển thị dưới bong bóng */}
-        {msg.reactions && Object.keys(msg.reactions).length > 0 && msg.type !== 'poll' && msg.type !== 'reminder' && (
+        {msg.reactions && Object.keys(msg.reactions).length > 0 && msg.type !== 'poll' && (
           <View style={[styles.reactionSummary, isMine ? { right: 12 } : { left: 12 }]}>
             {Object.entries(msg.reactions).map(([emoji, count], idx) => (
               <View key={idx} style={styles.reactionItem}>

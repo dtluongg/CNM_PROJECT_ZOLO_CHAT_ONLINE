@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { getAccessToken } from '../utils/authStorage';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
 
@@ -35,7 +36,7 @@ export const PresenceProvider = ({ children }) => {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    const accessToken = token || localStorage.getItem('accessToken');
+    const accessToken = token || getAccessToken();
     if (!accessToken) {
       setOnlineSet(new Set());
       return;

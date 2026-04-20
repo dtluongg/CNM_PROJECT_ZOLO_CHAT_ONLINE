@@ -144,6 +144,7 @@ const initSocket = (httpServer) => {
         // Đăng ký các event handler theo từng feature
         require('./callSocket')(io, socket, onlineUsers);
         require('./chatSocket')(io, socket, onlineUsers);
+        require('./voiceRoomSocket')(io, socket, onlineUsers);
 
         // Khi socket ngắt kết nối
         socket.on('disconnect', () => {

@@ -10,7 +10,7 @@ import messageApi from '../api/messageApi';
  * @param {string}   conversationId  - ID cuộc hội thoại
  * @param {function} onMessageSent   - Callback nhận tin nhắn voice đã gửi thành công
  */
-const useRecording = (conversationId, onMessageSent) => {
+const useRecording = (conversationId, onMessageSent, topicId = null) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSec, setRecordingSec] = useState(0);
 
@@ -81,7 +81,7 @@ const useRecording = (conversationId, onMessageSent) => {
       const up = await messageApi.uploadVoice(fd);
 
       // Gửi tin nhắn voice với fileId vừa upload
-      const res = await messageApi.sendVoice(conversationId, up.data.voice.fileId, replyToMessageId);
+      const res = await messageApi.sendVoice(conversationId, up.data.voice.fileId, replyToMessageId, topicId);
       onMessageSent?.(res.data.data);
     } catch (err) {
       console.error('stopRecording error:', err);

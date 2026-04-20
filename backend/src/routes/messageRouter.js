@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middlewares/verifytoken');
+const { checkCanSendInTopic, checkCanInvite } = require('../middlewares/checkTopicPermission');
 const { sendMessage, getMessages, getAttachments, revokeMessage, editMessage, markAsRead, deleteMessageForMe } = require('../controllers/messageController');
 const { summarizeUnread } = require('../controllers/aiController');
 const { createPoll, votePoll } = require('../controllers/pollController');
@@ -19,10 +20,10 @@ const { createPoll, votePoll } = require('../controllers/pollController');
 // ════════════════════════════════════════════════════════════════
 router.get('/:conversationId/attachments', verifyToken, getAttachments);
 router.post('/:conversationId/aiSummary',  verifyToken, summarizeUnread);
-router.post('/:conversationId/poll',       verifyToken, createPoll);
+router.post('/:conversationId/poll',       verifyToken, checkCanSendInTopic, createPoll);
 router.patch('/poll/:messageId/vote',      verifyToken, votePoll);
 router.get('/:conversationId', verifyToken, getMessages);
-router.post('/:conversationId', verifyToken, sendMessage);
+router.post('/:conversationId', verifyToken, checkCanSendInTopic, sendMessage);
 router.post('/:conversationId/read/:messageId', verifyToken, markAsRead);
 router.patch('/:messageId/delete-for-me', verifyToken, deleteMessageForMe);
 router.patch('/:messageId/revoke', verifyToken, revokeMessage);
