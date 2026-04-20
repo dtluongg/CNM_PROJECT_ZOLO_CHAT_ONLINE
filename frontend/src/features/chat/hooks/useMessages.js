@@ -225,16 +225,22 @@ export const useMessages = ({
     } catch (err) {
       console.error('handleSendMessage error:', err);
       if (err?.response?.status === 403) {
-        if (payload.type === 'text') {
+        if (payload.type === 'text' && resolvedConversation?.type === 'dm') {
           setMessages((prev) => ({
             ...prev,
             [convId]: (prev[convId] || []).map((m) =>
               m._id?.startsWith('temp_') ? { ...m, blocked: true } : m
             ),
           }));
+        } else if (payload.type === 'text') {
+          // Group permission errors (vd: nhóm khóa) không phải trạng thái "bị chặn người dùng".
+          setMessages((prev) => ({
+            ...prev,
+            [convId]: (prev[convId] || []).filter((m) => !m._id?.startsWith('temp_')),
+          }));
         }
         const otherUserId = resolvedConversation?.otherUserId || activeConversation?.otherUserId;
-        if (otherUserId) fetchDmBlockStatus(otherUserId);
+        if (resolvedConversation?.type === 'dm' && otherUserId) fetchDmBlockStatus(otherUserId);
       } else if (payload.type === 'text') {
         setMessages((prev) => ({
           ...prev,

@@ -1,5 +1,6 @@
 const ConversationMember = require('../models/conversationMemberModel');
 const GroupRole = require('../models/groupRoleModel');
+const Conversation = require('../models/conversationModel');
 
 // Tính quyền thực tế theo thứ tự: personalOverride > customRole > systemRole
 const getEffectiveTopicPermission = async (member, topicId) => {
@@ -10,31 +11,45 @@ const getEffectiveTopicPermission = async (member, topicId) => {
     return { canAccess: true, canSend: true };
   }
 
+  const canSendGlobally = member.canSendMessages !== false;
+
   // 2. Custom role
   if (member.customRoleId) {
     const role = await GroupRole.findById(member.customRoleId).lean();
     if (role) {
       const allowedIds  = (role.allowedTopicIds  || []).map(id => id.toString());
       const sendableIds = (role.sendableTopicIds || []).map(id => id.toString());
-      console.log('[role] name:', role.name);
-      console.log('[role] allowedIds:', allowedIds);
-      console.log('[role] sendableIds:', sendableIds); // 👈 xem cái này
-      console.log('[role] checking tid:', tid);
 
-      const canAccess = allowedIds.length === 0 || allowedIds.includes(tid);
-      const canSend   = canAccess
-        && sendableIds.length > 0
-        && sendableIds.includes(tid)
-        && role.permissions?.canSendMessages !== false;
+      let canAccess = allowedIds.length === 0 || allowedIds.includes(tid);
+      let canSend   = canAccess
+        && canSendGlobally
+        && role.permissions?.canSendMessages !== false
+        && (sendableIds.length === 0 || sendableIds.includes(tid));
+
+      // Personal override có độ ưu tiên cao hơn custom role trên từng topic.
+      const override = (member.topicOverrides || []).find(o => o.topicId?.toString() === tid);
+      if (override) {
+        canAccess = !!override.canAccess;
+        canSend = canAccess && !!override.canSend && canSendGlobally;
+      }
 
       return { canAccess, canSend };
     }
   }
 
-  // 3. Default member không có custom role — được xem và gửi tất cả
+  // 3. Default member không có custom role
+  let canAccess = true;
+  let canSend = canSendGlobally;
+
+  const override = (member.topicOverrides || []).find(o => o.topicId?.toString() === tid);
+  if (override) {
+    canAccess = !!override.canAccess;
+    canSend = canAccess && !!override.canSend && canSendGlobally;
+  }
+
   return {
-    canAccess: true,
-    canSend: member.canSendMessages !== false,
+    canAccess,
+    canSend,
   };
 };
 
@@ -45,11 +60,23 @@ const checkCanSendInTopic = async (req, res, next) => {
     const conversationId = req.params.conversationId || req.params.id || req.body.conversationId;
     const topicId        = req.body.topicId || req.query.topicId || null;
 
+    const conversation = await Conversation.findById(conversationId).select('type isLocked').lean();
+    if (!conversation) {
+      return res.status(404).json({ message: 'Không tìm thấy cuộc trò chuyện' });
+    }
+
     const member = await ConversationMember.findOne({
       conversationId, userId, leftAt: null,
     });
 
     if (!member) return res.status(403).json({ message: 'Bạn không thuộc cuộc trò chuyện này' });
+
+    // Group bị khóa: chỉ owner/admin được gửi, member thường chỉ đọc.
+    if (conversation.type === 'group' && conversation.isLocked && member.role === 'member') {
+      return res.status(403).json({
+        message: 'Nhóm đang khóa. Chỉ owner/admin mới được gửi tin nhắn',
+      });
+    }
 
     // Kênh chung (không có topicId) — chỉ check canSendMessages cá nhân
     if (!topicId) {
@@ -76,6 +103,14 @@ const checkCanInvite = async (req, res, next) => {
     const userId         = (req.user?._id || req.user?.id || '').toString();
     const conversationId = req.params.id;
 
+    const conversation = await Conversation.findById(conversationId).select('type inviteMode').lean();
+    if (!conversation) {
+      return res.status(404).json({ message: 'Không tìm thấy cuộc trò chuyện' });
+    }
+    if (conversation.type !== 'group') {
+      return res.status(400).json({ message: 'Chỉ nhóm mới hỗ trợ mời thành viên' });
+    }
+
     const member = await ConversationMember.findOne({
       conversationId, userId, leftAt: null,
     });
@@ -84,6 +119,15 @@ const checkCanInvite = async (req, res, next) => {
 
     // owner/admin luôn được mời
     if (member.role === 'owner' || member.role === 'admin') return next();
+
+    if (conversation.inviteMode === 'admin_only') {
+      return res.status(403).json({
+        message: 'Nhóm đang ở chế độ Admin Only, chỉ owner/admin mới được mời trực tiếp'
+      });
+    }
+
+    // Member thường được bật cờ canInviteMembers vẫn có quyền mời.
+    if (member.canInviteMembers === true) return next();
 
     // Kiểm tra custom role có quyền canInviteMembers không
     if (member.customRoleId) {

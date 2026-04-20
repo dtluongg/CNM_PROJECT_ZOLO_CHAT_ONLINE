@@ -36,6 +36,27 @@ import TopicManager from "./rightSidebar/TopicManager";
 
 import { getAvatarColor } from "./rightSidebar/utils/avatarUtils";
 
+const GROUP_TYPE_LABEL = {
+    study: '📚 Học tập',
+    gaming: '🎮 Gaming',
+    general: '💬 Chung',
+    project: '📌 Dự án',
+    other: '🗂️ Khác',
+    sensitive: '🔐 Nhóm nhạy cảm',
+};
+
+const INVITE_MODE_LABEL = {
+    open_invite: 'Open Invite',
+    approval_required: 'Approval Required',
+    admin_only: 'Admin Only',
+};
+
+const INVITE_MODE_HINT = {
+    open_invite: 'Người có quyền mời sẽ thêm trực tiếp vào nhóm.',
+    approval_required: 'Member gửi đề xuất thêm người, admin/owner duyệt.',
+    admin_only: 'Chỉ owner/admin mới được thêm trực tiếp.',
+};
+
 export default function RightSidebar({
     conversation,
     onClose,
@@ -85,10 +106,11 @@ export default function RightSidebar({
     const [notifBusy, setNotifBusy] = useState(false);
 
     // ── Group Settings State ─────────────────────────────
-    const [groupSettingsForm, setGroupSettingsForm] = useState({ name: '', groupType: 'general', description: '' });
+    const [groupSettingsForm, setGroupSettingsForm] = useState({ name: '', groupType: 'general', description: '', inviteMode: 'open_invite' });
     const [groupAvatarFile, setGroupAvatarFile] = useState(null);
     const [groupAvatarPreview, setGroupAvatarPreview] = useState(null);
     const [savingGroupSettings, setSavingGroupSettings] = useState(false);
+    const [savingGroupLock, setSavingGroupLock] = useState(false);
     const groupAvatarInputRef = React.useRef(null);
     const [joinRequestMsg, setJoinRequestMsg]   = useState('');
     const [joinRequestBusy, setJoinRequestBusy] = useState(false);
@@ -128,6 +150,10 @@ export default function RightSidebar({
         myPermissions?.globalPermissions?.canInviteMembers === true
       );
     const isOwner = myMember?.role === "owner";
+        const isAdmin = myMember?.role === 'admin';
+        const inviteMode = conversation?.inviteMode || 'open_invite';
+        const canOpenDirectInviteSection =
+                canInviteMembers && (inviteMode !== 'admin_only' || isOwner || isAdmin);
 
     // ── Load Members ─────────────────────────────────────
     const loadMembers = useCallback(async () => {
@@ -226,6 +252,7 @@ export default function RightSidebar({
                 name: conversation.name || '',
                 groupType: conversation.groupType || 'general',
                 description: conversation.raw?.description || conversation.description || '',
+                inviteMode: conversation.inviteMode || 'open_invite',
             });
             setGroupAvatarFile(null);
             setGroupAvatarPreview(null);
@@ -306,11 +333,18 @@ export default function RightSidebar({
         if (!conversation.id || selectedAddIds.length === 0) return;
         try {
             setBusyAction("add-members");
-            await conversationApi.addConversationMembers(
+            const res = await conversationApi.addConversationMembers(
                 conversation.id,
                 selectedAddIds,
+                joinRequestMsg.trim(),
             );
+            const msg = res?.data?.message || '';
+            if (msg.toLowerCase().includes('chờ admin') || msg.toLowerCase().includes('yêu cầu')) {
+                window.alert(msg);
+                setJoinRequestSent(true);
+            }
             setSelectedAddIds([]);
+            setJoinRequestMsg('');
             await loadMembers();
             await loadFriendPool();
             if (onGroupUpdated) await onGroupUpdated();
@@ -508,6 +542,7 @@ export default function RightSidebar({
             await conversationApi.updateGroupInfo(conversation.id, {
                 name: groupSettingsForm.name.trim(),
                 groupType: groupSettingsForm.groupType,
+                inviteMode: groupSettingsForm.inviteMode,
                 description: groupSettingsForm.description,
                 avatar: avatarUrl,
             });
@@ -517,6 +552,21 @@ export default function RightSidebar({
             window.alert(error.response?.data?.message || 'Không thể cập nhật nhóm');
         } finally {
             setSavingGroupSettings(false);
+        }
+    };
+
+    const handleToggleGroupLock = async () => {
+        if (!conversation?.id || !isOwner) return;
+        const nextLockState = !conversation.isLocked;
+        try {
+            setSavingGroupLock(true);
+            await conversationApi.setConversationLock(conversation.id, nextLockState);
+            if (onGroupUpdated) await onGroupUpdated();
+            window.alert(nextLockState ? 'Đã khóa nhóm. Member chỉ có thể xem.' : 'Đã mở khóa nhóm. Member có thể gửi lại.');
+        } catch (error) {
+            window.alert(error.response?.data?.message || 'Không thể cập nhật trạng thái khóa nhóm');
+        } finally {
+            setSavingGroupLock(false);
         }
     };
 
@@ -731,10 +781,28 @@ export default function RightSidebar({
                                             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                                                 <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Loại nhóm</span>
                                                 <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
-                                                    {({ study: '📚 Học tập', gaming: '🎮 Gaming', general: '💬 Chung', project: '📌 Dự án', other: '🗂️ Khác' })[conversation.groupType] || conversation.groupType}
+                                                    {GROUP_TYPE_LABEL[conversation.groupType] || conversation.groupType}
                                                 </span>
                                             </div>
                                         )}
+                                        {conversation.inviteMode && (
+                                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Chế độ mời</span>
+                                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                                                    {INVITE_MODE_LABEL[conversation.inviteMode] || conversation.inviteMode}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Trạng thái nhóm</span>
+                                            <span style={{
+                                                fontSize: 12,
+                                                fontWeight: 700,
+                                                color: conversation.isLocked ? '#ed4245' : '#57f287',
+                                            }}>
+                                                {conversation.isLocked ? '🔒 Đang khóa' : '🔓 Đang mở'}
+                                            </span>
+                                        </div>
                                         {conversation.description && (
                                             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
                                                 <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Mô tả</span>
@@ -804,7 +872,7 @@ export default function RightSidebar({
                                     )}
                                 </div>
                             )}
-                            {conversation.type === 'group' && !canInviteMembers && myMember && myMember.role === 'member' && (
+                            {conversation.type === 'group' && !canInviteMembers && myMember && myMember.role === 'member' && inviteMode !== 'admin_only' && (
                                 <div style={{ marginBottom: 16 }}>
                                     <SectionHeader title="Giới thiệu thành viên" />
                                     <div style={{
@@ -894,14 +962,32 @@ export default function RightSidebar({
                                     </div>
                                 </div>
                             )}
-                            {/* Thêm thành viên trực tiếp — owner/admin */}
-                            {conversation.type === 'group' && canInviteMembers && (
+                            {conversation.type === 'group' && myMember && myMember.role === 'member' && inviteMode === 'admin_only' && (
                                 <div style={{ marginBottom: 16 }}>
                                     <SectionHeader title="Thêm thành viên" />
                                     <div style={{
                                         background: 'var(--bg-tertiary)', borderRadius: 8,
                                         padding: '12px 14px', border: '1px solid var(--border)',
+                                        fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5,
                                     }}>
+                                        🔐 Nhóm đang ở chế độ <strong>Admin Only</strong>.<br />
+                                        Chỉ owner hoặc admin mới được thêm thành viên.
+                                    </div>
+                                </div>
+                            )}
+                            {/* Thêm thành viên trực tiếp — owner/admin */}
+                            {conversation.type === 'group' && canOpenDirectInviteSection && (
+                                <div style={{ marginBottom: 16 }}>
+                                    <SectionHeader title={inviteMode === 'approval_required' && myMember?.role === 'member' ? 'Đề xuất thêm thành viên' : 'Thêm thành viên'} />
+                                    <div style={{
+                                        background: 'var(--bg-tertiary)', borderRadius: 8,
+                                        padding: '12px 14px', border: '1px solid var(--border)',
+                                    }}>
+                                        {inviteMode === 'approval_required' && myMember?.role === 'member' && (
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                                                Chế độ nhóm hiện tại yêu cầu admin/owner duyệt. Chọn bạn bè rồi gửi đề xuất.
+                                            </div>
+                                        )}
                                         {loadingFriendPool ? (
                                             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Đang tải...</div>
                                         ) : friendPool.length === 0 ? (
@@ -954,6 +1040,21 @@ export default function RightSidebar({
                                                         );
                                                     })}
                                                 </div>
+                                                {inviteMode === 'approval_required' && myMember?.role === 'member' && (
+                                                    <textarea
+                                                        value={joinRequestMsg}
+                                                        onChange={e => setJoinRequestMsg(e.target.value)}
+                                                        placeholder="Lý do đề xuất (tùy chọn)..."
+                                                        rows={2}
+                                                        style={{
+                                                            width: '100%', boxSizing: 'border-box', marginBottom: 8,
+                                                            padding: '7px 10px', borderRadius: 8, fontSize: 12,
+                                                            border: '1px solid var(--border)', background: 'var(--bg-primary)',
+                                                            color: 'var(--text-primary)', outline: 'none', resize: 'none',
+                                                            fontFamily: 'inherit',
+                                                        }}
+                                                    />
+                                                )}
                                                 <button
                                                     onClick={handleAddMembers}
                                                     disabled={selectedAddIds.length === 0 || busyAction === 'add-members'}
@@ -967,6 +1068,8 @@ export default function RightSidebar({
                                                 >
                                                     {busyAction === 'add-members'
                                                         ? 'Đang thêm...'
+                                                        : (inviteMode === 'approval_required' && myMember?.role === 'member')
+                                                            ? (selectedAddIds.length > 0 ? `📨 Gửi đề xuất (${selectedAddIds.length})` : '📨 Gửi đề xuất')
                                                         : selectedAddIds.length > 0
                                                             ? `➕ Thêm ${selectedAddIds.length} người`
                                                             : '➕ Thêm thành viên'}
@@ -1444,8 +1547,31 @@ export default function RightSidebar({
                                         { value: 'gaming',  label: '🎮 Gaming' },
                                         { value: 'project', label: '📌 Dự án / Làm việc' },
                                         { value: 'other',   label: '🗂️ Khác' },
+                                        { value: 'sensitive', label: '🔐 Nhóm nhạy cảm' },
                                     ].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                                 </select>
+                            </div>
+
+                            {/* Invite mode */}
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>Chế độ mời</div>
+                                <select
+                                    value={groupSettingsForm.inviteMode}
+                                    onChange={(e) => setGroupSettingsForm((p) => ({ ...p, inviteMode: e.target.value }))}
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box',
+                                        background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                        borderRadius: 8, color: 'var(--text-primary)',
+                                        padding: '8px 10px', outline: 'none', fontSize: 13, cursor: 'pointer',
+                                    }}
+                                >
+                                    <option value='open_invite'>Open Invite</option>
+                                    <option value='approval_required'>Approval Required</option>
+                                    <option value='admin_only'>Admin Only</option>
+                                </select>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                                    {INVITE_MODE_HINT[groupSettingsForm.inviteMode]}
+                                </div>
                             </div>
 
                             {/* Description */}
@@ -1468,6 +1594,52 @@ export default function RightSidebar({
                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
                                     {groupSettingsForm.description.length}/200
                                 </div>
+                            </div>
+
+                            {/* Group lock */}
+                            <div style={{
+                                background: 'var(--bg-tertiary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 8,
+                                padding: '10px 12px',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                                    <div>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                            Khóa nhóm chat
+                                        </div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                                            Khi khóa: chỉ owner/admin gửi được, member chỉ xem.
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleToggleGroupLock}
+                                        disabled={!isOwner || savingGroupLock}
+                                        style={{
+                                            minWidth: 92,
+                                            padding: '7px 10px',
+                                            borderRadius: 8,
+                                            border: 'none',
+                                            cursor: (!isOwner || savingGroupLock) ? 'not-allowed' : 'pointer',
+                                            background: conversation.isLocked ? '#57f287' : '#ed4245',
+                                            color: conversation.isLocked ? '#000' : '#fff',
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            opacity: (!isOwner || savingGroupLock) ? 0.6 : 1,
+                                        }}
+                                    >
+                                        {savingGroupLock
+                                            ? 'Đang xử lý...'
+                                            : conversation.isLocked
+                                                ? 'Mở khóa'
+                                                : 'Khóa nhóm'}
+                                    </button>
+                                </div>
+                                {!isOwner && (
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                                        Chỉ owner mới được khóa/mở khóa nhóm.
+                                    </div>
+                                )}
                             </div>
 
                             <button

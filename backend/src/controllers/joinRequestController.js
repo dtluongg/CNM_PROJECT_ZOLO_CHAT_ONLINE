@@ -24,6 +24,10 @@ const createJoinRequest = async (req, res, next) => {
     });
 
     if (requesterMember) {
+      if (conversation.inviteMode === 'admin_only' && !['owner', 'admin'].includes(requesterMember.role)) {
+        return res.status(403).json({ message: 'Nhóm đang ở chế độ Admin Only, chỉ owner/admin mới được đề xuất thêm người' });
+      }
+
       // Đã là member → chỉ được gửi request giới thiệu người khác
       if (!targetUserId) {
         return res.status(400).json({ message: 'Bạn đã là thành viên. Hãy chỉ định người muốn giới thiệu (targetUserId).' });
@@ -117,9 +121,6 @@ const listJoinRequests = async (req, res, next) => {
 
     const myMember = await ConversationMember.findOne({ conversationId, userId, leftAt: null });
     if (!myMember) return res.status(403).json({ message: 'Bạn không thuộc nhóm này' });
-    if (!['owner', 'admin'].includes(myMember.role) && !myMember.canManageMembers) {
-      return res.status(403).json({ message: 'Chỉ admin/owner mới xem được danh sách yêu cầu' });
-    }
 
     const requests = await JoinRequest.find({ conversationId, status: 'pending' })
       .populate('userId', 'displayName avatar email username')
@@ -146,7 +147,7 @@ const reviewJoinRequest = async (req, res, next) => {
 
     const myMember = await ConversationMember.findOne({ conversationId, userId: reviewerId, leftAt: null });
     if (!myMember) return res.status(403).json({ message: 'Bạn không thuộc nhóm này' });
-    if (!['owner', 'admin'].includes(myMember.role) && !myMember.canManageMembers) {
+    if (!['owner', 'admin'].includes(myMember.role)) {
       return res.status(403).json({ message: 'Chỉ admin/owner mới duyệt được yêu cầu' });
     }
 
@@ -164,6 +165,9 @@ const reviewJoinRequest = async (req, res, next) => {
       if (existing) {
         existing.leftAt = null;
         existing.role   = 'member';
+        existing.canSendMessages = true;
+        existing.canInviteMembers = true;
+        existing.canManageMembers = false;
         await existing.save();
       } else {
         await ConversationMember.create({
@@ -171,7 +175,7 @@ const reviewJoinRequest = async (req, res, next) => {
           userId:          request.userId,
           role:            'member',
           canSendMessages: true,
-          canInviteMembers: false,
+          canInviteMembers: true,
           canManageMembers: false,
         });
       }

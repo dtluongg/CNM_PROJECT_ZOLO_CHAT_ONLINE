@@ -253,17 +253,22 @@ const assignMemberRole = async (req, res, next) => {
         });
         if (!targetMember) return res.status(404).json({ message: 'Không tìm thấy thành viên trong nhóm' });
 
-        if (targetMember.role === 'owner') {
-            return res.status(400).json({ message: 'Không thể gán custom role cho owner' });
-        }
-        // Admin chỉ gán role cho member thường, không gán cho admin khác
-        if (myMember.role === 'admin' && targetMember.role === 'admin') {
-            return res.status(403).json({ message: 'Admin không thể thay đổi role của admin khác' });
-        }
-
         if (customRoleId === null || customRoleId === undefined || customRoleId === '') {
             // Gỡ role
             targetMember.customRoleId = null;
+            await targetMember.save();
+
+            return res.status(200).json({
+                message: 'Đã gỡ role thành công',
+                data: {
+                    userId: targetUserId,
+                    customRoleId: targetMember.customRoleId,
+                },
+            });
+        }
+
+        if (targetMember.role === 'owner' || targetMember.role === 'admin') {
+            return res.status(400).json({ message: 'Chỉ có thể gán custom role cho member thường' });
         } else {
             if (!isValidId(customRoleId)) return res.status(400).json({ message: 'customRoleId không hợp lệ' });
 
@@ -311,6 +316,10 @@ const updateMemberTopicOverrides = async (req, res, next) => {
             conversationId, userId: targetUserId, leftAt: null,
         });
         if (!targetMember) return res.status(404).json({ message: 'Không tìm thấy thành viên' });
+
+        if (targetMember.role === 'owner' || targetMember.role === 'admin') {
+            return res.status(400).json({ message: 'Chỉ có thể cập nhật topic override cho member thường' });
+        }
 
         // Validate topicIds
         const topicIds = overrides.map(o => o.topicId).filter(Boolean);
@@ -383,20 +392,35 @@ const getEffectivePermissions = async (req, res, next) => {
         const allowedIds  = (cr.allowedTopicIds  || []).map(id => id.toString());
         const sendableIds = (cr.sendableTopicIds || []).map(id => id.toString());
 
-        const canAccess = allowedIds.length === 0 || allowedIds.includes(tid);
-        const canSend   = canAccess
-          && sendableIds.length > 0
-          && sendableIds.includes(tid)
-          && cr.permissions?.canSendMessages !== false;
+                let canAccess = allowedIds.length === 0 || allowedIds.includes(tid);
+                let canSend   = canAccess
+                    && member.canSendMessages !== false
+                    && cr.permissions?.canSendMessages !== false
+                    && (sendableIds.length === 0 || sendableIds.includes(tid));
+
+                const override = (member.topicOverrides || []).find(o => o.topicId?.toString() === tid);
+                if (override) {
+                    canAccess = !!override.canAccess;
+                    canSend = canAccess && !!override.canSend && member.canSendMessages !== false;
+                }
 
         return { ...topic, canAccess, canSend, source: 'custom_role' };
       }
 
       // Default
+            let canAccess = true;
+            let canSend = member.canSendMessages !== false;
+
+            const override = (member.topicOverrides || []).find(o => o.topicId?.toString() === tid);
+            if (override) {
+                canAccess = !!override.canAccess;
+                canSend = canAccess && !!override.canSend && member.canSendMessages !== false;
+            }
+
       return {
         ...topic,
-        canAccess: true,
-        canSend: member.canSendMessages !== false,
+                canAccess,
+                canSend,
         source: 'default',
       };
     });
@@ -411,9 +435,9 @@ const getEffectivePermissions = async (req, res, next) => {
           color: member.customRoleId.color,
         } : null,
         globalPermissions: {
-          canSendMessages:  member.role === 'owner' || member.role === 'admin' || member.canSendMessages,
-          canInviteMembers: member.role === 'owner' || member.role === 'admin' || member.customRoleId?.permissions?.canInviteMembers,
-          canManageMembers: member.role === 'owner' || member.role === 'admin' || member.canManageMembers,
+                    canSendMessages:  member.role === 'owner' || member.role === 'admin' || (member.canSendMessages !== false && member.customRoleId?.permissions?.canSendMessages !== false),
+                    canInviteMembers: member.role === 'owner' || member.role === 'admin' || member.canInviteMembers === true || member.customRoleId?.permissions?.canInviteMembers === true,
+                    canManageMembers: member.role === 'owner' || member.role === 'admin' || member.canManageMembers === true || member.customRoleId?.permissions?.canManageMembers === true,
         },
         topicPermissions: effectiveTopics,
       },

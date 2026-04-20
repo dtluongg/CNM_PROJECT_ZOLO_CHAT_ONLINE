@@ -125,6 +125,16 @@ const Chat = () => {
         c.id === conversationId ? { ...c, unread: 0 } : c
       ));
     },
+    onConversationDisbanded: (conversationId) => {
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      setMessages((prev) => {
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
+      });
+      setActiveConversation((prev) => (prev?.id === conversationId ? null : prev));
+      if (isMobile) setMobileView('list');
+    },
   });
 
   // ── location state effects ────────────────────────────────────────────────

@@ -33,7 +33,23 @@ const DEFAULT_CHANNELS = {
         { name: 'thảo-luận', emoji: '💬', categoryName: '💬 Chat chung', channelType: 'text', position: 0 },
         { name: 'nhật-ký-nhóm', emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
     ],
+    sensitive: [
+        { name: 'thông-báo', emoji: '📢', categoryName: '🔐 Nhạy cảm', channelType: 'text', position: 0 },
+        { name: 'nhật-ký-nhóm', emoji: '📋', categoryName: '🔔 Hệ thống', channelType: 'system', position: 99 },
+    ],
 };
+
+const INVITE_MODE_BY_GROUP_TYPE = {
+    general: 'open_invite',
+    gaming: 'open_invite',
+    study: 'approval_required',
+    project: 'approval_required',
+    other: 'approval_required',
+    sensitive: 'admin_only',
+};
+
+const resolveInviteModeByGroupType = (groupType) =>
+    INVITE_MODE_BY_GROUP_TYPE[groupType] || 'open_invite';
 
 // Chuyển id string sang ObjectId để dùng trong aggregate/query có kiểu chặt chẽ.
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
@@ -93,6 +109,7 @@ const pickConversationFields = (conversation) => ({
     name: conversation.name,
     avatar: conversation.avatar,
     groupType: conversation.groupType || 'general',
+    inviteMode: conversation.inviteMode || resolveInviteModeByGroupType(conversation.groupType || 'general'),
     description: conversation.description || '',
     createdBy: conversation.createdBy,
     lastMessageId: conversation.lastMessageId,
@@ -286,7 +303,7 @@ const createDmConversation = async (userId, targetUserId, initialMessage = '') =
 
 // Tạo group trong transaction: tạo conversation + owner + danh sách member ban đầu.
 const createGroupConversation = async (userId, payload) => {
-    const { name, avatar, memberIds = [], groupType = 'general', description = '' } = payload;
+    const { name, avatar, memberIds = [], groupType = 'general', description = '', inviteMode } = payload;
 
     if (!name || !name.trim()) {
         const err = new Error('Tên nhóm là bắt buộc');
@@ -303,14 +320,21 @@ const createGroupConversation = async (userId, payload) => {
         let createdConversation = null;
 
         await session.withTransaction(async () => {
-            const VALID_GROUP_TYPES = ['study', 'gaming', 'general', 'project', 'other'];
+            const VALID_GROUP_TYPES = ['study', 'gaming', 'general', 'project', 'other', 'sensitive'];
+            const VALID_INVITE_MODES = ['open_invite', 'approval_required', 'admin_only'];
+            const normalizedGroupType = VALID_GROUP_TYPES.includes(groupType) ? groupType : 'general';
+            const normalizedInviteMode = VALID_INVITE_MODES.includes(inviteMode)
+                ? inviteMode
+                : resolveInviteModeByGroupType(normalizedGroupType);
+
             const conversation = await Conversation.create(
                 [
                     {
                         type: 'group',
                         name: name.trim(),
                         avatar: avatar || '',
-                        groupType: VALID_GROUP_TYPES.includes(groupType) ? groupType : 'general',
+                        groupType: normalizedGroupType,
+                        inviteMode: normalizedInviteMode,
                         description: (description || '').toString().slice(0, 200),
                         createdBy: toObjectId(userId),
                     },
@@ -367,7 +391,7 @@ const createGroupConversation = async (userId, payload) => {
 const createConversation = async (req, res, next) => {
     try {
         const userId = getCurrentUserId(req);
-        const { type, name, avatar, targetUserId, memberIds, initialMessage, groupType, description } = req.body;
+        const { type, name, avatar, targetUserId, memberIds, initialMessage, groupType, description, inviteMode } = req.body;
 
         if (!userId) {
             return res.status(401).json({ message: 'Chưa xác thực người dùng' });
@@ -486,7 +510,14 @@ const createConversation = async (req, res, next) => {
             }
         }
 
-        const newGroup = await createGroupConversation(userId, { name, avatar, memberIds: uniqueMemberIds, groupType, description });
+        const newGroup = await createGroupConversation(userId, {
+            name,
+            avatar,
+            memberIds: uniqueMemberIds,
+            groupType,
+            description,
+            inviteMode,
+        });
 
         return res.status(201).json({
             message: 'Tạo nhóm thành công',
@@ -682,7 +713,7 @@ const updateConversationInfo = async (req, res, next) => {
         const userId = getCurrentUserId(req);
         const { id } = req.params;
         const conversationId = id;
-        const { name, avatar, groupType, description } = req.body;
+        const { name, avatar, groupType, description, inviteMode } = req.body;
 
         ensureValidObjectId(conversationId, 'conversationId');
 
@@ -705,7 +736,8 @@ const updateConversationInfo = async (req, res, next) => {
             return res.status(403).json({ message: 'Bạn không có quyền cập nhật thông tin nhóm' });
         }
 
-        const VALID_GROUP_TYPES = ['study', 'gaming', 'general', 'project', 'other'];
+        const VALID_GROUP_TYPES = ['study', 'gaming', 'general', 'project', 'other', 'sensitive'];
+        const VALID_INVITE_MODES = ['open_invite', 'approval_required', 'admin_only'];
         const updates = {};
         if (name !== undefined) {
             if (!name || !name.trim()) {
@@ -723,6 +755,16 @@ const updateConversationInfo = async (req, res, next) => {
                 return res.status(400).json({ message: 'groupType không hợp lệ' });
             }
             updates.groupType = groupType;
+            if (inviteMode === undefined) {
+                updates.inviteMode = resolveInviteModeByGroupType(groupType);
+            }
+        }
+
+        if (inviteMode !== undefined) {
+            if (!VALID_INVITE_MODES.includes(inviteMode)) {
+                return res.status(400).json({ message: 'inviteMode không hợp lệ' });
+            }
+            updates.inviteMode = inviteMode;
         }
 
         if (description !== undefined) {

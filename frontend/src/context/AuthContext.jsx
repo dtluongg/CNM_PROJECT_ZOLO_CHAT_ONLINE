@@ -1,5 +1,14 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { supabase } from '../config/supabase';
+import {
+  getAccessToken,
+  getCurrentUserRaw,
+  setAccessToken,
+  setCurrentUserRaw,
+  removeAccessToken,
+  removeCurrentUserRaw,
+  migrateLegacyAuthStorage,
+} from '../utils/authStorage';
 
 export const AuthContext = createContext();
 
@@ -10,8 +19,10 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const init = async () => {
-      const storedToken = localStorage.getItem('accessToken');
-      const storedUserRaw = localStorage.getItem('currentUser');
+      migrateLegacyAuthStorage();
+
+      const storedToken = getAccessToken();
+      const storedUserRaw = getCurrentUserRaw();
 
       if (!storedToken) {
         setLoading(false);
@@ -25,7 +36,7 @@ export const AuthProvider = ({ children }) => {
           setUser(cachedUser);
           setToken(storedToken);
         } catch {
-          localStorage.removeItem('currentUser');
+          removeCurrentUserRaw();
         }
       }
 
@@ -38,7 +49,7 @@ export const AuthProvider = ({ children }) => {
           // Dùng token mới từ Supabase (có thể đã được refresh tự động)
           activeToken = session.access_token;
           if (activeToken !== storedToken) {
-            localStorage.setItem('accessToken', activeToken);
+            setAccessToken(activeToken);
           }
           setToken(activeToken);
         }
@@ -56,7 +67,7 @@ export const AuthProvider = ({ children }) => {
           const data = await res.json();
           if (data?.user) {
             setUser(data.user);
-            localStorage.setItem('currentUser', JSON.stringify(data.user));
+            setCurrentUserRaw(JSON.stringify(data.user));
           }
         }
       } catch {
@@ -72,7 +83,7 @@ export const AuthProvider = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'TOKEN_REFRESHED' && session?.access_token) {
         setToken(session.access_token);
-        localStorage.setItem('accessToken', session.access_token);
+        setAccessToken(session.access_token);
       }
     });
 
@@ -82,28 +93,28 @@ export const AuthProvider = ({ children }) => {
   const login = (accessToken, userData) => {
     setToken(accessToken);
     setUser(userData);
-    localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('currentUser', JSON.stringify(userData));
+    setAccessToken(accessToken);
+    setCurrentUserRaw(JSON.stringify(userData));
   };
 
   const logout = () => {
     setToken(null);
     setUser(null);
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('currentUser');
+    removeAccessToken();
+    removeCurrentUserRaw();
     // Đăng xuất khỏi Supabase session nếu là OAuth
     supabase.auth.signOut().catch(() => {});
   };
 
   const updateToken = (newAccessToken) => {
     setToken(newAccessToken);
-    localStorage.setItem('accessToken', newAccessToken);
+    setAccessToken(newAccessToken);
   };
 
   const updateUser = (newUserData) => {
     const merged = { ...user, ...newUserData };
     setUser(merged);
-    localStorage.setItem('currentUser', JSON.stringify(merged));
+    setCurrentUserRaw(JSON.stringify(merged));
   };
 
   return (

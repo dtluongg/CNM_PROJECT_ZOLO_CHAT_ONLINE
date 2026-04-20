@@ -73,7 +73,7 @@ function Toggle({ checked, onChange, disabled }) {
         </div>
     );
 }
-function JoinRequestsTab({ conversation, onApproved }) {
+function JoinRequestsTab({ conversation, onApproved, canReview }) {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading]   = useState(false);
     const [busy, setBusy]         = useState('');
@@ -172,33 +172,41 @@ function JoinRequestsTab({ conversation, onApproved }) {
 
                             {/* Actions */}
                             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                                <button
-                                    onClick={() => handleReview(req._id, 'approve')}
-                                    disabled={!!busy}
-                                    style={{
-                                        padding: '6px 12px', borderRadius: 8,
-                                        background: '#57f287', color: '#000',
-                                        border: 'none', cursor: busy ? 'not-allowed' : 'pointer',
-                                        fontSize: 12, fontWeight: 700,
-                                        opacity: busy === `approve-${req._id}` ? 0.6 : 1,
-                                    }}
-                                >
-                                    {busy === `approve-${req._id}` ? '...' : '✓ Duyệt'}
-                                </button>
-                                <button
-                                    onClick={() => handleReview(req._id, 'reject')}
-                                    disabled={!!busy}
-                                    style={{
-                                        padding: '6px 12px', borderRadius: 8,
-                                        background: '#ed424520', color: '#ed4245',
-                                        border: '1px solid #ed424540',
-                                        cursor: busy ? 'not-allowed' : 'pointer',
-                                        fontSize: 12, fontWeight: 600,
-                                        opacity: busy === `reject-${req._id}` ? 0.6 : 1,
-                                    }}
-                                >
-                                    {busy === `reject-${req._id}` ? '...' : '✕ Từ chối'}
-                                </button>
+                                {canReview ? (
+                                    <>
+                                        <button
+                                            onClick={() => handleReview(req._id, 'approve')}
+                                            disabled={!!busy}
+                                            style={{
+                                                padding: '6px 12px', borderRadius: 8,
+                                                background: '#57f287', color: '#000',
+                                                border: 'none', cursor: busy ? 'not-allowed' : 'pointer',
+                                                fontSize: 12, fontWeight: 700,
+                                                opacity: busy === `approve-${req._id}` ? 0.6 : 1,
+                                            }}
+                                        >
+                                            {busy === `approve-${req._id}` ? '...' : '✓ Duyệt'}
+                                        </button>
+                                        <button
+                                            onClick={() => handleReview(req._id, 'reject')}
+                                            disabled={!!busy}
+                                            style={{
+                                                padding: '6px 12px', borderRadius: 8,
+                                                background: '#ed424520', color: '#ed4245',
+                                                border: '1px solid #ed424540',
+                                                cursor: busy ? 'not-allowed' : 'pointer',
+                                                fontSize: 12, fontWeight: 600,
+                                                opacity: busy === `reject-${req._id}` ? 0.6 : 1,
+                                            }}
+                                        >
+                                            {busy === `reject-${req._id}` ? '...' : '✕ Từ chối'}
+                                        </button>
+                                    </>
+                                ) : (
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                        Chỉ owner/admin có thể duyệt
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))
@@ -286,14 +294,21 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
         const ed = getEdit(m);
         setBusy(`save-${id}`);
         try {
+            let effectiveRole = m.role;
+
             // Chỉ update system role
             if (ed.role !== m.role) {
                 await conversationApi.updateConversationMember(conversation.id, id, {
                     role: ed.role,
                 });
+                effectiveRole = ed.role;
             }
-            // Assign custom role
-            await roleApi.assign(conversation.id, id, ed.customRoleId || null);
+
+            // Chỉ gán custom role cho member thường
+            if (effectiveRole === 'member') {
+                await roleApi.assign(conversation.id, id, ed.customRoleId || null);
+            }
+
             setPendingEdit(prev => { const n = { ...prev }; delete n[id]; return n; });
             await onMembersReload();
         } catch (err) {
@@ -434,10 +449,12 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                             <select
                                 value={ed.customRoleId || ''}
                                 onChange={e => setEdit(m, 'customRoleId', e.target.value || null)}
+                                disabled={ed.role !== 'member'}
                                 style={{
                                     width: '100%', padding: '7px 10px', borderRadius: 8, fontSize: 12,
                                     border: '1px solid var(--border)', background: 'var(--bg-secondary)',
                                     color: 'var(--text-primary)', cursor: 'pointer',
+                                    opacity: ed.role !== 'member' ? 0.6 : 1,
                                 }}
                             >
                                 <option value=''>— Không có (mặc định) —</option>
@@ -445,9 +462,15 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                                     <option key={r._id} value={r._id.toString()}>{r.name}</option>
                                 ))}
                             </select>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
-                                💡 Quyền kênh được quản lý hoàn toàn qua Role tab
-                            </div>
+                            {ed.role === 'member' ? (
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                                    💡 Quyền kênh được quản lý hoàn toàn qua Role tab
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                                    Custom role chỉ áp dụng cho member thường
+                                </div>
+                            )}
                         </div>
 
                         {/* Actions */}
@@ -1072,7 +1095,8 @@ export default function MemberManagementModal({ visible, onClose, conversation, 
     const [members, setMembers]           = useState([]);
     const [loadingRoles, setLoadingRoles] = useState(false);
     const myMember  = members.find(m => (m.user?._id || '').toString() === currentUserId);
-    const canManage = myMember?.role === 'owner' || myMember?.role === 'admin' || !!myMember?.canManageMembers;
+    const isOwner = myMember?.role === 'owner';
+    const canReviewRequests = myMember?.role === 'owner' || myMember?.role === 'admin';
 
     const loadRoles = useCallback(async () => {
         if (!conversation?.id) return;
@@ -1116,12 +1140,18 @@ export default function MemberManagementModal({ visible, onClose, conversation, 
         }
     }, [visible, loadRoles, loadTopics, loadMembers]);
 
+    useEffect(() => {
+        if (activeTab === 'roles' && !isOwner) {
+            setActiveTab('members');
+        }
+    }, [activeTab, isOwner]);
+
     if (!visible) return null;
 
     const tabs = [
         { key: 'members', label: 'Thành viên' },
-        { key: 'roles',   label: 'Roles' },
-        ...(canManage ? [{ key: 'requests', label: 'Duyệt' }] : []),
+        ...(isOwner ? [{ key: 'roles', label: 'Roles' }] : []),
+        { key: 'requests', label: 'Duyệt' },
     ];
 
     return (
@@ -1189,7 +1219,7 @@ export default function MemberManagementModal({ visible, onClose, conversation, 
                         onMembersReload={handleReloadAll}
                     />
                 )}
-                {activeTab === 'roles' && (
+                {activeTab === 'roles' && isOwner && (
                     <RolesTab
                         conversation={conversation}
                         currentUserId={currentUserId}
@@ -1199,10 +1229,11 @@ export default function MemberManagementModal({ visible, onClose, conversation, 
                         onRefresh={handleReloadAll}
                     />
                 )}
-                {activeTab === 'requests' && canManage && (
+                {activeTab === 'requests' && (
                     <JoinRequestsTab
                         conversation={conversation}
                         onApproved={handleReloadAll}
+                        canReview={canReviewRequests}
                     />
                 )}
 
