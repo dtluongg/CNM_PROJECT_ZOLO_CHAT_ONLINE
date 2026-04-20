@@ -170,9 +170,38 @@ const notifyNewMessage = async ({
 
     return created;
 };
+const handleMentionsNotification = async ({ senderId, conversationId, messageId, mentions }) => {
+    try {
+        const now = new Date();
+        for (const userId of mentions) {
+            if (userId.toString() === senderId.toString()) continue;
 
+            const setting = await NotificationSetting.findOne({ userId, conversationId }).lean();
+
+            // Áp dụng logic chặn: Nếu đang Mute thì "continue" (bỏ qua không tạo thông báo)
+            if (setting && setting.isMuted) {
+                if (!setting.muteUntil || new Date(setting.muteUntil) > now) {
+                    continue;
+                }
+            }
+
+            // Nếu thoát được "lưới lọc" ở trên thì mới tạo thông báo
+            await Notification.create({
+                userId, actorId: senderId, type: 'mention',
+                conversationId, messageId, title: 'Bạn có lượt nhắc tên mới',
+                body: 'Ai đó đã nhắc đến bạn', isRead: false
+            });
+
+            await exports.emitUnreadCount(userId);
+        }
+    } catch (error) {
+        console.error('Lỗi handleMentionsNotification:', error);
+    }
+};
 module.exports = {
     createAndEmitNotification,
     notifyNewMessage,
     emitUnreadCount,
+    canReceiveMessageNotification,
+    handleMentionsNotification,
 };
