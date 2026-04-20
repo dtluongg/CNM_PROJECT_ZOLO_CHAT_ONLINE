@@ -15,7 +15,7 @@ const MessageReaction = require('../models/messageReactionModel');
 const MessageRead = require('../models/messageReadModel');
 const { getIO } = require('../socket/socketManager');
 const { notifyNewMessage } = require('../services/notificationService');
-
+const { handleMentionsNotification } = require('../services/notificationService');
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -81,7 +81,7 @@ const sendMessage = async (req, res) => {
 
         await requireMembership(conversationId, userId);
 
-        const { type = 'text', content = '', attachmentId, replyToMessageId, forwardFromMessageId, topicId } = req.body;
+        const { type = 'text', content = '', attachmentId, replyToMessageId, forwardFromMessageId, topicId,mentions } = req.body;
 
         const ALLOWED_TYPES = ['text', 'voice', 'image', 'file'];
         if (!ALLOWED_TYPES.includes(type)) {
@@ -211,13 +211,23 @@ const sendMessage = async (req, res) => {
         } catch (notifyErr) {
             console.error('notifyNewMessage error:', notifyErr.message);
         }
-
+        // ── BỔ SUNG: XỬ LÝ THÔNG BÁO TAG TÊN (MENTION) ────────────────
+        // Chạy ngầm (không dùng await) để API trả về nhanh chóng
+        if (mentions && Array.isArray(mentions) && mentions.length > 0) {
+            handleMentionsNotification({
+                senderId: userId,
+                conversationId: conversationId,
+                messageId: message._id, // Dùng ID của tin nhắn vừa được create ở trên
+                mentions: mentions
+            });
+        }
         return res.status(201).json({ message: 'Gửi tin nhắn thành công', data: formatted });
     } catch (err) {
         if (err.statusCode) return res.status(err.statusCode).json({ message: err.message });
         console.error('sendMessage error:', err);
         return res.status(500).json({ message: 'Lỗi server khi gửi tin nhắn' });
     }
+
 };
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -282,17 +292,17 @@ const getMessages = async (req, res) => {
         const pollMsgs = raw.filter(m => m.type === 'poll');
         if (pollMsgs.length > 0) {
             const User = require('../models/userModel');
-            const voterIds = [...new Set(pollMsgs.flatMap(m => 
+            const voterIds = [...new Set(pollMsgs.flatMap(m =>
                 (m.payload?.options || []).flatMap(opt => (opt.voterIds || []).map(v => (v?._id || v || '').toString()))
             ))].filter(id => id && id !== '');
-            
+
             if (voterIds.length > 0) {
                 const voters = await User.find({ _id: { $in: voterIds } }).select('displayName avatar').lean();
                 const voterMap = {};
                 voters.forEach(v => {
                     if (v && v._id) voterMap[v._id.toString()] = v;
                 });
-                
+
                 pollMsgs.forEach(m => {
                     if (m.payload && m.payload.options) {
                         m.payload.options.forEach(opt => {
@@ -595,12 +605,12 @@ const markAsRead = async (req, res) => {
             await ConversationMember.findOneAndUpdate(
                 { conversationId, userId },
                 {
-                  unreadCount: 0,
-                  lastReadMessageId: messageId,
-                  'aiSummary.summary': null,       // Xóa summary vì đã đọc hết
-                  'aiSummary.summarizedAt': null,
-                  'aiSummary.unreadCount': 0,
-                  'aiSummary.fromMessageId': null,
+                    unreadCount: 0,
+                    lastReadMessageId: messageId,
+                    'aiSummary.summary': null,       // Xóa summary vì đã đọc hết
+                    'aiSummary.summarizedAt': null,
+                    'aiSummary.unreadCount': 0,
+                    'aiSummary.fromMessageId': null,
                 }
             );
         }

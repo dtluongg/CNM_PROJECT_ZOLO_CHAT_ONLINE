@@ -904,6 +904,211 @@ export default function RightSidebar({
                                                     🔒 Bạn không có quyền mời trực tiếp.<br/>
                                                     Chọn bạn bè để giới thiệu — admin sẽ duyệt.
                                                 </div>
+                                    {!loadingMembers &&
+                                        members.map((m) => {
+                                            const uid = (
+                                                m.user?._id || ""
+                                            ).toString();
+                                            const isSelf = uid === myUserId;
+                                            const canEditThisMember =
+                                                canManageMembers &&
+                                                !isSelf &&
+                                                m.role !== "owner";
+                                            const isEditing =
+                                                editingMemberId === uid;
+
+                                            return (
+                                                <div
+                                                    key={uid}
+                                                    style={{
+                                                        background:
+                                                            "var(--bg-tertiary)",
+                                                        borderRadius: 8,
+                                                        padding: "9px 10px",
+                                                        marginBottom: 8,
+                                                        border: "1px solid var(--border)",
+                                                    }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            display: "flex",
+                                                            alignItems:
+                                                                "center",
+                                                            justifyContent:
+                                                                "space-between",
+                                                            gap: 10,
+                                                        }}
+                                                    >
+                                                        <div
+                                                            style={{
+                                                                minWidth: 0,
+                                                            }}
+                                                        >
+                                                            <div
+                                                                style={{
+                                                                    fontSize: 13,
+                                                                    fontWeight: 700,
+                                                                    color: "var(--text-primary)",
+                                                                    display:
+                                                                        "flex",
+                                                                    alignItems:
+                                                                        "center",
+                                                                    gap: 8,
+                                                                }}
+                                                            >
+                                                                <span>
+                                                                    {m.user
+                                                                        ?.displayName ||
+                                                                        "Unknown"}
+                                                                </span>
+                                                                <RoleChip
+                                                                    role={
+                                                                        m.role
+                                                                    }
+                                                                />
+                                                                {isSelf && (
+                                                                    <span
+                                                                        style={{
+                                                                            fontSize: 11,
+                                                                            color: "var(--text-muted)",
+                                                                        }}
+                                                                    >
+                                                                        (bạn)
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div
+                                                                style={{
+                                                                    fontSize: 11,
+                                                                    color: "var(--text-muted)",
+                                                                    marginTop: 3,
+                                                                }}
+                                                            >
+                                                                send:
+                                                                {m.canSendMessages
+                                                                    ? "Y"
+                                                                    : "N"}{" "}
+                                                                | invite:
+                                                                {m.canInviteMembers
+                                                                    ? "Y"
+                                                                    : "N"}{" "}
+                                                                | manage:
+                                                                {m.canManageMembers
+                                                                    ? "Y"
+                                                                    : "N"}
+                                                            </div>
+                                                        </div>
+
+                                                        <div
+                                                            style={{
+                                                                display: "flex",
+                                                                gap: 6,
+                                                            }}
+                                                        >
+                                                            {canEditThisMember && (
+                                                                <button
+                                                                    onClick={() =>
+                                                                        startEditMember(
+                                                                            m,
+                                                                        )
+                                                                    }
+                                                                    style={{
+                                                                        background:
+                                                                            "var(--bg-hover)",
+                                                                        color: "var(--text-primary)",
+                                                                        border: "none",
+                                                                        borderRadius: 6,
+                                                                        padding:
+                                                                            "5px 8px",
+                                                                        cursor: "pointer",
+                                                                        fontSize: 11,
+                                                                        fontWeight: 700,
+                                                                    }}
+                                                                >
+                                                                    <UserCog
+                                                                        size={
+                                                                            12
+                                                                        }
+                                                                    />
+                                                                </button>
+                                                            )}
+                                                            {canEditThisMember && (
+                                                                <button
+                                                                    onClick={() =>
+                                                                        handleKickMember(
+                                                                            m,
+                                                                        )
+                                                                    }
+                                                                    disabled={
+                                                                        busyAction ===
+                                                                        `kick-${uid}`
+                                                                    }
+                                                                    style={{
+                                                                        background:
+                                                                            "#ed424520",
+                                                                        color: "#ed4245",
+                                                                        border: "none",
+                                                                        borderRadius: 6,
+                                                                        padding:
+                                                                            "5px 8px",
+                                                                        cursor: "pointer",
+                                                                        fontSize: 11,
+                                                                        fontWeight: 700,
+                                                                        opacity:
+                                                                            busyAction ===
+                                                                                `kick-${uid}`
+                                                                                ? 0.6
+                                                                                : 1,
+                                                                    }}
+                                                                >
+                                                                    <Trash2
+                                                                        size={
+                                                                            12
+                                                                        }
+                                                                    />
+                                                                </button>
+                                                            )}
+                                                            {isOwner &&
+                                                                !isSelf &&
+                                                                m.role !==
+                                                                "owner" && (
+                                                                    <button
+                                                                        onClick={() =>
+                                                                            handleTransferOwner(
+                                                                                m,
+                                                                            )
+                                                                        }
+                                                                        disabled={
+                                                                            busyAction ===
+                                                                            `transfer-${uid}`
+                                                                        }
+                                                                        style={{
+                                                                            background:
+                                                                                "rgba(250,166,26,0.2)",
+                                                                            color: "#faa61a",
+                                                                            border: "none",
+                                                                            borderRadius: 6,
+                                                                            padding:
+                                                                                "5px 8px",
+                                                                            cursor: "pointer",
+                                                                            fontSize: 11,
+                                                                            fontWeight: 700,
+                                                                            opacity:
+                                                                                busyAction ===
+                                                                                    `transfer-${uid}`
+                                                                                    ? 0.6
+                                                                                    : 1,
+                                                                        }}
+                                                                    >
+                                                                        <Crown
+                                                                            size={
+                                                                                12
+                                                                            }
+                                                                        />
+                                                                    </button>
+                                                                )}
+                                                        </div>
+                                                    </div>
 
                                                 {/* Chọn bạn bè */}
                                                 <select
@@ -973,6 +1178,210 @@ export default function RightSidebar({
                                         🔐 Nhóm đang ở chế độ <strong>Admin Only</strong>.<br />
                                         Chỉ owner hoặc admin mới được thêm thành viên.
                                     </div>
+                                                    {/* ── Inline Edit Panel ── */}
+                                                    {isEditing && (
+                                                        <div
+                                                            style={{
+                                                                marginTop: 10,
+                                                                borderTop:
+                                                                    "1px solid var(--border)",
+                                                                paddingTop: 10,
+                                                            }}
+                                                        >
+                                                            <div
+                                                                style={{
+                                                                    display:
+                                                                        "grid",
+                                                                    gap: 8,
+                                                                }}
+                                                            >
+                                                                <label
+                                                                    style={{
+                                                                        fontSize: 12,
+                                                                        color: "var(--text-secondary)",
+                                                                        display:
+                                                                            "flex",
+                                                                        alignItems:
+                                                                            "center",
+                                                                        justifyContent:
+                                                                            "space-between",
+                                                                    }}
+                                                                >
+                                                                    <span>
+                                                                        Role
+                                                                    </span>
+                                                                    <select
+                                                                        value={
+                                                                            editRole
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            setEditRole(
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            )
+                                                                        }
+                                                                        disabled={
+                                                                            !isOwner
+                                                                        }
+                                                                        style={{
+                                                                            background:
+                                                                                "var(--bg-primary)",
+                                                                            color: "var(--text-primary)",
+                                                                            border: "1px solid var(--border)",
+                                                                            borderRadius: 6,
+                                                                            padding:
+                                                                                "4px 6px",
+                                                                            fontSize: 12,
+                                                                        }}
+                                                                    >
+                                                                        <option value="member">
+                                                                            member
+                                                                        </option>
+                                                                        <option value="admin">
+                                                                            admin
+                                                                        </option>
+                                                                    </select>
+                                                                </label>
+                                                                <label
+                                                                    style={{
+                                                                        fontSize: 12,
+                                                                        color: "var(--text-secondary)",
+                                                                    }}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={
+                                                                            editCanSend
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            setEditCanSend(
+                                                                                e
+                                                                                    .target
+                                                                                    .checked,
+                                                                            )
+                                                                        }
+                                                                    />{" "}
+                                                                    canSendMessages
+                                                                </label>
+                                                                <label
+                                                                    style={{
+                                                                        fontSize: 12,
+                                                                        color: "var(--text-secondary)",
+                                                                    }}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={
+                                                                            editCanInvite
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            setEditCanInvite(
+                                                                                e
+                                                                                    .target
+                                                                                    .checked,
+                                                                            )
+                                                                        }
+                                                                    />{" "}
+                                                                    canInviteMembers
+                                                                </label>
+                                                                <label
+                                                                    style={{
+                                                                        fontSize: 12,
+                                                                        color: "var(--text-secondary)",
+                                                                    }}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={
+                                                                            editCanManage
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            setEditCanManage(
+                                                                                e
+                                                                                    .target
+                                                                                    .checked,
+                                                                            )
+                                                                        }
+                                                                        disabled={
+                                                                            !isOwner
+                                                                        }
+                                                                    />{" "}
+                                                                    canManageMembers
+                                                                </label>
+                                                                <div
+                                                                    style={{
+                                                                        display:
+                                                                            "flex",
+                                                                        gap: 8,
+                                                                        justifyContent:
+                                                                            "flex-end",
+                                                                    }}
+                                                                >
+                                                                    <button
+                                                                        onClick={() =>
+                                                                            setEditingMemberId(
+                                                                                null,
+                                                                            )
+                                                                        }
+                                                                        style={{
+                                                                            border: "none",
+                                                                            borderRadius: 6,
+                                                                            padding:
+                                                                                "6px 10px",
+                                                                            background:
+                                                                                "var(--bg-hover)",
+                                                                            color: "var(--text-primary)",
+                                                                            cursor: "pointer",
+                                                                            fontSize: 12,
+                                                                            fontWeight: 700,
+                                                                        }}
+                                                                    >
+                                                                        Hủy
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={
+                                                                            saveEditMember
+                                                                        }
+                                                                        disabled={
+                                                                            busyAction ===
+                                                                            `edit-${uid}`
+                                                                        }
+                                                                        style={{
+                                                                            border: "none",
+                                                                            borderRadius: 6,
+                                                                            padding:
+                                                                                "6px 10px",
+                                                                            background:
+                                                                                "var(--accent)",
+                                                                            color: "#fff",
+                                                                            cursor: "pointer",
+                                                                            fontSize: 12,
+                                                                            fontWeight: 700,
+                                                                            opacity:
+                                                                                busyAction ===
+                                                                                    `edit-${uid}`
+                                                                                    ? 0.6
+                                                                                    : 1,
+                                                                        }}
+                                                                    >
+                                                                        Lưu
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                 </div>
                             )}
                             {/* Thêm thành viên trực tiếp — owner/admin */}
@@ -1079,6 +1488,65 @@ export default function RightSidebar({
                                     </div>
                                 </div>
                             )}
+                                                            <label
+                                                                key={fid}
+                                                                style={{
+                                                                    display:
+                                                                        "block",
+                                                                    fontSize: 12,
+                                                                    color: "var(--text-secondary)",
+                                                                    marginBottom: 6,
+                                                                }}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={
+                                                                        checked
+                                                                    }
+                                                                    onChange={() =>
+                                                                        handleToggleAddMember(
+                                                                            fid,
+                                                                        )
+                                                                    }
+                                                                />{" "}
+                                                                {f.displayName}
+                                                            </label>
+                                                        );
+                                                    })}
+                                            <button
+                                                onClick={handleAddMembers}
+                                                disabled={
+                                                    selectedAddIds.length ===
+                                                    0 ||
+                                                    busyAction === "add-members"
+                                                }
+                                                style={{
+                                                    border: "none",
+                                                    borderRadius: 6,
+                                                    padding: "7px 10px",
+                                                    background: "var(--accent)",
+                                                    color: "#fff",
+                                                    cursor: "pointer",
+                                                    fontSize: 12,
+                                                    fontWeight: 700,
+                                                    marginTop: 6,
+                                                    opacity:
+                                                        selectedAddIds.length ===
+                                                            0 ||
+                                                            busyAction ===
+                                                            "add-members"
+                                                            ? 0.6
+                                                            : 1,
+                                                }}
+                                            >
+                                                {busyAction === "add-members"
+                                                    ? "Đang thêm..."
+                                                    : `Thêm ${selectedAddIds.length} thành viên`}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                             {/* Hành động */}
                             <div
                                 style={{
@@ -1092,7 +1560,7 @@ export default function RightSidebar({
                                     icon={<MessageCircle size={15} />}
                                     label="Nhắn tin"
                                     variant="primary"
-                                    onClick={() => {}}
+                                    onClick={() => { }}
                                 />
                                 {conversation.type === "dm" &&
                                     onViewProfile && (
@@ -1126,12 +1594,16 @@ export default function RightSidebar({
                                 />
                                 <ActionButton
                                     icon={<BellOff size={15} />}
-                                    label={
-                                        notifSetting?.isMuted
-                                            ? "Bật thông báo"
-                                            : "Tắt thông báo"
-                                    }
-                                    onClick={handleToggleMuteConversation}
+                                    label={notifSetting?.isMuted ? "Bật thông báo" : "Tắt thông báo"}
+                                    onClick={() => {
+                                        if (notifSetting?.isMuted) {
+                                            // Đang tắt -> Bấm để mở lại (gọi hàm cũ của bạn)
+                                            handleToggleMuteConversation();
+                                        } else {
+                                            // Đang mở -> Bấm để hiện Popup chọn thời gian
+                                            setShowMuteModal(true);
+                                        }
+                                    }}
                                     disabled={notifBusy}
                                 />
 
@@ -1690,3 +2162,18 @@ export default function RightSidebar({
                         </div>
                     );
                 }
+                </div>
+            </div>
+            {/* Gọi Modal Tắt thông báo */}
+            <MuteConversationModal
+                isOpen={showMuteModal}
+                onClose={() => setShowMuteModal(false)}
+                conversationId={conversation?.id}
+                onSuccess={() => {
+                    // Cập nhật lại state của Sidebar khi API gọi thành công
+                    setNotifSetting(prev => ({ ...prev, isMuted: true }));
+                }}
+            />
+        </div>
+    );
+}
