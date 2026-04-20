@@ -5,6 +5,8 @@ import { getAvatarColor, getInitials } from '../../../theme';
 const Avatar = ({ name, avatar, size = 36, online = null, THEME, styles }) => {
   const [imgError, setImgError] = useState(false);
   const bg = getAvatarColor(name);
+  const safeTheme = THEME || {};
+  const safeStyles = styles || {};
 
   return (
     <View style={{ width: size, height: size }}>
@@ -17,11 +19,11 @@ const Avatar = ({ name, avatar, size = 36, online = null, THEME, styles }) => {
       ) : (
         <View
           style={[
-            styles.avatarCircle,
+            safeStyles.avatarCircle,
             { width: size, height: size, borderRadius: size / 2, backgroundColor: bg },
           ]}
         >
-          <Text style={[styles.avatarText, { fontSize: size * 0.38 }]}>
+          <Text style={[safeStyles.avatarText, { fontSize: size * 0.38, color: '#fff', fontWeight: '700' }]}>
             {getInitials(name)}
           </Text>
         </View>
@@ -30,12 +32,12 @@ const Avatar = ({ name, avatar, size = 36, online = null, THEME, styles }) => {
       {online !== null && (
         <View
           style={[
-            styles.onlineDot,
+            safeStyles.onlineDot,
             {
               width: size * 0.28,
               height: size * 0.28,
               borderRadius: size * 0.14,
-              backgroundColor: online ? THEME.statusOnline : THEME.statusOffline,
+              backgroundColor: online ? safeTheme.statusOnline || '#22c55e' : safeTheme.statusOffline || '#64748b',
             },
           ]}
         />

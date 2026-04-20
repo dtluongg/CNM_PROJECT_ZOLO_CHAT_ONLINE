@@ -319,33 +319,59 @@ const InfoPanel = ({
                 <View style={{ flex: 1 }}>
                   {/* Inner sub-tabs for admin */}
                   {isAdmin && (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 10, gap: 8, flexDirection: 'row' }}
+                    <View
+                      style={{
+                        marginHorizontal: 12,
+                        marginTop: 4,
+                        marginBottom: 10,
+                        padding: 4,
+                        borderRadius: 14,
+                        backgroundColor: THEME.bgPrimary,
+                        borderWidth: 1,
+                        borderColor: THEME.border,
+                        flexDirection: 'row',
+                        gap: 4,
+                      }}
                     >
                       {[
-                        { key: 'list',     label: 'Danh sách', icon: 'users'      },
-                        { key: 'roles',    label: 'Phân quyền',icon: 'shield'     },
-                        { key: 'requests', label: 'Duyệt vào', icon: 'user-plus'  },
-                      ].map(s => (
-                        <TouchableOpacity
-                          key={s.key}
-                          onPress={() => setMemberSub(s.key)}
-                          style={{
-                            flexDirection: 'row', alignItems: 'center', gap: 5,
-                            paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-                            backgroundColor: memberSub === s.key ? THEME.accent + '20' : THEME.bgPrimary,
-                            borderWidth: 1, borderColor: memberSub === s.key ? THEME.accent + '60' : THEME.border,
-                          }}
-                        >
-                          <Feather name={s.icon} size={12} color={memberSub === s.key ? THEME.accent : THEME.textMuted} />
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: memberSub === s.key ? THEME.accent : THEME.textMuted }}>
-                            {s.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
+                        { key: 'list',     label: 'Danh sách', icon: 'users' },
+                        { key: 'roles',    label: 'Phân quyền', icon: 'shield' },
+                        { key: 'requests', label: 'Duyệt vào', icon: 'user-plus' },
+                      ].map((s) => {
+                        const active = memberSub === s.key;
+                        return (
+                          <TouchableOpacity
+                            key={s.key}
+                            onPress={() => setMemberSub(s.key)}
+                            style={{
+                              flex: 1,
+                              minHeight: 40,
+                              borderRadius: 10,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexDirection: 'row',
+                              gap: 6,
+                              backgroundColor: active ? THEME.accent + '20' : 'transparent',
+                              borderWidth: active ? 1 : 0,
+                              borderColor: active ? THEME.accent + '66' : 'transparent',
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Feather name={s.icon} size={12} color={active ? THEME.accent : THEME.textMuted} />
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                fontWeight: active ? '700' : '600',
+                                color: active ? THEME.accent : THEME.textMuted,
+                              }}
+                              numberOfLines={1}
+                            >
+                              {s.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   )}
 
                   {/* Members list */}
