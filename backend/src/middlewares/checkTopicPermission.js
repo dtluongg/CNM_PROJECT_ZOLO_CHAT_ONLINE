@@ -40,6 +40,7 @@ const getEffectiveTopicPermission = async (member, topicId) => {
   }
 
   // 3. Default member không có custom role
+  const canSendGlobally = member.canSendMessages !== false;
   let canAccess = true;
   let canSend = canSendGlobally;
 

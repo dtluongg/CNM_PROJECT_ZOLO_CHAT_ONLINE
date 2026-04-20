@@ -411,17 +411,6 @@ const getEffectivePermissions = async (req, res, next) => {
         const allowedIds  = (cr.allowedTopicIds  || []).map(id => id.toString());
         const sendableIds = (cr.sendableTopicIds || []).map(id => id.toString());
 
-                let canAccess = allowedIds.length === 0 || allowedIds.includes(tid);
-                let canSend   = canAccess
-                    && member.canSendMessages !== false
-                    && cr.permissions?.canSendMessages !== false
-                    && (sendableIds.length === 0 || sendableIds.includes(tid));
-
-                const override = (member.topicOverrides || []).find(o => o.topicId?.toString() === tid);
-                if (override) {
-                    canAccess = !!override.canAccess;
-                    canSend = canAccess && !!override.canSend && member.canSendMessages !== false;
-                }
         const canAccess = allowedIds.length === 0 || allowedIds.includes(tid);
         let canSend = false;
         if (canAccess) {
@@ -432,17 +421,6 @@ const getEffectivePermissions = async (req, res, next) => {
 
         return { ...topic, canAccess, canSend, source: 'custom_role' };
       }
-
-      // Default
-            let canAccess = true;
-            let canSend = member.canSendMessages !== false;
-
-            const override = (member.topicOverrides || []).find(o => o.topicId?.toString() === tid);
-            if (override) {
-                canAccess = !!override.canAccess;
-                canSend = canAccess && !!override.canSend && member.canSendMessages !== false;
-            }
-
       // 4. Default member
       return {
         ...topic,
