@@ -14,16 +14,18 @@ export function VoiceRoomProvider({ children }) {
   const [error,                setError]                = useState(null);
 
   const {
-    connect, disconnect, toggleMute, toggleCamera,
+    connect, disconnect,
+    toggleMute, toggleCamera, toggleScreenShare,
     getRemoteVideoURL,
     connected, isMuted, isCameraOff,
-    speaking, liveParts, localVideoURL,
+    isScreenSharing, isRemoteScreenSharing, // ✅ cả hai trạng thái share
+    speaking, liveParts,
+    localVideoURL, screenURL,               // ✅ screenURL để RTCView hiển thị
   } = useVoiceRoom();
 
   const getMergedParticipants = useCallback((topicId) => {
     const key  = topicId || '__general__';
     const info = roomInfoMap[key];
-    // Build a lookup from backend data (has displayName + avatar from DB)
     const backendMap = {};
     (info?.participants || []).forEach(p => { backendMap[p.userId] = p; });
 
@@ -33,7 +35,6 @@ export function VoiceRoomProvider({ children }) {
         return {
           userId:      lp.identity,
           identity:    lp.identity,
-          // prefer backend displayName (more reliable) then LiveKit name then fallback
           displayName: bd.displayName || lp.name || 'Người dùng',
           avatar:      bd.avatar      || lp.metadata?.avatar || null,
           isSpeaking:  speaking.has(lp.identity),
@@ -43,7 +44,6 @@ export function VoiceRoomProvider({ children }) {
         };
       });
     }
-    // Fallback: before LiveKit connects, show backend participants as placeholders
     return (info?.participants || []).map(p => ({
       ...p,
       identity:   p.userId,
@@ -154,9 +154,10 @@ export function VoiceRoomProvider({ children }) {
       inRoom, activeKey, activeConversationId, activeTopicId,
       loading, error,
       connected, isMuted, isCameraOff,
-      liveParts, localVideoURL,
+      isScreenSharing, isRemoteScreenSharing, // ✅
+      liveParts, localVideoURL, screenURL,     // ✅
       createRoom, joinRoom, leaveRoom,
-      toggleMute, toggleCamera,
+      toggleMute, toggleCamera, toggleScreenShare, // ✅
       getRemoteVideoURL,
       fetchStatus, fetchStatusBatch,
     }}>
