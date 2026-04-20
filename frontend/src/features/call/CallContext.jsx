@@ -13,6 +13,7 @@ import React, {
 } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
+import { getAccessToken } from '../../utils/authStorage';
 import { useWebRTC } from './hooks/useWebRTC';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
@@ -355,7 +356,7 @@ export const CallProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    const accessToken = token || localStorage.getItem('accessToken');
+    const accessToken = token || getAccessToken();
 
     if (!accessToken) return;
 

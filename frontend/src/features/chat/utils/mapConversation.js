@@ -22,7 +22,9 @@ export const mapConversationItem = (item, dmOverrides) => {
     otherUserId: isDm ? (item.otherUserId || other?._id?.toString() || null) : null,
     myMembership: item.myMembership || null,   // lastReadMessageId, unreadCount, aiSummary
     pinnedMessages: item.pinnedMessages || [],
+    isLocked: !!item.isLocked,
     groupType: item.groupType || 'general',
+    inviteMode: item.inviteMode || 'open_invite',
     description: item.description || '',
     // Shortcut tiện dùng trong ChatArea
     aiSummary: item.myMembership?.aiSummary || null,

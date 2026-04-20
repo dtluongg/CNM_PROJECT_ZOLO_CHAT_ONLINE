@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { normalizeMsg } from '../utils/normalizeMsg';
+import { getAccessToken } from '../../../utils/authStorage';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
 
@@ -15,6 +16,7 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
  * @param {function} options.onMessageRevoked   - (conversationId, messageId) => void
  * @param {function} options.onMessageEdited    - (conversationId, msg) => void
  * @param {function} options.onUnreadReset      - (conversationId) => void
+ * @param {function} options.onConversationDisbanded - (conversationId) => void
  */
 export const useSocket = ({
   token,
@@ -26,12 +28,12 @@ export const useSocket = ({
   onMessageRevoked,
   onMessageEdited,
   onUnreadReset,
-  onConversationUpdated,
+  onConversationDisbanded,
 }) => {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    const accessToken = token || localStorage.getItem('accessToken');
+    const accessToken = token || getAccessToken();
     if (!accessToken) return;
 
     const socket = io(SOCKET_URL, {
@@ -68,6 +70,10 @@ export const useSocket = ({
 
     socket.on('chat:unread-reset', ({ conversationId }) => {
       onUnreadReset?.(conversationId);
+    });
+
+    socket.on('chat:conversation-disbanded', ({ conversationId }) => {
+      onConversationDisbanded?.(conversationId);
     });
 
     socket.on('conversation:updated', ({ conversationId, changes }) => {

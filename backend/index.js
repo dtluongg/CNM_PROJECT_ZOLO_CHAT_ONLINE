@@ -6,7 +6,7 @@ const dns = require('node:dns');
 const cookieParser = require('cookie-parser');
 
 dotenv.config();
-// dns.setServers(['1.1.1.1']);
+dns.setServers(['1.1.1.1']);
 
 const app = express();
 const server = http.createServer(app);
