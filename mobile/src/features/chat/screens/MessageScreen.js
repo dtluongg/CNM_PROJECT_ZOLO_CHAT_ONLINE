@@ -818,6 +818,7 @@ export default function MessageScreen({ route, navigation }) {
                   msg={item.msg}
                   currentUserId={currentUserId}
                   THEME={THEME}
+                  styles={styles}
                 />
               );
             }

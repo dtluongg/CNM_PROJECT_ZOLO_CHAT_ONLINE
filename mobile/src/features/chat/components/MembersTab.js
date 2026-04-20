@@ -14,6 +14,7 @@ const ROLE_INFO = {
 };
 const SECTION_ORDER  = ['owner', 'admin', 'member'];
 const SECTION_LABELS = { owner: '👑 Chủ nhóm', admin: '🛡️ Quản trị viên', member: '👤 Thành viên' };
+const SECTION_ICONS = { owner: 'award', admin: 'shield', member: 'users' };
 
 export default function MembersTab({
   conversation, members, setMembers, loadMembers,
@@ -123,6 +124,9 @@ export default function MembersTab({
   const filtered = members.filter(m =>
     (m.user?.displayName || m.user?.username || '').toLowerCase().includes(search.toLowerCase())
   );
+  const ownerCount = members.filter(m => (m.role || 'member') === 'owner').length;
+  const adminCount = members.filter(m => (m.role || 'member') === 'admin').length;
+  const memberCount = members.length;
 
   const renderMember = (member) => {
     const uid    = member.user?._id || member._id;
@@ -142,15 +146,18 @@ export default function MembersTab({
     const dirty      = isDirty(uid, member);
 
     return (
-      <View key={member._id || uid}>
+      <View key={member._id || uid} style={{ marginHorizontal: 12, marginBottom: 8 }}>
         {/* Member row */}
         <TouchableOpacity
           onPress={() => canExpand && setExpandedId(isExp ? null : uid)}
           activeOpacity={canExpand ? 0.7 : 1}
           style={{
             flexDirection: 'row', alignItems: 'center',
-            paddingVertical: 10, paddingHorizontal: 14,
-            backgroundColor: isExp ? (THEME.bgHover || '#35373c') : 'transparent',
+            paddingVertical: 11, paddingHorizontal: 12,
+            backgroundColor: isExp ? (THEME.bgHover || '#35373c') : THEME.bgPrimary,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: isExp ? (THEME.accent + '45') : THEME.border,
           }}
         >
           {uavt ? (
@@ -163,7 +170,7 @@ export default function MembersTab({
 
           <View style={{ flex: 1, minWidth: 0 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '600', color: THEME.textPrimary }}>{uname}</Text>
+              <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: THEME.textPrimary }}>{uname}</Text>
               {isMe && <Text style={{ fontSize: 10, color: THEME.textMuted }}>(bạn)</Text>}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }}>
@@ -193,7 +200,7 @@ export default function MembersTab({
 
         {/* Expanded panel */}
         {isExp && canExpand && (
-          <View style={{ backgroundColor: THEME.bgPrimary, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14, borderTopWidth: 1, borderTopColor: THEME.border }}>
+          <View style={{ backgroundColor: THEME.bgPrimary, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 14, borderTopWidth: 1, borderTopColor: THEME.border, marginTop: 8, borderRadius: 12, borderWidth: 1, borderColor: THEME.border }}>
 
             {/* System role — owner only */}
             {isOwner && (
@@ -227,7 +234,7 @@ export default function MembersTab({
             {canTransfer && (
               <TouchableOpacity
                 onPress={() => handleTransferOwner(member)}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14, padding: 10, backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)' }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14, padding: 10, backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)' }}
               >
                 <Feather name="award" size={14} color="#f59e0b" />
                 <Text style={{ color: '#f59e0b', fontSize: 13, fontWeight: '600' }}>Chuyển quyền chủ nhóm</Text>
@@ -239,7 +246,7 @@ export default function MembersTab({
               <Text style={sLabel(THEME)}>Vai trò tuỳ chỉnh</Text>
               <TouchableOpacity
                 onPress={() => setShowRolePicker(uid)}
-                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, backgroundColor: THEME.bgHover || '#35373c', borderRadius: 8, borderWidth: 1, borderColor: THEME.border }}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, backgroundColor: THEME.bgHover || '#35373c', borderRadius: 10, borderWidth: 1, borderColor: THEME.border }}
               >
                 {customRole ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -261,7 +268,7 @@ export default function MembersTab({
                 onChangeText={setKickReason}
                 placeholder="Nhập lý do xóa thành viên..."
                 placeholderTextColor={THEME.textMuted}
-                style={{ padding: 10, backgroundColor: THEME.bgHover || '#35373c', borderRadius: 8, borderWidth: 1, borderColor: THEME.border, color: THEME.textPrimary, fontSize: 13 }}
+                style={{ padding: 10, backgroundColor: THEME.bgHover || '#35373c', borderRadius: 10, borderWidth: 1, borderColor: THEME.border, color: THEME.textPrimary, fontSize: 13 }}
               />
             </View>
 
@@ -306,11 +313,22 @@ export default function MembersTab({
 
   return (
     <View style={{ flex: 1 }}>
+      <View style={{ marginHorizontal: 12, marginTop: 10, marginBottom: 10, flexDirection: 'row', gap: 8 }}>
+        <View style={{ flex: 1, backgroundColor: THEME.bgPrimary, borderWidth: 1, borderColor: THEME.border, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10 }}>
+          <Text style={{ color: THEME.textMuted, fontSize: 10, fontWeight: '700' }}>Tổng</Text>
+          <Text style={{ color: THEME.textPrimary, fontSize: 16, fontWeight: '800', marginTop: 2 }}>{memberCount}</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: THEME.bgPrimary, borderWidth: 1, borderColor: THEME.border, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10 }}>
+          <Text style={{ color: THEME.textMuted, fontSize: 10, fontWeight: '700' }}>Quản trị</Text>
+          <Text style={{ color: '#3b82f6', fontSize: 16, fontWeight: '800', marginTop: 2 }}>{ownerCount + adminCount}</Text>
+        </View>
+      </View>
+
       {/* Add members */}
       {isAdmin && (
         <TouchableOpacity
           onPress={onShowAddMembers}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, margin: 12, marginBottom: 8, padding: 12, backgroundColor: THEME.accent + '15', borderRadius: 12, borderWidth: 1, borderColor: THEME.accent + '40' }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 12, marginBottom: 8, padding: 12, backgroundColor: THEME.accent + '15', borderRadius: 12, borderWidth: 1, borderColor: THEME.accent + '40' }}
         >
           <Feather name="user-plus" size={16} color={THEME.accent} />
           <Text style={{ color: THEME.accent, fontWeight: '700', fontSize: 14 }}>Thêm thành viên</Text>
@@ -342,14 +360,24 @@ export default function MembersTab({
           const group = filtered.filter(m => (m.role || 'member') === roleGroup);
           if (group.length === 0) return null;
           return (
-            <View key={roleGroup}>
-              <Text style={{
-                color: THEME.textMuted, fontSize: 11, fontWeight: '700',
-                textTransform: 'uppercase', letterSpacing: 0.5,
-                paddingHorizontal: 14, paddingTop: 12, paddingBottom: 5,
+            <View key={roleGroup} style={{ marginBottom: 8 }}>
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6,
               }}>
-                {SECTION_LABELS[roleGroup]} ({group.length})
-              </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Feather name={SECTION_ICONS[roleGroup]} size={12} color={THEME.textMuted} />
+                  <Text style={{
+                    color: THEME.textMuted, fontSize: 11, fontWeight: '700',
+                    textTransform: 'uppercase', letterSpacing: 0.5,
+                  }}>
+                    {SECTION_LABELS[roleGroup]}
+                  </Text>
+                </View>
+                <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: THEME.bgPrimary, borderWidth: 1, borderColor: THEME.border }}>
+                  <Text style={{ color: THEME.textMuted, fontSize: 10, fontWeight: '700' }}>{group.length}</Text>
+                </View>
+              </View>
               {group.map(renderMember)}
             </View>
           );
