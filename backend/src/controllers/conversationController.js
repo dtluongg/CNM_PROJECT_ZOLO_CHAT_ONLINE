@@ -136,6 +136,7 @@ const INVITE_MODE_BY_GROUP_TYPE = {
 const resolveInviteModeByGroupType = (groupType) =>
     INVITE_MODE_BY_GROUP_TYPE[groupType] || 'open_invite';
 
+const NotificationSetting = require('../models/notificationSettingModel'); // Thay đổi đường dẫn cho đúng
 // Chuyển id string sang ObjectId để dùng trong aggregate/query có kiểu chặt chẽ.
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
@@ -709,6 +710,17 @@ const listMyConversations = async (req, res, next) => {
             memberCounts.map((item) => [item._id.toString(), item.totalMembers])
         );
 
+
+        // ================= BẮT ĐẦU THÊM MỚI =================
+        // Lấy tất cả cài đặt thông báo của user hiện tại
+        const userSettings = await NotificationSetting.find({ userId }).lean();
+
+        // Tạo Map để tra cứu nhanh trạng thái tắt âm (Tối ưu hiệu năng O(1))
+        const mutedConversationsMap = new Map(
+            userSettings.map(setting => [setting.conversationId.toString(), setting.isMuted])
+        );
+        // ================= KẾT THÚC THÊM MỚI =================
+
         const data = conversations
             .filter((conversation) => {
                 if (conversation.type !== 'dm') return true;
@@ -717,13 +729,24 @@ const listMyConversations = async (req, res, next) => {
                 return !blockedByOthersSet.has(dmDisplayInfo.otherUserId);
             })
             .map((conversation) => {
-            const myMember = memberMap.get(conversation._id.toString());
-            const dmDisplayInfo = dmDisplayMap.get(conversation._id.toString()) || null;
-            return {
-                ...buildConversationItem(conversation, myMember, dmDisplayInfo),
-                totalMembers: memberCountMap.get(conversation._id.toString()) || 0,
-            };
+                const myMember = memberMap.get(conversation._id.toString());
+                const dmDisplayInfo = dmDisplayMap.get(conversation._id.toString()) || null;
+
+                // Lấy trạng thái isMuted từ Map (mặc định là false nếu không có)
+                const isMuted = mutedConversationsMap.get(conversation._id.toString()) || false;
+
+                return {
+                    ...buildConversationItem(conversation, myMember, dmDisplayInfo),
+                    totalMembers: memberCountMap.get(conversation._id.toString()) || 0,
+                    isMuted, // <--- BƠM isMuted VÀO ĐÂY
+                };
             });
+
+        return res.status(200).json({
+            data,
+            meta: { archive: archiveMode },
+        });
+
 
         return res.status(200).json({
             data,
@@ -778,11 +801,19 @@ const getConversationById = async (req, res, next) => {
                 }
             }
         }
-
+        // --- BẮT ĐẦU THÊM MỚI TẠI ĐÂY ---
+        // Gọi file Model (Nhớ import NotificationSetting ở đầu file nhé)
+        const setting = await NotificationSetting.findOne({
+            userId: userId,
+            conversationId: conversationId
+        });
+        const isMuted = setting ? setting.isMuted : false;
+        // --- KẾT THÚC THÊM MỚI ---
         return res.status(200).json({
             data: {
                 ...buildConversationItem(conversation, myMember, dmDisplayMap.get(conversation._id.toString()) || null),
                 totalMembers,
+                isMuted, // <--- Bơm thêm isMuted vào kết quả trả về
             },
         });
     } catch (error) {
