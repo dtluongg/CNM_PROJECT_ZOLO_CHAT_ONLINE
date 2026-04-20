@@ -3,6 +3,7 @@ const ConversationMember   = require('../models/conversationMemberModel');
 const User                 = require('../models/userModel');
 const { createVoiceRoomToken } = require('../services/livekitService');
 const { getIO }            = require('../socket/socketManager');
+const { getEffectiveTopicPermission } = require('../middlewares/checkTopicPermission');
 
 // Helper: find active room by topicId (preferred) or conversationId fallback
 const findActiveRoom = (topicId, conversationId) =>
@@ -18,6 +19,11 @@ const createVoiceRoom = async (req, res) => {
 
     const member = await ConversationMember.findOne({ conversationId, userId }).lean();
     if (!member) return res.status(403).json({ message: 'Bạn không phải thành viên nhóm' });
+
+    if (topicId) {
+      const perm = await getEffectiveTopicPermission(member, topicId);
+      if (!perm.canAccess) return res.status(403).json({ message: 'Bạn không có quyền truy cập kênh thoại này' });
+    }
 
     const existing = await findActiveRoom(topicId, conversationId);
     if (existing) {
@@ -65,6 +71,11 @@ const joinVoiceRoom = async (req, res) => {
 
     const member = await ConversationMember.findOne({ conversationId, userId }).lean();
     if (!member) return res.status(403).json({ message: 'Bạn không phải thành viên nhóm' });
+
+    if (topicId) {
+      const perm = await getEffectiveTopicPermission(member, topicId);
+      if (!perm.canAccess) return res.status(403).json({ message: 'Bạn không có quyền truy cập kênh thoại này' });
+    }
 
     const room = await findActiveRoom(topicId, conversationId);
     if (!room) return res.status(404).json({ message: 'Không có phòng thoại đang hoạt động' });

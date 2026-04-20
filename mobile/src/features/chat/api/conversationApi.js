@@ -69,6 +69,9 @@ const conversationApi = {
 
   reviewJoinRequest: (conversationId, requestId, action) =>
     apiClient.patch(`/conversations/${conversationId}/join-requests/${requestId}`, { action }),
+
+  getEffectivePermissions: (conversationId, userId) =>
+    apiClient.get(`/conversations/${conversationId}/members/${userId}/effective-permissions`),
 };
 
 export default conversationApi;

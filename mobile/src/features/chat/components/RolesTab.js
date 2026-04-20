@@ -79,10 +79,18 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
   const toggleTopicId = (field, tid) => {
     setForm(prev => {
       const arr  = prev[field] || [];
-      let   next = arr.includes(tid) ? arr.filter(id => id !== tid) : [...arr, tid];
-      // If removing view, also remove send
+      const next = arr.includes(tid) ? arr.filter(id => id !== tid) : [...arr, tid];
+
       if (field === 'allowedTopicIds' && !next.includes(tid)) {
+        // Removing view access → must also remove send access
         return { ...prev, allowedTopicIds: next, sendableTopicIds: prev.sendableTopicIds.filter(id => id !== tid) };
+      }
+      if (field === 'sendableTopicIds' && next.includes(tid)) {
+        // Adding send access → must also grant view access (invariant: sendable ⊆ allowed)
+        const allowed = prev.allowedTopicIds.includes(tid)
+          ? prev.allowedTopicIds
+          : [...prev.allowedTopicIds, tid];
+        return { ...prev, sendableTopicIds: next, allowedTopicIds: allowed };
       }
       return { ...prev, [field]: next };
     });

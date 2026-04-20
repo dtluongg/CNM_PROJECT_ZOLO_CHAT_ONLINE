@@ -15,7 +15,7 @@ const GROUP_TYPES = [
   { value: 'other',   label: '✨ Khác',     color: '#eb459e' },
 ];
 
-export default function GroupSettingsTab({ conversation, THEME, onUpdated }) {
+export default function GroupSettingsTab({ conversation, THEME, onUpdated, compact }) {
   const [name,          setName]          = useState(conversation.name || '');
   const [description,   setDescription]   = useState(conversation.description || '');
   const [groupType,     setGroupType]     = useState(conversation.groupType || 'general');
@@ -59,7 +59,8 @@ export default function GroupSettingsTab({ conversation, THEME, onUpdated }) {
   };
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+    <View style={compact ? {} : { flex: 1 }}>
+    <ScrollView style={compact ? {} : { flex: 1 }} contentContainerStyle={compact ? { paddingBottom: 8 } : { padding: 16, paddingBottom: 40 }}>
       {/* Avatar */}
       <View style={{ alignItems: 'center', marginBottom: 24 }}>
         <TouchableOpacity onPress={pickAvatar} activeOpacity={0.8}>
@@ -137,6 +138,7 @@ export default function GroupSettingsTab({ conversation, THEME, onUpdated }) {
         }
       </TouchableOpacity>
     </ScrollView>
+    </View>
   );
 }
 

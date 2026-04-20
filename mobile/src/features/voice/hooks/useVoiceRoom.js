@@ -1,26 +1,33 @@
 /**
  * useVoiceRoom – LiveKit hook cho React Native.
  *
- * Âm thanh: native WebRTC layer tự phát qua loa (không cần audio element).
- * Video:    lấy MediaStream từ track rồi dùng RTCView.streamURL.
+ * Stack: livekit-client (JS SDK) + react-native-webrtc (WebRTC polyfill)
+ *        + react-native-incall-manager (audio session / speaker routing)
+ *
+ * Âm thanh: native WebRTC layer tự phát qua loa (InCallManager quản lý routing).
+ * Video:    lấy URL từ MediaStream.toURL() rồi dùng RTCView.
  */
 import { useRef, useState, useCallback, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Room, RoomEvent, Track } from 'livekit-client';
 
-// Lấy MediaStream constructor của react-native-webrtc (nếu có)
+// InCallManager – audio session & speaker routing trên iOS/Android
+let InCallManager = null;
+if (Platform.OS !== 'web') {
+  try { InCallManager = require('react-native-incall-manager').default; } catch {}
+}
+
+// MediaStream từ react-native-webrtc – để tạo streamURL cho RTCView
 let MediaStreamNative = null;
-try {
-  MediaStreamNative = require('react-native-webrtc').MediaStream;
-} catch {}
+if (Platform.OS !== 'web') {
+  try { MediaStreamNative = require('react-native-webrtc').MediaStream; } catch {}
+}
 
 function toStreamURL(track) {
   if (!MediaStreamNative || !track?.mediaStreamTrack) return null;
   try {
-    const ms = new MediaStreamNative([track.mediaStreamTrack]);
-    return ms.toURL();
-  } catch {
-    return null;
-  }
+    return new MediaStreamNative([track.mediaStreamTrack]).toURL();
+  } catch { return null; }
 }
 
 function safeParse(raw) {
@@ -35,7 +42,6 @@ export function useVoiceRoom() {
   const [isCameraOff,     setIsCameraOff]     = useState(true);
   const [speaking,        setSpeaking]        = useState(new Set());
   const [liveParts,       setLiveParts]       = useState([]);
-  // video URLs: identity → streamURL (string hoặc null)
   const [localVideoURL,   setLocalVideoURL]   = useState(null);
   const [remoteVideoURLs, setRemoteVideoURLs] = useState({});
 
@@ -66,18 +72,47 @@ export function useVoiceRoom() {
   const connect = useCallback(async ({ livekitUrl, token }) => {
     if (roomRef.current) return;
 
+    // ── Bước 1: Khởi động audio session TRƯỚC khi kết nối ──────────────────
+    // Quan trọng trên iOS (AVAudioSession) và Android để audio routing đúng
+    if (InCallManager) {
+      try {
+        InCallManager.start({ media: 'audio' });
+        // Voice chat dùng loa ngoài (không phải earpiece)
+        InCallManager.setForceSpeakerphoneOn(true);
+      } catch (e) {
+        console.warn('[VoiceRoom] InCallManager.start failed:', e?.message);
+      }
+    }
+
+    // ── Bước 2: Tạo Room với config tối ưu cho React Native ────────────────
     const room = new Room({
       adaptiveStream: true,
       dynacast: true,
+      // QUAN TRỌNG: React Native không có Web Audio API
+      // Nếu để true, livekit-client cố tạo AudioContext → crash
+      webAudioMix: false,
+      publishDefaults: {
+        // Tắt simulcast để tiết kiệm bandwidth trên mobile
+        simulcast: false,
+        videoSimulcastLayers: [],
+      },
+      audioCaptureDefaults: {
+        autoGainControl:  true,
+        echoCancellation: true,
+        noiseSuppression: true,
+      },
     });
     roomRef.current = room;
 
+    // ── Bước 3: Đăng ký event handlers ─────────────────────────────────────
+
+    // Remote video track được subscribe
     room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
       if (track.source === Track.Source.Camera) {
         const url = toStreamURL(track);
         setRemoteVideoURLs(prev => ({ ...prev, [participant.identity]: url }));
       }
-      // Audio plays automatically via native WebRTC — no audio element needed
+      // Audio tự phát qua native WebRTC layer — không cần xử lý thêm
       refreshParticipants(room);
     });
 
@@ -92,18 +127,22 @@ export function useVoiceRoom() {
       refreshParticipants(room);
     });
 
-    room.on(RoomEvent.LocalTrackPublished, () => {
-      const cam = room.localParticipant.getTrackPublication(Track.Source.Camera);
-      const localTrack = cam?.videoTrack || cam?.track || null;
-      setLocalVideoURL(localTrack ? toStreamURL(localTrack) : null);
-      setIsCameraOff(!room.localParticipant.isCameraEnabled);
+    // Local track được publish (khi bật mic/camera)
+    room.on(RoomEvent.LocalTrackPublished, (pub) => {
+      if (pub.source === Track.Source.Camera) {
+        const cam = room.localParticipant.getTrackPublication(Track.Source.Camera);
+        const localTrack = cam?.videoTrack || cam?.track || null;
+        setLocalVideoURL(localTrack ? toStreamURL(localTrack) : null);
+        setIsCameraOff(!room.localParticipant.isCameraEnabled);
+      }
       refreshParticipants(room);
     });
 
-    room.on(RoomEvent.LocalTrackUnpublished, () => {
-      const cam = room.localParticipant.getTrackPublication(Track.Source.Camera);
-      if (!cam) setLocalVideoURL(null);
-      setIsCameraOff(!room.localParticipant.isCameraEnabled);
+    room.on(RoomEvent.LocalTrackUnpublished, (pub) => {
+      if (pub.source === Track.Source.Camera) {
+        setLocalVideoURL(null);
+        setIsCameraOff(!room.localParticipant.isCameraEnabled);
+      }
       refreshParticipants(room);
     });
 
@@ -131,7 +170,12 @@ export function useVoiceRoom() {
       setRemoteVideoURLs({});
     });
 
-    await room.connect(livekitUrl, token);
+    // ── Bước 4: Kết nối ────────────────────────────────────────────────────
+    await room.connect(livekitUrl, token, {
+      autoSubscribe: true, // Tự subscribe tất cả remote tracks
+    });
+
+    // Bật mic ngay sau khi kết nối
     await room.localParticipant.setMicrophoneEnabled(true);
     setConnected(true);
     setIsMuted(false);
@@ -140,8 +184,18 @@ export function useVoiceRoom() {
 
   const disconnect = useCallback(async () => {
     if (!roomRef.current) return;
-    await roomRef.current.disconnect();
+    try {
+      await roomRef.current.disconnect();
+    } catch {}
     roomRef.current = null;
+
+    // Dừng audio session SAU khi ngắt kết nối
+    if (InCallManager) {
+      try {
+        InCallManager.setForceSpeakerphoneOn(false);
+        InCallManager.stop();
+      } catch {}
+    }
   }, []);
 
   const toggleMute = useCallback(async () => {
@@ -149,7 +203,7 @@ export function useVoiceRoom() {
     if (!room) return;
     const enabled = room.localParticipant.isMicrophoneEnabled;
     await room.localParticipant.setMicrophoneEnabled(!enabled);
-    setIsMuted(enabled);
+    setIsMuted(enabled); // isMuted = true khi mic bị tắt
   }, []);
 
   const toggleCamera = useCallback(async () => {
@@ -164,7 +218,7 @@ export function useVoiceRoom() {
       setIsCameraOff(enabled);
       refreshParticipants(room);
     } catch (e) {
-      console.warn('[VoiceRoom] Camera toggle failed:', e.message);
+      console.warn('[VoiceRoom] Camera toggle failed:', e?.message);
     }
   }, [refreshParticipants]);
 
@@ -172,8 +226,17 @@ export function useVoiceRoom() {
     return remoteVideoURLs[identity] || null;
   }, [remoteVideoURLs]);
 
+  // Cleanup khi component unmount (thoát app)
   useEffect(() => {
-    return () => { roomRef.current?.disconnect(); };
+    return () => {
+      if (roomRef.current) {
+        try { roomRef.current.disconnect(); } catch {}
+        roomRef.current = null;
+      }
+      if (InCallManager) {
+        try { InCallManager.stop(); } catch {}
+      }
+    };
   }, []);
 
   return {
