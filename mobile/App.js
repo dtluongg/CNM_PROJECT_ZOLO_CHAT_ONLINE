@@ -1,3 +1,4 @@
+import './polyfills';
 import 'react-native-url-polyfill/auto';
 
 // Must use require() NOT import — ES imports are hoisted and would load
@@ -8,6 +9,57 @@ if (Platform.OS !== 'web') {
     require('react-native-webrtc').registerGlobals();
   } catch (e) {
     console.warn('[WebRTC] registerGlobals failed:', e?.message);
+  }
+
+  // react-native-webrtc v124 defines getSettings() directly on instances,
+  // so prototype patching has no effect. Instead, wrap getUserMedia to patch
+  // every track right after it is created.
+  try {
+    if (typeof navigator !== 'undefined') {
+      if (!navigator.mediaDevices) navigator.mediaDevices = {};
+
+      // ── enumerateDevices ──────────────────────────────────────────────────
+      if (typeof navigator.mediaDevices.enumerateDevices !== 'function') {
+        navigator.mediaDevices.enumerateDevices = async () => [];
+      }
+
+      // ── getUserMedia wrapper ──────────────────────────────────────────────
+      const _origGUM = navigator.mediaDevices.getUserMedia?.bind(navigator.mediaDevices);
+      if (_origGUM) {
+        navigator.mediaDevices.getUserMedia = async function (constraints) {
+          const stream = await _origGUM(constraints);
+          // Patch every track instance so livekit-client's deviceId.toLowerCase() works
+          stream.getTracks().forEach(track => {
+            const _origGS = track.getSettings?.bind(track);
+            track.getSettings = function () {
+              const s = (() => {
+                try { return _origGS?.() ?? {}; } catch { return {}; }
+              })();
+              return {
+                ...s,
+                deviceId:   s?.deviceId   || 'default',
+                groupId:    s?.groupId    || '',
+                label:      s?.label      || track.label || '',
+                kind:       s?.kind       || track.kind || 'audio',
+                width:      s?.width      || 0,
+                height:     s?.height     || 0,
+                frameRate:  s?.frameRate  || 0,
+                facingMode: s?.facingMode || '',
+              };
+            };
+            if (typeof track.getCapabilities !== 'function') {
+              track.getCapabilities = () => ({
+                deviceId: 'default', groupId: '',
+                kind: track.kind || 'audio', label: track.label || '',
+              });
+            }
+          });
+          return stream;
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('[Polyfill] getUserMedia patch failed:', e?.message);
   }
 }
 

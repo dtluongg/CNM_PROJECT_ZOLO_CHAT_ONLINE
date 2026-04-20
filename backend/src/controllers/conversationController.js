@@ -4,6 +4,91 @@ const ConversationMember = require('../models/conversationMemberModel');
 const ConversationTopic = require('../models/conversationTopicModel');
 const Friendship = require('../models/friendshipModel');
 const User = require('../models/userModel');
+const Message = require('../models/messageModel');
+
+// Tạo system message và emit socket khi thông tin nhóm thay đổi (tên, ảnh, mô tả, loại nhóm)
+async function emitGroupInfoSystemMessage(conversationId, actorId, changes) {
+    try {
+        const { getIO } = require('../socket/socketManager');
+        const io = getIO();
+
+        const [actor, members, systemTopic] = await Promise.all([
+            User.findById(actorId).select('displayName avatar').lean(),
+            ConversationMember.find({ conversationId, leftAt: null }).select('userId').lean(),
+            ConversationTopic.findOne({ conversationId, channelType: 'system' }).select('_id').lean(),
+        ]);
+
+        let topicId = systemTopic?._id || null;
+        if (!topicId) {
+            const newTopic = await ConversationTopic.create({
+                conversationId,
+                name: 'nhật-ký-nhóm',
+                emoji: '📋',
+                categoryName: '🔔 Hệ thống',
+                channelType: 'system',
+                position: 99,
+                createdBy: actorId,
+            });
+            topicId = newTopic._id;
+        }
+
+        // Build human-readable content
+        const parts = [];
+        if (changes.name)        parts.push(`đổi tên nhóm thành "${changes.name.newValue}"`);
+        if (changes.avatar)      parts.push('cập nhật ảnh nhóm');
+        if (changes.description) parts.push('cập nhật mô tả nhóm');
+        if (changes.groupType)   parts.push(`đổi loại nhóm thành "${changes.groupType.newValue}"`);
+        const content = `${actor?.displayName || '?'} đã ${parts.join(', ')}`;
+
+        const msg = await Message.create({
+            conversationId,
+            senderId: actorId,
+            type: 'system',
+            content,
+            topicId,
+            payload: {
+                event: 'group_info_updated',
+                actorId:     actorId.toString(),
+                actorName:   actor?.displayName || '?',
+                actorAvatar: actor?.avatar || null,
+                changes,
+            },
+        });
+
+        await Conversation.findByIdAndUpdate(conversationId, {
+            lastMessageId:      msg._id,
+            lastMessagePreview: content,
+            lastMessageTime:    msg.createdAt,
+        });
+
+        const formatted = {
+            _id:            msg._id,
+            conversationId: conversationId.toString(),
+            senderId:       actorId.toString(),
+            type:           'system',
+            content,
+            topicId:        topicId?.toString(),
+            payload:        msg.payload,
+            createdAt:      msg.createdAt,
+            time: new Date(msg.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        // Broadcast system message + conversation:updated to all members
+        const recipientIds = members.map(m => m.userId.toString());
+        recipientIds.forEach(uid => {
+            io.to(`user:${uid}`).emit('chat:new-message', {
+                conversationId: conversationId.toString(),
+                message: formatted,
+            });
+            io.to(`user:${uid}`).emit('conversation:updated', {
+                conversationId: conversationId.toString(),
+                changes,
+            });
+        });
+    } catch (err) {
+        console.error('emitGroupInfoSystemMessage error:', err);
+    }
+}
 
 const DEFAULT_CHANNELS = {
     study: [
@@ -707,26 +792,43 @@ const updateConversationInfo = async (req, res, next) => {
 
         const VALID_GROUP_TYPES = ['study', 'gaming', 'general', 'project', 'other'];
         const updates = {};
+        const infoChanges = {}; // track what actually changed for system messages
+
         if (name !== undefined) {
             if (!name || !name.trim()) {
                 return res.status(400).json({ message: 'Tên nhóm không được để trống' });
             }
-            updates.name = name.trim();
+            const newName = name.trim();
+            if (newName !== conversation.name) {
+                updates.name = newName;
+                infoChanges.name = { oldValue: conversation.name, newValue: newName };
+            }
         }
 
         if (avatar !== undefined) {
-            updates.avatar = avatar || '';
+            const newAvatar = avatar || '';
+            if (newAvatar !== (conversation.avatar || '')) {
+                updates.avatar = newAvatar;
+                infoChanges.avatar = { oldValue: conversation.avatar || '', newValue: newAvatar };
+            }
         }
 
         if (groupType !== undefined) {
             if (!VALID_GROUP_TYPES.includes(groupType)) {
                 return res.status(400).json({ message: 'groupType không hợp lệ' });
             }
-            updates.groupType = groupType;
+            if (groupType !== conversation.groupType) {
+                updates.groupType = groupType;
+                infoChanges.groupType = { oldValue: conversation.groupType, newValue: groupType };
+            }
         }
 
         if (description !== undefined) {
-            updates.description = (description || '').toString().slice(0, 200);
+            const newDesc = (description || '').toString().slice(0, 200);
+            if (newDesc !== (conversation.description || '')) {
+                updates.description = newDesc;
+                infoChanges.description = { oldValue: conversation.description || '', newValue: newDesc };
+            }
         }
 
         if (!Object.keys(updates).length) {
@@ -741,6 +843,11 @@ const updateConversationInfo = async (req, res, next) => {
             .populate('createdBy', '_id displayName avatar')
             .populate('lastMessageId', '_id senderId content type createdAt')
             .lean();
+
+        // Emit system message + realtime update to all members (fire-and-forget)
+        if (Object.keys(infoChanges).length > 0) {
+            emitGroupInfoSystemMessage(conversationId, userId, infoChanges).catch(() => {});
+        }
 
         return res.status(200).json({
             message: 'Cập nhật thông tin nhóm thành công',

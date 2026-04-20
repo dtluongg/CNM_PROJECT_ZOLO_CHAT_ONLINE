@@ -26,6 +26,7 @@ export const useSocket = ({
   onMessageRevoked,
   onMessageEdited,
   onUnreadReset,
+  onConversationUpdated,
 }) => {
   const socketRef = useRef(null);
 
@@ -67,6 +68,10 @@ export const useSocket = ({
 
     socket.on('chat:unread-reset', ({ conversationId }) => {
       onUnreadReset?.(conversationId);
+    });
+
+    socket.on('conversation:updated', ({ conversationId, changes }) => {
+      onConversationUpdated?.(conversationId, changes);
     });
 
     return () => {
