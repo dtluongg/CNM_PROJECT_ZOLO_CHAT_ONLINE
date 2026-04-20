@@ -32,19 +32,17 @@ if (Platform.OS !== 'web') {
           stream.getTracks().forEach(track => {
             const _origGS = track.getSettings?.bind(track);
             track.getSettings = function () {
-              const s = (() => {
-                try { return _origGS?.() ?? {}; } catch { return {}; }
-              })();
+              const s = (() => { try { return _origGS?.() ?? {}; } catch { return {}; } })();
               return {
+                deviceId:   s?.deviceId   ?? 'default',
+                groupId:    s?.groupId    ?? '',
+                label:      s?.label      ?? (track.label  || ''),
+                kind:       s?.kind       ?? (track.kind   || 'audio'),
+                width:      s?.width      ?? 0,
+                height:     s?.height     ?? 0,
+                frameRate:  s?.frameRate  ?? 0,
+                facingMode: s?.facingMode ?? '',
                 ...s,
-                deviceId:   s?.deviceId   || 'default',
-                groupId:    s?.groupId    || '',
-                label:      s?.label      || track.label || '',
-                kind:       s?.kind       || track.kind || 'audio',
-                width:      s?.width      || 0,
-                height:     s?.height     || 0,
-                frameRate:  s?.frameRate  || 0,
-                facingMode: s?.facingMode || '',
               };
             };
             if (typeof track.getCapabilities !== 'function') {
