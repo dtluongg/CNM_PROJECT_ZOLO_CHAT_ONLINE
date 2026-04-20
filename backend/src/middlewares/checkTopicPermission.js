@@ -1,6 +1,6 @@
+const Conversation = require('../models/conversationModel');
 const ConversationMember = require('../models/conversationMemberModel');
 const GroupRole = require('../models/groupRoleModel');
-
 // Tính quyền thực tế theo thứ tự: personalOverride > customRole > systemRole
 const getEffectiveTopicPermission = async (member, topicId) => {
   const tid = topicId?.toString();
