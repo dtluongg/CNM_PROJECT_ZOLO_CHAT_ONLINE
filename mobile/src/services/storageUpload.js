@@ -33,10 +33,12 @@ const getFileData = async (uri) => {
     encoding: 'base64',
   });
 
-  const byteCharacters = atob(base64);
-  const bytes = new Uint8Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    bytes[i] = byteCharacters.charCodeAt(i);
+  // Chuyển base64 sang Uint8Array một cách an toàn cho RN
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
   }
 
   return bytes;

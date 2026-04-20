@@ -22,7 +22,7 @@ export default function StoryCard({ user, stories, isMe, onPress, onAdd, THEME }
                 />
             ) : (
                 <View style={[styles.emptyMedia, { backgroundColor: THEME.bgTertiary }]}>
-                    {isMe && <Feather name="plus" size={32} color={THEME.accent} />}
+                    {!isMe && <Feather name="user" size={32} color={THEME.textSecondary} />}
                 </View>
             )}
 
@@ -38,10 +38,13 @@ export default function StoryCard({ user, stories, isMe, onPress, onAdd, THEME }
                 </Text>
             </View>
 
-            {isMe && !latestStory && (
-                <View style={[styles.addButton, { backgroundColor: THEME.accent }]}>
+            {isMe && (
+                <TouchableOpacity 
+                    style={[styles.addButton, { backgroundColor: THEME.accent }]}
+                    onPress={onAdd}
+                >
                     <Feather name="plus" size={16} color="#fff" />
-                </View>
+                </TouchableOpacity>
             )}
         </TouchableOpacity>
     );

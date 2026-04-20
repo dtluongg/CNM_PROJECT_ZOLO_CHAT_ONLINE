@@ -348,6 +348,47 @@ const useStyles = (THEME) =>
       opacity: 0.8,
       lineHeight: 16,
     },
+    // ── Story Reply Context ───────────────────────────────────────────
+    storyReplyContainer: {
+      backgroundColor: 'transparent',
+      borderRadius: 12,
+      padding: 0,
+      marginBottom: 0,
+      width: 220,
+      overflow: 'hidden',
+    },
+    storyReplyHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+      paddingHorizontal: 4,
+    },
+    storyReplyTitle: {
+      fontSize: 12,
+      fontWeight: '500',
+      marginLeft: 6,
+    },
+    storyReplyMedia: {
+      width: '100%',
+      height: 300,
+      borderRadius: 16,
+      backgroundColor: 'rgba(0,0,0,0.05)',
+    },
+    storyReplyBubble: {
+      marginTop: -20,
+      borderRadius: 25,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      alignSelf: 'flex-end',
+      minWidth: 60,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4.65,
+      elevation: 8,
+      borderWidth: 2,
+      borderColor: 'rgba(255,255,255,0.1)',
+    },
   });
 
 export default useStyles;

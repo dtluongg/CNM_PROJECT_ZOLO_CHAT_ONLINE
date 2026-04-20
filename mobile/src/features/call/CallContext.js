@@ -285,7 +285,9 @@ export const CallProvider = ({ children }) => {
     try {
       createPeer();
 
-      InCallManager.stopRingtone();
+      if (InCallManager) {
+        InCallManager.stopRingtone();
+      }
 
       const stream = await getLocalStream(type);
       stream.getAudioTracks().forEach((track) => {

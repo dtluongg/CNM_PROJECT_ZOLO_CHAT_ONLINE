@@ -349,21 +349,20 @@ const MessageBubble = ({
           {/* Bubble */}
           <div style={{
             background: (msg.type === 'poll' || msg.type === 'reminder') ? 'transparent' : (isMine ? 'var(--bubble-self)' : 'var(--bubble-other)'),
-
             color: isMine ? '#fff' : 'var(--text-primary)',
             padding: (msg.type === 'poll' || msg.type === 'reminder') ? 0 : (isMobile ? '9px 14px' : '8px 14px'),
             borderRadius: (msg.type === 'poll' || msg.type === 'reminder') ? 0 : 20,
-
             fontSize: isMobile ? 15 : 14, lineHeight: 1.5,
             wordBreak: 'break-word',
             boxShadow: (msg.type === 'poll' || msg.type === 'reminder') ? 'none' : (isBeingRepliedTo ? '0 0 0 2px var(--accent), 0 4px 12px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.12)'),
-
             maxWidth: '100%',
             transform: isBeingRepliedTo ? 'scale(1.02)' : 'scale(1)',
             transition: 'all 0.2s ease-out',
             position: 'relative',
             marginLeft: (msg.payload?.type === 'story_reply' && !isMine) ? 8 : 0,
             marginRight: (msg.payload?.type === 'story_reply' && isMine) ? 8 : 0,
+            marginTop: msg.payload?.type === 'story_reply' ? -25 : 0,
+            zIndex: msg.payload?.type === 'story_reply' ? 10 : 1,
           }}>
             {isPinned && msg.type !== 'poll' && msg.type !== 'reminder' && (
               <div style={{

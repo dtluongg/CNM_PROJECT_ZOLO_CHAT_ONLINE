@@ -112,7 +112,7 @@ const replyToStory = async (req, res) => {
         const senderId = req.user._id;
         const { storyId, content, isHeart } = req.body;
 
-        if (!storyId || !content) {
+        if (!storyId || (!content && !isHeart)) {
             return res.status(400).json({ message: 'Thiếu thông tin storyId hoặc nội dung phản hồi' });
         }
 
@@ -123,10 +123,33 @@ const replyToStory = async (req, res) => {
 
         // 1. Nếu là Heart Reaction, chỉ cập nhật trạng thái đã thả tim và không gửi chat
         if (isHeart || content === '❤️') {
-            await storyModel.updateOne(
+            // Cố gắng cập nhật hasHeart cho user đã xem
+            const updatedStory = await storyModel.findOneAndUpdate(
                 { _id: storyId, 'viewers.userId': senderId },
-                { $set: { 'viewers.$.hasHeart': true } }
+                { $set: { 'viewers.$.hasHeart': true } },
+                { new: true }
             );
+
+            // Nếu user chưa có trong viewers (do race condition), thêm mới vào luôn
+            if (!updatedStory) {
+                await storyModel.findByIdAndUpdate(storyId, {
+                    $push: { viewers: { userId: senderId, viewedAt: new Date(), hasHeart: true } }
+                });
+            }
+
+            // Phát Socket báo hiệu cho chủ Story
+            try {
+                const io = getIO();
+                io.to(`user:${story.user._id.toString()}`).emit('story:reaction', {
+                    storyId,
+                    userId: senderId,
+                    displayName: req.user.displayName,
+                    emoji: '❤️'
+                });
+            } catch (err) {
+                console.error('Socket error in story reaction:', err.message);
+            }
+
             return res.status(200).json({ message: 'Đã thả tim story' });
         }
 
@@ -234,13 +257,18 @@ const replyToStory = async (req, res) => {
     }
 };
 
-// ════════════════════════════════════════════════════════════════
-//  ĐÁNH DẤU ĐÃ XEM TIN
-// ════════════════════════════════════════════════════════════════
 const markStoryAsViewed = async (req, res) => {
     try {
         const userId = req.user._id;
         const { id } = req.params;
+
+        const story = await storyModel.findById(id);
+        if (!story) return res.status(404).json({ message: 'Không tìm thấy tin' });
+
+        // KHÔNG ghi nhận lượt xem nếu là chủ tin xem tin của chính mình
+        if (story.user.toString() === userId.toString()) {
+            return res.status(200).json({ message: 'Chủ tin xem tin' });
+        }
 
         // Cập nhật nguyên tử: Chỉ push người xem nếu userId chưa tồn tại trong mảng viewers
         const updatedStory = await storyModel.findOneAndUpdate(
@@ -282,12 +310,15 @@ const getStoryViewers = async (req, res) => {
             return res.status(403).json({ message: 'Bạn không có quyền xem danh sách người xem của tin này' });
         }
 
-        // Lọc trùng (deduplicate) để đảm bảo an toàn nếu dữ liệu cũ đã bị lỗi
+        // Lọc trùng (deduplicate) và LOẠI BỎ CHỦ TIN khỏi danh sách hiển thị
         const uniqueViewers = [];
         const seenUserIds = new Set();
 
         story.viewers.forEach(v => {
-            if (v.userId && !seenUserIds.has(v.userId._id.toString())) {
+            if (v.userId && 
+                v.userId._id.toString() !== userId.toString() && // Loại bỏ chính mình
+                !seenUserIds.has(v.userId._id.toString())
+            ) {
                 seenUserIds.add(v.userId._id.toString());
                 uniqueViewers.push(v);
             }

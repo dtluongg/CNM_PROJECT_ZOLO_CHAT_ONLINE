@@ -11,15 +11,34 @@ import { useTheme } from '../../../context/ThemeContext';
 import StoryCard from '../components/StoryCard';
 import StoryViewerModal from '../components/StoryViewerModal';
 import { uploadToSupabase } from '../../../services/storageUpload';
+import useStorySocket from '../hooks/useStorySocket';
 
 export default function StoriesScreen() {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const { theme: THEME } = useTheme();
     const [feed, setFeed] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [activeViewer, setActiveViewer] = useState(null);
+
+    // ── Lắng nghe Socket để cập nhật Real-time ──────────────────────
+    useStorySocket(token, {
+        onStoryNew: () => {
+            // Có tin mới -> tải lại cả bản tin để đảm bảo đúng phân quyền bạn bè
+            fetchFeed();
+        },
+        onStoryDeleted: ({ storyId }) => {
+            // Có tin bị xóa -> lọc bỏ ngay lập tức khỏi state để UX mượt mà
+            setFeed(prev => 
+                prev.map(item => ({
+                    ...item,
+                    stories: item.stories.filter(s => (s._id || s.id) !== storyId)
+                }))
+                .filter(item => item.stories.length > 0 || (item.user?._id || item.user?.id) === user?._id)
+            );
+        }
+    });
 
     const fetchFeed = useCallback(async () => {
         try {
@@ -99,14 +118,23 @@ export default function StoriesScreen() {
             <View style={[styles.header, { backgroundColor: THEME.bgSecondary, borderBottomColor: THEME.border }]}>
                 <Text style={[styles.headerTitle, { color: THEME.textPrimary }]}>Tin mới</Text>
                 {uploading && <ActivityIndicator size="small" color={THEME.accent} style={{ marginRight: 10 }} />}
-                <TouchableOpacity onPress={handlePickMedia} disabled={uploading}>
-                    <Feather name="camera" size={24} color={THEME.accent} />
-                </TouchableOpacity>
             </View>
 
+            {/* Danh sách Stories */}
             <FlatList
-                data={feed}
-                keyExtractor={(item) => item.user._id}
+                data={(() => {
+                    if (!user?._id) return feed;
+                    const hasMe = feed.some(item => item.user?._id === user?._id);
+                    if (hasMe) {
+                        // Di chuyển "Tin của bạn" lên đầu nếu đã có trong feed
+                        const myItem = feed.find(item => item.user?._id === user?._id);
+                        const others = feed.filter(item => item.user?._id !== user?._id);
+                        return [myItem, ...others];
+                    }
+                    // Nếu chưa có tin, chèn một item ảo để hiện nút "+"
+                    return [{ user, stories: [] }, ...feed];
+                })()}
+                keyExtractor={(item) => item.user?._id || Math.random().toString()}
                 numColumns={2}
                 contentContainerStyle={styles.listContent}
                 refreshControl={

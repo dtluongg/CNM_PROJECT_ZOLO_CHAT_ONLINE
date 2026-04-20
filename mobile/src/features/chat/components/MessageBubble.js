@@ -105,6 +105,26 @@ const MessageBubble = ({
     );
   };
 
+  const renderStoryReply = (payload) => {
+    if (!payload || payload.type !== 'story_reply') return null;
+
+    return (
+      <View style={styles.storyReplyContainer}>
+        <View style={styles.storyReplyHeader}>
+          <Feather name="corner-up-right" size={14} color={THEME.textMuted} />
+          <Text style={[styles.storyReplyTitle, { color: THEME.textMuted }]}>
+            Bạn đã trả lời tin
+          </Text>
+        </View>
+        <Image 
+          source={{ uri: payload.mediaUrl }} 
+          style={styles.storyReplyMedia}
+          resizeMode="cover"
+        />
+      </View>
+    );
+  };
+
   // Render nội dung bên trong bong bóng tuỳ theo type
   const renderContent = () => {
     // Tin nhắn đã bị thu hồi
@@ -244,13 +264,35 @@ const MessageBubble = ({
     }
 
 
+    const payload = parsePayload(msg.payload);
+
     return (
-      <Text style={[styles.bubbleText, { color: bubbleText }]}>
-        {msg.content}
-        {msg.edited && (
-          <Text style={{ fontSize: 11, fontStyle: 'italic', opacity: 0.6 }}> (đã chỉnh sửa)</Text>
+      <View>
+        {payload.type === 'story_reply' && (
+          <View>
+            {renderStoryReply(payload)}
+            <View style={[
+              styles.storyReplyBubble, 
+              { backgroundColor: isMine ? THEME.accent : THEME.bubbleOther },
+              { alignSelf: isMine ? 'flex-end' : 'flex-start' },
+              !isMine && { marginLeft: 12 },
+              isMine && { marginRight: 12 }
+            ]}>
+              <Text style={[styles.bubbleText, { color: isMine ? '#fff' : THEME.textPrimary }]}>
+                {msg.content}
+              </Text>
+            </View>
+          </View>
         )}
-      </Text>
+        {payload.type !== 'story_reply' && (
+          <Text style={[styles.bubbleText, { color: bubbleText }]}>
+            {msg.content}
+            {msg.edited && (
+              <Text style={{ fontSize: 11, fontStyle: 'italic', opacity: 0.6 }}> (đã chỉnh sửa)</Text>
+            )}
+          </Text>
+        )}
+      </View>
     );
   };
 
@@ -343,11 +385,12 @@ const MessageBubble = ({
               borderRadius,
               msg.type === 'poll' && { alignSelf: 'center', marginTop: 10 },
               msg.type === 'reminder' && { alignSelf: 'center' },
-              // Bỏ padding + nền khi là media (ảnh/video), bình chọn hoặc nhắc hẹn
+              // Bỏ padding + nền khi là media (ảnh/video), bình chọn, nhắc hẹn hoặc phản hồi story
               (msg.type === 'video' ||
                 msg.type === 'image' ||
                 msg.type === 'poll' ||
                 msg.type === 'reminder' ||
+                parsePayload(msg.payload).type === 'story_reply' ||
                 /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(parsePayload(msg.payload).fileName || '')) && {
 
                 padding: 0,
