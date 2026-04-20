@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setLogoutCallback } from '../services/apiClient';
+import { supabase } from '../config/supabase';
 
 export const AuthContext = createContext();
 
@@ -39,6 +40,7 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setUser(null);
     try {
+      await supabase.auth.signOut();
       await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'currentUser']);
     } catch {}
   }, []);

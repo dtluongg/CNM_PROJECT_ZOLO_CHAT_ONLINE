@@ -6,12 +6,14 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { io } from 'socket.io-client';
+import Svg, { Rect } from 'react-native-svg';
 import { STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { usePresence } from '../context/PresenceContext';
 import ProfileScreen from '../features/user/screens/ProfileScreen';
 import FriendsScreen from '../features/friends/screens/FriendsScreen';
+import StoriesScreen from '../features/stories/screens/StoriesScreen';
 import conversationApi from '../features/chat/api/conversationApi';
 import friendApi from '../features/friends/api/friendApi';
 import { SOCKET_URL } from '../config/env';
@@ -87,6 +89,21 @@ const Avatar = ({ name, avatar, size = 44, status = null, online = null, THEME, 
     </View>
   );
 };
+
+const TinIconMobile = ({ size = 24, color = '#fff' }) => (
+  <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Rect 
+        x="3" y="5" width="9" height="14" rx="2" 
+        fill={color}
+      />
+      <Rect 
+        x="14" y="8" width="7" height="8" rx="2" 
+        fill={color}
+      />
+    </Svg>
+  </View>
+);
 
 // ─────────────────────────────────────────────
 // CREATE GROUP MODAL
@@ -367,6 +384,7 @@ const TABS = [
   { key: 'chats', icon: '💬', label: 'Tin nhắn' },
   { key: 'friends', icon: '👥', label: 'Bạn bè' },
   { key: 'profile', icon: '👤', label: 'Hồ sơ' },
+  { key: 'tin', icon: 'custom', label: 'Tin' },
 ];
 
 function BottomTabBar({ activeTab, onTabChange, unreadTotal, THEME, styles }) {
@@ -383,7 +401,13 @@ function BottomTabBar({ activeTab, onTabChange, unreadTotal, THEME, styles }) {
           >
             {active && <View style={styles.tabIndicator} />}
             <View style={{ position: 'relative' }}>
-              <Text style={[styles.tabIcon, { opacity: active ? 1 : 0.5 }]}>{tab.icon}</Text>
+              {tab.key === 'tin' ? (
+                <View style={{ opacity: active ? 1 : 0.5 }}>
+                  <TinIconMobile size={22} color={active ? THEME.accent : THEME.textPrimary} />
+                </View>
+              ) : (
+                <Text style={[styles.tabIcon, { opacity: active ? 1 : 0.5 }]}>{tab.icon}</Text>
+              )}
               {tab.key === 'chats' && unreadTotal > 0 && !active && (
                 <View style={styles.tabBadge}>
                   <Text style={styles.tabBadgeText}>{unreadTotal > 99 ? '99+' : unreadTotal}</Text>
@@ -470,6 +494,8 @@ export default function MainTabScreen({ navigation, route }) {
         return <FriendsScreen navigation={navigation} />;
       case 'profile':
         return <ProfileScreen navigation={navigation} />;
+      case 'tin':
+        return <StoriesScreen />;
       default:
         return null;
     }
