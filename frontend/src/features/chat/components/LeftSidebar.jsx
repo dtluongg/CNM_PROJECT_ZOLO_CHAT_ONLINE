@@ -22,6 +22,7 @@ const GROUP_TYPE_LABEL = {
   general: '💬 Thảo luận',
   project: '📌 Dự án',
   other:   '🗂️ Khác',
+  sensitive: '🔐 Nhóm nhạy cảm',
 };
 
 export default function LeftSidebar({

@@ -2,8 +2,17 @@ const mongoose = require('mongoose');
 const Conversation = require('../models/conversationModel');
 const ConversationMember = require('../models/conversationMemberModel');
 const ConversationTopic = require('../models/conversationTopicModel');
+const GroupRole = require('../models/groupRoleModel');
 const User = require('../models/userModel');
 const Message = require('../models/messageModel');
+const MessageReaction = require('../models/messageReactionModel');
+const MessageRead = require('../models/messageReadModel');
+const Attachment = require('../models/attachmentModel');
+const JoinRequest = require('../models/joinRequestModel');
+const VoiceRoom = require('../models/voiceRoomModel');
+const Call = require('../models/callModel');
+const Notification = require('../models/notificationModel');
+const NotificationSetting = require('../models/notificationSettingModel');
 const { getIO } = require('../socket/socketManager');
 
 // Tạo system message và phát socket khi có thay đổi thành viên.
@@ -146,6 +155,56 @@ const requireActiveMembership = async (conversationId, userId) => {
 const isOwner = (member) => member.role === 'owner';
 const isAdmin = (member) => member.role === 'admin';
 
+const canInviteMembersInGroup = async (member) => {
+    if (!member) return false;
+    if (isOwner(member) || isAdmin(member)) return true;
+    if (member.canInviteMembers === true) return true;
+
+    if (member.customRoleId) {
+        const role = await GroupRole.findById(member.customRoleId).select('permissions.canInviteMembers').lean();
+        if (role?.permissions?.canInviteMembers === true) return true;
+    }
+
+    return false;
+};
+
+const emitJoinRequestToAdmins = async (conversationId, requesterId, targetUserIds, createdRequests, message = '') => {
+    try {
+        if (!createdRequests.length) return;
+
+        const io = getIO();
+        const admins = await ConversationMember.find({
+            conversationId,
+            leftAt: null,
+            $or: [{ role: 'owner' }, { role: 'admin' }],
+        }).select('userId').lean();
+
+        const requester = await User.findById(requesterId).select('displayName avatar').lean();
+        const targets = await User.find({ _id: { $in: targetUserIds } }).select('_id displayName avatar').lean();
+        const targetMap = new Map(targets.map((u) => [u._id.toString(), u]));
+
+        for (const request of createdRequests) {
+            const target = targetMap.get(request.userId.toString());
+            admins.forEach(({ userId: adminId }) => {
+                io.to(`user:${adminId.toString()}`).emit('join-request:new', {
+                    conversationId: conversationId.toString(),
+                    request: {
+                        _id: request._id,
+                        userId: request.userId,
+                        requestedBy: requesterId,
+                        requesterName: requester?.displayName,
+                        targetName: target?.displayName,
+                        message,
+                        createdAt: request.createdAt,
+                    },
+                });
+            });
+        }
+    } catch (err) {
+        console.error('emitJoinRequestToAdmins error:', err);
+    }
+};
+
 // API thêm thành viên vào nhóm
 const addConversationMembers = async (req, res, next) => {
     const session = await mongoose.startSession();
@@ -153,7 +212,7 @@ const addConversationMembers = async (req, res, next) => {
         const userId = getCurrentUserId(req);
         const { id } = req.params;
         const conversationId = id;
-        const { memberUserId, memberUserIds } = req.body;
+        const { memberUserId, memberUserIds, message = '' } = req.body;
 
         ensureValidObjectId(conversationId, 'conversationId');
 
@@ -176,6 +235,7 @@ const addConversationMembers = async (req, res, next) => {
 
         let addedUserIds = [];
         let rejoinedUserIds = [];
+        let createdJoinRequests = [];
 
         await session.withTransaction(async () => {
             const conversation = await Conversation.findById(conversationId).session(session);
@@ -203,8 +263,16 @@ const addConversationMembers = async (req, res, next) => {
                 throw err;
             }
 
-            if (!isOwner(myMember) && !myMember.canInviteMembers) {
+            const canInvite = await canInviteMembersInGroup(myMember);
+            if (!canInvite) {
                 const err = new Error('Bạn không có quyền thêm thành viên vào nhóm');
+                err.statusCode = 403;
+                throw err;
+            }
+
+            const inviteMode = conversation.inviteMode || 'open_invite';
+            if (inviteMode === 'admin_only' && !isOwner(myMember) && !isAdmin(myMember)) {
+                const err = new Error('Nhóm đang ở chế độ Admin Only, chỉ owner/admin mới được mời trực tiếp');
                 err.statusCode = 403;
                 throw err;
             }
@@ -224,6 +292,54 @@ const addConversationMembers = async (req, res, next) => {
             const existingMemberMap = new Map(
                 existingMembers.map((member) => [member.userId.toString(), member])
             );
+
+            // approval_required: member thường chỉ tạo yêu cầu chờ duyệt, không thêm trực tiếp
+            if (inviteMode === 'approval_required' && !isOwner(myMember) && !isAdmin(myMember)) {
+                const pendingRequests = await JoinRequest.find({
+                    conversationId,
+                    userId: { $in: normalizedIds },
+                    status: 'pending',
+                }).session(session).lean();
+
+                const pendingSet = new Set(pendingRequests.map((r) => r.userId.toString()));
+                const toRequestIds = [];
+                const skippedActive = [];
+                const skippedPending = [];
+
+                for (const targetId of normalizedIds) {
+                    const existed = existingMemberMap.get(targetId);
+                    if (existed && existed.leftAt === null) {
+                        skippedActive.push(targetId);
+                        continue;
+                    }
+                    if (pendingSet.has(targetId)) {
+                        skippedPending.push(targetId);
+                        continue;
+                    }
+                    toRequestIds.push(targetId);
+                }
+
+                if (toRequestIds.length) {
+                    createdJoinRequests = await JoinRequest.insertMany(
+                        toRequestIds.map((targetId) => ({
+                            conversationId,
+                            userId: targetId,
+                            requestedBy: userId,
+                            message,
+                        })),
+                        { session, ordered: true }
+                    );
+                }
+
+                return res.status(200).json({
+                    message: 'Đã gửi yêu cầu thêm thành viên, chờ admin/owner duyệt',
+                    data: {
+                        requestedUserIds: toRequestIds,
+                        skippedActiveUserIds: skippedActive,
+                        skippedPendingUserIds: skippedPending,
+                    },
+                });
+            }
 
             const toInsert = [];
             const toRejoin = [];
@@ -267,6 +383,16 @@ const addConversationMembers = async (req, res, next) => {
                 data: { addedUserIds, rejoinedUserIds, skippedUserIds: skipped },
             });
         });
+
+        if (createdJoinRequests.length) {
+            await emitJoinRequestToAdmins(
+                conversationId,
+                userId,
+                createdJoinRequests.map((r) => r.userId.toString()),
+                createdJoinRequests,
+                message
+            );
+        }
 
         for (const targetId of [...addedUserIds, ...rejoinedUserIds]) {
             await emitMemberSystemMessage(conversationId, userId, targetId, 'member_join');
@@ -335,6 +461,7 @@ const disbandConversation = async (req, res, next) => {
         const userId = getCurrentUserId(req);
         const { id } = req.params;
         const conversationId = id;
+        let affectedUserIds = [];
 
         ensureValidObjectId(conversationId, 'conversationId');
 
@@ -363,18 +490,52 @@ const disbandConversation = async (req, res, next) => {
                 throw err;
             }
 
-            const now = new Date();
-            conversation.isLocked = true;
-            await conversation.save({ session });
+            const members = await ConversationMember.find({ conversationId })
+                .select('userId')
+                .session(session)
+                .lean();
+            affectedUserIds = [...new Set(members.map((m) => m.userId?.toString()).filter(Boolean))];
 
-            await ConversationMember.updateMany(
-                { conversationId, leftAt: null },
-                { $set: { leftAt: now, canSendMessages: false } },
-                { session }
-            );
+            const messages = await Message.find({ conversationId })
+                .select('_id')
+                .session(session)
+                .lean();
+            const messageIds = messages.map((m) => m._id);
+
+            if (messageIds.length) {
+                await MessageReaction.deleteMany({ messageId: { $in: messageIds } }, { session });
+                await MessageRead.deleteMany({ messageId: { $in: messageIds } }, { session });
+                await Attachment.deleteMany({ messageId: { $in: messageIds } }, { session });
+                await Notification.deleteMany({
+                    $or: [
+                        { conversationId },
+                        { messageId: { $in: messageIds } },
+                    ],
+                }, { session });
+            } else {
+                await Notification.deleteMany({ conversationId }, { session });
+            }
+
+            await MessageRead.deleteMany({ conversationId }, { session });
+            await NotificationSetting.deleteMany({ conversationId }, { session });
+            await VoiceRoom.deleteMany({ conversationId }, { session });
+            await Call.deleteMany({ conversationId }, { session });
+            await JoinRequest.deleteMany({ conversationId }, { session });
+            await GroupRole.deleteMany({ conversationId }, { session });
+            await ConversationTopic.deleteMany({ conversationId }, { session });
+            await Message.deleteMany({ conversationId }, { session });
+            await ConversationMember.deleteMany({ conversationId }, { session });
+            await Conversation.deleteOne({ _id: conversationId }, { session });
         });
 
-        return res.status(200).json({ message: 'Giải tán nhóm thành công' });
+        const io = getIO();
+        if (io) {
+            for (const targetUserId of affectedUserIds) {
+                io.to(`user:${targetUserId}`).emit('chat:conversation-disbanded', { conversationId });
+            }
+        }
+
+        return res.status(200).json({ message: 'Giải tán nhóm thành công. Toàn bộ dữ liệu hội thoại đã được xóa.' });
     } catch (error) {
         next(error);
     } finally {
@@ -553,6 +714,7 @@ const updateMember = async (req, res, next) => {
         if (hasRoleUpdate) {
             targetMember.role = role;
             if (role === 'admin') {
+                targetMember.customRoleId = null;
                 if (canManageMembers === undefined) targetMember.canManageMembers = true;
                 if (canInviteMembers === undefined) targetMember.canInviteMembers = true;
             }

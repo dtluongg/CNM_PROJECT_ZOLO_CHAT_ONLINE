@@ -7,7 +7,23 @@ const GROUP_TYPES = [
   { value: 'gaming',  label: '🎮 Gaming' },
   { value: 'project', label: '📌 Dự án / Làm việc' },
   { value: 'other',   label: '🗂️ Khác' },
+  { value: 'sensitive', label: '🔐 Nhóm nhạy cảm' },
 ];
+
+const INVITE_MODE_BY_GROUP = {
+  general: 'open_invite',
+  gaming: 'open_invite',
+  study: 'approval_required',
+  project: 'approval_required',
+  other: 'approval_required',
+  sensitive: 'admin_only',
+};
+
+const INVITE_MODE_LABEL = {
+  open_invite: 'Open Invite: Người có quyền mời sẽ thêm trực tiếp',
+  approval_required: 'Approval Required: Member giới thiệu, admin/owner duyệt',
+  admin_only: 'Admin Only: Chỉ owner/admin được thêm trực tiếp',
+};
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
@@ -38,6 +54,7 @@ const CreateGroupModal = ({
 }) => {
   const avatarInputRef = useRef(null);
   const isMobile = useIsMobile();
+  const inviteMode = INVITE_MODE_BY_GROUP[groupType] || 'open_invite';
 
   const selectedFriends = friendsForGroup.filter(f => selectedFriendIds.includes(f.friendId));
 
@@ -163,6 +180,9 @@ const CreateGroupModal = ({
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
+            <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 5 }}>
+              {INVITE_MODE_LABEL[inviteMode]}
+            </div>
           </div>
 
           {/* Description */}

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { supabase } from '../config/supabase';
+import { getAccessToken, setAccessToken } from '../utils/authStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:2026/backend/api';
 
@@ -11,7 +12,7 @@ const apiClient = axios.create({
 // Request interceptor: gắn token vào mọi request
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -36,7 +37,7 @@ apiClient.interceptors.response.use(
 
         if (!refreshError && session?.access_token) {
           const newToken = session.access_token;
-          localStorage.setItem('accessToken', newToken);
+          setAccessToken(newToken);
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return apiClient(originalRequest);
         }
@@ -53,7 +54,7 @@ apiClient.interceptors.response.use(
         );
         if (res.data?.accessToken) {
           const newToken = res.data.accessToken;
-          localStorage.setItem('accessToken', newToken);
+          setAccessToken(newToken);
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return apiClient(originalRequest);
         }

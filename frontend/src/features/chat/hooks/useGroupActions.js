@@ -4,6 +4,15 @@ import messageApi from '../api/messageApi';
 import friendApi from '../../friends/api/friendApi';
 import { formatConversationTime } from '../utils/formatTime';
 
+const INVITE_MODE_BY_GROUP = {
+  general: 'open_invite',
+  gaming: 'open_invite',
+  study: 'approval_required',
+  project: 'approval_required',
+  other: 'approval_required',
+  sensitive: 'admin_only',
+};
+
 export const useGroupActions = ({
   isMobile,
   fetchConversations,
@@ -93,6 +102,7 @@ export const useGroupActions = ({
         memberIds:   selectedFriendIds,
         groupType,
         description: groupDescription,
+        inviteMode: INVITE_MODE_BY_GROUP[groupType] || 'open_invite',
       });
       const created         = res?.data?.data;
       const conversationId  = created?._id;
@@ -108,6 +118,7 @@ export const useGroupActions = ({
           name:        created.name || 'Nhóm mới',
           avatar:      created.avatar || null,
           groupType:   created.groupType || 'general',
+          inviteMode:  created.inviteMode || INVITE_MODE_BY_GROUP[created.groupType || 'general'] || 'open_invite',
           description: created.description || '',
           lastMessage: created.lastMessagePreview || 'Chưa có tin nhắn',
           time:        formatConversationTime(created.lastMessageTime || created.updatedAt || created.createdAt),

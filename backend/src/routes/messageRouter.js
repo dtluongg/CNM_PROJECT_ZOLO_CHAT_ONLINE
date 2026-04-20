@@ -20,7 +20,7 @@ const { createPoll, votePoll } = require('../controllers/pollController');
 // ════════════════════════════════════════════════════════════════
 router.get('/:conversationId/attachments', verifyToken, getAttachments);
 router.post('/:conversationId/aiSummary',  verifyToken, summarizeUnread);
-router.post('/:conversationId/poll',       verifyToken, createPoll);
+router.post('/:conversationId/poll',       verifyToken, checkCanSendInTopic, createPoll);
 router.patch('/poll/:messageId/vote',      verifyToken, votePoll);
 router.get('/:conversationId', verifyToken, getMessages);
 router.post('/:conversationId', verifyToken, checkCanSendInTopic, sendMessage);

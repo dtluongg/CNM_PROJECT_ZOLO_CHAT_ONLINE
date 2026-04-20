@@ -230,8 +230,20 @@ export default function ChatArea({
       window.alert(err?.response?.data?.message || 'Không thể bỏ ghim tin nhắn');
     }
   };
+    const myRole = myPermissions?.systemRole || conversation?.myMembership?.role || null;
+    const isGroupLockedReadOnly =
+      conversation?.type === 'group' &&
+      !!conversation?.isLocked &&
+      myRole === 'member';
+
     const canSendInActiveTopic = useMemo(() => {
-      if (!myPermissions) return true; // chưa load → cho phép tạm
+      if (isGroupLockedReadOnly) return false;
+      if (conversation?.type === 'group' && !myPermissions) {
+        // Fallback theo role cục bộ để tránh cho gõ khi quyền chưa kịp đồng bộ.
+        if (!myRole) return false;
+        return myRole === 'owner' || myRole === 'admin' || conversation?.myMembership?.canSendMessages !== false;
+      }
+      if (!myPermissions) return true;
       if (conversation?.type !== 'group') return true; // DM luôn được gửi
       if (!activeTopic) {
         // Kênh chung — check globalPermissions
@@ -243,7 +255,7 @@ export default function ChatArea({
       );
       if (!topicPerm) return true; // không có entry → cho phép
       return topicPerm.canSend !== false;
-    }, [myPermissions, activeTopic, conversation?.type]);
+    }, [myPermissions, activeTopic, conversation?.type, conversation?.myMembership?.canSendMessages, isGroupLockedReadOnly, myRole]);
 
 
   const openChannelSheet = useCallback(async () => {
@@ -718,7 +730,9 @@ export default function ChatArea({
           }}>
             <span style={{ fontSize: 18 }}>🔒</span>
             <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              Bạn không có quyền gửi tin nhắn trong kênh{activeTopic ? ` #${activeTopic.name}` : ' này'}.
+              {isGroupLockedReadOnly
+                ? 'Nhóm đang khóa. Chỉ owner/admin mới được gửi tin nhắn.'
+                : `Bạn không có quyền gửi tin nhắn trong kênh${activeTopic ? ` #${activeTopic.name}` : ' này'}.`}
             </span>
           </div>
         )

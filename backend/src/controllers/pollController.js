@@ -4,6 +4,24 @@ const Conversation = require('../models/conversationModel');
 const ConversationMember = require('../models/conversationMemberModel');
 const { getIO } = require('../socket/socketManager');
 const { notifyNewMessage } = require('../services/notificationService');
+const { getEffectiveTopicPermission } = require('../middlewares/checkTopicPermission');
+
+const requireActiveMembership = async (conversationId, userId) => {
+  const member = await ConversationMember.findOne({
+    conversationId,
+    userId,
+    leftAt: null,
+    isDeleted: { $ne: true },
+  });
+
+  if (!member) {
+    const err = new Error('Bạn không thuộc cuộc trò chuyện này');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return member;
+};
 
 /**
  * Tạo bình chọn mới
@@ -12,8 +30,22 @@ const { notifyNewMessage } = require('../services/notificationService');
 exports.createPoll = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { topic, options, multipleChoice = false } = req.body;
-    const senderId = req.user._id;
+    const { topic, options, multipleChoice = false, topicId = null } = req.body;
+    const senderId = req.user._id.toString();
+
+    const member = await requireActiveMembership(conversationId, senderId);
+
+    if (topicId) {
+      const permission = await getEffectiveTopicPermission(member, topicId);
+      if (!permission.canAccess) {
+        return res.status(403).json({ message: 'Bạn không có quyền truy cập kênh này' });
+      }
+      if (!permission.canSend) {
+        return res.status(403).json({ message: 'Bạn không có quyền gửi bình chọn trong kênh này' });
+      }
+    } else if (member.role === 'member' && member.canSendMessages === false) {
+      return res.status(403).json({ message: 'Bạn không có quyền gửi tin nhắn trong nhóm này' });
+    }
 
     if (!topic || !options || !Array.isArray(options) || options.length < 2) {
       return res.status(400).json({ message: 'Vui lòng nhập chủ đề và ít nhất 2 phương án.' });
@@ -35,7 +67,8 @@ exports.createPoll = async (req, res) => {
         options: pollOptions,
         isClosed: false,
         multipleChoice
-      }
+      },
+      topicId: topicId || null,
     });
 
     const populatedMsg = await Message.findById(newMessage._id).populate('senderId', 'displayName avatar');
@@ -105,6 +138,14 @@ exports.votePoll = async (req, res) => {
     const message = await Message.findById(messageId);
     if (!message || message.type !== 'poll') {
       return res.status(404).json({ message: 'Không tìm thấy cuộc bình chọn.' });
+    }
+
+    const member = await requireActiveMembership(message.conversationId, userId);
+    if (message.topicId) {
+      const permission = await getEffectiveTopicPermission(member, message.topicId);
+      if (!permission.canAccess) {
+        return res.status(403).json({ message: 'Bạn không có quyền truy cập kênh chứa bình chọn này' });
+      }
     }
 
     const payload = JSON.parse(JSON.stringify(message.payload));
