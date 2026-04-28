@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { View, Text, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { getAvatarColor, getInitials } from '../../../theme';
+import { useLanguage } from '../../../context/LanguageContext';
 
-const GROUP_TYPE_LABELS = {
-  study:   '📚 Học tập',
-  gaming:  '🎮 Gaming',
-  general: '💬 Chung',
-  project: '💼 Dự án',
-  other:   '✨ Khác',
-};
+const getGroupTypeLabels = (t) => ({
+  study:   t('chat.group_types.study'),
+  gaming:  t('chat.group_types.gaming'),
+  general: t('chat.group_types.general'),
+  project: t('chat.group_types.project'),
+  other:   t('chat.group_types.other'),
+});
 
 const MiniAvatar = ({ name, avatar, size = 22 }) => {
   const [imgError, setImgError] = useState(false);
@@ -34,6 +35,8 @@ const MiniAvatar = ({ name, avatar, size = 22 }) => {
 };
 
 const SystemMessageBubble = ({ msg }) => {
+  const { t } = useLanguage();
+  const GROUP_TYPE_LABELS = getGroupTypeLabels(t);
   const event = msg.payload?.event;
 
   // ── Tham gia nhóm ─────────────────────────────────────────────────────────
@@ -53,13 +56,13 @@ const SystemMessageBubble = ({ msg }) => {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <MiniAvatar name={targetName} avatar={targetAvatar} />
             <Text style={{ fontSize: 13, fontWeight: '700', color: '#5865f2' }}>
-              {targetName} đã tham gia nhóm!
+              {t('system.member_join', { name: targetName })}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
             <Feather name="user-plus" size={10} color="#888" />
             <Text style={{ fontSize: 11, color: '#888' }}>
-              Được mời bởi <Text style={{ fontWeight: '700' }}>{actorName}</Text>
+              {t('system.invited_by', { name: actorName })}
             </Text>
           </View>
           <Text style={{ fontSize: 10, color: '#888', opacity: 0.7 }}>{msg.time}</Text>
@@ -81,7 +84,7 @@ const SystemMessageBubble = ({ msg }) => {
         }}>
           <MiniAvatar name={actorName} avatar={actorAvatar} />
           <Feather name="log-out" size={12} color="#888" />
-          <Text style={{ fontSize: 12, color: '#666' }}>{actorName} đã rời khỏi nhóm</Text>
+          <Text style={{ fontSize: 12, color: '#666' }}>{t('system.member_leave', { name: actorName })}</Text>
           <Text style={{ fontSize: 10, color: '#888', opacity: 0.6 }}>{msg.time}</Text>
         </View>
       </View>
@@ -104,11 +107,11 @@ const SystemMessageBubble = ({ msg }) => {
           <Feather name="user-x" size={12} color="#ed4245" />
           <View style={{ flexDirection: 'column' }}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: '#ed4245' }}>
-              {targetName} đã bị xóa khỏi nhóm
+              {t('system.member_kick', { name: targetName })}
             </Text>
             {reason && (
               <Text style={{ fontSize: 10, color: '#ed4245', opacity: 0.75 }}>
-                Lý do: {reason}
+                {t('system.kick_reason', { reason })}
               </Text>
             )}
           </View>
@@ -137,9 +140,12 @@ const SystemMessageBubble = ({ msg }) => {
           <Feather name="shield" size={12} color={isAdminRole ? '#f0b132' : '#888'} />
           <View style={{ flexDirection: 'column' }}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: isAdminRole ? '#f0b132' : '#666' }}>
-              {targetName} được đặt làm {isAdminRole ? 'Quản trị viên' : 'Thành viên'}
+              {t('system.role_updated', { 
+                name: targetName, 
+                role: isAdminRole ? t('system.role_admin') : t('system.role_member') 
+              })}
             </Text>
-            <Text style={{ fontSize: 10, color: '#888' }}>bởi {actorName}</Text>
+            <Text style={{ fontSize: 10, color: '#888' }}>{t('system.role_updated_by', { name: actorName })}</Text>
           </View>
           <Text style={{ fontSize: 10, color: '#888', opacity: 0.6 }}>{msg.time}</Text>
         </View>
@@ -163,13 +169,13 @@ const SystemMessageBubble = ({ msg }) => {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <MiniAvatar name={targetName} avatar={targetAvatar} />
             <Text style={{ fontSize: 13, fontWeight: '700', color: '#f0b132' }}>
-              {targetName} là chủ nhóm mới!
+              {t('system.owner_transferred', { name: targetName })}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
             <Feather name="award" size={10} color="#888" />
             <Text style={{ fontSize: 11, color: '#888' }}>
-              Chuyển từ <Text style={{ fontWeight: '700' }}>{actorName}</Text>
+              {t('system.transferred_from', { name: actorName })}
             </Text>
           </View>
           <Text style={{ fontSize: 10, color: '#888', opacity: 0.7 }}>{msg.time}</Text>
@@ -190,7 +196,7 @@ const SystemMessageBubble = ({ msg }) => {
         <View key="name" style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <Feather name="edit-3" size={10} color="#666" />
           <Text style={{ fontSize: 11, color: '#555' }}>
-            Tên nhóm: <Text style={{ fontWeight: '700' }}>{changes.name.newValue}</Text>
+            {t('system.field_name')}: <Text style={{ fontWeight: '700' }}>{changes.name.newValue}</Text>
           </Text>
         </View>
       );
@@ -199,7 +205,7 @@ const SystemMessageBubble = ({ msg }) => {
       changeRows.push(
         <View key="avatar" style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <Feather name="image" size={10} color="#666" />
-          <Text style={{ fontSize: 11, color: '#555' }}>Đã cập nhật ảnh nhóm</Text>
+          <Text style={{ fontSize: 11, color: '#555' }}>{t('system.field_avatar')}</Text>
           {changes.avatar.newValue && (
             <Image
               source={{ uri: changes.avatar.newValue }}
@@ -214,7 +220,7 @@ const SystemMessageBubble = ({ msg }) => {
         <View key="desc" style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <Feather name="info" size={10} color="#666" />
           <Text style={{ fontSize: 11, color: '#555' }}>
-            Mô tả: <Text style={{ fontStyle: 'italic' }}>{changes.description.newValue || '(trống)'}</Text>
+            {t('system.field_description')}: <Text style={{ fontStyle: 'italic' }}>{changes.description.newValue || t('system.field_description_empty')}</Text>
           </Text>
         </View>
       );
@@ -224,7 +230,7 @@ const SystemMessageBubble = ({ msg }) => {
         <View key="type" style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <Feather name="tag" size={10} color="#666" />
           <Text style={{ fontSize: 11, color: '#555' }}>
-            Loại nhóm: <Text style={{ fontWeight: '700' }}>
+            {t('system.field_group_type')}: <Text style={{ fontWeight: '700' }}>
               {GROUP_TYPE_LABELS[changes.groupType.newValue] || changes.groupType.newValue}
             </Text>
           </Text>
@@ -242,7 +248,7 @@ const SystemMessageBubble = ({ msg }) => {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' }}>
             <MiniAvatar name={actorName} avatar={actorAvatar} />
             <Text style={{ fontSize: 12, fontWeight: '600', color: '#5865f2', flex: 1 }}>
-              {actorName} đã cập nhật nhóm
+              {t('system.info_updated', { name: actorName })}
             </Text>
             <Text style={{ fontSize: 10, color: '#888', opacity: 0.7 }}>{msg.time}</Text>
           </View>
@@ -251,6 +257,44 @@ const SystemMessageBubble = ({ msg }) => {
               {changeRows}
             </View>
           )}
+        </View>
+      </View>
+    );
+  }
+
+  // ── Nhắc hẹn ─────────────────────────────────────────────────────────────
+  if (event === 'reminder_triggered') {
+    const reminderContent = msg.payload?.reminderContent || msg.content || t('chat.reminder_triggered_default');
+    const actorName    = msg.senderName || msg.payload?.actorName || t('common.someone');
+    const actorAvatar  = msg.avatar     || msg.payload?.actorAvatar || null;
+
+    const convType      = msg.payload?.convType || 'dm';
+    const targetName    = msg.payload?.targetName || msg.payload?.convName || 'Zolo';
+    const targetAvatar  = msg.payload?.targetAvatar || msg.payload?.convAvatar || null;
+
+    return (
+      <View style={{ alignItems: 'center', marginVertical: 12, marginHorizontal: 16 }}>
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: 12,
+          backgroundColor: '#fff', borderWidth: 1, borderColor: '#fbbf24',
+          borderRadius: 40, paddingVertical: 6, paddingHorizontal: 14,
+          elevation: 2, shadowColor: '#fbbf24', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4,
+        }}>
+          {/* Avatar Người đặt nhắc hẹn */}
+          <MiniAvatar name={actorName} avatar={actorAvatar} />
+          
+          <View style={{ flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Feather name="bell" size={13} color="#f97316" />
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#f97316' }}>
+                {t('system.reminder_triggered', { content: reminderContent })}
+              </Text>
+            </View>
+            <Text style={{ fontSize: 10, color: '#9a3412', opacity: 0.7 }}>{msg.time}</Text>
+          </View>
+
+          {/* Avatar Đối phương (DM) hoặc Avatar Nhóm (Group) */}
+          <MiniAvatar name={targetName} avatar={targetAvatar} />
         </View>
       </View>
     );
@@ -272,11 +316,13 @@ const SystemMessageBubble = ({ msg }) => {
   if (status === 'ended') {
     const dur = msg.payload?.duration || 0;
     const m = Math.floor(dur / 60), s = dur % 60;
-    label = `Cuộc gọi ${isVideo ? 'video' : 'thoại'} · ${m > 0 ? `${m} phút ${s} giây` : `${s} giây`}`;
+    const typeLabel = isVideo ? t('system.call_video') : t('system.call_voice');
+    const durLabel = m > 0 ? t('system.call_duration', { m, s }) : t('system.call_duration_sec', { s });
+    label = `${typeLabel} · ${durLabel}`;
   } else if (isMissed) {
-    label = 'Cuộc gọi nhỡ';
+    label = t('system.call_missed');
   } else if (isRejected) {
-    label = 'Cuộc gọi bị từ chối';
+    label = t('system.call_rejected');
   } else {
     label = msg.content;
   }

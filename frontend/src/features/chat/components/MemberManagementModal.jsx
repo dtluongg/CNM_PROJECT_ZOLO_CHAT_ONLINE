@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import conversationApi from '../api/conversationApi';
 import apiClient from '../../../services/apiClient';
+import { useLanguage } from '../../../context/LanguageContext';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const COLORS = ['#5865f2','#eb459e','#ed4245','#faa61a','#57f287','#00b4d8','#9b59b6','#e67e22'];
@@ -23,16 +24,16 @@ const getRoleId = (customRoleId) => {
     return customRoleId.toString();
 };
 
-const ROLE_CFG = {
-    owner:  { label: 'Chủ nhóm',      icon: Crown,  color: '#faa61a', bg: '#faa61a22' },
-    admin:  { label: 'Quản trị viên',  icon: Shield, color: '#5865f2', bg: '#5865f222' },
-    member: { label: 'Thành viên',     icon: User,   color: 'var(--text-muted)', bg: 'var(--bg-hover)' },
-};
+const ROLE_CFG = (t) => ({
+    owner:  { label: t('member_management.roles.owner'),      icon: Crown,  color: '#faa61a', bg: '#faa61a22' },
+    admin:  { label: t('member_management.roles.admin'),  icon: Shield, color: '#5865f2', bg: '#5865f222' },
+    member: { label: t('member_management.roles.member'),     icon: User,   color: 'var(--text-muted)', bg: 'var(--bg-hover)' },
+});
 
-const PERMISSIONS_META = [
-    { key: 'canSendMessages',  label: 'Gửi tin nhắn được tất cả các kênh',      desc: 'Cho phép gửi tin nhắn trong nhóm' },
-    { key: 'canInviteMembers', label: 'Mời thành viên',     desc: 'Cho phép mời người khác vào nhóm' },
-    { key: 'canManageMembers', label: 'Quản lý thành viên', desc: 'Cho phép chỉnh sửa quyền của thành viên' },
+const PERMISSIONS_META = (t) => [
+    { key: 'canSendMessages',  label: t('member_management.permissions.canSendMessages'),      desc: t('member_management.permissions.canSendMessages_desc', { defaultValue: 'Cho phép gửi tin nhắn trong nhóm' }) },
+    { key: 'canInviteMembers', label: t('member_management.permissions.canInviteMembers'),     desc: t('member_management.permissions.canInviteMembers_desc', { defaultValue: 'Cho phép mời người khác vào nhóm' }) },
+    { key: 'canManageMembers', label: t('member_management.permissions.canManageMembers'), desc: t('member_management.permissions.canManageMembers_desc', { defaultValue: 'Cho phép chỉnh sửa quyền của thành viên' }) },
 ];
 
 const PRESET_COLORS = ['#5865f2','#eb459e','#ed4245','#faa61a','#57f287','#00b4d8','#9b59b6','#e67e22','#ffffff','#99aab5'];
@@ -74,6 +75,7 @@ function Toggle({ checked, onChange, disabled }) {
     );
 }
 function JoinRequestsTab({ conversation, onApproved, canReview }) {
+    const { t } = useLanguage();
     const [requests, setRequests] = useState([]);
     const [loading, setLoading]   = useState(false);
     const [busy, setBusy]         = useState('');
@@ -100,13 +102,13 @@ function JoinRequestsTab({ conversation, onApproved, canReview }) {
             setRequests(prev => prev.filter(r => r._id !== requestId));
             if (action === 'approve') onApproved?.();
         } catch (err) {
-            window.alert(err.response?.data?.message || 'Không thể thực hiện');
+            window.alert(err.response?.data?.message || t('common.error'));
         } finally { setBusy(''); }
     };
 
     if (loading) return (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-            Đang tải...
+            {t('common.loading')}
         </div>
     );
 
@@ -117,13 +119,13 @@ function JoinRequestsTab({ conversation, onApproved, canReview }) {
                 flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {requests.length} yêu cầu đang chờ duyệt
+                    {t('member_management.requests.pending_count', { count: requests.length })}
                 </span>
                 <button onClick={load} style={{
                     fontSize: 11, color: 'var(--accent)', background: 'none',
                     border: 'none', cursor: 'pointer', fontWeight: 600,
                 }}>
-                    🔄 Làm mới
+                    🔄 {t('member_management.requests.refresh')}
                 </button>
             </div>
 
@@ -134,7 +136,7 @@ function JoinRequestsTab({ conversation, onApproved, canReview }) {
                         color: 'var(--text-muted)', fontSize: 13,
                     }}>
                         <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>
-                        Không có yêu cầu nào đang chờ duyệt
+                        {t('member_management.requests.no_requests')}
                     </div>
                 ) : (
                     requests.map(req => (
@@ -185,7 +187,7 @@ function JoinRequestsTab({ conversation, onApproved, canReview }) {
                                                 opacity: busy === `approve-${req._id}` ? 0.6 : 1,
                                             }}
                                         >
-                                            {busy === `approve-${req._id}` ? '...' : '✓ Duyệt'}
+                                            {busy === `approve-${req._id}` ? '...' : `✓ ${t('member_management.requests.approve')}`}
                                         </button>
                                         <button
                                             onClick={() => handleReview(req._id, 'reject')}
@@ -199,12 +201,12 @@ function JoinRequestsTab({ conversation, onApproved, canReview }) {
                                                 opacity: busy === `reject-${req._id}` ? 0.6 : 1,
                                             }}
                                         >
-                                            {busy === `reject-${req._id}` ? '...' : '✕ Từ chối'}
+                                            {busy === `reject-${req._id}` ? '...' : `✕ ${t('member_management.requests.reject')}`}
                                         </button>
                                     </>
                                 ) : (
                                     <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                                        Chỉ owner/admin có thể duyệt
+                                        {t('member_management.requests.only_admin_can_review')}
                                     </div>
                                 )}
                             </div>
@@ -240,6 +242,7 @@ const roleApi = {
 //  TAB 1: THÀNH VIÊN
 // ─────────────────────────────────────────────────────────────────────────────
 function MembersTab({ conversation, currentUserId, customRoles, members, onMembersReload, topics }) {
+    const { t } = useLanguage();
     const [loading, setLoading]         = useState(false);
     const [search, setSearch]           = useState('');
     const [expandedId, setExpandedId]   = useState(null);
@@ -312,14 +315,14 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
             setPendingEdit(prev => { const n = { ...prev }; delete n[id]; return n; });
             await onMembersReload();
         } catch (err) {
-            window.alert(err.response?.data?.message || 'Không thể lưu thay đổi');
+            window.alert(err.response?.data?.message || t('member_management.roles.save_error', { defaultValue: 'Không thể lưu thay đổi' }));
         } finally { setBusy(''); }
     };
 
     // ── Kick ──
     const handleKick = async (m) => {
         const id = (m.user?._id || '').toString();
-        if (!window.confirm(`Xóa ${m.user?.displayName || 'thành viên'} khỏi nhóm?`)) return;
+        if (!window.confirm(t('member_management.members.remove_confirm', { name: m.user?.displayName || 'thành viên' }))) return;
         setBusy(`kick-${id}`);
         try {
             await conversationApi.kickConversationMember(conversation.id, id, kickReason.trim() || null);
@@ -327,7 +330,7 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
             setExpandedId(null);
             await onMembersReload();
         } catch (err) {
-            window.alert(err.response?.data?.message || 'Không thể xóa thành viên');
+            window.alert(err.response?.data?.message || t('member_management.members.kick_error', { defaultValue: 'Không thể xóa thành viên' }));
         } finally { setBusy(''); }
     };
 
@@ -336,7 +339,8 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
         const isSelf     = id === currentUserId;
         const isExpanded = expandedId === id;
         const ed         = getEdit(m);
-        const rc         = ROLE_CFG[m.role] || ROLE_CFG.member;
+        const roles_cfg  = ROLE_CFG(t);
+        const rc         = roles_cfg[m.role] || roles_cfg.member;
         const RoleIcon   = rc.icon;
         const editable   = canEditMember(m);
         const isBusy     = busy.includes(id);
@@ -361,7 +365,7 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         }}>
                             {m.user?.displayName || '?'}
-                            {isSelf && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6 }}>(bạn)</span>}
+                            {isSelf && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6 }}>({t('member_management.members.you')})</span>}
                         </div>
 
                         {/* Badge row */}
@@ -398,7 +402,7 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                                     fontSize: 10, color: '#ed4245',
                                     background: '#ed424515', borderRadius: 8, padding: '1px 6px',
                                 }}>
-                                    Cấm gửi
+                                    {t('member_management.members.banned_send')}
                                 </span>
                             )}
                         </div>
@@ -423,17 +427,17 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                                 <div style={{
                                     fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
                                     textTransform: 'uppercase', marginBottom: 6,
-                                }}>Vai trò hệ thống</div>
+                                }}>{t('member_management.roles.system_role_label')}</div>
                                 <div style={{ display: 'flex', gap: 8 }}>
                                     {['admin', 'member'].map(r => (
                                         <button key={r} onClick={() => setEdit(m, 'role', r)} style={{
                                             padding: '5px 14px', borderRadius: 8, fontSize: 12,
                                             fontWeight: 600, cursor: 'pointer',
-                                            border: `1.5px solid ${ed.role === r ? ROLE_CFG[r].color : 'var(--border)'}`,
-                                            background: ed.role === r ? ROLE_CFG[r].bg : 'var(--bg-secondary)',
-                                            color: ed.role === r ? ROLE_CFG[r].color : 'var(--text-muted)',
+                                            border: `1.5px solid ${ed.role === r ? ROLE_CFG(t)[r].color : 'var(--border)'}`,
+                                            background: ed.role === r ? ROLE_CFG(t)[r].bg : 'var(--bg-secondary)',
+                                            color: ed.role === r ? ROLE_CFG(t)[r].color : 'var(--text-muted)',
                                         }}>
-                                            {ROLE_CFG[r].label}
+                                            {ROLE_CFG(t)[r].label}
                                         </button>
                                     ))}
                                 </div>
@@ -445,7 +449,7 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                             <div style={{
                                 fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
                                 textTransform: 'uppercase', marginBottom: 6,
-                            }}>Custom Role</div>
+                            }}>{t('member_management.roles.custom_role')}</div>
                             <select
                                 value={ed.customRoleId || ''}
                                 onChange={e => setEdit(m, 'customRoleId', e.target.value || null)}
@@ -457,7 +461,7 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                                     opacity: ed.role !== 'member' ? 0.6 : 1,
                                 }}
                             >
-                                <option value=''>— Không có (mặc định) —</option>
+                                <option value=''>{t('member_management.roles.no_custom_role')}</option>
                                 {customRoles.map(r => (
                                     <option key={r._id} value={r._id.toString()}>{r.name}</option>
                                 ))}
@@ -483,7 +487,7 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                                     cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
                                 }}>
                                     <Save size={12} />
-                                    {busy === `save-${id}` ? 'Đang lưu...' : 'Lưu thay đổi'}
+                                    {busy === `save-${id}` ? t('member_management.roles.saving') : t('member_management.roles.save_changes')}
                                 </button>
                             )}
                             <button onClick={() => handleKick(m)} disabled={isBusy} style={{
@@ -492,12 +496,12 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                                 border: '1px solid #ed424540', borderRadius: 8, fontSize: 12,
                                 fontWeight: 600, cursor: isBusy ? 'not-allowed' : 'pointer',
                             }}>
-                                <UserX size={12} /> Xóa khỏi nhóm
+                                <UserX size={12} /> {t('member_management.members.remove_btn')}
                             </button>
                         </div>
                         <input
                             value={kickReason} onChange={e => setKickReason(e.target.value)}
-                            placeholder="Lý do xóa (tùy chọn)..."
+                            placeholder={t('member_management.members.kick_reason_placeholder')}
                             style={{
                                 width: '100%', padding: '6px 10px', borderRadius: 8, fontSize: 12,
                                 border: '1px solid var(--border)', background: 'var(--bg-secondary)',
@@ -527,7 +531,7 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
             <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
                 <input
                     value={search} onChange={e => setSearch(e.target.value)}
-                    placeholder="Tìm thành viên..."
+                    placeholder={t('member_management.members.search_placeholder')}
                     style={{
                         width: '100%', padding: '8px 12px', borderRadius: 8,
                         border: '1px solid var(--border)', background: 'var(--bg-primary)',
@@ -538,25 +542,25 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
             <div style={{ flex: 1, overflowY: 'auto' }}>
                 {members.length === 0 ? (
                     <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                        Đang tải...
+                        {t('common.loading')}
                     </div>
                 ) : (
                     <>
                         {byRole('owner').length > 0 && <>
-                            <SectionLabel label="Chủ nhóm" count={byRole('owner').length} />
+                            <SectionLabel label={t('member_management.roles.owner')} count={byRole('owner').length} />
                             {byRole('owner').map(renderMember)}
                         </>}
                         {byRole('admin').length > 0 && <>
-                            <SectionLabel label="Quản trị viên" count={byRole('admin').length} />
+                            <SectionLabel label={t('member_management.roles.admin')} count={byRole('admin').length} />
                             {byRole('admin').map(renderMember)}
                         </>}
                         {byRole('member').length > 0 && <>
-                            <SectionLabel label="Thành viên" count={byRole('member').length} />
+                            <SectionLabel label={t('member_management.roles.member')} count={byRole('member').length} />
                             {byRole('member').map(renderMember)}
                         </>}
                         {filtered.length === 0 && members.length > 0 && (
                             <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                                Không tìm thấy
+                                {t('member_management.members.no_results')}
                             </div>
                         )}
                     </>
@@ -570,6 +574,7 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
 //  TAB 2: ROLES
 // ─────────────────────────────────────────────────────────────────────────────
 function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, members = [] }) {
+    const { t } = useLanguage();
     const [expandedId, setExpandedId] = useState(null);
     const [creating, setCreating]     = useState(false);
     const [busy, setBusy]             = useState('');
@@ -608,7 +613,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
         members.filter(m => getRoleId(m.customRoleId) === roleId.toString());
 
     const handleCreate = async () => {
-        if (!newRole.name.trim()) { window.alert('Nhập tên role'); return; }
+        if (!newRole.name.trim()) { window.alert(t('member_management.roles.enter_name_error', { defaultValue: 'Nhập tên role' })); return; }
         setBusy('create');
         try {
             await roleApi.create(conversation.id, newRole);
@@ -620,7 +625,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
             });
             onRefresh();
         } catch (err) {
-            window.alert(err.response?.data?.message || 'Không thể tạo role');
+            window.alert(err.response?.data?.message || t('member_management.roles.create_error', { defaultValue: 'Không thể tạo role' }));
         } finally { setBusy(''); }
     };
 
@@ -633,18 +638,18 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
             setExpandedId(null);
             onRefresh();
         } catch (err) {
-            window.alert(err.response?.data?.message || 'Không thể cập nhật role');
+            window.alert(err.response?.data?.message || t('member_management.roles.update_error', { defaultValue: 'Không thể cập nhật role' }));
         } finally { setBusy(''); }
     };
 
     const handleDelete = async (role) => {
-        if (!window.confirm(`Xóa role "${role.name}"? Tất cả member đang dùng role này sẽ bị gỡ.`)) return;
+        if (!window.confirm(t('member_management.roles.delete_role_confirm', { name: role.name }))) return;
         setBusy(`delete-${role._id}`);
         try {
             await roleApi.delete(conversation.id, role._id);
             onRefresh();
         } catch (err) {
-            window.alert(err.response?.data?.message || 'Không thể xóa role');
+            window.alert(err.response?.data?.message || t('member_management.roles.delete_error', { defaultValue: 'Không thể xóa role' }));
         } finally { setBusy(''); }
     };
 
@@ -667,15 +672,13 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                 <div style={{
                     fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
                     textTransform: 'uppercase', marginBottom: 4,
-                }}>Kênh được truy cập</div>
+                }}>{t('member_management.roles.allowed_channels')}</div>
                 <div style={{
                     fontSize: 11, color: 'var(--text-muted)', marginBottom: 6,
                     padding: '6px 8px', background: 'var(--bg-primary)',
                     borderRadius: 6, lineHeight: 1.5,
                 }}>
-                    💡 <strong>Xem:</strong> tick = được vào kênh, bỏ tick = bị chặn<br/>
-                    💡 <strong>Gửi:</strong> tick = được gửi tin, bỏ tick = chỉ đọc<br/>
-                    💡 Để trống tất cả Xem = được xem mọi kênh, nhưng phải tick Gửi mới gửi được
+                    {t('member_management.roles.allowed_channels_hint', { defaultValue: '💡 Xem: tick = được vào kênh, bỏ tick = bị chặn\n💡 Gửi: tick = được gửi tin, bỏ tick = chỉ đọc\n💡 Để trống tất cả Xem = được xem mọi kênh, nhưng phải tick Gửi mới gửi được' })}
                 </div>
                 <div style={{ display: 'grid', gap: 4, marginBottom: 12 }}>
                     {[...textTopics, ...voiceTopics].map(t => {
@@ -710,7 +713,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                     color: hasSend ? '#57f287' : hasAccess ? '#5865f2' : '#ed4245',
                                     fontWeight: 600, marginRight: 4,
                                 }}>
-                                    {hasSend ? '✓ Gửi' : hasAccess ? '👁 Xem' : '✕ Chặn'}
+                                    {hasSend ? t('member_management.roles.can_send') : hasAccess ? t('member_management.roles.can_view') : t('member_management.roles.is_blocked')}
                                 </span>
 
                                 <label style={{
@@ -738,7 +741,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                               })()
                                         }
                                     />
-                                    Xem
+                                    {t('member_management.roles.view')}
                                 </label>
                                 <label style={{
                                     fontSize: 11, color: 'var(--text-muted)',
@@ -758,7 +761,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                             : toggleTopic(roleId, 'sendableTopicIds', tid)
                                         }
                                     />
-                                    Gửi
+                                    {t('member_management.roles.send')}
                                 </label>
                             </div>
                         );
@@ -771,7 +774,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
     // Mini avatar stack cho member đang dùng role
     const renderMemberAvatars = (roleMembers) => {
         if (roleMembers.length === 0) return (
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Chưa có thành viên</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('member_management.roles.no_members_hint', { defaultValue: 'Chưa có thành viên' })}</span>
         );
         return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
@@ -805,7 +808,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     {roleMembers.length === 1
                         ? roleMembers[0]?.user?.displayName || '?'
-                        : `${roleMembers[0]?.user?.displayName || '?'} +${roleMembers.length - 1} khác`
+                        : t('member_management.roles.members_count_summary', { name: roleMembers[0]?.user?.displayName || '?', count: roleMembers.length - 1, defaultValue: `${roleMembers[0]?.user?.displayName || '?'} +${roleMembers.length - 1} khác` })
                     }
                 </span>
             </div>
@@ -818,7 +821,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                 padding: '10px 16px', borderBottom: '1px solid var(--border)',
                 flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{roles.length} / 10 roles</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('member_management.roles.count_limit', { count: roles.length })}</span>
                 <button
                     onClick={() => setCreating(true)}
                     disabled={roles.length >= 10 || busy === 'create'}
@@ -829,7 +832,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                         cursor: 'pointer', opacity: roles.length >= 10 ? 0.5 : 1,
                     }}
                 >
-                    <Plus size={13} /> Tạo role
+                    <Plus size={13} /> {t('member_management.roles.create_btn')}
                 </button>
             </div>
 
@@ -841,12 +844,12 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                         borderRadius: 10, padding: 14, border: '1px solid var(--accent)',
                     }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
-                            Tạo role mới
+                            {t('member_management.roles.create_role')}
                         </div>
                         <input
                             value={newRole.name}
                             onChange={e => setNewRole(p => ({ ...p, name: e.target.value }))}
-                            placeholder="Tên role..."
+                            placeholder={t('member_management.roles.placeholder_name')}
                             style={{
                                 width: '100%', padding: '8px 10px', borderRadius: 8, fontSize: 13,
                                 border: '1px solid var(--border)', background: 'var(--bg-secondary)',
@@ -855,7 +858,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                             }}
                         />
                         <div style={{ marginBottom: 10 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Màu</div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>{t('member_management.roles.color')}</div>
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                 {PRESET_COLORS.map(c => (
                                     <div key={c} onClick={() => setNewRole(p => ({ ...p, color: c }))}
@@ -873,7 +876,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                             <div style={{
                                 fontSize: 11, fontWeight: 600, color: 'var(--text-muted)',
                                 marginBottom: 6, textTransform: 'uppercase',
-                            }}>Quyền hạn</div>
+                            }}>{t('member_management.roles.permissions')}</div>
                             {PERMISSIONS_META.map(p => (
                                 <label key={p.key} style={{
                                     display: 'flex', alignItems: 'center',
@@ -885,7 +888,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                             ...prev, permissions: { ...prev.permissions, [p.key]: v },
                                         }))}
                                     />
-                                    <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{p.label}</span>
+                                    <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{p(t).find(x => x.key === p.key)?.label || p.key}</span>
                                 </label>
                             ))}
                         </div>
@@ -895,13 +898,13 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                 padding: '7px 16px', background: 'var(--accent)', color: '#fff',
                                 border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
                             }}>
-                                {busy === 'create' ? 'Đang tạo...' : 'Tạo'}
+                                {busy === 'create' ? t('member_management.roles.creating') : t('common.create', { defaultValue: 'Tạo' })}
                             </button>
                             <button onClick={() => setCreating(false)} style={{
                                 padding: '7px 14px', background: 'var(--bg-hover)',
                                 color: 'var(--text-primary)', border: 'none', borderRadius: 8,
                                 fontSize: 12, cursor: 'pointer',
-                            }}>Hủy</button>
+                            }}>{t('common.cancel')}</button>
                         </div>
                     </div>
                 )}
@@ -949,7 +952,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                     {/* Name */}
                                     <div style={{ marginBottom: 10 }}>
                                         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>
-                                            Tên role
+                                            {t('member_management.roles.role_name')}
                                         </div>
                                         <input value={ed.name}
                                             onChange={e => setED(role._id, 'name', e.target.value)}
@@ -964,7 +967,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                     {/* Color */}
                                     <div style={{ marginBottom: 12 }}>
                                         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
-                                            Màu
+                                            {t('member_management.roles.color')}
                                         </div>
                                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                             {PRESET_COLORS.map(c => (
@@ -985,7 +988,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                         <div style={{
                                             fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
                                             textTransform: 'uppercase', marginBottom: 8,
-                                        }}>Quyền hạn</div>
+                                        }}>{t('member_management.roles.permissions')}</div>
                                         {PERMISSIONS_META.map(p => (
                                             <label key={p.key} style={{
                                                 display: 'flex', alignItems: 'center',
@@ -997,10 +1000,10 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                                 />
                                                 <div>
                                                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-                                                        {p.label}
+                                                        {PERMISSIONS_META(t).find(x => x.key === p.key)?.label || p.key}
                                                     </div>
                                                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                                        {PERMISSIONS_META.find(x => x.key === p.key)?.desc}
+                                                        {PERMISSIONS_META(t).find(x => x.key === p.key)?.desc}
                                                     </div>
                                                 </div>
                                             </label>
@@ -1016,7 +1019,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                             <div style={{
                                                 fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
                                                 textTransform: 'uppercase', marginBottom: 8,
-                                            }}>Thành viên đang dùng role này</div>
+                                            }}>{t('member_management.roles.members_using_this')}</div>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                                 {roleMembers.map(m => (
                                                     <div key={(m.user?._id || '').toString()} style={{
@@ -1036,7 +1039,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                                             fontSize: 10, marginLeft: 'auto',
                                                             color: 'var(--text-muted)',
                                                         }}>
-                                                            {ROLE_CFG[m.role]?.label || m.role}
+                                                            {ROLE_CFG(t)[m.role]?.label || m.role}
                                                         </span>
                                                     </div>
                                                 ))}
@@ -1051,7 +1054,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                             border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700,
                                             cursor: 'pointer', opacity: isBusy ? 0.6 : 1,
                                         }}>
-                                            {busy === `update-${role._id}` ? 'Đang lưu...' : 'Lưu'}
+                                            {busy === `update-${role._id}` ? t('member_management.roles.saving') : t('common.save')}
                                         </button>
                                         <button onClick={() => handleDelete(role)} disabled={isBusy} style={{
                                             display: 'flex', alignItems: 'center', gap: 4,
@@ -1059,7 +1062,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                             border: '1px solid #ed424440', borderRadius: 8,
                                             fontSize: 12, fontWeight: 600, cursor: 'pointer',
                                         }}>
-                                            <Trash2 size={12} /> Xóa role
+                                            <Trash2 size={12} /> {t('member_management.roles.delete_role')}
                                         </button>
                                     </div>
                                 </div>
@@ -1070,12 +1073,12 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
 
                 {roles.length === 0 && !creating && (
                     <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                        Chưa có custom role nào.<br />
+                        {t('member_management.roles.no_custom_roles')}<br />
                         <button onClick={() => setCreating(true)} style={{
                             marginTop: 10, background: 'none', border: 'none',
                             color: 'var(--accent)', cursor: 'pointer', fontSize: 13, fontWeight: 600,
                         }}>
-                            Tạo role đầu tiên
+                            {t('member_management.roles.create_first_role')}
                         </button>
                     </div>
                 )}
@@ -1088,6 +1091,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
 //  MAIN MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function MemberManagementModal({ visible, onClose, conversation, currentUserId, onRefresh }) {
+    const { t } = useLanguage();
     const [activeTab, setActiveTab]       = useState('members');
     const [roles, setRoles]               = useState([]);
     const [topics, setTopics]             = useState([]);
@@ -1149,9 +1153,9 @@ export default function MemberManagementModal({ visible, onClose, conversation, 
     if (!visible) return null;
 
     const tabs = [
-        { key: 'members', label: 'Thành viên' },
-        ...(isOwner ? [{ key: 'roles', label: 'Roles' }] : []),
-        { key: 'requests', label: 'Duyệt' },
+        { key: 'members', label: t('member_management.tabs.members') },
+        ...(isOwner ? [{ key: 'roles', label: t('member_management.tabs.roles') }] : []),
+        { key: 'requests', label: t('member_management.tabs.requests') },
     ];
 
     return (
@@ -1175,7 +1179,7 @@ export default function MemberManagementModal({ visible, onClose, conversation, 
                 }}>
                     <div>
                         <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>
-                            Quản lý nhóm
+                            {t('member_management.title')}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{conversation?.name}</div>
                     </div>

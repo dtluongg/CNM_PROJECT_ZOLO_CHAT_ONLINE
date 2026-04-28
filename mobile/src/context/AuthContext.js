@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useContext, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setLogoutCallback } from '../services/apiClient';
 import { supabase } from '../config/supabase';
+import { API_BASE_URL } from '../config/env';
 
 export const AuthContext = createContext();
 
@@ -11,6 +12,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('[AuthContext] INITIALIZING WITH API_BASE_URL:', API_BASE_URL);
     const timeout = setTimeout(() => {
       console.warn('[AuthContext] restoreSession timeout');
       setLoading(false);
@@ -28,6 +30,7 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (e) {
         console.error('[AuthContext] restoreSession error:', e);
+        await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'currentUser']);
       } finally {
         clearTimeout(timeout);
         setLoading(false);

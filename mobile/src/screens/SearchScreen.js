@@ -15,6 +15,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import apiClient from '../services/apiClient';
 import { THEME, STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
 import { usePresence } from '../context/PresenceContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const Avatar = ({ name, avatar, size = 50 }) => {
   const bg = getAvatarColor(name);
@@ -43,6 +44,7 @@ const Avatar = ({ name, avatar, size = 50 }) => {
 
 export default function SearchScreen({ navigation }) {
   const { isUserOnline, getPresenceStatus } = usePresence();
+  const { t } = useLanguage();
 
   const [mode, setMode] = useState('text'); // 'text' | 'camera'
   const [query, setQuery] = useState('');
@@ -84,9 +86,9 @@ export default function SearchScreen({ navigation }) {
       const res = await apiClient.get(`/auth/users/search?q=${encodeURIComponent(q.trim())}`);
       const users = res.data.users || [];
       setResults(users);
-      setError(users.length === 0 ? 'Không tìm thấy người dùng nào.' : '');
+      setError(users.length === 0 ? t('search.no_users') : '');
     } catch (e) {
-      setError(e.response?.data?.message || 'Lỗi kết nối. Vui lòng thử lại!');
+      setError(e.response?.data?.message || t('search.connection_error'));
       setResults([]);
     } finally {
       setLoading(false);
@@ -110,8 +112,8 @@ export default function SearchScreen({ navigation }) {
 
       const match = data.match(/\/user\/([a-f0-9]{24})/i);
       if (!match) {
-        Alert.alert('Mã QR không hợp lệ', 'Đây không phải mã hồ sơ người dùng.', [
-          { text: 'Quét lại', onPress: () => setScanned(false) },
+        Alert.alert(t('search.qr_invalid_title'), t('search.qr_invalid_desc'), [
+          { text: t('friends.retry_scan'), onPress: () => setScanned(false) },
         ]);
         return;
       }
@@ -128,8 +130,8 @@ export default function SearchScreen({ navigation }) {
 
         navigation.navigate('UserProfile', { user });
       } catch {
-        Alert.alert('Không tìm thấy', 'Người dùng không tồn tại hoặc đã bị xóa.', [
-          { text: 'Quét lại', onPress: () => setScanned(false) },
+        Alert.alert(t('friends.user_not_found'), t('friends.user_not_found_desc'), [
+          { text: t('friends.retry_scan'), onPress: () => setScanned(false) },
         ]);
       }
     },
@@ -140,7 +142,7 @@ export default function SearchScreen({ navigation }) {
     if (!permission?.granted) {
       const { granted } = await requestPermission();
       if (!granted) {
-        Alert.alert('Cần quyền camera', 'Vui lòng cấp quyền camera trong Cài đặt.');
+        Alert.alert(t('common.camera_permission_title'), t('common.camera_permission_desc'));
         return;
       }
     }
@@ -184,12 +186,12 @@ export default function SearchScreen({ navigation }) {
           </Text>
           {item.username && <Text style={s.userHandle}>@{item.username}</Text>}
           <Text style={[s.userStatus, { color: si.color }]} numberOfLines={1}>
-            {si.label}
+            {t(`chat.status.${si.key || 'offline'}`)}
           </Text>
         </View>
 
         <View style={s.viewBtn}>
-          <Text style={s.viewBtnText}>Xem</Text>
+          <Text style={s.viewBtnText}>{t('common.edit') === 'Sửa' ? 'Xem' : 'View'}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -201,7 +203,7 @@ export default function SearchScreen({ navigation }) {
 
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.headerTitle}>Tìm kiếm</Text>
+        <Text style={s.headerTitle}>{t('search.title')}</Text>
         <TouchableOpacity
           style={[s.modeToggle, mode === 'camera' && { backgroundColor: THEME.accent }]}
           onPress={mode === 'camera' ? closeCamera : openCamera}
@@ -221,7 +223,7 @@ export default function SearchScreen({ navigation }) {
                 style={s.searchInput}
                 value={query}
                 onChangeText={search}
-                placeholder="Tìm theo tên, @username, email..."
+                placeholder={t('friends.search_placeholder')}
                 placeholderTextColor={THEME.textMuted}
                 autoCorrect={false}
                 autoCapitalize="none"
@@ -246,7 +248,7 @@ export default function SearchScreen({ navigation }) {
           {/* Result Count */}
           {results.length > 0 && (
             <View style={s.resultHeader}>
-              <Text style={s.resultCount}>{results.length} KẾT QUẢ</Text>
+              <Text style={s.resultCount}>{results.length} {t('friends.global_search_results')}</Text>
             </View>
           )}
 
@@ -263,18 +265,18 @@ export default function SearchScreen({ navigation }) {
                 {query.length < 2 ? (
                   <>
                     <Text style={s.emptyIcon}>🔍</Text>
-                    <Text style={s.emptyTitle}>Tìm kiếm bạn bè</Text>
+                    <Text style={s.emptyTitle}>{t('friends.search_friends')}</Text>
                     <Text style={s.emptyDesc}>
-                      Nhập ít nhất 2 ký tự để tìm theo tên, username hoặc email
+                      {t('search.min_chars_hint')}
                     </Text>
                     <TouchableOpacity style={s.qrCta} onPress={openCamera}>
-                      <Text style={s.qrCtaText}>📷 Quét mã QR</Text>
+                      <Text style={s.qrCtaText}>📷 {t('friends.qr_not_recognized_title') === 'Chưa nhận dạng được' ? 'Quét mã QR' : 'Scan QR Code'}</Text>
                     </TouchableOpacity>
                   </>
                 ) : error ? (
                   <>
                     <Text style={s.emptyIcon}>😕</Text>
-                    <Text style={s.emptyTitle}>Không tìm thấy</Text>
+                    <Text style={s.emptyTitle}>{t('friends.no_search_results')}</Text>
                     <Text style={s.emptyDesc}>{error}</Text>
                   </>
                 ) : null}
@@ -305,7 +307,7 @@ export default function SearchScreen({ navigation }) {
               <View style={s.scanDimSide} />
             </View>
             <View style={s.scanDimBottom}>
-              <Text style={s.scanHint}>Hướng camera vào mã QR hồ sơ người dùng</Text>
+              <Text style={s.scanHint}>{t('friends.qr_caption', { name: '' }).replace(' hồ sơ của ', '').replace(' profile on ZoloChat', '')}</Text>
             </View>
           </View>
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePresence } from '../../../context/PresenceContext';
+import { useLanguage } from '../../../context/LanguageContext';
 import { getFriendStatus, filterFriends, groupFriendsAlphabetically } from '../utils/friendHelpers';
 
 const FriendsList = ({
@@ -14,6 +15,7 @@ const FriendsList = ({
 }) => {
   const navigate = useNavigate();
   const { isUserOnline, getPresenceStatus } = usePresence();
+  const { t } = useLanguage();
 
   const filtered = filterFriends(friends, friendFilterText);
   const { grouped, sortedKeys } = groupFriendsAlphabetically(filtered);
@@ -23,14 +25,14 @@ const FriendsList = ({
       {/* Header */}
       <div className="px-6 py-4 border-b flex items-center justify-between gap-4 flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
         <span className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-          Bạn bè ({friends.length})
+          {t('friends.count_title', { count: friends.length })}
         </span>
         <button
           onClick={onOpenCreateGroup}
           className="px-4 py-2 text-sm font-semibold rounded-lg"
           style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
         >
-          Tạo nhóm chat
+          {t('friends.create_group_btn')}
         </button>
       </div>
 
@@ -38,7 +40,7 @@ const FriendsList = ({
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {sortedKeys.length === 0 && (
           <p className="text-center mt-10" style={{ color: 'var(--text-muted)' }}>
-            Không tìm thấy bạn bè nào.
+            {t('friends.no_results')}
           </p>
         )}
 
@@ -48,6 +50,11 @@ const FriendsList = ({
             <div className="rounded-lg shadow-sm border overflow-hidden" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
               {grouped[letter].map((f, idx) => {
                 const status = getFriendStatus(f.friendId, isUserOnline, getPresenceStatus);
+                // Dynamically translate status label using the presStatus key logic
+                const isOnline = isUserOnline(f.friendId);
+                const presStatusKey = isOnline ? (getPresenceStatus(f.friendId) || 'online') : 'offline';
+                const translatedStatusLabel = t(`chat.status.${presStatusKey}`);
+
                 return (
                   <div
                     key={f.friendshipId}
@@ -80,23 +87,23 @@ const FriendsList = ({
                         {f.originalName && f.originalName !== f.displayName && (
                           <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{f.originalName}</p>
                         )}
-                        <p className="text-xs" style={{ color: status.color }}>{status.label}</p>
+                        <p className="text-xs" style={{ color: status.color }}>{translatedStatusLabel}</p>
                       </div>
                     </div>
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                       <button onClick={(e) => { e.stopPropagation(); onMessage(f); }} className="px-3 py-1.5 text-xs font-semibold rounded" style={{ backgroundColor: 'var(--accent)', color: '#fff' }}>
-                        Nhắn tin
+                        {t('friends.message_btn')}
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); onUpdateNickname(f.friendId); }} className="px-3 py-1.5 text-xs font-semibold rounded" style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)' }}>
-                        Biệt danh
+                        {t('friends.nickname_btn')}
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); onBlock(f.friendId, f.iBlocked); }} className={`px-3 py-1.5 text-xs font-semibold rounded ${f.iBlocked ? 'text-gray-600 bg-gray-200' : 'text-orange-600 bg-orange-50'}`}>
-                        {f.iBlocked ? 'Bỏ chặn' : 'Chặn'}
+                        {f.iBlocked ? t('friends.unblock_btn') : t('friends.block_btn')}
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); onUnfriend(f.friendId); }} className="px-3 py-1.5 text-xs font-semibold bg-red-50 rounded text-red-600">
-                        Xoá
+                        {t('friends.delete_btn')}
                       </button>
                     </div>
                   </div>
@@ -110,4 +117,4 @@ const FriendsList = ({
   );
 };
 
-export default FriendsList;
+export default FriendsList;

@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { Hash, BellOff } from 'lucide-react';
 import Avatar from './Avatar';
 import { usePresence } from '../../../../../context/PresenceContext';
+import { useLanguage } from '../../../../../context/LanguageContext';
+import { translateLastMessage } from '../../../../../utils/translationUtils';
 
 const ConvItem = ({ conv, active, collapsed, isMobile, onClick }) => {
+  const { t } = useLanguage();
   const { isUserOnline, getPresenceStatus } = usePresence();
   const [hovered, setHovered] = useState(false);
   console.log("Check Mute:", conv.name, conv.isMuted);
@@ -104,7 +107,7 @@ const ConvItem = ({ conv, active, collapsed, isMobile, onClick }) => {
               whiteSpace: 'nowrap',
               flex: 1,
             }}>
-              {conv.lastMessage}
+               {translateLastMessage(conv.lastMessage, t)}
             </span>
 
             {conv.unread > 0 && (

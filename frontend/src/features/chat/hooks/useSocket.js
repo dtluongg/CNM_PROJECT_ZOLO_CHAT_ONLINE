@@ -29,6 +29,7 @@ export const useSocket = ({
   onMessageEdited,
   onUnreadReset,
   onConversationDisbanded,
+  onConversationUpdated,
 }) => {
   const socketRef = useRef(null);
 

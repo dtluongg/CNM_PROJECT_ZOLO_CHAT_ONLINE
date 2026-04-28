@@ -5,13 +5,14 @@ import jsQR from 'jsqr';
 import userApi from '../api/userApi';
 import friendApi from '../../friends/api/friendApi';
 import { usePresence } from '../../../context/PresenceContext';
+import { useLanguage } from '../../../context/LanguageContext';
 
-const AVATAR_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245','#9b59b6','#e67e22'];
+const AVATAR_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245', '#9b59b6', '#e67e22'];
 const getAvatarColor = (name) => AVATAR_COLORS[(name || '?').charCodeAt(0) % AVATAR_COLORS.length];
 const getInitials = (name) => {
   if (!name) return '?';
   const p = name.trim().split(' ');
-  return p.length === 1 ? p[0][0].toUpperCase() : (p[0][0] + p[p.length-1][0]).toUpperCase();
+  return p.length === 1 ? p[0][0].toUpperCase() : (p[0][0] + p[p.length - 1][0]).toUpperCase();
 };
 
 const STATUS_COLOR = { online: '#3ba55c', idle: '#faa61a', dnd: '#ed4245', offline: '#80848e', invisible: '#80848e' };
@@ -23,6 +24,7 @@ function UserCard({ user, onClick, isOnline, presStatus, friendStatus, requestId
   const displayStatus = isOnline ? (presStatus || 'online') : 'offline';
   const statusColor = STATUS_COLOR[displayStatus] || '#80848e';
 
+  const { t } = useLanguage();
   const renderFriendBtn = () => {
     if (friendStatus === 'friends') return (
       <button
@@ -30,7 +32,7 @@ function UserCard({ user, onClick, isOnline, presStatus, friendStatus, requestId
         disabled={actionBusy}
         style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-hover)', color: 'var(--text-secondary)', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
       >
-        <UserCheck size={13} /> Bạn bè
+        <UserCheck size={13} /> {t('user_search.friend_status.friends')}
       </button>
     );
     if (friendStatus === 'sent') return (
@@ -39,7 +41,7 @@ function UserCard({ user, onClick, isOnline, presStatus, friendStatus, requestId
         disabled={actionBusy}
         style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(250,166,26,0.4)', background: 'rgba(250,166,26,0.12)', color: '#faa61a', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
       >
-        <Clock size={13} /> Đã gửi
+        <Clock size={13} /> {t('user_search.friend_status.sent')}
       </button>
     );
     if (friendStatus === 'received') return (
@@ -49,19 +51,19 @@ function UserCard({ user, onClick, isOnline, presStatus, friendStatus, requestId
           disabled={actionBusy}
           style={{ fontSize: 12, fontWeight: 700, padding: '5px 8px', borderRadius: 7, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
         >
-          Chấp nhận
+          {t('user_search.friend_status.accept')}
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onFriendAction('reject', requestId); }}
           disabled={actionBusy}
           style={{ fontSize: 12, fontWeight: 600, padding: '5px 8px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-hover)', color: 'var(--text-muted)', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
         >
-          Từ chối
+          {t('user_search.friend_status.reject')}
         </button>
       </div>
     );
     if (friendStatus === 'blocked') return (
-      <span style={{ fontSize: 11, color: '#ed4245', fontWeight: 600 }}>Đã chặn</span>
+      <span style={{ fontSize: 11, color: '#ed4245', fontWeight: 600 }}>{t('user_search.friend_status.blocked')}</span>
     );
     // Not friends yet
     return (
@@ -70,7 +72,7 @@ function UserCard({ user, onClick, isOnline, presStatus, friendStatus, requestId
         disabled={actionBusy}
         style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, padding: '5px 10px', borderRadius: 7, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
       >
-        <UserPlus size={13} /> Kết bạn
+        <UserPlus size={13} /> {t('user_search.friend_status.add_friend')}
       </button>
     );
   };
@@ -129,6 +131,7 @@ function UserCard({ user, onClick, isOnline, presStatus, friendStatus, requestId
 }
 
 export default function UserSearchModal({ onClose }) {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { isUserOnline, getPresenceStatus } = usePresence();
   const [tab, setTab] = useState('search'); // 'search' | 'qr'
@@ -290,10 +293,10 @@ export default function UserSearchModal({ onClose }) {
       }
     } catch (err) {
       const msg = err.name === 'NotAllowedError'
-        ? 'Bị từ chối quyền camera. Hãy cho phép quyền camera trong trình duyệt.'
+        ? t('user_search.camera_denied')
         : err.name === 'NotFoundError'
-        ? 'Không tìm thấy camera trên thiết bị.'
-        : 'Không thể mở camera. Vui lòng thử lại.';
+          ? t('user_search.camera_not_found')
+          : t('user_search.camera_error');
       setCameraError(msg);
     }
   }, [facingMode, stopCamera]);
@@ -322,7 +325,7 @@ export default function UserSearchModal({ onClose }) {
           const res = await userApi.getUserProfile(match[1]);
           setCameraResult({ userId: match[1], profile: res.data.user });
         } catch {
-          setCameraError('Không thể tải thông tin người dùng từ mã QR.');
+          setCameraError(t('user_search.qr_read_error'));
         } finally {
           setScanning(false);
         }
@@ -374,9 +377,9 @@ export default function UserSearchModal({ onClose }) {
       try {
         const res = await userApi.searchUsers(val.trim());
         setResults(res.data.users || []);
-        if ((res.data.users || []).length === 0) setSearchError('Không tìm thấy người dùng nào.');
+        if ((res.data.users || []).length === 0) setSearchError(t('user_search.no_results'));
       } catch (err) {
-        setSearchError(err.response?.data?.message || 'Lỗi khi tìm kiếm.');
+        setSearchError(err.response?.data?.message || t('user_search.search_error'));
       } finally {
         setSearching(false);
       }
@@ -388,19 +391,21 @@ export default function UserSearchModal({ onClose }) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
-    if (!file.type.startsWith('image/')) { setQrError('Vui lòng chọn file ảnh.'); return; }
-    setQrLoading(true); setQrError(''); setQrResult(null);
-    setQrPreview(URL.createObjectURL(file));
+    setQrLoading(true);
+    setQrError('');
+    setQrResult(null);
     try {
-      const imageData = await readImageData(file);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-      if (!code) { setQrError('Không tìm thấy mã QR trong ảnh.'); setQrLoading(false); return; }
+      const code = await readImageData(file);
+      if (!code) { setQrError(t('user_search.qr_not_found_error')); setQrLoading(false); return; }
       const match = code.data.match(/\/user\/([a-f\d]{24})/i);
-      if (!match) { setQrError(`Mã QR không hợp lệ. Nội dung: "${code.data.slice(0, 60)}"`); setQrLoading(false); return; }
+      if (!match) { setQrError(`${t('user_search.qr_invalid')} Nội dung: "${code.data.slice(0, 60)}"`); setQrLoading(false); return; }
       const res = await userApi.getUserProfile(match[1]);
       setQrResult({ userId: match[1], profile: res.data.user });
-    } catch { setQrError('Không thể đọc mã QR. Hãy đảm bảo ảnh rõ nét.'); }
-    finally { setQrLoading(false); }
+    } catch (err) {
+      setQrError(t('user_search.qr_read_error'));
+    } finally {
+      setQrLoading(false);
+    }
   };
 
   const readImageData = (file) => new Promise((resolve, reject) => {
@@ -448,7 +453,7 @@ export default function UserSearchModal({ onClose }) {
           flexShrink: 0,
         }}>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
-            Tìm kiếm người dùng
+            {t('user_search.title')}
           </h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px 8px', borderRadius: 6 }}>
             <X size={18} />
@@ -458,8 +463,8 @@ export default function UserSearchModal({ onClose }) {
         {/* Main Tabs */}
         <div style={{ display: 'flex', gap: 2, margin: '14px 20px 0', background: 'var(--bg-primary)', borderRadius: 8, padding: 3, flexShrink: 0 }}>
           {[
-            { key: 'search', label: 'Tìm kiếm', icon: <Search size={14} /> },
-            { key: 'qr',     label: 'Quét QR', icon: <QrCode size={14} /> },
+            { key: 'search', label: t('user_search.tab_search'), icon: <Search size={14} /> },
+            { key: 'qr', label: t('user_search.tab_qr'), icon: <QrCode size={14} /> },
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
               flex: 1, background: tab === t.key ? 'var(--bg-secondary)' : 'none',
@@ -495,7 +500,7 @@ export default function UserSearchModal({ onClose }) {
                   autoFocus
                   value={query}
                   onChange={handleQueryChange}
-                  placeholder="Nhập tên, @username hoặc email..."
+                  placeholder={t('user_search.placeholder')}
                   style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 14 }}
                 />
                 {searching && (
@@ -503,12 +508,12 @@ export default function UserSearchModal({ onClose }) {
                 )}
               </div>
               <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-                Nhập ít nhất 2 ký tự để bắt đầu tìm kiếm.
+                {t('user_search.hint')}
               </p>
               {results.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                    {results.length} kết quả
+                    {t('user_search.results_count', { count: results.length })}
                   </div>
                   {results.map(u => (
                     <UserCard
@@ -540,8 +545,8 @@ export default function UserSearchModal({ onClose }) {
               {/* Sub-mode toggle */}
               <div style={{ display: 'flex', gap: 2, background: 'var(--bg-primary)', borderRadius: 8, padding: 3 }}>
                 {[
-                  { key: 'camera', icon: <Camera size={14} />, label: 'Dùng camera' },
-                  { key: 'upload', icon: <Upload size={14} />, label: 'Tải ảnh lên' },
+                  { key: 'camera', icon: <Camera size={14} />, label: t('user_search.qr_camera') },
+                  { key: 'upload', icon: <Upload size={14} />, label: t('user_search.qr_upload') },
                 ].map(m => (
                   <button key={m.key} onClick={() => setQrMode(m.key)} style={{
                     flex: 1, background: qrMode === m.key ? 'var(--bg-secondary)' : 'none',
@@ -586,7 +591,7 @@ export default function UserSearchModal({ onClose }) {
                       }}>
                         <CameraOff size={40} style={{ opacity: 0.4 }} />
                         <div style={{ fontSize: 13, textAlign: 'center', padding: '0 20px' }}>
-                          {cameraError || 'Nhấn "Mở camera" để bắt đầu quét QR'}
+                          {cameraError || t('user_search.camera_not_active')}
                         </div>
                       </div>
                     )}
@@ -599,7 +604,7 @@ export default function UserSearchModal({ onClose }) {
                         background: 'rgba(0,0,0,0.6)', gap: 12,
                       }}>
                         <div style={{ width: 32, height: 32, border: '3px solid rgba(255,255,255,0.2)', borderTop: '3px solid #fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                        <div style={{ color: '#fff', fontSize: 13 }}>Đang tải thông tin...</div>
+                        <div style={{ color: '#fff', fontSize: 13 }}>{t('user_search.qr_loading')}</div>
                       </div>
                     )}
 
@@ -628,7 +633,7 @@ export default function UserSearchModal({ onClose }) {
                     {cameraActive && (
                       <button
                         onClick={handleFlipCamera}
-                        title="Đổi camera"
+                        title={t('common.switch_camera', { defaultValue: 'Đổi camera' })}
                         style={{
                           position: 'absolute', bottom: 10, right: 10,
                           background: 'rgba(0,0,0,0.55)', border: 'none', borderRadius: 8,
@@ -652,7 +657,7 @@ export default function UserSearchModal({ onClose }) {
                         display: 'flex', alignItems: 'center', gap: 8,
                       }}
                     >
-                      <Camera size={16} /> Mở camera
+                      <Camera size={16} /> {t('user_search.camera_open')}
                     </button>
                   ) : cameraActive ? (
                     <button
@@ -664,7 +669,7 @@ export default function UserSearchModal({ onClose }) {
                         display: 'flex', alignItems: 'center', gap: 6,
                       }}
                     >
-                      <CameraOff size={14} /> Tắt camera
+                      <CameraOff size={14} /> {t('user_search.camera_close')}
                     </button>
                   ) : null}
 
@@ -682,7 +687,7 @@ export default function UserSearchModal({ onClose }) {
                   {cameraResult && (
                     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: '#3ba55c', textTransform: 'uppercase', letterSpacing: '0.8px', textAlign: 'center' }}>
-                        ✓ Quét thành công
+                        ✓ {t('user_search.qr_scan_success')}
                       </div>
                       <UserCard user={cameraResult.profile} onClick={() => handleViewUser(cameraResult.userId)} />
                       <button
@@ -693,14 +698,14 @@ export default function UserSearchModal({ onClose }) {
                           color: 'var(--text-muted)', fontSize: 13, fontWeight: 600,
                         }}
                       >
-                        Quét lại
+                        {t('user_search.qr_scan_retry')}
                       </button>
                     </div>
                   )}
 
                   {!cameraActive && !cameraResult && !cameraError && (
                     <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5 }}>
-                      Hướng camera vào mã QR của ZoloChat để tự động nhận diện
+                      {t('user_search.camera_hint')}
                     </p>
                   )}
                 </div>
@@ -727,10 +732,10 @@ export default function UserSearchModal({ onClose }) {
                     }
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-                        {qrLoading ? 'Đang đọc mã QR...' : 'Tải ảnh mã QR lên'}
+                        {qrLoading ? t('user_search.qr_loading') : t('user_search.qr_upload_title')}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-                        JPG, PNG, WebP — ảnh chứa mã QR của ZoloChat
+                        {t('user_search.qr_upload_hint')}
                       </div>
                     </div>
                   </div>
@@ -755,14 +760,14 @@ export default function UserSearchModal({ onClose }) {
                   {qrResult && (
                     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: '#3ba55c', textTransform: 'uppercase', letterSpacing: '0.8px', textAlign: 'center' }}>
-                        ✓ Tìm thấy người dùng
+                        ✓ {t('user_search.qr_found_user')}
                       </div>
                       <UserCard user={qrResult.profile} onClick={() => handleViewUser(qrResult.userId)} />
                     </div>
                   )}
 
                   <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5 }}>
-                    Chụp màn hình hoặc lưu mã QR từ trang hồ sơ của người dùng, sau đó tải lên đây.
+                    {t('user_search.qr_upload_instructions', { defaultValue: 'Chụp màn hình hoặc lưu mã QR từ trang hồ sơ của người dùng, sau đó tải lên đây.' })}
                   </p>
                 </div>
               )}

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Pin, X, ChevronLeft, ChevronRight, CornerRightUp } from 'lucide-react';
+import { useLanguage } from '../../../../../context/LanguageContext';
 
 const PinnedBar = ({ pinnedMessages = [], onJump, onUnpin }) => {
+  const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
   
   // Tự động điều chỉnh currentIndex khi danh sách ghim thay đổi
@@ -32,10 +34,10 @@ const PinnedBar = ({ pinnedMessages = [], onJump, onUnpin }) => {
   };
 
   const getPreviewText = () => {
-    if (message.revoked) return 'Tin nhắn đã được thu hồi';
-    if (message.type === 'image') return '[Hình ảnh]';
-    if (message.type === 'file') return `[File] ${message.payload?.fileName || ''}`;
-    if (message.type === 'voice') return '[Tin nhắn thoại]';
+    if (message.revoked) return t('pinned_bar.revoked');
+    if (message.type === 'image') return t('pinned_bar.image');
+    if (message.type === 'file') return t('pinned_bar.file', { name: message.payload?.fileName || '' });
+    if (message.type === 'voice') return t('pinned_bar.voice');
     return message.content;
   };
 
@@ -64,11 +66,13 @@ const PinnedBar = ({ pinnedMessages = [], onJump, onUnpin }) => {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>
-            Tin nhắn đã ghim {pinnedMessages.length > 1 && `(${currentIndex + 1}/${pinnedMessages.length})`}
+            {pinnedMessages.length > 1 
+              ? t('pinned_bar.title_count', { current: currentIndex + 1, total: pinnedMessages.length })
+              : t('pinned_bar.title')}
           </span>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>•</span>
           <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {message.senderId?.displayName || 'Thành viên'}
+            {message.senderId?.displayName || t('pinned_bar.member_fallback')}
           </span>
         </div>
         <div style={{ 
@@ -112,7 +116,7 @@ const PinnedBar = ({ pinnedMessages = [], onJump, onUnpin }) => {
           style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, borderRadius: 4 }}
           onMouseEnter={e => e.currentTarget.style.color = '#ed4245'}
           onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-          title="Bỏ ghim"
+          title={t('pinned_bar.unpin_tooltip')}
         >
           <X size={16} />
         </button>

@@ -1,117 +1,124 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View, Text, TouchableOpacity, ScrollView, Image,
-  ActivityIndicator, Alert,
-} from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import conversationApi from '../api/conversationApi';
 import { getAvatarColor, getInitials } from '../../../theme';
+import { useLanguage } from '../../../context/LanguageContext';
 
 export default function JoinRequestsTab({ conversation, THEME }) {
-  const convId = conversation?._id || conversation?.id;
+  const { t } = useLanguage();
   const [requests, setRequests] = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [busy,     setBusy]     = useState('');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const convId = conversation._id || conversation.id;
       const res = await conversationApi.listJoinRequests(convId);
-      setRequests(Array.isArray(res.data?.data) ? res.data.data : []);
-    } catch { setRequests([]); }
-    finally { setLoading(false); }
-  }, [convId]);
+      setRequests(res.data?.data || res.data || []);
+    } catch (e) {
+      console.log('Error fetching join requests:', e);
+      setRequests([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [conversation]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleReview = async (reqId, action) => {
     setBusy(`${action}-${reqId}`);
     try {
+      const convId = conversation._id || conversation.id;
       await conversationApi.reviewJoinRequest(convId, reqId, action);
       setRequests(prev => prev.filter(r => r._id !== reqId));
     } catch (e) {
-      Alert.alert('Lỗi', e.response?.data?.message || 'Không thể thực hiện');
-    } finally { setBusy(''); }
+      Alert.alert(t('common.error'), e.response?.data?.message || t('common.something_wrong'));
+    } finally {
+      setBusy('');
+    }
   };
 
-  if (loading) return <ActivityIndicator color={THEME.accent} style={{ marginVertical: 40 }} />;
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
+        <ActivityIndicator color={THEME.accent} />
+      </View>
+    );
+  }
+
+  if (requests.length === 0) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+        <Feather name="user-check" size={48} color={THEME.textMuted} style={{ marginBottom: 16, opacity: 0.5 }} />
+        <Text style={{ color: THEME.textPrimary, fontSize: 16, fontWeight: '700' }}>
+          {t('info_panel.members.no_requests_found')}
+        </Text>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <Text style={{ color: THEME.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          {requests.length} yêu cầu chờ duyệt
-        </Text>
-        <TouchableOpacity onPress={load} style={{ padding: 4 }}>
-          <Feather name="refresh-cw" size={14} color={THEME.accent} />
-        </TouchableOpacity>
-      </View>
-
-      {requests.length === 0 && (
-        <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-          <Text style={{ fontSize: 32, marginBottom: 10 }}>✅</Text>
-          <Text style={{ color: THEME.textMuted, fontSize: 13 }}>Không có yêu cầu nào đang chờ duyệt</Text>
-        </View>
-      )}
-
-      {requests.map(req => {
-        const name   = req.userId?.displayName || req.userId?.username || '?';
-        const avatar = req.userId?.avatar;
-        const date   = req.createdAt ? new Date(req.createdAt).toLocaleDateString('vi-VN') : '';
+    <FlatList
+      data={requests}
+      keyExtractor={item => item._id}
+      contentContainerStyle={{ padding: 16 }}
+      renderItem={({ item }) => {
+        const u = item.userId || {};
+        const name = u.displayName || u.username || t('user.unknown');
+        const isApproveBusy = busy === `approve-${item._id}`;
+        const isRejectBusy = busy === `reject-${item._id}`;
+        const anyBusy = busy !== '';
 
         return (
-          <View key={req._id} style={{
-            flexDirection: 'row', alignItems: 'center', gap: 10,
-            padding: 12, backgroundColor: THEME.bgPrimary, borderRadius: 10, marginBottom: 8,
-          }}>
-            {/* Avatar */}
-            {avatar ? (
-              <Image source={{ uri: avatar }} style={{ width: 42, height: 42, borderRadius: 21, flexShrink: 0 }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: THEME.bgPrimary, padding: 12, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: THEME.border }}>
+            {u.avatar ? (
+              <Image source={{ uri: u.avatar }} style={{ width: 44, height: 44, borderRadius: 22, marginRight: 12 }} />
             ) : (
-              <View style={{ width: 42, height: 42, borderRadius: 21, flexShrink: 0, backgroundColor: getAvatarColor(name), justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{getInitials(name)}</Text>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: getAvatarColor(name), justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{getInitials(name)}</Text>
               </View>
             )}
-
-            {/* Info */}
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: THEME.textPrimary }}>{name}</Text>
-              {req.message ? (
-                <Text numberOfLines={2} style={{ fontSize: 11, color: THEME.textMuted, marginTop: 2, fontStyle: 'italic' }}>"{req.message}"</Text>
-              ) : null}
-              <Text style={{ fontSize: 10, color: THEME.textMuted, marginTop: 1 }}>{date}</Text>
+            
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: THEME.textPrimary, fontWeight: '700', fontSize: 15 }}>{name}</Text>
+              {item.message ? (
+                <Text numberOfLines={2} style={{ fontSize: 11, color: THEME.textMuted, marginTop: 2, fontStyle: 'italic' }}>"{item.message}"</Text>
+              ) : (
+                <Text style={{ color: THEME.textMuted, fontSize: 12, marginTop: 2 }}>{t('info_panel.members.requests_waiting')}</Text>
+              )}
             </View>
 
-            {/* Actions */}
-            <View style={{ gap: 5, flexShrink: 0 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
-                onPress={() => handleReview(req._id, 'approve')}
-                disabled={!!busy}
-                style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(87,242,135,0.15)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(87,242,135,0.35)', alignItems: 'center', minWidth: 76 }}
+                disabled={anyBusy}
+                onPress={() => handleReview(item._id, 'reject')}
+                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: THEME.bgTertiary, minWidth: 70, alignItems: 'center' }}
               >
-                {busy === `approve-${req._id}` ? (
-                  <ActivityIndicator size="small" color="#57f287" />
+                {isRejectBusy ? (
+                  <ActivityIndicator size="small" color={THEME.textPrimary} />
                 ) : (
-                  <Text style={{ color: '#57f287', fontSize: 12, fontWeight: '700' }}>✓ Duyệt</Text>
+                  <Text style={{ color: THEME.textPrimary, fontWeight: '600', fontSize: 13 }}>{t('info_panel.members.reject')}</Text>
                 )}
               </TouchableOpacity>
-
               <TouchableOpacity
-                onPress={() => handleReview(req._id, 'reject')}
-                disabled={!!busy}
-                style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(237,66,69,0.12)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(237,66,69,0.3)', alignItems: 'center', minWidth: 76 }}
+                disabled={anyBusy}
+                onPress={() => handleReview(item._id, 'approve')}
+                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: THEME.accent, minWidth: 70, alignItems: 'center' }}
               >
-                {busy === `reject-${req._id}` ? (
-                  <ActivityIndicator size="small" color="#ed4245" />
+                {isApproveBusy ? (
+                  <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={{ color: '#ed4245', fontSize: 12, fontWeight: '600' }}>✕ Từ chối</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{t('info_panel.members.approve')}</Text>
                 )}
               </TouchableOpacity>
             </View>
           </View>
         );
-      })}
-    </ScrollView>
+      }}
+    />
   );
 }

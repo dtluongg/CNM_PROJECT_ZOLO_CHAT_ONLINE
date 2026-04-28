@@ -1,5 +1,6 @@
 import React from 'react';
 import { Bell, Calendar, Clock } from 'lucide-react';
+import { useLanguage } from '../../../../../context/LanguageContext';
 
 /**
  * ReminderMessage.jsx
@@ -9,14 +10,16 @@ import { Bell, Calendar, Clock } from 'lucide-react';
  * ─────────────────────────────────────────────────────────────────────────────
  */
 const ReminderMessage = ({ message, isMine, isPinned }) => {
+  const { t, language } = useLanguage();
   const payload = message.payload || {};
   const reminderContent = payload.content || message.content;
   const reminderTime = payload.reminderTime ? new Date(payload.reminderTime) : null;
   const isTriggered = payload.isTriggered || false;
 
   const formatDate = (date) => {
-    if (!date) return 'Chưa xác định';
-    return date.toLocaleDateString('vi-VN', {
+    if (!date) return t('chat.reminder_card.unknown_date');
+    const localeStr = language === 'vi' ? 'vi-VN' : 'en-US';
+    return date.toLocaleDateString(localeStr, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -25,7 +28,8 @@ const ReminderMessage = ({ message, isMine, isPinned }) => {
 
   const formatTime = (date) => {
     if (!date) return '??:??';
-    return date.toLocaleTimeString('vi-VN', {
+    const localeStr = language === 'vi' ? 'vi-VN' : 'en-US';
+    return date.toLocaleTimeString(localeStr, {
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -108,16 +112,16 @@ const ReminderMessage = ({ message, isMine, isPinned }) => {
       {isPinned && (
         <div style={pinnedStyle}>
           <span>📌</span>
-          <span>Ghim tin nhắn</span>
+          <span>{t('chat.reminder_card.pinned')}</span>
         </div>
       )}
 
       <div style={headerStyle}>
         <Bell size={16} strokeWidth={3} />
-        <span>Nhắc hẹn</span>
+        <span>{t('chat.reminder_card.label')}</span>
         <div style={{ flex: 1 }} />
         <span style={badgeStyle}>
-          {isTriggered ? 'ĐÃ NHẮC' : 'SẮP TỚI'}
+          {isTriggered ? t('chat.reminder_card.triggered') : t('chat.reminder_card.upcoming')}
         </span>
       </div>
 

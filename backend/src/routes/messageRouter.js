@@ -3,7 +3,7 @@ const router = express.Router();
 const verifyToken = require('../middlewares/verifytoken');
 const { checkCanSendInTopic, checkCanInvite } = require('../middlewares/checkTopicPermission');
 const { sendMessage, getMessages, getAttachments, revokeMessage, editMessage, markAsRead, deleteMessageForMe } = require('../controllers/messageController');
-const { summarizeUnread } = require('../controllers/aiController');
+const { summarizeUnread, translateText } = require('../controllers/aiController');
 const { createPoll, votePoll } = require('../controllers/pollController');
 
 // ════════════════════════════════════════════════════════════════
@@ -20,6 +20,7 @@ const { createPoll, votePoll } = require('../controllers/pollController');
 // ════════════════════════════════════════════════════════════════
 router.get('/:conversationId/attachments', verifyToken, getAttachments);
 router.post('/:conversationId/aiSummary',  verifyToken, summarizeUnread);
+router.post('/ai/translate',               verifyToken, translateText);
 router.post('/:conversationId/poll',       verifyToken, checkCanSendInTopic, createPoll);
 router.patch('/poll/:messageId/vote',      verifyToken, votePoll);
 router.get('/:conversationId', verifyToken, getMessages);

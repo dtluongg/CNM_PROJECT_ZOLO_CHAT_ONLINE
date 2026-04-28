@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, AlarmClock, Calendar, Clock } from 'lucide-react';
+import { useLanguage } from '../../../../../context/LanguageContext';
 
 const Wheel = ({ items, value, onChange, labelPath = null, width = 'w-24', isOpen, isItemDisabled }) => {
   const scrollRef = useRef(null);
@@ -92,6 +93,7 @@ const Wheel = ({ items, value, onChange, labelPath = null, width = 'w-24', isOpe
 };
 
 export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup }) {
+  const { t } = useLanguage();
   const [content, setContent] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState('09:00');
@@ -159,7 +161,7 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
     const selectedTime = new Date(reminderTimeStr);
     
     if (selectedTime <= new Date()) {
-      alert('Vui lòng chọn thời gian nhắc hẹn ở tương lai');
+      alert(t('reminder.future_error'));
       return;
     }
 
@@ -220,10 +222,18 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
 
   const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
   const months = [
-    { label: 'Jan', value: '01' }, { label: 'Feb', value: '02' }, { label: 'Mar', value: '03' },
-    { label: 'Apr', value: '04' }, { label: 'May', value: '05' }, { label: 'Jun', value: '06' },
-    { label: 'Jul', value: '07' }, { label: 'Aug', value: '08' }, { label: 'Sep', value: '09' },
-    { label: 'Oct', value: '10' }, { label: 'Nov', value: '11' }, { label: 'Dec', value: '12' }
+    { label: t('months.jan', { defaultValue: 'Jan' }), value: '01' }, 
+    { label: t('months.feb', { defaultValue: 'Feb' }), value: '02' }, 
+    { label: t('months.mar', { defaultValue: 'Mar' }), value: '03' },
+    { label: t('months.apr', { defaultValue: 'Apr' }), value: '04' }, 
+    { label: t('months.may', { defaultValue: 'May' }), value: '05' }, 
+    { label: t('months.jun', { defaultValue: 'Jun' }), value: '06' },
+    { label: t('months.jul', { defaultValue: 'Jul' }), value: '07' }, 
+    { label: t('months.aug', { defaultValue: 'Aug' }), value: '08' }, 
+    { label: t('months.sep', { defaultValue: 'Sep' }), value: '09' },
+    { label: t('months.oct', { defaultValue: 'Oct' }), value: '10' }, 
+    { label: t('months.nov', { defaultValue: 'Nov' }), value: '11' }, 
+    { label: t('months.dec', { defaultValue: 'Dec' }), value: '12' }
   ];
   const years = Array.from({ length: 15 }, (_, i) => (new Date().getFullYear() + i).toString());
   const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
@@ -261,7 +271,7 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent)]/10 text-[var(--accent)]">
                 <AlarmClock size={20} />
               </div>
-              <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Tạo nhắc hẹn</h2>
+              <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">{t('reminder.create_title')}</h2>
             </div>
             <button onClick={onClose} className="rounded-full p-2 text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-all">
               <X size={24} />
@@ -271,12 +281,12 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
           <div className="max-h-[min(65vh,500px)] overflow-y-auto scrollbar-hide pr-1 space-y-6">
             <div className="flex flex-col">
               <div className="mb-3 px-1">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)]">Nội dung</label>
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)]">{t('reminder.content_label')}</label>
               </div>
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="Nhập nội dung cần nhắc hẹn..."
+                placeholder={t('reminder.content_placeholder')}
                 className="w-full min-h-[120px] rounded-2xl bg-black/10 p-4 text-sm text-[var(--text-primary)] border border-[var(--border)] focus:border-[var(--accent)]/50 focus:bg-black/20 transition-all outline-none resize-none leading-relaxed"
               />
             </div>
@@ -284,7 +294,7 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
             <div className="grid grid-cols-2 gap-4">
               <div onClick={() => setShowPickerMode('date')} className="group flex flex-col cursor-pointer">
                 <div className="mb-3 px-1">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)] group-hover:text-[var(--accent)] transition-colors">Ngày</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)] group-hover:text-[var(--accent)] transition-colors">{t('reminder.date_label')}</label>
                 </div>
                 <div className="flex items-center gap-3 w-full rounded-xl bg-black/10 py-3.5 px-4 text-sm text-[var(--text-primary)] border border-[var(--border)] group-hover:border-[var(--accent)]/40 transition-all">
                   <Calendar size={16} className="text-[var(--text-muted)] group-hover:text-[var(--accent)]" />
@@ -293,7 +303,7 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
               </div>
               <div onClick={() => setShowPickerMode('time')} className="group flex flex-col cursor-pointer">
                 <div className="mb-3 px-1">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)] group-hover:text-[var(--accent)] transition-colors">Giờ</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)] group-hover:text-[var(--accent)] transition-colors">{t('reminder.time_label')}</label>
                 </div>
                 <div className="flex items-center gap-3 w-full rounded-xl bg-black/10 py-3.5 px-4 text-sm text-[var(--text-primary)] border border-[var(--border)] group-hover:border-[var(--accent)]/40 transition-all">
                   <Clock size={16} className="text-[var(--text-muted)] group-hover:text-[var(--accent)]" />
@@ -305,8 +315,8 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
             <div className="rounded-2xl bg-[var(--accent)]/[0.04] border border-[var(--accent)]/10 p-4">
               <p className="text-[11px] text-[var(--accent)] font-bold leading-relaxed opacity-80 italic">
                 * {isGroup 
-                    ? 'Hệ thống sẽ thông báo cho mọi người trong nhóm khi đến thời điểm này.' 
-                    : 'Hệ thống sẽ gửi thông báo nhắc hẹn cho cả hai người khi đến thời điểm này.'}
+                    ? t('reminder.group_hint') 
+                    : t('reminder.dm_hint')}
               </p>
             </div>
           </div>
@@ -316,7 +326,7 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
               onClick={onClose}
               className="flex-1 rounded-2xl bg-black/10 px-6 py-4 text-sm font-bold text-[var(--text-primary)] hover:bg-black/20 transition-all active:scale-95 border border-[var(--border)]"
             >
-              Hủy bỏ
+              {t('reminder.cancel_btn')}
             </button>
             <button
               onClick={handleCreate}
@@ -327,7 +337,7 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
                   : 'bg-[var(--accent)]/20 text-white/40 cursor-not-allowed'
               }`}
             >
-              Tạo nhắc hẹn
+              {t('reminder.create_btn')}
             </button>
           </div>
         </div>
@@ -336,13 +346,13 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
         <div className={`absolute bottom-0 left-0 right-0 bg-[var(--bg-secondary)] rounded-t-[2.5rem] shadow-[0_-20px_48px_rgba(0,0,0,0.5)] z-[100] picker-tray border-t border-[var(--border)] ${showPickerMode ? 'active' : ''}`}>
           <div className="flex items-center justify-between h-16 px-10 border-b border-[var(--border)]">
             <span className="text-[var(--text-primary)] font-black text-[10px] uppercase tracking-[0.25em]">
-              {showPickerMode === 'date' ? 'Chọn ngày' : 'Chọn giờ'}
+              {showPickerMode === 'date' ? t('reminder.select_date') : t('reminder.select_time')}
             </span>
             <button 
               onClick={handleTrayDone}
               className="text-[var(--accent)] font-bold text-sm tracking-tight hover:brightness-125 transition-all"
             >
-              Xong
+              {t('reminder.done')}
             </button>
           </div>
           

@@ -85,6 +85,26 @@ const messageApi = {
 
   unpinMessage: (conversationId, messageId) =>
     apiClient.post(`/conversations/${conversationId}/unpin/${messageId}`),
+
+  // ── AI Translate ───────────────────────────────────────────────────
+  translateMessage: (text, targetLanguage = 'Auto') =>
+    apiClient.post('/messages/ai/translate', { text, targetLanguage }),
+
+  // ── REMINDER ───────────────────────────────────────────────────
+  createReminder: (conversationId, { content, reminderTime, topicId }) =>
+    apiClient.post(`/messages/${conversationId}`, {
+      type: 'reminder',
+      content,
+      payload: { reminderTime },
+      topicId,
+    }),
+  
+  // ── POLL ──────────────────────────────────────────────────────────
+  createPoll: (conversationId, { topic, options, multipleChoice, topicId }) =>
+    apiClient.post(`/messages/${conversationId}/poll`, { topic, options, multipleChoice, topicId }),
+
+  votePoll: (messageId, { optionId, optionIds, newOptions, votedNewOptions }) =>
+    apiClient.patch(`/messages/poll/${messageId}/vote`, { optionId, optionIds, newOptions, votedNewOptions }),
 };
 
 export default messageApi;

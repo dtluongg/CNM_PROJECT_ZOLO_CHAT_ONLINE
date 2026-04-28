@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Check } from 'lucide-react';
+import { useLanguage } from '../../../../../context/LanguageContext';
 
 export default function VotePollModal({ isOpen, onClose, topic, options, multipleChoice, onVote, userVotes }) {
+  const { t } = useLanguage();
   const [selected, setSelected] = useState(new Set());
   const [newOptions, setNewOptions] = useState([]);
   const [selectedNew, setSelectedNew] = useState(new Set());
@@ -115,7 +117,7 @@ export default function VotePollModal({ isOpen, onClose, topic, options, multipl
           padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between'
         }}>
-          <h3 style={{ margin: 0, fontSize: '19px', fontWeight: 800, color: 'var(--text-primary)' }}>Bình chọn</h3>
+          <h3 style={{ margin: 0, fontSize: '19px', fontWeight: 800, color: 'var(--text-primary)' }}>{t('chat.poll_card.vote_modal_title')}</h3>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', cursor: 'pointer', 
             color: 'var(--text-muted)', width: '30px', height: '30px', borderRadius: '50%',
@@ -131,7 +133,7 @@ export default function VotePollModal({ isOpen, onClose, topic, options, multipl
           <div style={{ marginBottom: '24px' }}>
              <h4 style={{ margin: '0 0 4px 0', fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{topic}</h4>
              <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, opacity: 0.8 }}>
-               {multipleChoice ? 'Chọn nhiều phương án' : 'Chọn 1 phương án'}
+               {multipleChoice ? t('chat.poll_card.multiple_choice') : t('chat.poll_card.single_choice')}
              </div>
           </div>
 
@@ -221,7 +223,7 @@ export default function VotePollModal({ isOpen, onClose, topic, options, multipl
             <input 
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Thêm lựa chọn..."
+              placeholder={t('chat.poll_card.add_option_placeholder')}
               onKeyDown={(e) => e.key === 'Enter' && handleAddNewOption()}
               style={{
                 width: '100%', padding: '12px 48px 12px 16px', borderRadius: '14px',
@@ -253,7 +255,7 @@ export default function VotePollModal({ isOpen, onClose, topic, options, multipl
             flex: 1, padding: '13px', borderRadius: '12px',
             backgroundColor: 'rgba(255,255,255,0.05)', border: 'none',
             color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 700, fontSize: '14px'
-          }}>Hủy</button>
+          }}>{t('chat.poll_card.cancel_btn')}</button>
           <button 
             onClick={handleConfirm}
             style={{
@@ -262,7 +264,7 @@ export default function VotePollModal({ isOpen, onClose, topic, options, multipl
               color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: '14px',
               boxShadow: '0 8px 16px -4px rgba(var(--accent-rgb), 0.3)'
             }}
-          >Xác nhận</button>
+          >{t('chat.poll_card.confirm_btn')}</button>
         </div>
       </div>
 

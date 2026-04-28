@@ -1,11 +1,13 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../config/supabase';
 import authApi from '../features/auth/api/authApi';
 
 const Navbar = () => {
   const { user, token, logout } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -30,16 +32,16 @@ const Navbar = () => {
           {token ? (
             <>
               <Link to="/dashboard" className="hover:text-blue-100 transition">
-                Dashboard
+                {t('navbar.dashboard') || 'Dashboard'}
               </Link>
               <span className="text-sm text-blue-100">
-                {user?.displayName || 'User'}
+                {user?.displayName || t('common.user')}
               </span>
               <button
                 onClick={handleLogout}
                 className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg transition"
               >
-                Đăng Xuất
+                {t('auth.logout')}
               </button>
             </>
           ) : (
@@ -48,13 +50,13 @@ const Navbar = () => {
                 to="/signin"
                 className="hover:text-blue-100 transition"
               >
-                Đăng Nhập
+                {t('auth.login')}
               </Link>
               <Link
                 to="/signup"
                 className="bg-white text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg transition"
               >
-                Đăng Ký
+                {t('auth.signup')}
               </Link>
             </>
           )}

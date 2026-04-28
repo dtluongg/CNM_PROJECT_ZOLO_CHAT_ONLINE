@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "Zolo Chat",
+    "icon": "./public/logo.png",
+    "slug": "chatapp-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "updates": {
+      "checkAutomatically": "never"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chatapp.mobile",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "ZoloChat cần micro để thực hiện cuộc gọi.",
+        "NSCameraUsageDescription": "ZoloChat cần camera để thực hiện cuộc gọi video."
+      }
+    },
+    "android": {
+      "package": "com.chatapp.mobile",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.WAKE_LOCK",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
+    },
+    "scheme": "chatapp",
+    "experiments": {
+      "typedRoutes": false
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép ZoloChat truy cập ảnh để đổi avatar và ảnh bìa."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép ZoloChat dùng camera để quét mã QR."
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.0.21"
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}

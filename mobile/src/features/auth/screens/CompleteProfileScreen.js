@@ -7,8 +7,10 @@ import { useAuth } from '../../../context/AuthContext';
 import authApi from '../api/authApi';
 import userApi from '../../user/api/userApi';
 import apiClient from '../../../services/apiClient';
+import { useLanguage } from '../../../context/LanguageContext';
 
 export default function CompleteProfileScreen({ route, navigation }) {
+  const { t } = useLanguage();
   const { supabaseId, provider, displayName: initName, avatar: initAvatar } = route.params || {};
   const { login } = useAuth();
 
@@ -32,7 +34,7 @@ export default function CompleteProfileScreen({ route, navigation }) {
 
   const handleSendOtp = async () => {
     if (!email.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập địa chỉ email.');
+      Alert.alert(t('common.error'), t('auth.fill_all_fields'));
       return;
     }
     setSendingOtp(true);
@@ -40,9 +42,9 @@ export default function CompleteProfileScreen({ route, navigation }) {
       await apiClient.post('/auth/send-otp', { email: email.trim(), type: 'email' });
       setOtpSent(true);
       startCooldown();
-      Alert.alert('Đã gửi', `Mã OTP đã được gửi đến ${email}`);
+      Alert.alert(t('common.success') === 'Thành công' ? 'Đã gửi' : 'Sent', t('auth.otp_sent_msg', { email }));
     } catch (err) {
-      Alert.alert('Lỗi', err.response?.data?.message || 'Gửi OTP thất bại.');
+      Alert.alert(t('common.error'), err.response?.data?.message || t('common.error'));
     } finally {
       setSendingOtp(false);
     }
@@ -50,7 +52,7 @@ export default function CompleteProfileScreen({ route, navigation }) {
 
   const handleComplete = async () => {
     if (!email.trim() || !emailOtp.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập email và mã OTP.');
+      Alert.alert(t('common.error'), t('auth.fill_all_fields'));
       return;
     }
     setSubmitting(true);
@@ -66,7 +68,7 @@ export default function CompleteProfileScreen({ route, navigation }) {
       const { accessToken, user } = res.data;
       await login(accessToken, user);
     } catch (err) {
-      Alert.alert('Lỗi', err.response?.data?.message || 'Xác thực thất bại.');
+      Alert.alert(t('common.error'), err.response?.data?.message || (t('common.error') + ': Verification'));
     } finally {
       setSubmitting(false);
     }
@@ -78,9 +80,9 @@ export default function CompleteProfileScreen({ route, navigation }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Hoàn tất đăng ký</Text>
+        <Text style={styles.title}>{t('auth.complete_profile_title')}</Text>
         <Text style={styles.subtitle}>
-          Tài khoản {provider} của bạn chưa có email. Vui lòng cung cấp email để hoàn tất.
+          {t('auth.complete_profile_subtitle', { provider })}
         </Text>
 
         {/* Avatar preview */}
@@ -96,16 +98,16 @@ export default function CompleteProfileScreen({ route, navigation }) {
         {initName && <Text style={styles.providerName}>{initName}</Text>}
 
         {/* Display name */}
-        <Text style={styles.label}>Tên hiển thị</Text>
+        <Text style={styles.label}>{t('auth.display_name_label')}</Text>
         <TextInput
           style={styles.input}
           value={displayName}
           onChangeText={setDisplayName}
-          placeholder="Nhập tên hiển thị"
+          placeholder={t('auth.display_name_placeholder')}
         />
 
         {/* Email */}
-        <Text style={styles.label}>Email *</Text>
+        <Text style={styles.label}>{t('auth.email_label')}</Text>
         <View style={styles.row}>
           <TextInput
             style={[styles.input, { flex: 1, marginBottom: 0 }]}
@@ -124,7 +126,7 @@ export default function CompleteProfileScreen({ route, navigation }) {
               <ActivityIndicator color="#fff" size="small" />
             ) : (
               <Text style={styles.otpBtnText}>
-                {cooldown > 0 ? `${cooldown}s` : 'Gửi OTP'}
+                {cooldown > 0 ? `${cooldown}s` : t('auth.send_otp')}
               </Text>
             )}
           </TouchableOpacity>
@@ -133,12 +135,12 @@ export default function CompleteProfileScreen({ route, navigation }) {
         {/* OTP input */}
         {otpSent && (
           <>
-            <Text style={[styles.label, { marginTop: 16 }]}>Mã OTP</Text>
+            <Text style={[styles.label, { marginTop: 16 }]}>{t('auth.otp_label')}</Text>
             <TextInput
               style={styles.input}
               value={emailOtp}
               onChangeText={setEmailOtp}
-              placeholder="Nhập mã 6 số"
+              placeholder={t('auth.otp_placeholder')}
               keyboardType="number-pad"
               maxLength={6}
             />
@@ -153,12 +155,12 @@ export default function CompleteProfileScreen({ route, navigation }) {
           {submitting ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.submitBtnText}>Hoàn tất đăng ký</Text>
+            <Text style={styles.submitBtnText}>{t('auth.complete_profile_title')}</Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backLink}>
-          <Text style={styles.backLinkText}>← Quay lại đăng nhập</Text>
+          <Text style={styles.backLinkText}>← {t('auth.back_to_login')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>

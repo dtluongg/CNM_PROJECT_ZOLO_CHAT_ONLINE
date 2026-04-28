@@ -10,7 +10,14 @@ const fmtTime = (iso) => {
 };
 
 // Chuẩn hoá dữ liệu tin nhắn từ server
-const normalizeMsg = (msg) => ({ ...msg, time: fmtTime(msg.createdAt) });
+const normalizeMsg = (msg) => {
+  if (!msg) return {};
+  return {
+    ...msg,
+    senderId: (msg.senderId?._id || msg.senderId)?.toString(),
+    time: fmtTime(msg.createdAt)
+  };
+};
 
 /**
  * Hook quản lý toàn bộ danh sách tin nhắn của một cuộc hội thoại.

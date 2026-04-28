@@ -3,10 +3,12 @@ import {
   View, Text, Modal, TouchableOpacity, StyleSheet, 
   ScrollView, TextInput, Dimensions, KeyboardAvoidingView, Platform 
 } from 'react-native';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const VotePollModal = ({ visible, onClose, topic, options, multipleChoice, onVote, userVotes, THEME }) => {
+  const { t } = useLanguage();
   const [selected, setSelected] = useState(new Set());
   const [newOptions, setNewOptions] = useState([]);
   const [selectedNew, setSelectedNew] = useState(new Set());
@@ -110,7 +112,7 @@ const VotePollModal = ({ visible, onClose, topic, options, multipleChoice, onVot
           >
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: THEME.border }]}>
-               <Text style={[styles.title, { color: THEME.textPrimary }]}>Bình chọn</Text>
+               <Text style={[styles.title, { color: THEME.textPrimary }]}>{t('poll.vote')}</Text>
                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                  <Text style={{ color: THEME.textMuted, fontSize: 18 }}>✕</Text>
                </TouchableOpacity>
@@ -121,7 +123,7 @@ const VotePollModal = ({ visible, onClose, topic, options, multipleChoice, onVot
                <View style={{ marginBottom: 20 }}>
                  <Text style={[styles.topic, { color: THEME.textPrimary }]}>{topic}</Text>
                  <Text style={[styles.subtitle, { color: THEME.textMuted }]}>
-                   {multipleChoice ? 'Chọn nhiều phương án' : 'Chọn 1 phương án'}
+                   {multipleChoice ? t('poll.multi_choice') : t('poll.option_placeholder', { index: 1 }).replace(' 1', '').replace('1', '')}
                  </Text>
                </View>
 
@@ -198,7 +200,7 @@ const VotePollModal = ({ visible, onClose, topic, options, multipleChoice, onVot
                   <TextInput 
                     value={inputValue}
                     onChangeText={setInputValue}
-                    placeholder="Thêm lựa chọn..."
+                    placeholder={t('poll.option_placeholder', { index: '' }).trim() + '...'}
                     placeholderTextColor={THEME.textMuted}
                     style={[styles.input, { color: THEME.textPrimary }]}
                   />
@@ -212,7 +214,7 @@ const VotePollModal = ({ visible, onClose, topic, options, multipleChoice, onVot
             {/* Footer */}
             <View style={[styles.footer, { borderTopColor: THEME.border }]}>
                <TouchableOpacity onPress={onClose} style={[styles.footerBtn, { backgroundColor: THEME.bgTertiary }]}>
-                 <Text style={{ color: THEME.textPrimary, fontWeight: '700' }}>Hủy</Text>
+                 <Text style={{ color: THEME.textPrimary, fontWeight: '700' }}>{t('common.cancel')}</Text>
                </TouchableOpacity>
                <TouchableOpacity 
                  onPress={handleConfirm}
@@ -221,7 +223,7 @@ const VotePollModal = ({ visible, onClose, topic, options, multipleChoice, onVot
                    { backgroundColor: THEME.accent }
                  ]}
                >
-                 <Text style={{ color: '#fff', fontWeight: '700' }}>Xác nhận</Text>
+                 <Text style={{ color: '#fff', fontWeight: '700' }}>{t('common.confirm')}</Text>
                </TouchableOpacity>
             </View>
           </TouchableOpacity>

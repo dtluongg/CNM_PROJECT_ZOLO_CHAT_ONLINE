@@ -192,6 +192,7 @@ const signin = async (req, res) => {
                 authProvider: userFind.authProvider,
                 isEmailVerified: userFind.isEmailVerified,
                 isPhoneVerified: userFind.isPhoneVerified,
+                language: userFind.language || 'vi',
                 createdAt: userFind.createdAt,
             },
         });
@@ -522,6 +523,7 @@ const syncOAuthUser = async (req, res) => {
                 authProvider: dbUser.authProvider,
                 isEmailVerified: dbUser.isEmailVerified,
                 isPhoneVerified: dbUser.isPhoneVerified,
+                language: dbUser.language || 'vi',
                 createdAt: dbUser.createdAt,
             },
         });
@@ -531,7 +533,7 @@ const syncOAuthUser = async (req, res) => {
         console.error('syncOAuthUser stack:', error.stack);
         return res.status(500).json({
             message: 'Lỗi server khi đồng bộ tài khoản',
-            detail: process.env.NODE_ENV !== 'production' ? error.message : undefined,
+            detail: error.message
         });
     }
 };
@@ -596,6 +598,7 @@ const completeOAuthProfile = async (req, res) => {
                 authProvider: dbUser.authProvider,
                 isEmailVerified: dbUser.isEmailVerified,
                 isPhoneVerified: dbUser.isPhoneVerified,
+                language: dbUser.language || 'vi',
                 createdAt: dbUser.createdAt,
             },
         });
@@ -606,11 +609,6 @@ const completeOAuthProfile = async (req, res) => {
     }
 };
 
-// ════════════════════════════════════════════════════════════════
-//  AUTH ME
-// ════════════════════════════════════════════════════════════════
-
-// Lấy thông tin user hiện tại (dùng sau verifyToken middleware)
 // ════════════════════════════════════════════════════════════════
 //  AUTH ME
 // ════════════════════════════════════════════════════════════════
@@ -642,6 +640,7 @@ const authMe = async (req, res) => {
                 authProvider: user.authProvider,
                 isEmailVerified: user.isEmailVerified,
                 isPhoneVerified: user.isPhoneVerified,
+                language: user.language || 'vi',
                 createdAt: user.createdAt,
             },
         });

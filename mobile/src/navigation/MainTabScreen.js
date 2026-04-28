@@ -11,6 +11,7 @@ import { STATUS_CONFIG, getAvatarColor, getInitials } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { usePresence } from '../context/PresenceContext';
+import { useLanguage } from '../context/LanguageContext';
 import ProfileScreen from '../features/user/screens/ProfileScreen';
 import FriendsScreen from '../features/friends/screens/FriendsScreen';
 import StoriesScreen from '../features/stories/screens/StoriesScreen';
@@ -19,35 +20,36 @@ import friendApi from '../features/friends/api/friendApi';
 import { SOCKET_URL } from '../config/env';
 
 const GROUP_TYPES = [
-  { key: 'general', label: '💬 Thảo luận' },
-  { key: 'study',   label: '📚 Học tập' },
-  { key: 'gaming',  label: '🎮 Gaming' },
-  { key: 'project', label: '📌 Dự án' },
-  { key: 'other',   label: '🗂️ Khác' },
+  { key: 'general', label: 'group_types.general' },
+  { key: 'study',   label: 'group_types.study' },
+  { key: 'gaming',  label: 'group_types.gaming' },
+  { key: 'project', label: 'group_types.project' },
+  { key: 'other',   label: 'group_types.other' },
 ];
 
 
-const formatTime = (iso) => {
+const formatTime = (iso, language) => {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   const now = new Date();
   const sameDay = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  const locale = language === 'vi' ? 'vi-VN' : 'en-US';
   return sameDay
-    ? d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    ? d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
 };
 
-const mapConv = (item) => {
+const mapConv = (item, t, language) => {
   const isDm = item.type === 'dm';
   const other = isDm ? item.otherUser : null;
   return {
     id: item._id,
-    name: isDm ? (other?.displayName || item.name || 'Đoạn chat trực tiếp') : (item.name || 'Nhóm'),
+    name: isDm ? (other?.displayName || item.name || t('chat.direct_message')) : (item.name || t('chat.group_chat')),
     avatar: isDm ? (other?.avatar || null) : (item.avatar || null),
     otherUserId: isDm ? (other?._id?.toString() || null) : null,
-    lastMessage: item.lastMessagePreview || 'Chưa có tin nhắn',
-    time: formatTime(item.lastMessageTime || item.updatedAt || item.createdAt),
+    lastMessage: item.lastMessagePreview || t('chat.no_msgs'),
+    time: formatTime(item.lastMessageTime || item.updatedAt || item.createdAt, language),
     unread: item.myMembership?.unreadCount || 0,
     type: item.type,
     online: false,
@@ -118,6 +120,7 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
   const [selected, setSelected]       = useState([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
   const [creating, setCreating]       = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (!visible) { setStep(1); setGroupName(''); setGroupType('general'); setDescription(''); setAvatar(null); setSelected([]); return; }
@@ -138,8 +141,8 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
   const toggleFriend = (id) => setSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
   const handleCreate = async () => {
-    if (!groupName.trim()) { Alert.alert('Lỗi', 'Vui lòng nhập tên nhóm'); return; }
-    if (selected.length < 1) { Alert.alert('Lỗi', 'Chọn ít nhất 1 thành viên'); return; }
+    if (!groupName.trim()) { Alert.alert(t('common.error'), t('auth.fill_all_fields')); return; }
+    if (selected.length < 1) { Alert.alert(t('common.error'), t('create_group.subtitle')); return; }
     setCreating(true);
     try {
       const res = await conversationApi.createGroupConversation(groupName.trim(), avatar, selected, groupType, description.trim());
@@ -147,7 +150,7 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
       onCreated && onCreated(conv);
       onClose();
     } catch (err) {
-      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể tạo nhóm');
+      Alert.alert(t('common.error'), err.response?.data?.message || t('chat.create_error'));
     } finally { setCreating(false); }
   };
 
@@ -156,7 +159,7 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
       <Pressable style={styles.modalOverlay} onPress={onClose}>
         <Pressable style={[styles.modalBox, { maxHeight: '90%' }]} onPress={() => {}}>
           <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>Tạo nhóm mới</Text>
+          <Text style={styles.modalTitle}>{t('chat.create_group')}</Text>
 
           {step === 1 ? (
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -168,35 +171,35 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
                       <Text style={{ fontSize: 28 }}>📷</Text>
                     </View>
                 }
-                <Text style={{ color: THEME.accent, fontSize: 13, marginTop: 6, fontWeight: '600' }}>Chọn ảnh nhóm</Text>
+                <Text style={{ color: THEME.accent, fontSize: 13, marginTop: 6, fontWeight: '600' }}>{t('create_group.avatar_title')}</Text>
               </TouchableOpacity>
 
-              <Text style={styles.fieldLabel}>Tên nhóm *</Text>
-              <TextInput style={styles.fieldInput} value={groupName} onChangeText={setGroupName} placeholder="Nhập tên nhóm..." placeholderTextColor={THEME.textMuted} />
+              <Text style={styles.fieldLabel}>{t('chat.group_name')}</Text>
+              <TextInput style={styles.fieldInput} value={groupName} onChangeText={setGroupName} placeholder={t('chat.group_name_placeholder')} placeholderTextColor={THEME.textMuted} />
 
-              <Text style={styles.fieldLabel}>Loại nhóm</Text>
+              <Text style={styles.fieldLabel}>{t('chat.group_type')}</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                {GROUP_TYPES.map(t => (
-                  <TouchableOpacity key={t.key} onPress={() => setGroupType(t.key)}
-                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: groupType === t.key ? THEME.accent : THEME.border, backgroundColor: groupType === t.key ? THEME.accent + '20' : 'transparent' }}>
-                    <Text style={{ fontSize: 13, color: groupType === t.key ? THEME.accent : THEME.textMuted, fontWeight: '600' }}>{t.label}</Text>
+                {GROUP_TYPES.map(type => (
+                  <TouchableOpacity key={type.key} onPress={() => setGroupType(type.key)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: groupType === type.key ? THEME.accent : THEME.border, backgroundColor: groupType === type.key ? THEME.accent + '20' : 'transparent' }}>
+                    <Text style={{ fontSize: 13, color: groupType === type.key ? THEME.accent : THEME.textMuted, fontWeight: '600' }}>{t(`chat.group_types.${type.key}`)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.fieldLabel}>Mô tả (tùy chọn)</Text>
-              <TextInput style={[styles.fieldInput, { height: 72, textAlignVertical: 'top' }]} value={description} onChangeText={setDescription} placeholder="Mô tả nhóm..." placeholderTextColor={THEME.textMuted} multiline />
+              <Text style={styles.fieldLabel}>{t('chat.description')}</Text>
+              <TextInput style={[styles.fieldInput, { height: 72, textAlignVertical: 'top' }]} value={description} onChangeText={setDescription} placeholder={t('chat.description_placeholder')} placeholderTextColor={THEME.textMuted} multiline />
 
               <View style={styles.modalBtns}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={onClose}><Text style={styles.cancelBtnText}>Hủy</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.cancelBtn} onPress={onClose}><Text style={styles.cancelBtnText}>{t('common.cancel')}</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.saveBtn} onPress={() => setStep(2)}>
-                  <Text style={styles.saveBtnText}>Tiếp theo →</Text>
+                  <Text style={styles.saveBtnText}>{t('chat.next')}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
           ) : (
             <>
-              <Text style={[styles.fieldLabel, { marginBottom: 10 }]}>Chọn thành viên ({selected.length} đã chọn)</Text>
+              <Text style={[styles.fieldLabel, { marginBottom: 10 }]}>{t('chat.select_members')} ({t('chat.members_selected', { count: selected.length })})</Text>
               {loadingFriends
                 ? <ActivityIndicator color={THEME.accent} style={{ marginVertical: 24 }} />
                 : (
@@ -222,14 +225,14 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
                         </TouchableOpacity>
                       );
                     }}
-                    ListEmptyComponent={<Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Không có bạn bè nào</Text>}
+                    ListEmptyComponent={<Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>{t('friends.no_friends')}</Text>}
                   />
                 )
               }
               <View style={[styles.modalBtns, { marginTop: 12 }]}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setStep(1)}><Text style={styles.cancelBtnText}>← Quay lại</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setStep(1)}><Text style={styles.cancelBtnText}>{t('chat.back')}</Text></TouchableOpacity>
                 <TouchableOpacity style={[styles.saveBtn, { opacity: creating ? 0.6 : 1 }]} onPress={handleCreate} disabled={creating}>
-                  {creating ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Tạo nhóm</Text>}
+                  {creating ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>{t('chat.create_btn')}</Text>}
                 </TouchableOpacity>
               </View>
             </>
@@ -246,6 +249,7 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
 function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh, THEME, styles }) {
   const [search, setSearch] = useState('');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const { t } = useLanguage();
 
   const filtered = conversations.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
@@ -345,7 +349,7 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh,
             style={styles.searchInput}
             value={search}
             onChangeText={setSearch}
-            placeholder="Tìm hội thoại..."
+            placeholder={t('chat.search_placeholder')}
             placeholderTextColor={THEME.textMuted}
             selectionColor={THEME.accent}
           />
@@ -359,17 +363,17 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh,
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         {/* DMs */}
-        {dms.length > 0 && <SectionHeader title="TIN NHẮN RIÊNG" count={dms.length} />}
+        {dms.length > 0 && <SectionHeader title={t('chat.direct_messages')} count={dms.length} />}
         {dms.map(item => <ConvItem key={item.id} item={item} />)}
 
         {/* Groups */}
-        {groups.length > 0 && <SectionHeader title="NHÓM" count={groups.length} />}
+        {groups.length > 0 && <SectionHeader title={t('chat.groups')} count={groups.length} />}
         {groups.map(item => <ConvItem key={item.id} item={item} />)}
 
         {filtered.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>💬</Text>
-            <Text style={styles.emptyText}>Không tìm thấy hội thoại</Text>
+            <Text style={styles.emptyText}>{t('chat.no_results')}</Text>
           </View>
         )}
       </ScrollView>
@@ -380,17 +384,19 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh,
 // ─────────────────────────────────────────────
 // BOTTOM TAB BAR
 // ─────────────────────────────────────────────
-const TABS = [
-  { key: 'chats', icon: '💬', label: 'Tin nhắn' },
-  { key: 'friends', icon: '👥', label: 'Bạn bè' },
-  { key: 'profile', icon: '👤', label: 'Hồ sơ' },
-  { key: 'tin', icon: 'custom', label: 'Tin' },
+const getTabs = (t) => [
+  { key: 'chats',   icon: '💬', label: t('tabs.messages') },
+  { key: 'friends', icon: '👥', label: t('tabs.contacts') },
+  { key: 'profile', icon: '👤', label: t('tabs.profile') },
+  { key: 'tin',     icon: 'custom', label: t('tabs.discover') },
 ];
 
 function BottomTabBar({ activeTab, onTabChange, unreadTotal, THEME, styles }) {
+  const { t } = useLanguage();
+  const tabs = getTabs(t);
   return (
     <View style={styles.bottomBar}>
-      {TABS.map(tab => {
+      {tabs.map(tab => {
         const active = activeTab === tab.key;
         return (
           <TouchableOpacity
@@ -430,6 +436,7 @@ function BottomTabBar({ activeTab, onTabChange, unreadTotal, THEME, styles }) {
 export default function MainTabScreen({ navigation, route }) {
   const { theme: THEME } = useTheme();
   const { token } = useAuth();
+  const { t, language } = useLanguage();
   const styles = useStyles(THEME);
 
   const [activeTab, setActiveTab] = useState('chats');
@@ -440,11 +447,11 @@ export default function MainTabScreen({ navigation, route }) {
     try {
       const res = await conversationApi.listMyConversations('exclude');
       const list = Array.isArray(res?.data?.data) ? res.data.data : [];
-      setConversations(list.map(mapConv));
+      setConversations(list.map(c => mapConv(c, t, language)));
     } catch (err) {
       console.error('fetchConversations error:', err);
     }
-  }, []);
+  }, [t, language]);
 
   useEffect(() => {
     fetchConversations();
@@ -467,7 +474,8 @@ export default function MainTabScreen({ navigation, route }) {
         const fmtTime = (iso) => {
           const d = new Date(iso);
           if (Number.isNaN(d.getTime())) return '';
-          return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+          const locale = language === 'vi' ? 'vi-VN' : 'en-US';
+          return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
         };
         return {
           ...c,

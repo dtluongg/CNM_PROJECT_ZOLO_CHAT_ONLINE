@@ -6,6 +6,7 @@ import {
 import friendApi from '../api/friendApi';
 import { useTheme } from '../../../context/ThemeContext';
 import { getAvatarColor, getInitials } from '../../../theme';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const Avatar = ({ name, size = 50 }) => {
   const bg = getAvatarColor(name);
@@ -18,6 +19,7 @@ const Avatar = ({ name, size = 50 }) => {
 
 export default function FriendRequestsScreen({ navigation }) {
   const { theme: THEME } = useTheme();
+  const { t } = useLanguage();
   const s = useStyles(THEME);
 
   const [tab, setTab] = useState('incoming'); // 'incoming' | 'outgoing'
@@ -45,21 +47,21 @@ export default function FriendRequestsScreen({ navigation }) {
     fetchRequests();
   }, []);
 
-  const handleAction = async (actionFn, id, successMsg) => {
+  const handleAction = async (actionFn, id) => {
     try {
       await actionFn(id);
       fetchRequests();
     } catch (error) {
-      Alert.alert('Lỗi', error.message || 'Thao tác thất bại');
+      Alert.alert(t('common.error'), error.message || t('common.something_wrong'));
     }
   };
 
   const renderIncoming = ({ item }) => (
     <View style={s.card}>
-      <Avatar name={item.fromUserId?.displayName || 'Unknown User'} />
+      <Avatar name={item.fromUserId?.displayName || t('common.unknown_user')} />
       <View style={s.cardInfo}>
         <Text style={[s.name, { color: THEME.textPrimary }]} numberOfLines={1}>
-          {item.fromUserId?.displayName || 'Người lạ'}
+          {item.fromUserId?.displayName || t('friends.stranger')}
         </Text>
         <Text style={s.subText}>{item.fromUserId?.email}</Text>
       </View>
@@ -68,13 +70,13 @@ export default function FriendRequestsScreen({ navigation }) {
            style={[s.btn, { backgroundColor: THEME.bgInput }]}
            onPress={() => handleAction(friendApi.rejectRequest, item._id)}
         >
-          <Text style={[s.btnText, { color: THEME.textPrimary }]}>Từ chối</Text>
+          <Text style={[s.btnText, { color: THEME.textPrimary }]}>{t('friends.reject')}</Text>
         </TouchableOpacity>
         <TouchableOpacity 
            style={[s.btn, { backgroundColor: THEME.accent }]}
            onPress={() => handleAction(friendApi.acceptRequest, item._id)}
         >
-          <Text style={[s.btnText, { color: '#fff' }]}>Đồng ý</Text>
+          <Text style={[s.btnText, { color: '#fff' }]}>{t('friends.accept')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -82,19 +84,19 @@ export default function FriendRequestsScreen({ navigation }) {
 
   const renderOutgoing = ({ item }) => (
     <View style={s.card}>
-      <Avatar name={item.toUserId?.displayName || 'Unknown User'} />
+      <Avatar name={item.toUserId?.displayName || t('common.unknown_user')} />
       <View style={s.cardInfo}>
         <Text style={[s.name, { color: THEME.textPrimary }]} numberOfLines={1}>
-          {item.toUserId?.displayName || 'Người lạ'}
+          {item.toUserId?.displayName || t('friends.stranger')}
         </Text>
-        <Text style={s.subText}>Đang chờ đối tác xác nhận...</Text>
+        <Text style={s.subText}>{t('friends.waiting_confirm')}</Text>
       </View>
       <View style={s.btnGroup}>
         <TouchableOpacity 
            style={[s.btn, { backgroundColor: THEME.bgInput }]}
            onPress={() => handleAction(friendApi.cancelRequest, item._id)}
         >
-          <Text style={[s.btnText, { color: THEME.textPrimary }]}>Thu hồi</Text>
+          <Text style={[s.btnText, { color: THEME.textPrimary }]}>{t('friends.cancel_request')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -109,7 +111,7 @@ export default function FriendRequestsScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
             <Text style={{ fontSize: 24, color: THEME.textPrimary }}>←</Text>
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Lời mời kết bạn</Text>
+        <Text style={s.headerTitle}>{t('friends.tab_requests')}</Text>
         <TouchableOpacity style={s.settingsBtn}>
             <Text style={{ fontSize: 20, color: THEME.textPrimary }}>⚙️</Text>
         </TouchableOpacity>
@@ -123,7 +125,7 @@ export default function FriendRequestsScreen({ navigation }) {
             activeOpacity={0.8}
         >
             <Text style={[s.tabText, tab === 'incoming' && { color: THEME.accent, fontWeight: '700' }]}>
-                Đã nhận {incoming.length > 0 ? `(${incoming.length})` : ''}
+                {t('friends.tab_received', { count: incoming.length })}
             </Text>
         </TouchableOpacity>
         <TouchableOpacity 
@@ -132,7 +134,7 @@ export default function FriendRequestsScreen({ navigation }) {
             activeOpacity={0.8}
         >
             <Text style={[s.tabText, tab === 'outgoing' && { color: THEME.accent, fontWeight: '700' }]}>
-                Đã gửi {outgoing.length > 0 ? `(${outgoing.length})` : ''}
+                {t('friends.tab_sent', { count: outgoing.length })}
             </Text>
         </TouchableOpacity>
       </View>
@@ -154,7 +156,7 @@ export default function FriendRequestsScreen({ navigation }) {
                      <View style={{ padding: 40, alignItems: 'center', opacity: 0.5 }}>
                          <Text style={{ fontSize: 48, marginBottom: 16 }}>📬</Text>
                          <Text style={{ fontSize: 16, color: THEME.textMuted }}>
-                             {tab === 'incoming' ? 'Không có lời mời nào.' : 'Chưa gửi lời mời nào.'}
+                             {tab === 'incoming' ? t('friends.no_requests') : t('friends.no_sent_requests')}
                          </Text>
                      </View>
                  )}

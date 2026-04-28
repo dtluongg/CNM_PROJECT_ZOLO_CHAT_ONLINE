@@ -6,6 +6,7 @@ import { useState } from 'react';
 import ProfileSettings from '../features/user/components/ProfileSettings';
 import { useNotifications } from '../context/NotificationContext';
 import NotificationCenter from '../features/notifications/components/NotificationCenter';
+import { useLanguage } from '../context/LanguageContext';
 
 const getInitials = (name) => {
   if (!name) return '?';
@@ -34,6 +35,7 @@ const SidebarNav = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { t } = useLanguage();
     const [showSettings, setShowSettings] = useState(false);
     const [showNotificationCenter, setShowNotificationCenter] = useState(false);
     const { unreadCount } = useNotifications();
@@ -90,7 +92,7 @@ const SidebarNav = () => {
                 {/* Tin Nhắn */}
                 <button 
                     onClick={() => handleNavigate('/chat')}
-                    title="Tin nhắn"
+                    title={t('navbar.chat')}
                     style={{
                         width: 44, height: 44,
                         borderRadius: 12,
@@ -106,7 +108,7 @@ const SidebarNav = () => {
                 {/* Notification Center */}
                 <button
                     onClick={() => setShowNotificationCenter((v) => !v)}
-                    title="Thông báo"
+                    title={t('navbar.notifications')}
                     style={{
                         position: 'relative',
                         width: 44, height: 44,
@@ -133,7 +135,7 @@ const SidebarNav = () => {
                 {/* Danh bạ */}
                 <button 
                     onClick={() => handleNavigate('/friends')}
-                    title="Danh bạ"
+                    title={t('navbar.friends')}
                     style={{
                         width: 44, height: 44,
                         borderRadius: 12,
@@ -149,7 +151,7 @@ const SidebarNav = () => {
                 {/* Bản tin (Custom Tin Icon) */}
                 <button 
                     onClick={() => handleNavigate('/stories')}
-                    title="Bản tin"
+                    title={t('navbar.stories')}
                     style={{
                         width: 44, height: 44, borderRadius: 12,
                         backgroundColor: isStories ? 'var(--bg-hover)' : 'transparent',
@@ -164,7 +166,7 @@ const SidebarNav = () => {
 
                 {/* Đám mây (Static for UI) */}
                 <button 
-                    title="Truyền file"
+                    title={t('navbar.cloud')}
                     style={{
                         width: 44, height: 44, borderRadius: 12, backgroundColor: 'transparent',
                         color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -176,7 +178,7 @@ const SidebarNav = () => {
                 
                 {/* Công cụ (Static for UI) */}
                 <button 
-                    title="Công cụ"
+                    title={t('navbar.tools')}
                     style={{
                         width: 44, height: 44, borderRadius: 12, backgroundColor: 'transparent',
                         color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -193,7 +195,7 @@ const SidebarNav = () => {
                 {/* Cài đặt */}
                 <button 
                     onClick={() => setShowSettings(true)}
-                    title="Cài đặt"
+                    title={t('navbar.settings')}
                     style={{
                         width: 44, height: 44, borderRadius: 12, backgroundColor: showSettings ? 'var(--bg-hover)' : 'transparent',
                         color: showSettings ? 'var(--accent)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',

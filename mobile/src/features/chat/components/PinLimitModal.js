@@ -1,36 +1,62 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, Modal, TouchableOpacity,
-  StyleSheet, FlatList, Dimensions
+  StyleSheet, FlatList, Dimensions, Pressable
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
-const PinLimitModal = ({ isOpen, onClose, pinnedMessages, onConfirm, THEME }) => {
+const PinLimitModal = ({ isOpen, onClose, pinnedMessages = [], onConfirm, THEME }) => {
+  const { t } = useLanguage();
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
   if (!isOpen) return null;
+
+  const handleConfirm = () => {
+    onConfirm(selectedIndex);
+    setSelectedIndex(0);
+  };
 
   const renderItem = ({ item, index }) => {
     const message = item.messageId;
-    const previewText = message.revoked ? 'Tin nhắn đã được thu hồi' : 
-                       (message.type === 'image' ? '[Hình ảnh]' : 
-                       (message.type === 'file' ? `[File] ${message.payload?.fileName || ''}` : 
-                       (message.type === 'voice' ? '[Tin nhắn thoại]' : message.content)));
+    const isSelected = selectedIndex === index;
+    const previewText = message.revoked ? t('chat.revoked_msg') : 
+                       (message.type === 'image' ? t('chat.image_preview') : 
+                       (message.type === 'file' ? `${t('chat.file_preview')} ${message.payload?.fileName || ''}` : 
+                       (message.type === 'voice' ? t('chat.voice_preview') : message.content)));
 
     return (
       <TouchableOpacity
-        style={[styles.item, { borderBottomColor: THEME.border }]}
-        onPress={() => onConfirm(index)}
+        style={[
+          styles.item, 
+          { 
+            borderColor: isSelected ? THEME.accent : THEME.border,
+            backgroundColor: isSelected ? THEME.accent + '08' : 'transparent',
+            borderWidth: isSelected ? 2 : 1,
+          }
+        ]}
+        onPress={() => setSelectedIndex(index)}
+        activeOpacity={0.7}
       >
-        <View style={styles.itemHeader}>
-          <Text style={[styles.senderName, { color: THEME.textPrimary }]} numberOfLines={1}>
-            {message.senderId?.displayName || 'Thành viên'}
-          </Text>
-          <Ionicons name="swap-horizontal" size={16} color={THEME.accent} />
+        <View style={styles.itemIconContainer}>
+          <View style={[styles.messageIconCircle, { backgroundColor: THEME.bgPrimary }]}>
+            <Feather name="message-square" size={16} color={THEME.textMuted} />
+          </View>
         </View>
-        <Text style={[styles.previewText, { color: THEME.textMuted }]} numberOfLines={1}>
-          {previewText}
-        </Text>
+
+        <View style={styles.itemContent}>
+          <View style={styles.itemHeader}>
+            <Text style={[styles.itemTitle, { color: THEME.textPrimary }]}>{t('chat.pin_item_type')}</Text>
+            {isSelected && (
+              <Text style={[styles.changeLabel, { color: THEME.accent }]}>{t('chat.pin_replace_action')}</Text>
+            )}
+          </View>
+          <Text style={[styles.previewText, { color: THEME.textMuted }]} numberOfLines={1}>
+            {message.senderId?.displayName || t('chat.member')}: {previewText}
+          </Text>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -40,13 +66,13 @@ const PinLimitModal = ({ isOpen, onClose, pinnedMessages, onConfirm, THEME }) =>
       visible={isOpen}
       transparent={true}
       animationType="fade"
-      onRestart={() => onClose()}
+      onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={[styles.modalContent, { backgroundColor: THEME.bgSecondary }]}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={[styles.modalContent, { backgroundColor: THEME.bgSecondary }]} onPress={e => e.stopPropagation()}>
           {/* Header */}
-          <View style={[styles.header, { borderBottomColor: THEME.border }]}>
-            <Text style={[styles.title, { color: THEME.textPrimary }]}>Ghim tin nhắn</Text>
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: THEME.textPrimary }]}>{t('chat.update_pin_list')}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color={THEME.textMuted} />
             </TouchableOpacity>
@@ -55,7 +81,7 @@ const PinLimitModal = ({ isOpen, onClose, pinnedMessages, onConfirm, THEME }) =>
           {/* Body */}
           <View style={styles.body}>
             <Text style={[styles.description, { color: THEME.textSecondary }]}>
-              Bạn chỉ có thể ghim tối đa 3 tin nhắn. Hãy chọn một tin nhắn cũ để thay thế:
+              {t('chat.pin_limit_desc')}
             </Text>
 
             <FlatList
@@ -71,13 +97,20 @@ const PinLimitModal = ({ isOpen, onClose, pinnedMessages, onConfirm, THEME }) =>
           <View style={styles.footer}>
             <TouchableOpacity 
               onPress={onClose} 
-              style={[styles.cancelBtn, { backgroundColor: THEME.bgHover }]}
+              style={[styles.btn, styles.cancelBtn, { backgroundColor: 'transparent' }]}
             >
-              <Text style={[styles.cancelBtnText, { color: THEME.textPrimary }]}>Hủy bỏ</Text>
+              <Text style={[styles.btnText, { color: THEME.textPrimary }]}>{t('common.cancel')}</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={handleConfirm} 
+              style={[styles.btn, styles.confirmBtn, { backgroundColor: THEME.accent }]}
+            >
+              <Text style={[styles.btnText, { color: '#fff' }]}>{t('chat.pin_confirm_update')}</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 };
@@ -93,71 +126,102 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '100%',
     maxWidth: 400,
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
-    elevation: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '800',
   },
   closeBtn: {
     padding: 4,
   },
   body: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   description: {
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   list: {
-    marginBottom: 8,
+    marginBottom: 10,
   },
   item: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    flexDirection: 'row',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  itemIconContainer: {
+    marginRight: 12,
+  },
+  messageIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  itemContent: {
+    flex: 1,
   },
   itemHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    alignItems: 'center',
+    marginBottom: 2,
   },
-  senderName: {
-    fontSize: 14,
-    fontWeight: '600',
-    flex: 1,
+  itemTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  changeLabel: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   previewText: {
     fontSize: 13,
   },
   footer: {
-    padding: 16,
-    paddingTop: 0,
+    flexDirection: 'row',
+    padding: 20,
+    paddingTop: 10,
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  btn: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    minWidth: 80,
     alignItems: 'center',
   },
   cancelBtn: {
-    width: '100%',
-    padding: 14,
-    borderRadius: 10,
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
-  cancelBtnText: {
-    fontSize: 16,
-    fontWeight: '600',
+  confirmBtn: {
+    elevation: 2,
+  },
+  btnText: {
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
 

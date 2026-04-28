@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { X, Plus, BarChart2 } from 'lucide-react';
+import { useLanguage } from '../../../../../context/LanguageContext';
 
 export default function CreatePollModal({ isOpen, onClose, onCreate }) {
+  const { t } = useLanguage();
   const [topic, setTopic] = useState('');
   const [options, setOptions] = useState(['', '']);
   const [multipleChoice, setMultipleChoice] = useState(false);
@@ -30,7 +32,7 @@ export default function CreatePollModal({ isOpen, onClose, onCreate }) {
     e.preventDefault();
     const validOptions = options.map(o => o.trim()).filter(o => o !== '');
     if (!topic.trim() || validOptions.length < 2) {
-      alert('Vui lòng nhập chủ đề và ít nhất 2 phương án.');
+      alert(t('poll.validation_error'));
       return;
     }
     onCreate({ 
@@ -71,7 +73,7 @@ export default function CreatePollModal({ isOpen, onClose, onCreate }) {
             }}>
               <BarChart2 size={20} color="var(--accent)" />
             </div>
-            <h3 style={{ margin: 0, fontSize: '19px', fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--text-primary)' }}>Tạo bình chọn</h3>
+            <h3 style={{ margin: 0, fontSize: '19px', fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--text-primary)' }}>{t('poll.create_title')}</h3>
           </div>
           <button onClick={onClose} style={{
             background: 'rgba(255,255,255,0.05)', border: 'none', cursor: 'pointer', 
@@ -89,12 +91,12 @@ export default function CreatePollModal({ isOpen, onClose, onCreate }) {
               display: 'block', fontSize: '12px', fontWeight: 800,
               color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase',
               letterSpacing: '0.5px'
-            }}>Chủ đề bình chọn</label>
+            }}>{t('poll.topic_label')}</label>
             <input
               autoFocus
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              placeholder="Nhập câu hỏi bình chọn..."
+              placeholder={t('poll.topic_placeholder')}
               style={{
                 width: '100%', padding: '14px 16px', borderRadius: '12px',
                 backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)',
@@ -111,14 +113,14 @@ export default function CreatePollModal({ isOpen, onClose, onCreate }) {
               display: 'block', fontSize: '12px', fontWeight: 800,
               color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase',
               letterSpacing: '0.5px'
-            }}>Các lựa chọn</label>
+            }}>{t('poll.options_label')}</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {options.map((opt, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <input
                     value={opt}
                     onChange={(e) => handleOptionChange(i, e.target.value)}
-                    placeholder={`Lựa chọn ${i + 1}`}
+                    placeholder={t('poll.option_placeholder', { index: i + 1 })}
                     style={{
                       flex: 1, padding: '12px 16px', borderRadius: '12px',
                       backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)',
@@ -153,7 +155,7 @@ export default function CreatePollModal({ isOpen, onClose, onCreate }) {
                   transition: 'all 0.2s'
                 }}
               >
-                <Plus size={16} /> Thêm lựa chọn
+                <Plus size={16} /> {t('poll.add_option')}
               </button>
             )}
           </div>
@@ -165,8 +167,8 @@ export default function CreatePollModal({ isOpen, onClose, onCreate }) {
             border: '1px solid rgba(255,255,255,0.05)', marginBottom: '24px'
           }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>Chọn nhiều phương án</span>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Cho phép bình chọn nhiều lựa chọn</span>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{t('poll.multiple_choice_label')}</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('poll.multiple_choice_hint')}</span>
             </div>
             <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px' }}>
               <input 
@@ -197,13 +199,13 @@ export default function CreatePollModal({ isOpen, onClose, onCreate }) {
               backgroundColor: 'rgba(255,255,255,0.05)', border: 'none',
               color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 700,
               fontSize: '15px'
-            }}>Hủy bỏ</button>
+            }}>{t('poll.cancel')}</button>
             <button type="submit" style={{
               flex: 1, padding: '14px', borderRadius: '14px',
               background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)', border: 'none',
               color: '#fff', cursor: 'pointer', fontWeight: 700,
               fontSize: '15px', boxShadow: '0 8px 16px -4px rgba(var(--accent-rgb), 0.4)'
-            }}>Tạo bình chọn</button>
+            }}>{t('poll.create_btn')}</button>
           </div>
         </form>
       </div>
@@ -214,7 +216,7 @@ export default function CreatePollModal({ isOpen, onClose, onCreate }) {
         }
         @keyframes modalOpen {
           from { opacity: 0; transform: scale(0.9); }
-          to { opacity: Poll 1; transform: scale(1); }
+          to { opacity: 1; transform: scale(1); }
         }
       `}</style>
     </div>

@@ -162,8 +162,10 @@ export const CallProvider = ({ children }) => {
   }, []);
 
   const resetAll = useCallback(() => {
-    InCallManager.stopRingtone();
-    InCallManager.stop();
+    if (InCallManager) {
+      InCallManager.stopRingtone();
+      InCallManager.stop();
+    }
 
     webrtcCleanup();
     stopTimer();
@@ -193,10 +195,12 @@ export const CallProvider = ({ children }) => {
 
   const prepareAudioSession = useCallback((type) => {
     setTimeout(() => {
-      InCallManager.start({ media: 'audio' });
-      InCallManager.setMicrophoneMute(false);
-      InCallManager.setForceSpeakerphoneOn(type === 'video');
-      InCallManager.setSpeakerphoneOn(type === 'video');
+      if (InCallManager) {
+        InCallManager.start({ media: 'audio' });
+        InCallManager.setMicrophoneMute(false);
+        InCallManager.setForceSpeakerphoneOn(type === 'video');
+        InCallManager.setSpeakerphoneOn(type === 'video');
+      }
     }, 800);
   }, []);
 
@@ -357,7 +361,9 @@ export const CallProvider = ({ children }) => {
       const next = !previous;
 
       setMuted(next);
-      InCallManager.setMicrophoneMute(next);
+      if (InCallManager) {
+        InCallManager.setMicrophoneMute(next);
+      }
 
       return next;
     });
@@ -405,7 +411,9 @@ export const CallProvider = ({ children }) => {
       setIncoming(data);
       setCallType(data.type);
       setCallState(CALL_STATE.INCOMING);
-      InCallManager.startRingtone('_DEFAULT_');
+      if (InCallManager) {
+        InCallManager.startRingtone('_DEFAULT_');
+      }
     });
 
     socket.on('call:answered', async ({ callId: cid, answer }) => {
@@ -423,9 +431,11 @@ export const CallProvider = ({ children }) => {
         const type = callTypeRef.current || 'audio';
 
         setTimeout(() => {
-          InCallManager.setMicrophoneMute(false);
-          InCallManager.setForceSpeakerphoneOn(type === 'video');
-          InCallManager.setSpeakerphoneOn(type === 'video');
+          if (InCallManager) {
+            InCallManager.setMicrophoneMute(false);
+            InCallManager.setForceSpeakerphoneOn(type === 'video');
+            InCallManager.setSpeakerphoneOn(type === 'video');
+          }
         }, 300);
       } catch (err) {
         console.error('call:answered error:', err);
@@ -486,8 +496,10 @@ export const CallProvider = ({ children }) => {
       stopTimer();
       stopStatsTimer();
       webrtcCleanup();
-      InCallManager.stopRingtone();
-      InCallManager.stop();
+      if (InCallManager) {
+        InCallManager.stopRingtone();
+        InCallManager.stop();
+      }
     };
   }, [stopTimer, stopStatsTimer, webrtcCleanup]);
 

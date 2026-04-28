@@ -220,6 +220,17 @@ export const useMessages = ({
         setActiveConversation((prev) =>
           prev?.id === convId ? { ...prev, lastMessage: msg.content, time: msg.time } : prev
         );
+
+      // ── REMINDER ─────────────────────────────────────────────────────────
+      } else if (payload.type === 'reminder') {
+        const { content, reminderTime } = payload;
+        const res = await messageApi.createReminder(convId, { content, reminderTime });
+        const msg = normalizeMsg(res.data.data);
+        addMessage(convId, msg);
+        updateConversationPreview(convId, { lastMessage: '[Nhắc hẹn]', time: msg.time });
+        setActiveConversation((prev) =>
+          prev?.id === convId ? { ...prev, lastMessage: '[Nhắc hẹn]', time: msg.time } : prev
+        );
       }
 
     } catch (err) {

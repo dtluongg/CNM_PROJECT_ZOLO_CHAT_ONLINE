@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, Send, Heart, ChevronUp, CheckCircle, Users, MoreHorizontal, Trash2 } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Send, Heart, ChevronUp, CheckCircle, Users, MoreHorizontal, Trash2, Volume2, VolumeX } from 'lucide-react';
 import storiesApi from '../storiesApi';
 import { useSocket } from '../../chat/hooks/useSocket';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const STORY_DURATION = 5000; // 5 seconds per story
 
-const formatTimeAgo = (dateString) => {
+const formatTimeAgo = (dateString, t) => {
     const now = new Date();
     const past = new Date(dateString);
     const diffInMs = now - past;
@@ -13,13 +14,14 @@ const formatTimeAgo = (dateString) => {
     const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
     const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
-    if (diffInMins < 1) return 'vừa xong';
-    if (diffInMins < 60) return `${diffInMins}ph`;
-    if (diffInHours < 24) return `${diffInHours}giờ`;
-    return `${diffInDays}ngày`;
+    if (diffInMins < 1) return t('stories.just_now');
+    if (diffInMins < 60) return `${diffInMins}${t('stories.min_short')}`;
+    if (diffInHours < 24) return `${diffInHours}${t('stories.hour_short')}`;
+    return `${diffInDays}${t('stories.day_short')}`;
 };
 
 const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDeleteSuccess }) => {
+    const { t } = useLanguage();
     // Sử dụng state nội bộ cho danh sách stories để có thể cập nhật ngay lập tức khi xóa
     const [localStories, setLocalStories] = useState(userStories);
     const [currentIndex, setCurrentIndex] = useState(startIndex);
@@ -33,6 +35,7 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
     const [showViewers, setShowViewers] = useState(false);
     const [showOptions, setShowOptions] = useState(false);
     const [viewerData, setViewerData] = useState({ viewers: [], totalViews: 0, totalHearts: 0 });
+    const [isMuted, setIsMuted] = useState(false);
 
     const timerRef = useRef();
     const viewedStoriesRef = useRef(new Set());
@@ -198,7 +201,7 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
             if (isHeart) {
                 setIsLiked(true);
             } else {
-                setToastMessage(`Đã phản hồi ${user?.displayName}`);
+                setToastMessage(t('stories.reply_toast', { name: user?.displayName }));
                 setShowToast(true);
             }
 
@@ -226,7 +229,7 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
                 onDeleteSuccess();
             }
 
-            setToastMessage('Đã xóa tin thành công');
+            setToastMessage(t('stories.delete_success'));
             setShowToast(true);
             setShowOptions(false);
             
@@ -271,14 +274,14 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
                         <button 
                             onClick={(e) => { e.stopPropagation(); handleBack(); }}
                             className="absolute -left-4 md:-left-20 top-1/2 -translate-y-1/2 p-2 md:p-3 bg-white/20 hover:bg-white/40 rounded-full text-white transition-all backdrop-blur-sm z-[250] border border-white/10"
-                            title="Tin trước"
+                            title={t('stories.prev_story')}
                         >
                             <ChevronLeft size={28} />
                         </button>
                         <button 
                             onClick={(e) => { e.stopPropagation(); handleNext(); }}
                             className="absolute -right-4 md:-right-20 top-1/2 -translate-y-1/2 p-2 md:p-3 bg-white/20 hover:bg-white/40 rounded-full text-white transition-all backdrop-blur-sm z-[250] border border-white/10"
-                            title="Tin tiếp theo"
+                            title={t('stories.next_story')}
                         >
                             <ChevronRight size={28} />
                         </button>
@@ -308,34 +311,46 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
                             <div className="flex items-center gap-1.5">
                                 <span className="text-white text-[13px] font-semibold">{user?.displayName}</span>
                                 <span className="text-white/40 text-[13px]">•</span>
-                                <span className="text-white/60 text-[13px] font-medium">{formatTimeAgo(currentStory.createdAt)}</span>
+                                <span className="text-white/60 text-[13px] font-medium">{formatTimeAgo(currentStory.createdAt, t)}</span>
                             </div>
                         </div>
 
-                        {isOwner && (
-                            <div className="relative">
+                        <div className="flex items-center gap-1">
+                            {currentStory.mediaType === 'video' && (
                                 <button 
-                                    onClick={(e) => { e.stopPropagation(); setShowOptions(!showOptions); }}
+                                    onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }}
                                     className="p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all"
+                                    title={isMuted ? t('stories.unmute') : t('stories.mute')}
                                 >
-                                    <MoreHorizontal size={22} />
+                                    {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
                                 </button>
+                            )}
 
-                                {showOptions && (
-                                    <div className="absolute top-10 right-0 w-[160px] bg-white rounded-2xl shadow-2xl py-1.5 z-[300] animate-in fade-in zoom-in-95 duration-200">
-                                        <button 
-                                            onClick={handleDeleteStory}
-                                            className="w-full px-4 py-3 flex items-center gap-3 text-red-500 hover:bg-red-50 transition-colors rounded-xl"
-                                        >
-                                            <Trash2 size={18} />
-                                            <span className="text-[14px] font-semibold">Xóa tin</span>
-                                        </button>
+                            {isOwner && (
+                                <div className="relative">
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); setShowOptions(!showOptions); }}
+                                        className="p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all"
+                                    >
+                                        <MoreHorizontal size={22} />
+                                    </button>
 
-                                        <div className="absolute -top-1.5 right-3 w-3 h-3 bg-white rotate-45 border-l border-t border-gray-100" />
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                                    {showOptions && (
+                                        <div className="absolute top-10 right-0 w-[160px] bg-white rounded-2xl shadow-2xl py-1.5 z-[300] animate-in fade-in zoom-in-95 duration-200">
+                                            <button 
+                                                onClick={handleDeleteStory}
+                                                className="w-full px-4 py-3 flex items-center gap-3 text-red-500 hover:bg-red-50 transition-colors rounded-xl"
+                                            >
+                                                <Trash2 size={18} />
+                                                <span className="text-[14px] font-semibold">{t('stories.delete_btn')}</span>
+                                            </button>
+
+                                            <div className="absolute -top-1.5 right-3 w-3 h-3 bg-white rotate-45 border-l border-t border-gray-100" />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div 
@@ -348,7 +363,7 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
                                 src={currentStory.mediaUrl} 
                                 className="w-full h-full object-contain"
                                 autoPlay
-                                muted
+                                muted={isMuted}
                                 onEnded={handleNext}
                             />
                         ) : (
@@ -388,7 +403,7 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
                             <ChevronUp className="text-white animate-bounce" size={20} />
                             <div className="flex flex-col">
                                 <span className="text-white text-[15px] font-bold drop-shadow-md">
-                                    {viewerData.totalViews} người xem
+                                    {t('stories.views_count', { count: viewerData.totalViews })}
                                 </span>
                                 <div className="flex -space-x-2 mt-1">
                                     {viewerData.viewers.slice(0, 5).map((v, i) => (
@@ -410,7 +425,7 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
                                     onChange={(e) => setReplyContent(e.target.value)}
                                     onFocus={() => { setPaused(true); setShowToast(false); }}
                                     onBlur={() => setPaused(false)}
-                                    placeholder={`Phản hồi ${user?.displayName || 'tin'}...`}
+                                    placeholder={t('stories.reply_placeholder', { name: user?.displayName || 'tin' })}
                                     className="flex-1 bg-transparent text-white text-[14px] outline-none placeholder:text-white/40"
                                 />
                             </form>
@@ -418,7 +433,7 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
                                 <button 
                                     onClick={() => handleReaction('❤️')}
                                     className={`flex items-center justify-center hover:scale-110 active:scale-95 transition-all outline-none`}
-                                    title="Thả tim"
+                                    title={t('stories.reaction_heart')}
                                 >
                                     <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${isLiked ? 'bg-gradient-to-br from-red-400 to-red-600 shadow-red-500/20 shadow-lg' : 'bg-white/20 hover:bg-white/40'}`}>
                                         <Heart 
@@ -431,7 +446,7 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
                                     onClick={handleReply}
                                     disabled={!replyContent.trim() || sending}
                                     className="flex items-center justify-center text-white hover:scale-110 active:scale-95 disabled:opacity-30 transition-all ml-1"
-                                    title="Gửi"
+                                    title={t('stories.send_reply')}
                                 >
                                     <Send size={26} />
                                 </button>
@@ -446,11 +461,11 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
                             <div className="absolute inset-x-0 bottom-0 bg-white rounded-t-[32px] max-h-[75%] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-500 shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
                                 <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
                                     <div className="flex flex-col">
-                                        <h3 className="text-[17px] font-bold text-gray-900">Người xem tin</h3>
+                                        <h3 className="text-[17px] font-bold text-gray-900">{t('stories.viewers')}</h3>
                                         <div className="flex items-center gap-2 text-gray-400 text-[13px] font-medium mt-0.5">
-                                            <span>{viewerData.totalViews} lượt xem</span>
+                                            <span>{t('stories.views_count', { count: viewerData.totalViews })}</span>
                                             <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                                            <span>{viewerData.totalHearts} cảm xúc</span>
+                                            <span>{t('stories.hearts_count', { count: viewerData.totalHearts })}</span>
                                         </div>
                                     </div>
                                     <button 
@@ -487,7 +502,7 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
                                             <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-4">
                                                 <Users size={32} className="opacity-20" />
                                             </div>
-                                            <span className="text-[15px] font-medium">Chưa có lượt xem nào</span>
+                                            <span className="text-[15px] font-medium">{t('stories.no_viewers')}</span>
                                         </div>
                                     )}
                                 </div>
@@ -502,3 +517,4 @@ const StoryViewer = ({ userStories, startIndex = 0, currentUser, onClose, onDele
 };
 
 export default StoryViewer;
+

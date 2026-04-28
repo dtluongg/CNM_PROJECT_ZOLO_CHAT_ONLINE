@@ -70,6 +70,7 @@ import { LogBox } from 'react-native';
 import { AuthProvider } from './src/context/AuthContext';
 import { PresenceProvider } from './src/context/PresenceContext';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { LanguageProvider } from './src/context/LanguageContext';
 import { CallProvider } from './src/features/call/CallContext';
 import { VoiceRoomProvider } from './src/features/voice/VoiceRoomContext';
 import IncomingCallScreen from './src/features/call/screens/IncomingCallScreen';
@@ -86,16 +87,18 @@ function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <ThemeProvider>
-          <PresenceProvider>
-            <CallProvider>
-              <VoiceRoomProvider>
-                <AppNavigator />
-                <IncomingCallScreen />
-                <OutgoingCallScreen />
-                <ActiveCallScreen />
-              </VoiceRoomProvider>
-            </CallProvider>
-          </PresenceProvider>
+          <LanguageProvider>
+            <PresenceProvider>
+              <CallProvider>
+                <VoiceRoomProvider>
+                  <AppNavigator />
+                  <IncomingCallScreen />
+                  <OutgoingCallScreen />
+                  <ActiveCallScreen />
+                </VoiceRoomProvider>
+              </CallProvider>
+            </PresenceProvider>
+          </LanguageProvider>
         </ThemeProvider>
       </AuthProvider>
     </SafeAreaProvider>

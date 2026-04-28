@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { CallProvider } from './features/call/CallContext';
@@ -77,82 +78,84 @@ const App = () => {
     <Router>
       <ThemeProvider>
         <AuthProvider>
-          <ThemeSyncHandler />
-          <PresenceProvider>
-            <NotificationProvider>
-              <CallProvider>
-              <VoiceRoomProvider>
-              <CallNotification />
-              <NotificationToast />
-              <IncomingCallModal />
-              <OutgoingCallScreen />
-              <ActiveCallScreen />
-              <Layout>
-                <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/signup" element={<Signup />} />
-                <Route path="/signin" element={<Signin />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
+          <LanguageProvider>
+            <ThemeSyncHandler />
+            <PresenceProvider>
+              <NotificationProvider>
+                <CallProvider>
+                <VoiceRoomProvider>
+                <CallNotification />
+                <NotificationToast />
+                <IncomingCallModal />
+                <OutgoingCallScreen />
+                <ActiveCallScreen />
+                <Layout>
+                  <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/signup" element={<Signup />} />
+                  <Route path="/signin" element={<Signin />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
 
-                {/* Giữ route cũ /dashboard nhưng chuyển hướng về /chat */}
-                <Route path="/dashboard" element={<Navigate to="/chat" replace />} />
+                  {/* Giữ route cũ /dashboard nhưng chuyển hướng về /chat */}
+                  <Route path="/dashboard" element={<Navigate to="/chat" replace />} />
 
-                <Route
-                  path="/chat"
-                  element={
-                    <ProtectedRoute>
-                      <Chat />
-                    </ProtectedRoute>
-                  }
-                />
+                  <Route
+                    path="/chat"
+                    element={
+                      <ProtectedRoute>
+                        <Chat />
+                      </ProtectedRoute>
+                    }
+                  />
 
-                <Route
-                  path="/user/:userId"
-                  element={
-                    <ProtectedRoute>
-                      <UserProfilePage />
-                    </ProtectedRoute>
-                  }
-                />
+                  <Route
+                    path="/user/:userId"
+                    element={
+                      <ProtectedRoute>
+                        <UserProfilePage />
+                      </ProtectedRoute>
+                    }
+                  />
 
-                <Route
-                  path="/change-password"
-                  element={
-                    <ProtectedRoute>
-                      <ChangePassword />
-                    </ProtectedRoute>
-                  }
-                />
+                  <Route
+                    path="/change-password"
+                    element={
+                      <ProtectedRoute>
+                        <ChangePassword />
+                      </ProtectedRoute>
+                    }
+                  />
 
-                {/* MODULE BẠN BÈ */}
-                <Route
-                  path="/friends"
-                  element={
-                    <ProtectedRoute>
-                      <FriendsPage />
-                    </ProtectedRoute>
-                  }
-                />
+                  {/* MODULE BẠN BÈ */}
+                  <Route
+                    path="/friends"
+                    element={
+                      <ProtectedRoute>
+                        <FriendsPage />
+                      </ProtectedRoute>
+                    }
+                  />
 
-                <Route
-                  path="/stories"
-                  element={
-                    <ProtectedRoute>
-                      <StoriesPage />
-                    </ProtectedRoute>
-                  }
-                />
+                  <Route
+                    path="/stories"
+                    element={
+                      <ProtectedRoute>
+                        <StoriesPage />
+                      </ProtectedRoute>
+                    }
+                  />
 
 
-                <Route path="/auth/callback" element={<AuthCallback />} />
-                <Route path="/complete-profile" element={<CompleteProfile />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </Layout>
-              </VoiceRoomProvider>
-              </CallProvider>
-            </NotificationProvider>
-          </PresenceProvider>
+                  <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route path="/complete-profile" element={<CompleteProfile />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </Layout>
+                </VoiceRoomProvider>
+                </CallProvider>
+              </NotificationProvider>
+            </PresenceProvider>
+          </LanguageProvider>
         </AuthProvider>
       </ThemeProvider>
     </Router>

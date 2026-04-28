@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, Modal, TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform, Dimensions,
-  ScrollView, Animated
+  View, Text, StyleSheet, Modal, TouchableOpacity, 
+  TextInput, ScrollView, Animated, Alert, Dimensions,
+  KeyboardAvoidingView, Platform
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => {
+  const { t } = useLanguage();
   const [content, setContent] = useState('');
   const [date, setDate] = useState(new Date());
   const [showPickerMode, setShowPickerMode] = useState(null); // 'date', 'time', or null
@@ -48,7 +50,7 @@ const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => 
     if (!content.trim()) return;
 
     if (date <= new Date()) {
-      Alert.alert('Lỗi', 'Vui lòng chọn thời gian nhắc hẹn ở tương lai');
+      Alert.alert(t('common.error'), t('poll.error_future_reminder'));
       return;
     }
 
@@ -79,11 +81,11 @@ const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => 
   };
 
   const formatDate = (d) => {
-    return d.toLocaleDateString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    return d.toLocaleDateString(t('common.edit') === 'Sửa' ? 'vi-VN' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
   };
 
   const formatTime = (d) => {
-    return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return d.toLocaleTimeString(t('common.edit') === 'Sửa' ? 'vi-VN' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
   return (
@@ -109,7 +111,7 @@ const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => 
                 <View style={[styles.iconCircle, { backgroundColor: `${colors.accent}20` }]}>
                   <Feather name="bell" size={18} color={colors.accent} />
                 </View>
-                <Text style={[styles.title, { color: colors.textPrimary }]}>Tạo nhắc hẹn</Text>
+                <Text style={[styles.title, { color: colors.textPrimary }]}>{t('reminder.create_title')}</Text>
               </View>
               <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                 <Feather name="x" size={24} color={colors.textMuted} />
@@ -118,12 +120,12 @@ const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => 
 
             <ScrollView bounces={false} style={styles.body} contentContainerStyle={{ paddingBottom: 20 }}>
               {/* Content Input */}
-              <InputField label="NỘI DUNG CẦN NHẮC" colors={colors}>
+              <InputField label={t('reminder.content_label')} colors={colors}>
                 {/* Minimalist Input: No Background */}
                 <View style={[styles.inputContainer, { borderColor: colors.border }]}>
                   <TextInput
                     style={[styles.mainInput, { color: colors.textPrimary }]}
-                    placeholder="Nhập nội dung cần nhắc hẹn..."
+                    placeholder={t('reminder.content_placeholder')}
                     placeholderTextColor={colors.textMuted}
                     value={content}
                     onChangeText={setContent}
@@ -142,7 +144,7 @@ const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => 
                     <Feather name="calendar" size={16} color="#949ba4" />
                   </View>
                   <View>
-                    <Text style={[styles.cardLabel, { color: colors.textMuted }]}>NGÀY</Text>
+                    <Text style={[styles.cardLabel, { color: colors.textMuted }]}>{t('reminder.date_label')}</Text>
                     <Text style={[styles.cardValue, { color: colors.textPrimary }]}>{formatDate(date)}</Text>
                   </View>
                 </TouchableOpacity>
@@ -155,7 +157,7 @@ const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => 
                     <Feather name="clock" size={16} color="#949ba4" />
                   </View>
                   <View>
-                    <Text style={[styles.cardLabel, { color: colors.textMuted }]}>GIỜ</Text>
+                    <Text style={[styles.cardLabel, { color: colors.textMuted }]}>{t('reminder.time_label')}</Text>
                     <Text style={[styles.cardValue, { color: colors.textPrimary }]}>{formatTime(date)}</Text>
                   </View>
                 </TouchableOpacity>
@@ -164,9 +166,7 @@ const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => 
               <View style={[styles.infoBox, { backgroundColor: `${colors.accent}15` }]}>
                 {/* <Feather name="info" size={14} color={colors.accent} /> */}
                 <Text style={[styles.infoText, { color: colors.accent }]}>
-                  * {isGroup 
-                      ? 'Hệ thống sẽ thông báo cho mọi người trong nhóm khi đến thời điểm này.' 
-                      : 'Hệ thống sẽ gửi thông báo nhắc hẹn cho cả hai người khi đến thời điểm này.'}
+                  {t('reminder.hint_desc')}
                 </Text>
               </View>
             </ScrollView>
@@ -179,7 +179,7 @@ const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => 
                   style={[styles.secondaryBtn, { backgroundColor: colors.bgSecondary }]}
                   onPress={onClose}
                 >
-                  <Text style={[styles.secondaryBtnText, { color: colors.textPrimary }]}>Hủy bỏ</Text>
+                  <Text style={[styles.secondaryBtnText, { color: colors.textPrimary }]}>{t('common.cancel') === 'Hủy' ? 'Hủy bỏ' : 'Cancel'}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -192,7 +192,7 @@ const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => 
                   onPress={handleCreate}
                   disabled={!content.trim()}
                 >
-                  <Text style={[styles.primaryBtnText, !content.trim() && { color: 'rgba(255,255,255,0.4)' }]}>Tạo nhắc hẹn</Text>
+                  <Text style={[styles.primaryBtnText, !content.trim() && { color: 'rgba(255,255,255,0.4)' }]}>{t('reminder.create_btn')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -205,13 +205,13 @@ const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => 
               ]}>
                 <View style={styles.trayHeader}>
                   <Text style={[styles.trayTitle, { color: colors.textPrimary }]}>
-                    {showPickerMode === 'date' ? 'Chọn ngày' : 'Chọn giờ'}
+                    {showPickerMode === 'date' ? t('reminder.date_label') : t('reminder.time_label')}
                   </Text>
                   <TouchableOpacity
                     onPress={() => setShowPickerMode(null)}
                     style={styles.trayAction}
                   >
-                    <Text style={styles.doneBtn}>Xong</Text>
+                    <Text style={styles.doneBtn}>{t('common.understood') === 'Đã hiểu' ? 'Xong' : 'Done'}</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.pickerWrapper}>

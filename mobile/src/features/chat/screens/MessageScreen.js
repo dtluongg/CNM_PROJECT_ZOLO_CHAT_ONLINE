@@ -1,13 +1,21 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  Keyboard, Alert, StatusBar, Platform, Modal, Pressable,
+  Keyboard, Alert, StatusBar, Platform, Modal, Pressable, TextInput,
 } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { 
+  Ionicons, 
+  MaterialCommunityIcons, 
+  Feather, 
+  FontAwesome5 
+} from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 import { useCall } from '../../call/CallContext';
+import { useLanguage } from '../../../context/LanguageContext';
+import { getLocalizedTopicName } from '../../../utils/localizationUtils';
 
 // ── Components ─────────────────────────────────────────────────────────────
 import Avatar from '../components/Avatar';
@@ -28,6 +36,9 @@ import AiSummaryCard from '../components/AiSummaryCard';
 import PinnedBar from '../components/PinnedBar';
 import VoiceRoomPanel from '../../voice/components/VoiceRoomPanel';
 import { useVoiceRoomContext } from '../../voice/VoiceRoomContext';
+import CreateReminderModal from '../components/CreateReminderModal';
+import CreatePollModal from '../components/CreatePollModal';
+
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import useMessages from '../hooks/useMessages';
 import useSocket from '../hooks/useSocket';
@@ -43,16 +54,39 @@ import friendApi from '../../friends/api/friendApi';
 import useStyles from '../styles/messageStyles';
 
 // Định dạng thời gian ISO → "HH:mm"
-const fmtTime = (iso) => {
+const fmtTime = (iso, language = 'vi') => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(language === 'vi' ? 'vi-VN' : 'en-US', { hour: '2-digit', minute: '2-digit' });
 };
+
+const getLangList = (t) => [
+  { label: t('chat.languages.vi'), enLabel: 'Vietnamese', code: 'Vietnamese' },
+  { label: t('chat.languages.en'), enLabel: 'English', code: 'English' },
+  { label: t('chat.languages.jp'), enLabel: 'Japanese', code: 'Japanese' },
+  { label: t('chat.languages.ko'), enLabel: 'Korean', code: 'Korean' },
+  { label: t('chat.languages.zh'), enLabel: 'Chinese', code: 'Chinese' },
+  { label: t('chat.languages.fr'), enLabel: 'French', code: 'French' },
+  { label: t('chat.languages.de'), enLabel: 'German', code: 'German' },
+  { label: t('chat.languages.ru'), enLabel: 'Russian', code: 'Russian' },
+  { label: t('chat.languages.es'), enLabel: 'Spanish', code: 'Spanish' },
+  { label: t('chat.languages.it'), enLabel: 'Italian', code: 'Italian' },
+  { label: t('chat.languages.pt'), enLabel: 'Portuguese', code: 'Portuguese' },
+  { label: t('chat.languages.th'), enLabel: 'Thai', code: 'Thai' },
+  { label: t('chat.languages.ar'), enLabel: 'Arabic', code: 'Arabic' },
+  { label: t('chat.languages.tr'), enLabel: 'Turkish', code: 'Turkish' },
+  { label: t('chat.languages.nl'), enLabel: 'Dutch', code: 'Dutch' },
+  { label: t('chat.languages.el'), enLabel: 'Greek', code: 'Greek' },
+  { label: t('chat.languages.sv'), enLabel: 'Swedish', code: 'Swedish' },
+  { label: t('chat.languages.pl'), enLabel: 'Polish', code: 'Polish' },
+  { label: t('chat.languages.id'), enLabel: 'Indonesian', code: 'Indonesian' },
+];
 
 export default function MessageScreen({ route, navigation }) {
   const { conversation } = route.params;
   const { user, token } = useAuth();
   const { theme: THEME } = useTheme();
+  const { t, language } = useLanguage();
   const { isUserOnline, getLastSeen } = usePresence();
   const { initiateCall } = useCall();
   const { isInRoom, fetchStatusBatch } = useVoiceRoomContext();
@@ -85,6 +119,12 @@ export default function MessageScreen({ route, navigation }) {
   const [topics, setTopics] = useState([]);
   const [activeTopic, setActiveTopic] = useState(null);
   const [showChannelSheet, setShowChannelSheet] = useState(false);
+  const [showLangModal, setShowLangModal] = useState(false);
+  const [langTargetMsg, setLangTargetMsg] = useState(null);
+  const [searchLang, setSearchLang] = useState('');
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [showPollModal, setShowPollModal] = useState(false);
+
 
   // State info panel (modal 3 chấm)
   const [showInfoPanel, setShowInfoPanel] = useState(false);
@@ -98,6 +138,8 @@ export default function MessageScreen({ route, navigation }) {
   const [blockStatus, setBlockStatus] = useState(null);
   // Effective permission for the active topic (null = loading, default full access)
   const [topicPerm, setTopicPerm] = useState({ canAccess: true, canSend: true });
+  const [translations, setTranslations] = useState({});
+  const [translatingIds, setTranslatingIds] = useState(new Set());
 
   const flatRef = useRef(null);
   const inputRef = useRef(null);
@@ -174,6 +216,13 @@ export default function MessageScreen({ route, navigation }) {
     onRead: (data) => msgHook.markRead(data),
     onDeletedForMe: (messageId) => msgHook.deleteMessage(messageId),
     onPinnedMessagesChange: (newPins) => setPinnedMessages(newPins),
+    onReminderAlert: (data) => {
+      Alert.alert(
+        t('chat.reminder_alert_title'),
+        data.content,
+        [{ text: t('common.understood'), style: 'default' }]
+      );
+    },
   });
 
   // ── Setup khi mount ─────────────────────────────────────────────────────
@@ -302,7 +351,7 @@ export default function MessageScreen({ route, navigation }) {
       setShowInfoPanel(false);
       navigation.goBack();
     } catch (err) {
-      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể rời nhóm.');
+      Alert.alert(t('common.error'), err.response?.data?.message || t('chat.leave_group_error'));
     }
   };
 
@@ -313,7 +362,7 @@ export default function MessageScreen({ route, navigation }) {
       setShowInfoPanel(false);
       navigation.goBack();
     } catch (err) {
-      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể giải tán nhóm.');
+      Alert.alert(t('common.error'), err.response?.data?.message || t('chat.disband_group_error'));
     }
   };
 
@@ -328,13 +377,13 @@ export default function MessageScreen({ route, navigation }) {
       await fetchBlockStatus();
       const isNowBlocked = !blockStatus?.iBlocked;
       Alert.alert(
-        isNowBlocked ? 'Đã chặn' : 'Đã bỏ chặn',
+        isNowBlocked ? t('friends.blocked_success') : t('friends.unblocked_success'),
         isNowBlocked
-          ? `Bạn đã chặn ${conversation.name}.`
-          : `Đã bỏ chặn ${conversation.name}.`
+          ? t('friends.block_desc', { name: conversation.name })
+          : t('friends.unblock_desc', { name: conversation.name })
       );
     } catch (err) {
-      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể thực hiện.');
+      Alert.alert(t('common.error'), err.response?.data?.message || t('common.something_wrong'));
     } finally {
       setBlockBusy(false);
     }
@@ -366,7 +415,7 @@ export default function MessageScreen({ route, navigation }) {
         await messageApi.editMessage(mId, trimmed);
       } catch (err) {
         console.error('editMessage error:', err);
-        Alert.alert('Lỗi', 'Không thể chỉnh sửa tin nhắn');
+        Alert.alert(t('common.error'), t('chat.edit_error'));
       }
       return;
     }
@@ -377,12 +426,12 @@ export default function MessageScreen({ route, navigation }) {
     const tempMsg = {
       _id: tempId,
       senderId: currentUserId,
-      senderName: user?.displayName || 'Tôi',
+      senderName: user?.displayName || t('chat.me'),
       avatar: user?.avatar || null,
       type: 'text',
       content: trimmed,
       payload: {},
-      time: fmtTime(now),
+      time: fmtTime(now, language),
       createdAt: now,
       replyToMessageId: replyingMessage || null,
     };
@@ -413,7 +462,7 @@ export default function MessageScreen({ route, navigation }) {
         } else {
           // Không có quyền kênh — xoá tin tạm + refresh quyền
           msgHook.removeTempMessage(tempId);
-          Alert.alert('Không có quyền', msg403 || 'Bạn không có quyền gửi tin nhắn trong kênh này.');
+          Alert.alert(t('chat.no_access'), msg403 || t('chat.no_access_topic'));
           setTopicPerm(p => ({ ...p, canSend: false }));
         }
       } else {
@@ -449,7 +498,7 @@ export default function MessageScreen({ route, navigation }) {
       msgHook.revokeMessage(mId); // optimistic update
     } catch (err) {
       console.error('handleRevoke error:', err);
-      Alert.alert('Lỗi', 'Không thể thu hồi tin nhắn');
+      Alert.alert(t('common.error'), t('chat.revoke_error'));
     }
   };
 
@@ -462,31 +511,48 @@ export default function MessageScreen({ route, navigation }) {
       await messageApi.deleteForMe(mId.toString());
     } catch (err) {
       console.error('handleDeleteForMe error:', err);
-      Alert.alert('Lỗi', 'Không thể xóa tin nhắn');
+      Alert.alert(t('common.error'), t('chat.delete_error'));
     }
   };
 
   const handlePin = async (msg) => {
+    // Kiểm tra giới hạn ghim tại máy trước để tránh lỗi 400 trong log hệ thống
+    if (pinnedMessages?.length >= 3) {
+      setPendingPinMsgId(msg._id || msg.id);
+      setShowPinLimitModal(true);
+      return;
+    }
+
     try {
       const mId = msg._id || msg.id;
       await messageApi.pinMessage(conversation.id, mId.toString());
     } catch (err) {
-      if (err.response?.status === 400 && conversation.pinnedMessages?.length >= 3) {
+      // Vẫn giữ catch dự phòng nếu server trả lỗi 400 (do race condition)
+      if (err.response?.status === 400 && pinnedMessages?.length >= 3) {
         setPendingPinMsgId(msg._id || msg.id);
         setShowPinLimitModal(true);
       } else {
-        Alert.alert('Lỗi', err.response?.data?.message || 'Không thể ghim tin nhắn');
+        Alert.alert(t('common.error'), err.response?.data?.message || t('chat.pin_error'));
       }
     }
   };
 
   const handleConfirmReplacePin = async (selectedIndex) => {
     try {
-      const pinToReplace = conversation.pinnedMessages[selectedIndex];
+      const pinToReplace = pinnedMessages[selectedIndex];
       const oldMsgId = pinToReplace.messageId._id || pinToReplace.messageId.id;
 
-      // Bỏ ghim cái cũ
-      await messageApi.unpinMessage(conversation.id, oldMsgId.toString());
+      // Bỏ ghim cái cũ (Bọc try-catch riêng để nếu tin cũ đã bị bỏ ghim rồi thì vẫn tiếp tục ghim tin mới)
+      try {
+        await messageApi.unpinMessage(conversation.id, oldMsgId.toString());
+      } catch (unpinErr) {
+        console.log('Unpin old message failed or already unpinned:', unpinErr.response?.status);
+        // Nếu lỗi 404 (đã bỏ ghim) thì cứ tiếp tục, các lỗi khác (403, 500) thì có thể cân nhắc dừng
+        if (unpinErr.response?.status !== 404) {
+          throw unpinErr;
+        }
+      }
+
       // Ghim cái mới
       await messageApi.pinMessage(conversation.id, pendingPinMsgId.toString());
 
@@ -494,29 +560,70 @@ export default function MessageScreen({ route, navigation }) {
       setPendingPinMsgId(null);
     } catch (err) {
       console.error('handleConfirmReplacePin error:', err);
-      Alert.alert('Lỗi', 'Không thể thay thế tin nhắn ghim');
+      Alert.alert(t('common.error'), err.response?.data?.message || t('chat.pin_replace_error'));
     }
   };
 
   const handleUnpin = (mId) => {
     Alert.alert(
-      'Bỏ ghim',
-      'Bạn có chắc muốn bỏ ghim nội dung này không?',
+      t('chat.unpin_title'),
+      t('chat.unpin_confirm'),
       [
-        { text: 'Không', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Bỏ ghim',
+          text: t('chat.unpin'),
           style: 'destructive',
           onPress: async () => {
             try {
               await messageApi.unpinMessage(conversation.id, mId);
             } catch (err) {
-              Alert.alert('Lỗi', err.response?.data?.message || 'Không thể bỏ ghim tin nhắn');
+              Alert.alert(t('common.error'), err.response?.data?.message || t('chat.unpin_error'));
             }
           }
         },
       ]
     );
+  };
+
+  const handleTranslate = async (msg, targetLang = 'Auto') => {
+    if (msg.revoked || msg.recalled || msg.type !== 'text') return;
+    const mId = msg._id?.toString() || msg.id?.toString();
+    if (!mId) return;
+
+    try {
+      setTranslatingIds(prev => new Set(prev).add(mId));
+      const res = await messageApi.translateMessage(msg.content, targetLang);
+      
+      // Determine display label for language
+      let displayLang = targetLang;
+      if (targetLang === 'Auto') {
+        // Backend logic: if source is not VI -> target is VI, else target is EN
+        // We don't know source for sure here, but we can label it "Thông minh" or similar
+        displayLang = t('chat.auto');
+      }
+
+      setTranslations(prev => ({
+        ...prev,
+        [mId]: {
+          text: res.data.translatedText,
+          lang: displayLang
+        }
+      }));
+    } catch (err) {
+      console.error('Translation error:', err);
+      Alert.alert(t('common.error'), t('chat.translate_error'));
+    } finally {
+      setTranslatingIds(prev => {
+        const next = new Set(prev);
+        next.delete(mId);
+        return next;
+      });
+    }
+  };
+
+  const handleOpenLangPicker = (msg) => {
+    setLangTargetMsg(msg);
+    setShowLangModal(true);
   };
 
   const handleJumpToMessage = (targetId) => {
@@ -525,7 +632,7 @@ export default function MessageScreen({ route, navigation }) {
     if (index !== -1) {
       flatRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
     } else {
-      Alert.alert('Thông báo', 'Tin nhắn không nằm trong lịch sử hiển thị hiện tại');
+      Alert.alert(t('common.info'), t('chat.msg_not_in_history'));
     }
   };
 
@@ -536,6 +643,17 @@ export default function MessageScreen({ route, navigation }) {
     setShowEmoji(false);
     setTimeout(() => inputRef.current?.focus(), 100);
   };
+
+  const handleVotePoll = async (messageId, voteData) => {
+    try {
+      const res = await messageApi.votePoll(messageId, voteData);
+      msgHook.editMessage(res.data);
+    } catch (err) {
+      console.error('Vote error:', err);
+      Alert.alert(t('common.error'), t('chat.vote_error'));
+    }
+  };
+
 
   // ── Xem danh sách người đã đọc ──────────────────────────────────────────
   const handleShowReadBy = (readBy) => {
@@ -581,7 +699,7 @@ export default function MessageScreen({ route, navigation }) {
       type: msg.type === 'system' ? 'system' : 'msg',
       msg,
       key: `msg-${msgKey || i}`,
-      isMine: msg.senderId === currentUserId,
+      isMine: msg.senderId?.toString() === currentUserId?.toString(),
       showHeader: msg.type === 'system' ? false : !sameGroup,
     });
   });
@@ -620,14 +738,14 @@ export default function MessageScreen({ route, navigation }) {
   const statusText =
     conversation.type === 'dm'
       ? isOnline
-        ? 'Đang hoạt động'
+        ? t('chat.status.online')
         : (() => {
           const ls = conversation.otherUserId
             ? getLastSeen(conversation.otherUserId)
             : null;
-          return ls ? `Hoạt động ${formatLastSeen(ls)}` : 'Ngoại tuyến';
+          return ls ? t('chat.status.active_time', { time: formatLastSeen(ls) }) : t('chat.status.offline');
         })()
-      : `${conversation.memberCount || conversation.members || 0} thành viên`;
+      : t('chat.member_count', { count: conversation.memberCount || conversation.members || 0 });
 
   // ────────────────────────────────────────────────────────────────────────
   // RENDER
@@ -721,7 +839,7 @@ export default function MessageScreen({ route, navigation }) {
             color={THEME.accent}
           />
           <Text style={{ fontSize: 13, fontWeight: '700', color: THEME.textPrimary, flex: 1 }}>
-            {activeTopic?.name || 'chung'}
+            {activeTopic ? getLocalizedTopicName(activeTopic.name, t) : t('chat.general_channel')}
           </Text>
           <Feather name="chevron-down" size={14} color={THEME.textMuted} />
         </TouchableOpacity>
@@ -738,7 +856,7 @@ export default function MessageScreen({ route, navigation }) {
         <PinLimitModal
         isOpen={showPinLimitModal}
         onClose={() => { setShowPinLimitModal(false); setPendingPinMsgId(null); }}
-        pinnedMessages={conversation.pinnedMessages || []}
+        pinnedMessages={pinnedMessages}
         onConfirm={handleConfirmReplacePin}
         THEME={THEME}
       />
@@ -784,14 +902,14 @@ export default function MessageScreen({ route, navigation }) {
               >
                 {conversation.type === 'dm'
                   ? isOnline
-                    ? 'Đang hoạt động'
-                    : 'Ngoại tuyến'
-                  : `${conversation.memberCount || conversation.members || 0} thành viên`}
+                    ? t('chat.status.online')
+                    : t('chat.status.offline')
+                  : t('chat.member_count', { count: conversation.memberCount || conversation.members || 0 })}
               </Text>
               <Text style={styles.introDesc}>
                 {conversation.type === 'dm'
-                  ? `Đây là bắt đầu trò chuyện với ${conversation.name}.`
-                  : `Chào mừng đến kênh #${conversation.name}!`}
+                  ? t('chat.intro_dm', { name: conversation.name })
+                  : t('chat.intro_group', { name: conversation.name })}
               </Text>
             </View>
           )}
@@ -801,7 +919,7 @@ export default function MessageScreen({ route, navigation }) {
             typingUser ? (
               <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
                 <Text style={{ fontSize: 12, color: THEME.textMuted, fontStyle: 'italic' }}>
-                  {typingUser.displayName} đang nhập...
+                  {t('chat.user_typing', { name: typingUser.displayName })}
                 </Text>
               </View>
             ) : null
@@ -854,7 +972,15 @@ export default function MessageScreen({ route, navigation }) {
                 onFilePress={(url, fileName) => openFile(url, fileName)}
                 onPin={handlePin}
                 onUnpin={handleUnpin}
+                onVote={(voteData) => handleVotePoll(item.msg._id || item.msg.id, voteData)}
                 isPinned={pinnedMessages.some(p => (p.messageId?._id || p.messageId?.id || p.messageId)?.toString() === (item.msg?._id || item.msg?.id)?.toString())}
+                translation={translations[item.msg?._id?.toString() || item.msg?.id?.toString()]}
+                isTranslating={translatingIds.has(item.msg?._id?.toString() || item.msg?.id?.toString())}
+                onClearTranslation={(mId) => setTranslations(prev => {
+                  const next = { ...prev };
+                  delete next[mId];
+                  return next;
+                })}
               />
             );
           }}
@@ -864,15 +990,15 @@ export default function MessageScreen({ route, navigation }) {
         {conversation.type === 'dm' && blockStatus?.iBlocked && (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: THEME.bgSecondary, borderTopWidth: 1, borderTopColor: THEME.border }}>
             <Feather name="slash" size={13} color={THEME.textMuted} />
-            <Text style={{ color: THEME.textMuted, fontSize: 12 }}>Bạn đã chặn người này</Text>
+            <Text style={{ color: THEME.textMuted, fontSize: 12 }}>{t('chat.you_blocked_user')}</Text>
             <TouchableOpacity
               onPress={async () => {
                 try { await friendApi.blockFriend(conversation.otherUserId); await fetchBlockStatus(); }
-                catch { Alert.alert('Lỗi', 'Không thể bỏ chặn'); }
+                catch { Alert.alert(t('common.error'), t('friends.unblock_error')); }
               }}
               style={{ backgroundColor: THEME.accent + '22', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: THEME.accent + '44' }}
             >
-              <Text style={{ color: THEME.accent, fontWeight: '700', fontSize: 11 }}>Bỏ chặn</Text>
+              <Text style={{ color: THEME.accent, fontWeight: '700', fontSize: 11 }}>{t('friends.unblock')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -880,7 +1006,7 @@ export default function MessageScreen({ route, navigation }) {
         {conversation.type === 'dm' && blockStatus?.theyBlockedMe && (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: 'rgba(250,166,26,0.08)', borderTopWidth: 1, borderTopColor: 'rgba(250,166,26,0.2)' }}>
             <Feather name="alert-triangle" size={13} color="#faa61a" />
-            <Text style={{ color: '#faa61a', fontSize: 12 }}>Bạn đã bị chặn — tin nhắn sẽ không được gửi</Text>
+            <Text style={{ color: '#faa61a', fontSize: 12 }}>{t('chat.user_blocked_you_alert')}</Text>
           </View>
         )}
 
@@ -891,7 +1017,7 @@ export default function MessageScreen({ route, navigation }) {
           {editingMessage && (
             <View style={styles.editBar}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.editLabel}>Đang chỉnh sửa tin nhắn</Text>
+                <Text style={styles.editLabel}>{t('chat.editing_message')}</Text>
                 <Text style={styles.editContent} numberOfLines={1}>
                   {editingMessage.content}
                 </Text>
@@ -937,10 +1063,12 @@ export default function MessageScreen({ route, navigation }) {
                 onSend={handleSend}
                 onPickFile={() => pickAndSendFile(replyingMessage?._id || replyingMessage?.id)}
                 onPickImage={() => pickAndSendImage(replyingMessage?._id || replyingMessage?.id)}
+                onPickPoll={() => setShowPollModal(true)}
+                onPickReminder={() => setShowReminderModal(true)}
                 onStartRecord={startRecording}
                 onToggleEmoji={() => setShowEmoji((v) => !v)}
                 inputRef={inputRef}
-                placeholder={`Nhắn tin ${conversation.type === 'group' ? '#' : ''}${conversation.name}...`}
+                placeholder={t('chat.input_placeholder', { name: `${conversation.type === 'group' ? '#' : ''}${conversation.name}` })}
                 THEME={THEME}
                 styles={styles}
                 replyingMessage={replyingMessage}
@@ -948,14 +1076,49 @@ export default function MessageScreen({ route, navigation }) {
                 isGroup={conversation.type === 'group'}
                 disabled={activeTopic && !topicPerm.canSend}
                 disabledMessage={!topicPerm.canAccess
-                  ? 'Bạn không có quyền xem kênh này'
-                  : 'Bạn chỉ có thể xem, không thể gửi tin nhắn trong kênh này'
+                  ? t('chat.no_access_topic')
+                  : t('chat.view_only_topic')
                 }
               />
             )
           )}
         </View>
       </View>
+
+      <CreateReminderModal 
+        visible={showReminderModal}
+        onClose={() => setShowReminderModal(false)}
+        onCreate={async (data) => {
+          try {
+            const res = await messageApi.createReminder(conversation.id, {
+              ...data,
+              topicId: activeTopic?._id || null
+            });
+            msgHook.addMessage(res.data.data);
+          } catch (err) {
+            Alert.alert(t('common.error'), err.response?.data?.message || t('reminder.error_create'));
+          }
+        }}
+        THEME={THEME}
+        isGroup={conversation.type === 'group'}
+      />
+
+      <CreatePollModal
+        visible={showPollModal}
+        onClose={() => setShowPollModal(false)}
+        onCreate={async (data) => {
+          try {
+            const res = await messageApi.createPoll(conversation.id, {
+              ...data,
+              topicId: activeTopic?._id || null
+            });
+            msgHook.addMessage(res.data);
+          } catch (err) {
+            Alert.alert(t('common.error'), err.response?.data?.message || t('poll.error_create'));
+          }
+        }}
+        THEME={THEME}
+      />
 
       {/* ── Các modal ─────────────────────────────────────────────────────── */}
 
@@ -1004,9 +1167,129 @@ export default function MessageScreen({ route, navigation }) {
         onUnpin={handleUnpin}
         isPinned={actionMsg ? pinnedMessages.some(p => (p.messageId?._id || p.messageId?.id || p.messageId)?.toString() === (actionMsg?._id || actionMsg?.id)?.toString()) : false}
         onForward={(msg) => { setForwardingMsg(msg); setShowForwardModal(true); }}
+        onTranslate={handleTranslate}
+        onTranslateManual={handleOpenLangPicker}
         THEME={THEME}
         styles={styles}
       />
+
+      {/* Modal chọn ngôn ngữ dịch (Web-style) */}
+      <Modal 
+        visible={showLangModal} 
+        transparent 
+        animationType="slide"
+        onRequestClose={() => setShowLangModal(false)}
+      >
+        <Pressable 
+          style={styles.sheetOverlay} 
+          onPress={() => { setShowLangModal(false); setSearchLang(''); }}
+        >
+          <View style={[styles.sheet, { 
+            height: '80%', 
+            paddingHorizontal: 0,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            backgroundColor: THEME.bgSecondary
+          }]}>
+            {/* Header */}
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              paddingHorizontal: 20,
+              paddingVertical: 15,
+              borderBottomWidth: 1,
+              borderBottomColor: THEME.border
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Ionicons name="globe-outline" size={24} color={THEME.accent} />
+                <Text style={{ fontSize: 18, fontWeight: '700', color: THEME.textPrimary }}>
+                  {t('chat.select_translation_lang')}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => { setShowLangModal(false); setSearchLang(''); }}>
+                <Feather name="x" size={24} color={THEME.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Bar */}
+            <View style={{ padding: 15 }}>
+              <View style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                backgroundColor: THEME.bgTertiary,
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                height: 44,
+                borderWidth: 1,
+                borderColor: THEME.border
+              }}>
+                <Feather name="search" size={18} color={THEME.textMuted} />
+                <TextInput
+                  placeholder={t('common.search_lang_placeholder')}
+                  placeholderTextColor={THEME.textMuted}
+                  style={{ flex: 1, marginLeft: 10, color: THEME.textPrimary, fontSize: 15 }}
+                  value={searchLang}
+                  onChangeText={setSearchLang}
+                  autoCorrect={false}
+                />
+                {searchLang.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchLang('')}>
+                    <Ionicons name="close-circle" size={18} color={THEME.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* List */}
+            <FlatList
+              data={getLangList(t).filter(l => 
+                l.label.toLowerCase().includes(searchLang.toLowerCase()) || 
+                l.enLabel.toLowerCase().includes(searchLang.toLowerCase())
+              )}
+              keyExtractor={(item) => item.code}
+              contentContainerStyle={{ paddingBottom: 30 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowLangModal(false);
+                    setSearchLang('');
+                    if (langTargetMsg) handleTranslate(langTargetMsg, item.code);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 14,
+                    paddingHorizontal: 20,
+                    borderBottomWidth: 0.5,
+                    borderBottomColor: THEME.border
+                  }}
+                >
+                  <Text style={{ fontSize: 16, color: THEME.textPrimary }}>{item.label}</Text>
+                  <View style={{ 
+                    backgroundColor: THEME.bgTertiary, 
+                    paddingHorizontal: 8, 
+                    paddingVertical: 4, 
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: THEME.border
+                  }}>
+                    <Text style={{ fontSize: 11, color: THEME.textMuted, fontWeight: '600' }}>
+                      {item.enLabel}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <Text style={{ color: THEME.textMuted }}>{t('common.no_lang_found')}</Text>
+                </View>
+              }
+            />
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* Danh sách người đã đọc */}
       <ReadByModal
@@ -1034,6 +1317,14 @@ export default function MessageScreen({ route, navigation }) {
         THEME={THEME}
       />
 
+      <PinLimitModal
+        isOpen={showPinLimitModal}
+        onClose={() => setShowPinLimitModal(false)}
+        onConfirm={handleConfirmReplacePin}
+        pinnedMessages={conversation.pinnedMessages || []}
+        THEME={THEME}
+      />
+
       {/* ── Channel picker sheet ──────────────────────────────────────────── */}
       <Modal
         visible={showChannelSheet}
@@ -1051,7 +1342,7 @@ export default function MessageScreen({ route, navigation }) {
           >
             <View style={{ width: 40, height: 4, backgroundColor: THEME.border, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 12 }} />
             <Text style={{ fontSize: 15, fontWeight: '800', color: THEME.textPrimary, paddingHorizontal: 20, marginBottom: 10 }}>
-              Chọn kênh
+              {t('chat.select_channel')}
             </Text>
             {topics.map(topic => {
               const isActive = activeTopic?._id === topic._id;
@@ -1095,10 +1386,10 @@ export default function MessageScreen({ route, navigation }) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, fontWeight: isActive ? '700' : '500', color: THEME.textPrimary }}>
-                      {topic.name}
+                      {getLocalizedTopicName(topic.name, t)}
                     </Text>
                     <Text style={{ fontSize: 11, color: isVoice ? '#22c55e' : THEME.textMuted, marginTop: 1 }}>
-                      {isVoice ? 'Nhấn để vào phòng thoại' : 'Kênh văn bản'}
+                      {isVoice ? t('chat.tap_to_join_voice') : t('chat.text_channel')}
                     </Text>
                   </View>
                   {isVoice
@@ -1127,7 +1418,7 @@ export default function MessageScreen({ route, navigation }) {
                 <Feather name="message-square" size={16} color={THEME.textMuted} />
               </View>
               <Text style={{ fontSize: 14, fontWeight: !activeTopic ? '700' : '500', color: THEME.textPrimary }}>
-                Tất cả tin nhắn
+                {t('chat.all_messages')}
               </Text>
               {!activeTopic && <Feather name="check" size={16} color={THEME.accent} />}
             </TouchableOpacity>

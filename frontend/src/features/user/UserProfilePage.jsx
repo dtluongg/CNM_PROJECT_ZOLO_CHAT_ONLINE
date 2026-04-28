@@ -7,13 +7,15 @@ import friendApi from '../friends/api/friendApi';
 import conversationApi from '../chat/api/conversationApi';
 import { usePresence, formatLastSeen } from '../../context/PresenceContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { Globe } from 'lucide-react';
 
-const STATUS_CONFIG = {
-  online:  { color: '#3ba55c', label: 'Đang hoạt động', bg: 'rgba(59,165,92,0.12)' },
-  idle:    { color: '#faa61a', label: 'Vắng mặt',       bg: 'rgba(250,166,26,0.12)' },
-  dnd:     { color: '#ed4245', label: 'Không làm phiền', bg: 'rgba(237,66,69,0.12)' },
-  offline: { color: '#80848e', label: 'Offline',         bg: 'rgba(128,132,142,0.12)' },
-};
+const STATUS_CONFIG = (t) => ({
+  online:  { color: '#3ba55c', label: t('user_profile.status.online'),      bg: 'rgba(59,165,92,0.12)' },
+  idle:    { color: '#faa61a', label: t('user_profile.status.idle'),        bg: 'rgba(250,166,26,0.12)' },
+  dnd:     { color: '#ed4245', label: t('user_profile.status.dnd'),  bg: 'rgba(237,66,69,0.12)' },
+  offline: { color: '#80848e', label: t('user_profile.status.offline'),          bg: 'rgba(128,132,142,0.12)' },
+});
 
 const AVATAR_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245','#9b59b6','#e67e22'];
 const getAvatarColor = (name) => AVATAR_COLORS[(name || '?').charCodeAt(0) % AVATAR_COLORS.length];
@@ -24,6 +26,7 @@ const getInitials = (name) => {
 };
 
 function InfoRow({ icon, label, value, mono = false }) {
+  const { t } = useLanguage();
   const [copied, setCopied] = useState(false);
   if (!value) return null;
   const handleCopy = () => {
@@ -53,7 +56,7 @@ function InfoRow({ icon, label, value, mono = false }) {
       </div>
       <button
         onClick={handleCopy}
-        title="Sao chép"
+        title={t('common.copy', { defaultValue: 'Sao chép' })}
         style={{
           background: copied ? 'rgba(59,165,92,0.15)' : 'none', border: 'none',
           cursor: 'pointer', color: copied ? '#3ba55c' : 'var(--text-muted)',
@@ -72,6 +75,7 @@ export default function UserProfilePage() {
   const navigate = useNavigate();
   const { user: me } = useAuth();
   const { isUserOnline, getPresenceStatus, getStatusText } = usePresence();
+  const { t, language, changeLanguage } = useLanguage();
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -95,7 +99,7 @@ export default function UserProfilePage() {
     setLoading(true);
     userApi.getUserProfile(userId)
       .then(res => setProfile(res.data.user))
-      .catch(() => setError('Không thể tải thông tin người dùng.'))
+      .catch(() => setError(t('user_profile.load_error')))
       .finally(() => setLoading(false));
   }, [userId]);
 
@@ -167,7 +171,7 @@ export default function UserProfilePage() {
 
       await fetchFriendState();
     } catch (err) {
-      alert(err.response?.data?.message || 'Không thể thực hiện thao tác kết bạn');
+      alert(err.response?.data?.message || t('user_profile.friend_actions.error'));
     } finally {
       setFriendActionLoading(false);
     }
@@ -188,24 +192,25 @@ export default function UserProfilePage() {
         },
       });
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Không thể mở đoạn chat');
+      alert(err.response?.data?.message || err.message || t('chat.error_opening_chat', { defaultValue: 'Không thể mở đoạn chat' }));
     } finally {
       setMessageLoading(false);
     }
   };
 
   const friendButtonLabel =
-    friendState.relation === 'friend' ? 'Bạn bè' :
-    friendState.relation === 'incoming' ? 'Đồng ý kết bạn' :
-    friendState.relation === 'outgoing' ? 'Thu hồi lời mời' :
-    'Kết bạn';
+    friendState.relation === 'friend' ? t('user_profile.friend_actions.friend') :
+    friendState.relation === 'incoming' ? t('user_profile.friend_actions.incoming') :
+    friendState.relation === 'outgoing' ? t('user_profile.friend_actions.outgoing') :
+    t('user_profile.friend_actions.none');
 
   const isOnline = isUserOnline(userId);
   const presStatus = getPresenceStatus(userId);
   const displayStatus = isOnline
     ? (presStatus || 'online')      // Online → hiện presence status
     : 'offline';                     // Offline → luôn "offline"
-    const statusInfo = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.offline;
+    const status_config = STATUS_CONFIG(t);
+    const statusInfo = status_config[displayStatus] || status_config.offline;
   const accentColor = profile?.usernameColor || getAvatarColor(profile?.displayName);
 
   const handleCopyLink = () => {
@@ -228,7 +233,7 @@ export default function UserProfilePage() {
           borderTop: '3px solid var(--accent)',
           borderRadius: '50%', animation: 'spin 0.8s linear infinite',
         }} />
-        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Đang tải hồ sơ...</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t('user_profile.loading')}</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
@@ -242,7 +247,7 @@ export default function UserProfilePage() {
         flexDirection: 'column', gap: 12,
       }}>
         <div style={{ fontSize: 48 }}>😕</div>
-        <p style={{ color: '#ed4245', fontWeight: 700 }}>{error || 'Không tìm thấy người dùng'}</p>
+        <p style={{ color: '#ed4245', fontWeight: 700 }}>{error || t('user_profile.not_found')}</p>
         <button onClick={() => navigate(-1)} style={{
           background: 'var(--accent)', color: '#fff', border: 'none',
           borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontWeight: 600,
@@ -261,7 +266,7 @@ export default function UserProfilePage() {
         flexDirection: 'column', gap: 12,
       }}>
         <div style={{ fontSize: 48 }}>🚫</div>
-        <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 16 }}>Không thể xem thông tin của người dùng này</p>
+        <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 16 }}>{t('user_profile.blocked')}</p>
         <button onClick={() => navigate(-1)} style={{
           background: 'var(--accent)', color: '#fff', border: 'none',
           borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontWeight: 600,
@@ -294,11 +299,11 @@ export default function UserProfilePage() {
           onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}
         >
           <ArrowLeft size={18} />
-          Quay lại
+          {t('user_profile.back')}
         </button>
         <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>|</span>
         <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
-          {isOwnProfile ? 'Hồ sơ của tôi' : 'Hồ sơ người dùng'}
+          {isOwnProfile ? t('user_profile.my_profile') : t('user_profile.user_profile_title')}
         </span>
       </div>
 
@@ -409,7 +414,7 @@ export default function UserProfilePage() {
                 onMouseLeave={e => e.currentTarget.style.background = 'var(--accent)'}
               >
                 <MessageCircle size={15} />
-                {messageLoading ? 'Đang mở chat...' : 'Nhắn tin'}
+                {messageLoading ? t('user_profile.opening_chat') : t('user_profile.message')}
               </button>
               <button
                 onClick={handleFriendAction}
@@ -437,10 +442,10 @@ export default function UserProfilePage() {
                 }}
               >
                 <UserPlus size={15} />
-                {friendActionLoading ? 'Đang xử lý...' : friendButtonLabel}
+                {friendActionLoading ? t('user_profile.friend_actions.processing') : friendButtonLabel}
               </button>
               <button
-                onClick={() => alert('Tính năng gọi điện sắp ra mắt!')}
+                onClick={() => alert(t('user_profile.call_coming_soon'))}
                 style={{
                   flex: 1, minWidth: 100,
                   background: 'rgba(59,165,92,0.15)', color: '#3ba55c',
@@ -454,7 +459,7 @@ export default function UserProfilePage() {
                 onMouseLeave={e => e.currentTarget.style.background = 'rgba(59,165,92,0.15)'}
               >
                 <Phone size={15} />
-                Gọi điện
+                {t('user_profile.call')}
               </button>
             </div>
           )}
@@ -477,7 +482,7 @@ export default function UserProfilePage() {
                 onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
               >
                 {copiedLink ? <Check size={14} style={{ color: '#3ba55c' }} /> : <Copy size={14} />}
-                {copiedLink ? 'Đã sao chép link' : 'Sao chép link hồ sơ'}
+                {copiedLink ? t('user_profile.copied_link') : t('user_profile.copy_link')}
               </button>
               <button
                 onClick={() => setActiveTab('qr')}
@@ -493,7 +498,7 @@ export default function UserProfilePage() {
                 onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
               >
                 <ExternalLink size={14} />
-                Xem QR
+                {t('user_profile.view_qr')}
               </button>
               <button
                 onClick={() => navigate('/change-password')}
@@ -509,7 +514,7 @@ export default function UserProfilePage() {
                 onMouseLeave={e => e.currentTarget.style.background = 'rgba(237,66,69,0.12)'}
               >
                 <Shield size={14} />
-                Đổi mật khẩu
+                {t('auth.change_password_title')}
               </button>
             </div>
           )}
@@ -522,8 +527,8 @@ export default function UserProfilePage() {
           border: '1px solid var(--border)',
         }}>
           {[
-            { key: 'info', label: '👤 Thông tin' },
-            { key: 'qr',   label: '📱 QR & Link' },
+            { key: 'info', label: t('user_profile.tabs.info') },
+            { key: 'qr',   label: t('user_profile.tabs.qr') },
           ].map(t => (
             <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
               flex: 1, background: activeTab === t.key ? 'var(--accent)' : 'none',
@@ -541,31 +546,31 @@ export default function UserProfilePage() {
         {activeTab === 'info' && (
           <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>
-              Thông tin cá nhân
+              {t('user_profile.info.title')}
             </div>
 
-            <InfoRow icon={<Mail size={16} />} label="Email" value={profile.email} />
+            <InfoRow icon={<Mail size={16} />} label={t('user_profile.info.email')} value={profile.email} />
             {profile.username && (
-              <InfoRow icon={<AtSign size={16} />} label="Tên đăng nhập" value={`@${profile.username}`} mono />
+              <InfoRow icon={<AtSign size={16} />} label={t('user_profile.info.username')} value={`@${profile.username}`} mono />
             )}
             {profile.createdAt && (
               <InfoRow
                 icon={<Calendar size={16} />}
-                label="Tham gia từ"
-                value={new Date(profile.createdAt).toLocaleDateString('vi-VN', { day: 'numeric', month: 'long', year: 'numeric' })}
+                label={t('user_profile.info.joined_at')}
+                value={new Date(profile.createdAt).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
               />
             )}
             {profile.phone && (
-              <InfoRow icon={<Phone size={16} />} label="Số điện thoại" value={profile.phone} />
+              <InfoRow icon={<Phone size={16} />} label={t('user_profile.info.phone')} value={profile.phone} />
             )}
             {profile.authProvider && (
-              <InfoRow icon={<Shield size={16} />} label="Loại tài khoản" value={profile.authProvider === 'local' ? 'Tài khoản local' : `OAuth (${profile.authProvider})`} />
+              <InfoRow icon={<Shield size={16} />} label={t('user_profile.info.account_type')} value={profile.authProvider === 'local' ? t('user_profile.info.local_account') : t('user_profile.info.oauth_account', { provider: profile.authProvider })} />
             )}
 
             {/* Bio */}
             <div style={{ marginTop: 4 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
-                Giới thiệu bản thân
+                {t('user_profile.info.bio_title')}
               </div>
               <div style={{
                 background: 'var(--bg-tertiary)', borderRadius: 10,
@@ -575,7 +580,7 @@ export default function UserProfilePage() {
                 borderLeft: profile.bio ? `3px solid ${accentColor}` : '3px solid var(--border)',
                 minHeight: 60,
               }}>
-                {profile.bio || 'Người dùng chưa thêm giới thiệu.'}
+                {profile.bio || t('user_profile.info.no_bio')}
               </div>
             </div>
           </div>
@@ -585,8 +590,7 @@ export default function UserProfilePage() {
         {activeTab === 'qr' && (
           <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
-              Chia sẻ mã QR này để người khác tìm thấy hồ sơ của{' '}
-              <strong style={{ color: profile.usernameColor || 'var(--text-primary)' }}>{profile.displayName}</strong>
+              {t('user_profile.qr.share_hint', { name: profile.displayName })}
             </p>
 
             {/* QR Code */}
@@ -608,7 +612,7 @@ export default function UserProfilePage() {
             </div>
 
             <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '0 20px' }}>
-              Người dùng có thể scan mã hoặc dùng tính năng "Quét QR" trong phần tìm kiếm
+              {t('user_profile.qr.scan_hint')}
             </div>
 
             {/* Link + copy */}
@@ -617,7 +621,7 @@ export default function UserProfilePage() {
               border: '1px solid var(--border)', overflow: 'hidden',
             }}>
               <div style={{ padding: '8px 14px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px', borderBottom: '1px solid var(--border)' }}>
-                Link hồ sơ
+                {t('user_profile.qr.profile_link')}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', gap: 10 }}>
                 <span style={{
@@ -640,7 +644,7 @@ export default function UserProfilePage() {
                   }}
                 >
                   {copiedLink ? <Check size={13} /> : <Copy size={13} />}
-                  {copiedLink ? 'Đã sao chép' : 'Sao chép'}
+                  {copiedLink ? t('common.copied', { defaultValue: 'Đã sao chép' }) : t('common.copy', { defaultValue: 'Sao chép' })}
                 </button>
               </div>
             </div>

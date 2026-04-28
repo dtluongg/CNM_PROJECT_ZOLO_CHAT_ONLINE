@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Dimensions, StyleSheet } from 'react-native';
+import { useLanguage } from '../../../context/LanguageContext';
 import PollDetailsModal from './PollDetailsModal';
 import VotePollModal from './VotePollModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const PollMessage = ({ message, currentUserId, onVote, THEME, isPinned }) => {
+  const { t } = useLanguage();
   const [showDetails, setShowDetails] = useState(false);
   const [showVoteModal, setShowVoteModal] = useState(false);
   
@@ -42,14 +44,14 @@ const PollMessage = ({ message, currentUserId, onVote, THEME, isPinned }) => {
           <Text style={{ 
             fontSize: 10, fontWeight: '700', textTransform: 'uppercase',
             color: THEME.accent
-          }}>Ghim tin nhắn</Text>
+          }}>{t('chat.pinned_messages')}</Text>
         </View>
       )}
 
       {/* Topic Header */}
       <Text style={[styles.topic, { color: THEME.textPrimary }]}>{topic}</Text>
       <Text style={[styles.subtitle, { color: THEME.textMuted }]}>
-        {multipleChoice ? 'Chọn nhiều phương án' : 'Chọn 1 phương án'}
+        {multipleChoice ? t('poll.multi_choice') : t('poll.option_placeholder', { index: 1 }).replace(' 1', '').replace('1', '')}
       </Text>
 
       {/* Summary */}
@@ -59,7 +61,7 @@ const PollMessage = ({ message, currentUserId, onVote, THEME, isPinned }) => {
         activeOpacity={0.7}
       >
         <Text style={[styles.summaryText, { color: THEME.accent }]}>
-          {totalVoters} người bình chọn
+          {t('poll.voted_count', { count: totalVoters })}
         </Text>
         <Text style={{ color: THEME.accent, fontSize: 16 }}> › </Text>
       </TouchableOpacity>
@@ -132,7 +134,7 @@ const PollMessage = ({ message, currentUserId, onVote, THEME, isPinned }) => {
         activeOpacity={0.7}
       >
         <Text style={[styles.mainButtonText, { color: THEME.accent }]}>
-          {userVoted ? 'Đổi lựa chọn' : 'Bình chọn'}
+          {userVoted ? t('poll.change_vote') : t('poll.vote')}
         </Text>
       </TouchableOpacity>
 

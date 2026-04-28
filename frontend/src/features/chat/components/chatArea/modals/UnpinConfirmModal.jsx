@@ -1,7 +1,9 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import { useLanguage } from '../../../../../context/LanguageContext';
 
 const UnpinConfirmModal = ({ isOpen, onClose, onConfirm }) => {
+  const { t } = useLanguage();
   if (!isOpen) return null;
 
   return (
@@ -20,24 +22,25 @@ const UnpinConfirmModal = ({ isOpen, onClose, onConfirm }) => {
       `}</style>
       <div style={{
         width: '400px',
-        backgroundColor: '#fff',
+        backgroundColor: 'var(--bg-secondary)',
         borderRadius: '8px',
         boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
         overflow: 'hidden',
-        display: 'flex', flexDirection: 'column'
+        display: 'flex', flexDirection: 'column',
+        border: '1px solid var(--border)'
       }}>
         {/* Header */}
         <div style={{
           padding: '16px 20px',
-          borderBottom: '1px solid #f0f0f0',
+          borderBottom: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between'
         }}>
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#1a1a1a' }}>
-            Bỏ ghim
+          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>
+            {t('chat.unpin_confirm.title')}
           </h3>
           <button 
             onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666', padding: 4 }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}
           >
             <X size={20} />
           </button>
@@ -45,8 +48,8 @@ const UnpinConfirmModal = ({ isOpen, onClose, onConfirm }) => {
 
         {/* Body */}
         <div style={{ padding: '24px 20px' }}>
-          <p style={{ margin: 0, fontSize: '15px', color: '#334155', lineHeight: 1.5 }}>
-            Bạn có chắc muốn bỏ ghim nội dung này không?
+          <p style={{ margin: 0, fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            {t('chat.unpin_confirm.desc')}
           </p>
         </div>
 
@@ -59,14 +62,12 @@ const UnpinConfirmModal = ({ isOpen, onClose, onConfirm }) => {
             onClick={onClose}
             style={{
               padding: '8px 20px', borderRadius: '4px',
-              border: 'none', backgroundColor: '#e2e8f0',
-              fontSize: '14px', fontWeight: 600, color: '#1e293b',
+              border: 'none', backgroundColor: 'var(--bg-hover)',
+              fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)',
               cursor: 'pointer', transition: 'background 0.2s'
             }}
-            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#d1d5db'}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
           >
-            Không
+            {t('chat.unpin_confirm.no')}
           </button>
           <button 
             onClick={onConfirm}
@@ -79,7 +80,7 @@ const UnpinConfirmModal = ({ isOpen, onClose, onConfirm }) => {
             onMouseEnter={e => e.currentTarget.style.backgroundColor = '#a02020'}
             onMouseLeave={e => e.currentTarget.style.backgroundColor = '#c52828'}
           >
-            Bỏ ghim
+            {t('chat.unpin_confirm.yes')}
           </button>
         </div>
       </div>

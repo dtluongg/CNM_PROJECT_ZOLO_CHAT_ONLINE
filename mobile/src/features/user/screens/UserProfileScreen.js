@@ -6,6 +6,7 @@ import {
 import { THEME, formatLastSeen } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
 import { usePresence } from '../../../context/PresenceContext';
+import { useLanguage } from '../../../context/LanguageContext';
 
 import { useUserProfile } from '../hooks/useUserProfile';
 import { getLiveStatusInfo } from '../utils/statusHelpers';
@@ -17,6 +18,7 @@ import { styles as s } from '../styles/userProfileStyles';
 
 export default function UserProfileScreen({ route, navigation }) {
   const { user: authUser } = useAuth();
+  const { t, language } = useLanguage();
   const { isUserOnline, getPresenceStatus, getLastSeen, getStatusText } = usePresence();
 
   const {
@@ -48,7 +50,7 @@ export default function UserProfileScreen({ route, navigation }) {
       <View style={s.center}>
         <StatusBar barStyle="light-content" backgroundColor={THEME.bgSecondary} />
         <ActivityIndicator color={THEME.accent} size="large" />
-        <Text style={{ color: THEME.textMuted, marginTop: 10 }}>Đang tải hồ sơ...</Text>
+        <Text style={{ color: THEME.textMuted, marginTop: 10 }}>{t('common.loading_profile')}</Text>
       </View>
     );
   }
@@ -83,10 +85,10 @@ export default function UserProfileScreen({ route, navigation }) {
             <Avatar name={profile.displayName} avatar={profile.avatar} size={80} />
           </View>
           <View style={{ alignItems: 'flex-start' }}>
-            <StatusBubble color={si.color} label={si.label} />
+            <StatusBubble color={si.color} label={t(`chat.status.${si.statusKey}`)} />
             {si.statusKey === 'offline' && !isOwn && ls ? (
               <Text style={{ fontSize: 11, color: THEME.textMuted, marginTop: 3 }}>
-                Hoạt động {formatLastSeen(ls)}
+                {t('chat.status.active_time', { time: formatLastSeen(ls) })}
               </Text>
             ) : null}
           </View>
@@ -109,43 +111,43 @@ export default function UserProfileScreen({ route, navigation }) {
           <View style={s.actionRow}>
             <ActionButton
               icon={messaging ? '⏳' : '💬'}
-              label={messaging ? 'Đang mở...' : 'Nhắn tin'}
+              label={messaging ? t('common.opening') : t('friends.send_message')}
               onPress={handleMessage}
               primary
             />
 
             {friendStatus === null && (
-              <ActionButton icon="⏳" label="Đang tải..." onPress={() => {}} />
+              <ActionButton icon="⏳" label={t('common.loading')} onPress={() => {}} />
             )}
             {friendStatus === 'none' && (
               <ActionButton
                 icon={friendBusy ? '⏳' : '🤝'}
-                label={friendBusy ? 'Đang gửi...' : 'Kết bạn'}
+                label={friendBusy ? t('common.sending') : t('friends.add_friend')}
                 onPress={handleSendRequest}
               />
             )}
             {friendStatus === 'sent' && (
               <ActionButton
                 icon={friendBusy ? '⏳' : '✉️'}
-                label={friendBusy ? 'Đang hủy...' : 'Đã gửi lời mời'}
+                label={friendBusy ? t('common.cancelling') : t('friends.request_sent_label')}
                 onPress={handleCancelRequest}
               />
             )}
             {friendStatus === 'friends' && (
               <ActionButton
                 icon={friendBusy ? '⏳' : '👥'}
-                label={friendBusy ? 'Đang hủy...' : 'Hủy kết bạn'}
+                label={friendBusy ? t('common.cancelling') : t('friends.unfriend')}
                 onPress={handleUnfriend}
               />
             )}
 
-            <ActionButton icon="📞" label="Gọi điện" onPress={() => Alert.alert('Gọi điện', 'Tính năng sẽ sớm ra mắt!')} />
+            <ActionButton icon="📞" label={t('chat.voice_call')} onPress={() => Alert.alert(t('chat.voice_call'), t('common.feature_coming_soon'))} />
           </View>
         ) : (
           <View style={s.ownActionRow}>
             <TouchableOpacity style={s.ownActionBtn} onPress={() => navigation.navigate('ChangePassword')} activeOpacity={0.78}>
               <Text style={s.ownActionBtnIcon}>🔒</Text>
-              <Text style={s.ownActionBtnText}>Đổi mật khẩu</Text>
+              <Text style={s.ownActionBtnText}>{t('user.change_password')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -159,7 +161,7 @@ export default function UserProfileScreen({ route, navigation }) {
               disabled={friendBusy}
             >
               <Text style={s.actionBtnIcon}>✅</Text>
-              <Text style={[s.actionBtnLabel, { color: '#fff' }]}>{friendBusy ? 'Đang xử lý...' : 'Chấp nhận'}</Text>
+              <Text style={[s.actionBtnLabel, { color: '#fff' }]}>{friendBusy ? t('common.processing') : t('friends.accept')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.actionBtn, { flex: 1 }]}
@@ -168,14 +170,14 @@ export default function UserProfileScreen({ route, navigation }) {
               disabled={friendBusy}
             >
               <Text style={s.actionBtnIcon}>❌</Text>
-              <Text style={s.actionBtnLabel}>{friendBusy ? 'Đang xử lý...' : 'Từ chối'}</Text>
+              <Text style={s.actionBtnLabel}>{friendBusy ? t('common.processing') : t('friends.reject')}</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {profile.statusText ? (
           <View style={s.section}>
-            <Text style={s.sectionLabel}>TRẠNG THÁI TÙY CHỈNH</Text>
+            <Text style={s.sectionLabel}>{t('user.custom_status_title')}</Text>
             <View style={s.bioCard}>
               <Text style={s.bioText}>{profile.statusText}</Text>
             </View>
@@ -184,7 +186,7 @@ export default function UserProfileScreen({ route, navigation }) {
 
         {profile.bio ? (
           <View style={s.section}>
-            <Text style={s.sectionLabel}>GIỚI THIỆU</Text>
+            <Text style={s.sectionLabel}>{t('user.bio_title')}</Text>
             <View style={s.bioCard}>
               <Text style={s.bioText}>{profile.bio}</Text>
             </View>
@@ -192,34 +194,34 @@ export default function UserProfileScreen({ route, navigation }) {
         ) : null}
 
         <View style={s.section}>
-          <Text style={s.sectionLabel}>THÔNG TIN THÀNH VIÊN</Text>
+          <Text style={s.sectionLabel}>{t('user.member_info_title')}</Text>
           <View style={s.infoCard}>
             {profile.email && <InfoRow icon="📧" label="Email" value={profile.email} />}
-            {profile.username && <InfoRow icon="🏷️" label="Username" value={`@${profile.username}`} sep />}
+            {profile.username && <InfoRow icon="🏷️" label={t('user.username')} value={`@${profile.username}`} sep />}
             {profile.createdAt && (
               <InfoRow
                 icon="📅"
-                label="Tham gia"
-                value={new Date(profile.createdAt).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long' })}
+                label={t('user.joined_date')}
+                value={new Date(profile.createdAt).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { year: 'numeric', month: 'long' })}
                 sep
               />
             )}
-            {profile.phone && <InfoRow icon="📱" label="Số điện thoại" value={profile.phone} sep />}
+            {profile.phone && <InfoRow icon="📱" label={t('user.phone')} value={profile.phone} sep />}
             {profile.authProvider && (
               <InfoRow
                 icon="🔐"
-                label="Loại tài khoản"
-                value={profile.authProvider === 'local' ? 'Tài khoản local' : `OAuth (${profile.authProvider})`}
+                label={t('user.account_type')}
+                value={profile.authProvider === 'local' ? t('user.local_account') : `OAuth (${profile.authProvider})`}
                 sep
               />
             )}
             {(typeof profile.isEmailVerified === 'boolean' || typeof profile.isPhoneVerified === 'boolean') && (
               <View style={s.verifyBox}>
                 {typeof profile.isEmailVerified === 'boolean' && (
-                  <Text style={s.verifyText}>Email: {profile.isEmailVerified ? 'Đã xác thực' : 'Chưa xác thực'}</Text>
+                  <Text style={s.verifyText}>Email: {profile.isEmailVerified ? t('user.verified') : t('user.unverified')}</Text>
                 )}
                 {typeof profile.isPhoneVerified === 'boolean' && (
-                  <Text style={s.verifyText}>SĐT: {profile.isPhoneVerified ? 'Đã xác thực' : 'Chưa xác thực'}</Text>
+                  <Text style={s.verifyText}>{t('user.phone')}: {profile.isPhoneVerified ? t('user.verified') : t('user.unverified')}</Text>
                 )}
               </View>
             )}

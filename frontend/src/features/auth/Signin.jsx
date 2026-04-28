@@ -3,6 +3,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
 import authApi from './api/authApi';
+import { useLanguage } from '../../context/LanguageContext';
 
 const CALLBACK_URL = `${window.location.origin}/auth/callback`;
 const MAX_FAILED_ATTEMPTS = 5;
@@ -17,7 +18,13 @@ const formatRemainingTime = (seconds) => {
 
 const isWrongPasswordMessage = (message = '') => {
   const normalized = message.toLowerCase();
-  return normalized.includes('mật khẩu không chính xác') || normalized.includes('mat khau khong chinh xac');
+  return (
+    normalized.includes('mật khẩu không chính xác') || 
+    normalized.includes('mat khau khong chinh xac') ||
+    normalized.includes('invalid password') ||
+    normalized.includes('wrong password') ||
+    normalized.includes('incorrect password')
+  );
 };
 
 const GoogleIcon = () => (
@@ -52,7 +59,7 @@ const OAuthButton = ({ provider, label, icon, onClick, loading }) => (
     {loading === provider
       ? <span className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
       : icon}
-    {loading === provider ? 'Đang chuyển hướng...' : label}
+    {loading === provider ? label : label}
   </button>
 );
 
@@ -60,6 +67,7 @@ const Signin = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
+  const { t } = useLanguage();
   const [formData, setFormData] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -141,7 +149,7 @@ const Signin = () => {
     setError('');
 
     if (isLocked) {
-      setError(`Bạn đã nhập sai mật khẩu quá ${MAX_FAILED_ATTEMPTS} lần. Vui lòng thử lại sau ${formatRemainingTime(remainingSeconds)}.`);
+      setError(t('auth.lock_error', { count: MAX_FAILED_ATTEMPTS, time: formatRemainingTime(remainingSeconds) }));
       return;
     }
 
@@ -158,7 +166,7 @@ const Signin = () => {
         navigate('/dashboard');
       }
     } catch (err) {
-      const backendMessage = err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng thử lại.';
+      const backendMessage = err.response?.data?.message || t('auth.signin_failed');
 
       if (isWrongPasswordMessage(backendMessage)) {
         const nextAttempts = failedAttempts + 1;
@@ -168,11 +176,11 @@ const Signin = () => {
           setFailedAttempts(nextAttempts);
           setLockUntil(nextLockUntil);
           setRemainingSeconds(Math.ceil(LOCK_DURATION_MS / 1000));
-          setError(`Bạn đã nhập sai mật khẩu ${MAX_FAILED_ATTEMPTS} lần. Tài khoản tạm khóa trong 5 phút.`);
+          setError(t('auth.wrong_password_limit', { count: MAX_FAILED_ATTEMPTS }));
         } else {
           const attemptsLeft = MAX_FAILED_ATTEMPTS - nextAttempts;
           setFailedAttempts(nextAttempts);
-          setError(`${backendMessage}. Bạn còn ${attemptsLeft} lần thử.`);
+          setError(t('auth.wrong_password_attempts', { message: backendMessage, count: attemptsLeft }));
         }
       } else {
         setError(backendMessage);
@@ -195,12 +203,12 @@ const Signin = () => {
         },
       });
       if (oauthError) {
-        setError(oauthError.message || `Đăng nhập ${provider} thất bại`);
+        setError(oauthError.message || t('auth.oauth_failed', { provider }));
         setOauthLoading(null);
       }
       // Nếu thành công, trình duyệt sẽ redirect → không cần xử lý thêm
     } catch (err) {
-      setError(`Không thể kết nối ${provider}. Vui lòng thử lại.`);
+      setError(t('auth.conn_failed', { provider }));
       setOauthLoading(null);
     }
   };
@@ -208,7 +216,7 @@ const Signin = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-start md:items-center justify-center px-4 py-8 md:py-10 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">Đăng Nhập</h1>
+        <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">{t('auth.login')}</h1>
 
         {successMessage && (
           <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 text-sm">
@@ -223,27 +231,27 @@ const Signin = () => {
 
         {isLocked && (
           <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded mb-4 text-sm">
-            Tạm thời khóa đăng nhập bằng mật khẩu. Thử lại sau {formatRemainingTime(remainingSeconds)}.
+            {t('auth.lock_message', { time: formatRemainingTime(remainingSeconds) })}
           </div>
         )}
 
         {/* OAuth buttons */}
         <div className="space-y-3 mb-5">
-          <OAuthButton provider="google" label="Tiếp tục với Google" icon={<GoogleIcon />} onClick={handleOAuth} loading={oauthLoading} />
-          <OAuthButton provider="facebook" label="Tiếp tục với Facebook" icon={<FacebookIcon />} onClick={handleOAuth} loading={oauthLoading} />
+          <OAuthButton provider="google" label={oauthLoading === 'google' ? t('auth.redirecting') : t('auth.google')} icon={<GoogleIcon />} onClick={handleOAuth} loading={oauthLoading} />
+          <OAuthButton provider="facebook" label={oauthLoading === 'facebook' ? t('auth.redirecting') : t('auth.facebook')} icon={<FacebookIcon />} onClick={handleOAuth} loading={oauthLoading} />
         </div>
 
         {/* Divider */}
         <div className="flex items-center gap-3 mb-5">
           <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-sm text-gray-400">hoặc đăng nhập bằng tài khoản</span>
+          <span className="text-sm text-gray-400">{t('auth.or_login_with')}</span>
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
         {/* Local form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-gray-700 font-semibold mb-2 text-sm">Username hoặc Email</label>
+            <label className="block text-gray-700 font-semibold mb-2 text-sm">{t('auth.username_or_email')}</label>
             <input
               type="text"
               name="username"
@@ -252,11 +260,11 @@ const Signin = () => {
               disabled={isLocked}
               required
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              placeholder="Tên đăng nhập hoặc email"
+              placeholder={t('auth.username_placeholder')}
             />
           </div>
           <div>
-            <label className="block text-gray-700 font-semibold mb-2 text-sm">Mật khẩu</label>
+            <label className="block text-gray-700 font-semibold mb-2 text-sm">{t('auth.password')}</label>
             <input
               type="password"
               name="password"
@@ -265,7 +273,7 @@ const Signin = () => {
               disabled={isLocked}
               required
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              placeholder="Mật khẩu"
+              placeholder={t('auth.password_placeholder')}
             />
           </div>
           <div className="flex justify-end -mt-2 mb-1">
@@ -273,7 +281,7 @@ const Signin = () => {
               to="/forgot-password"
               className="text-xs text-blue-600 hover:text-blue-700 font-semibold"
             >
-              Quên mật khẩu?
+              {t('auth.forgot_password')}
             </Link>
           </div>
           <button
@@ -281,13 +289,13 @@ const Signin = () => {
             disabled={loading || isLocked}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition disabled:opacity-50"
           >
-            {loading ? 'Đang đăng nhập...' : isLocked ? `Thử lại sau ${formatRemainingTime(remainingSeconds)}` : 'Đăng Nhập'}
+            {loading ? t('auth.logging_in') : isLocked ? t('auth.lock_message', { time: formatRemainingTime(remainingSeconds) }) : t('auth.login_btn')}
           </button>
         </form>
 
         <p className="text-center text-gray-600 mt-5 text-sm">
-          Chưa có tài khoản?{' '}
-          <Link to="/signup" className="text-blue-600 hover:text-blue-700 font-semibold">Đăng ký ngay</Link>
+          {t('auth.no_account')}{' '}
+          <Link to="/signup" className="text-blue-600 hover:text-blue-700 font-semibold">{t('auth.no_account_link')}</Link>
         </p>
       </div>
     </div>

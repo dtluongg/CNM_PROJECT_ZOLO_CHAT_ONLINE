@@ -1,6 +1,6 @@
 const ConversationMember = require('../models/conversationMemberModel');
 const Message            = require('../models/messageModel');
-const { summarize }      = require('../services/aiService');
+const { summarize, translate }      = require('../services/aiService');
 
 // ── Rate limit ───────────────────────────────────────────────────────────────
 // key: `${userId}:${conversationId}` → lastCalledAt (timestamp)
@@ -120,5 +120,29 @@ exports.summarizeUnread = async (req, res) => {
   } catch (err) {
     console.error('[aiController] summarizeUnread error:', err.message);
     return res.status(500).json({ message: 'Không thể tóm tắt lúc này, vui lòng thử lại sau' });
+  }
+};
+
+/**
+ * POST /api/messages/ai/translate
+ * Dịch một đoạn văn bản.
+ */
+exports.translateText = async (req, res) => {
+  try {
+    const { text, targetLanguage } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ message: 'Thiếu nội dung cần dịch' });
+    }
+
+    const translatedText = await translate(text, targetLanguage || 'Auto');
+
+    return res.json({
+      translatedText,
+      targetLanguage: targetLanguage || 'Auto',
+    });
+  } catch (err) {
+    console.error('[aiController] translateText error:', err.message);
+    return res.status(500).json({ message: 'Không thể dịch lúc này, vui lòng thử lại sau' });
   }
 };

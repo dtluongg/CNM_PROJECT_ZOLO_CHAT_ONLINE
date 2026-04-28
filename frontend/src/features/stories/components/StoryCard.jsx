@@ -1,7 +1,9 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const StoryCard = ({ user, stories = [], isMe = false, onAdd, onView }) => {
+    const { t } = useLanguage();
     const hasStories = stories.length > 0;
     const latestStory = hasStories ? stories[0] : null;
 
@@ -40,7 +42,7 @@ const StoryCard = ({ user, stories = [], isMe = false, onAdd, onView }) => {
                     <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white mb-1 shadow-md -mt-7 border-4 border-white">
                         <Plus size={18} strokeWidth={3} />
                     </div>
-                    <span className="text-xs font-bold text-gray-800">Thêm vào tin</span>
+                    <span className="text-xs font-bold text-gray-800">{t('stories.add_story')}</span>
                 </div>
             </div>
         );
@@ -75,7 +77,7 @@ const StoryCard = ({ user, stories = [], isMe = false, onAdd, onView }) => {
             {/* Name Bottom */}
             <div className="absolute bottom-3 left-3 right-3 z-10">
                 <span className="text-white text-xs font-bold shadow-sm truncate block">
-                    {isMe ? 'Tin của bạn' : user?.displayName}
+                    {isMe ? t('stories.my_story') : user?.displayName}
                 </span>
             </div>
 

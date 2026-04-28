@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, Trash2, Lock, Unlock, Hash, Volume2, FileText, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { useLanguage } from '../../../../context/LanguageContext';
+import { translateTopicName } from '../../../../utils/translationUtils';
 
-const CHANNEL_TYPE_OPTS = [
-    { value: 'text',   label: '# Văn bản',  Icon: Hash    },
-    { value: 'voice',  label: '🔊 Giọng nói', Icon: Volume2  },
-    { value: 'system', label: '📋 Hệ thống',  Icon: FileText },
+const getChannelOpts = (t) => [
+    { value: 'text',   label: t('topic_manager.types.text'),  Icon: Hash    },
+    { value: 'voice',  label: t('topic_manager.types.voice'), Icon: Volume2  },
+    { value: 'system', label: t('topic_manager.types.system'),  Icon: FileText },
 ];
 
 const getChannelIcon = (channelType) => {
@@ -17,6 +19,8 @@ import conversationApi from '../../api/conversationApi';
 const CATEGORY_EMOJIS = ['💬', '📢', '📚', '🎮', '🔧', '🎵', '📌', '🎉'];
 
 export default function TopicManager({ conversation, canManage, onTopicSelect, activeTopic, onTopicsChanged }) {
+    const { t } = useLanguage();
+    const CHANNEL_TYPE_OPTS = getChannelOpts(t);
     const [topics, setTopics]               = useState([]);
     const [loading, setLoading]             = useState(false);
     const [showForm, setShowForm]           = useState(false);
@@ -25,6 +29,9 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
     const [saving, setSaving]               = useState(false);
     const [collapsedCats, setCollapsedCats] = useState({});
     const [hoveredId, setHoveredId]         = useState(null);
+
+    // ── Helper to translate hardcoded backend strings ────────────────────────
+    const translateTopicContent = (val) => translateTopicName(val, t);
 
     const loadTopics = useCallback(async () => {
         if (!conversation?.id) return;
@@ -72,21 +79,21 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
             await loadTopics();
             onTopicsChanged?.(); // ← thêm dòng này
         } catch (err) {
-            window.alert(err.response?.data?.message || 'Không thể lưu kênh');
+            window.alert(err.response?.data?.message || t('topic_manager.save_error'));
         } finally {
             setSaving(false);
         }
     };
 
     const handleDelete = async (topic) => {
-        if (!window.confirm(`Xóa kênh #${topic.name}?`)) return;
+        if (!window.confirm(t('topic_manager.delete_confirm', { name: topic.name }))) return;
         try {
             await conversationApi.deleteTopic(conversation.id, topic._id);
             await loadTopics();
             onTopicsChanged?.(); // ← thêm dòng này
             if (activeTopic?._id === topic._id) onTopicSelect(null);
         } catch (err) {
-            window.alert(err.response?.data?.message || 'Không thể xóa kênh');
+            window.alert(err.response?.data?.message || t('topic_manager.delete_error'));
         }
     };
 
@@ -151,7 +158,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
                         fontWeight: isActive ? 700 : 500,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
-                        {topic.name}
+                        {translateTopicContent(topic.name)}
                     </span>
                     {topic.isLocked && (
                         <Lock size={11} style={{ color: isActive ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)', flexShrink: 0 }} />
@@ -163,21 +170,21 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
                         <button
                             onClick={(e) => { e.stopPropagation(); handleToggleLock(topic); }}
                             style={{ ...s.iconBtn, color: isActive ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)' }}
-                            title={topic.isLocked ? 'Mở khóa' : 'Khóa'}
+                            title={topic.isLocked ? t('topic_manager.unlock') : t('topic_manager.lock')}
                         >
                             {topic.isLocked ? <Unlock size={12} /> : <Lock size={12} />}
                         </button>
                         <button
                             onClick={(e) => { e.stopPropagation(); openEdit(topic); }}
                             style={{ ...s.iconBtn, color: isActive ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)' }}
-                            title="Sửa"
+                            title={t('topic_manager.edit_title')}
                         >
                             <Pencil size={12} />
                         </button>
                         <button
                             onClick={(e) => { e.stopPropagation(); handleDelete(topic); }}
                             style={{ ...s.iconBtn, color: isActive ? 'rgba(255,100,100,0.9)' : '#ed4245' }}
-                            title="Xóa"
+                            title={t('common.delete')}
                         >
                             <Trash2 size={12} />
                         </button>
@@ -191,12 +198,12 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {/* Section header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 2px', marginBottom: 4 }}>
-                <span style={s.sectionLabel}>Kênh chat</span>
+                <span style={s.sectionLabel}>{t('topic_manager.title')}</span>
                 {canManage && (
                     <button
                         onClick={openCreate}
                         style={{ ...s.iconBtn, color: 'var(--accent)' }}
-                        title="Tạo kênh mới"
+                        title={t('topic_manager.create_btn')}
                     >
                         <Plus size={15} />
                     </button>
@@ -217,12 +224,12 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
             >
                 <Hash size={14} style={{ color: !activeTopic ? 'rgba(255,255,255,0.8)' : 'var(--text-muted)', flexShrink: 0 }} />
                 <span style={{ fontSize: 13, color: !activeTopic ? '#fff' : 'var(--text-primary)', fontWeight: !activeTopic ? 700 : 500 }}>
-                    chung
+                    {t('chat.general_channel')}
                 </span>
             </div>
 
             {loading && (
-                <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '6px 8px' }}>Đang tải...</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '6px 8px' }}>{t('topic_manager.loading')}</div>
             )}
 
             {/* Topics by category */}
@@ -240,7 +247,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
                                 ? <ChevronRight size={12} style={{ color: 'var(--text-muted)' }} />
                                 : <ChevronDown size={12} style={{ color: 'var(--text-muted)' }} />
                             }
-                            <span style={s.sectionLabel}>{cat}</span>
+                            <span style={s.sectionLabel}>{translateTopicContent(cat)}</span>
                         </div>
                     )}
 
@@ -256,7 +263,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
 
             {!loading && topics.length === 0 && (
                 <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '6px 8px', fontStyle: 'italic' }}>
-                    {canManage ? 'Nhấn + để tạo kênh đầu tiên.' : 'Chưa có kênh nào.'}
+                    {canManage ? t('topic_manager.no_topics_manage') : t('topic_manager.no_topics')}
                 </div>
             )}
 
@@ -269,7 +276,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
-                            {editingTopic ? 'Sửa kênh' : 'Tạo kênh mới'}
+                            {editingTopic ? t('topic_manager.edit_title') : t('topic_manager.create_title')}
                         </span>
                         <button onClick={() => setShowForm(false)} style={{ ...s.iconBtn }}>
                             <X size={14} />
@@ -285,7 +292,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
                             {CATEGORY_EMOJIS.map((em) => <option key={em} value={em}>{em}</option>)}
                         </select>
                         <input
-                            placeholder="tên-kênh"
+                            placeholder={t('topic_manager.name_placeholder')}
                             value={form.name}
                             onChange={(e) => setForm((p) => ({ ...p, name: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
                             style={{ ...s.input, flex: 1 }}
@@ -304,14 +311,14 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
                     </select>
 
                     <input
-                        placeholder="Danh mục (ví dụ: 📚 Học tập)"
+                        placeholder={t('topic_manager.cat_placeholder')}
                         value={form.categoryName}
                         onChange={(e) => setForm((p) => ({ ...p, categoryName: e.target.value }))}
                         style={s.input}
                     />
 
                     <input
-                        placeholder="Mô tả kênh (tùy chọn)"
+                        placeholder={t('topic_manager.desc_placeholder')}
                         value={form.description}
                         onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                         style={s.input}
@@ -326,7 +333,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
                                 color: 'var(--text-primary)', fontWeight: 600, fontSize: 13,
                             }}
                         >
-                            Hủy
+                            {t('topic_manager.cancel')}
                         </button>
                         <button
                             onClick={handleSave}
@@ -338,7 +345,7 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
                                 opacity: saving || !form.name.trim() ? 0.6 : 1,
                             }}
                         >
-                            {saving ? 'Đang lưu...' : (editingTopic ? 'Cập nhật' : 'Tạo kênh')}
+                            {saving ? (editingTopic ? t('topic_manager.updating') : t('topic_manager.creating')) : (editingTopic ? t('topic_manager.save') : t('topic_manager.save'))}
                         </button>
                     </div>
                 </div>

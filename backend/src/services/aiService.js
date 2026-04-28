@@ -77,4 +77,58 @@ Hãy tóm tắt ngắn gọn nội dung chính bằng tiếng Việt (tối đa 
     }
 }
 
-module.exports = { summarize };
+/**
+ * Gọi NVIDIA Gemma để dịch văn bản
+ * @param {string} text - Văn bản cần dịch
+ * @param {string} targetLanguage - Ngôn ngữ đích (mặc định là English hoặc Vietnamese tùy ngữ cảnh)
+ * @returns {Promise<string>} - Văn bản đã dịch
+ */
+async function translate(text, targetLanguage = "Auto") {
+    try {
+        const apiKey = process.env.NVIDIA_API_KEY;
+        if (!apiKey)
+            throw new Error("NVIDIA_API_KEY chưa được cấu hình trong .env");
+
+        const systemPrompt = `You are a professional, accurate translation system.
+RULES:
+1. Preserve all emojis and formatting.
+2. DO NOT add any greetings, explanations, or extra words (e.g., no "Xin chào" or "Here is the translation"). Only return the translated text.
+3. Target Language Logic:
+   - If target is "Auto": Detect source language. If source is NOT Vietnamese, translate to Vietnamese. If source IS Vietnamese, translate to English.
+   - If target is a specific language (e.g. "Japanese", "Korean", "French"): Translate the text to that specific language regardless of its original language.`;
+
+        const userPrompt = `Text: "${text}"\nTarget: "${targetLanguage}"`;
+
+        const response = await axios.post(
+            `${NVIDIA_BASE_URL}/chat/completions`,
+            {
+                model: NVIDIA_MODEL,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                max_tokens: 1024,
+                temperature: 0.1, // Set to 0.1 for maximum accuracy and consistency
+                stream: false,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    "Content-Type": "application/json",
+                },
+                timeout: 30000,
+            },
+        );
+
+        return response.data.choices?.[0]?.message?.content?.trim() || "";
+    } catch (err) {
+        console.error(
+            "[aiService] Translate error:",
+            err.response?.data || err.message,
+        );
+        throw err;
+    }
+}
+
+module.exports = { summarize, translate };
+

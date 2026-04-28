@@ -66,7 +66,7 @@ export function useProfile({ user, updateUser, navigation }) {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images', // ✅ FIX: Dùng string literal
+      mediaTypes: 'images',
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.85,
@@ -95,7 +95,7 @@ export function useProfile({ user, updateUser, navigation }) {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images', // ✅ FIX: Dùng string literal
+      mediaTypes: 'images',
       allowsEditing: true,
       aspect: [3, 1],
       quality: 0.85,

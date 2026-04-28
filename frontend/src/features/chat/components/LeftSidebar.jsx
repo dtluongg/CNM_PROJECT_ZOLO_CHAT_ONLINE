@@ -14,16 +14,8 @@ import conversationApi from '../api/conversationApi';
 import voiceRoomApi from '../../voice/api/voiceRoomApi';
 import { VoiceRoomProvider } from '../../voice/VoiceRoomContext';
 import { useVoiceRoomContext } from '../../voice/VoiceRoomContext';
+import { useLanguage } from '../../../context/LanguageContext';
 
-
-const GROUP_TYPE_LABEL = {
-  study:   '📚 Học tập',
-  gaming:  '🎮 Gaming',
-  general: '💬 Thảo luận',
-  project: '📌 Dự án',
-  other:   '🗂️ Khác',
-  sensitive: '🔐 Nhóm nhạy cảm',
-};
 
 export default function LeftSidebar({
   conversations,
@@ -38,9 +30,19 @@ export default function LeftSidebar({
   isMobile = false,
 }) {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const [collapsed, setCollapsed]           = useState(false);
   const [search, setSearch]                 = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const GROUP_TYPE_LABEL_T = {
+    study:   t('auth.group_types.study'),
+    gaming:  t('auth.group_types.gaming'),
+    general: t('auth.group_types.general'),
+    project: t('auth.group_types.project'),
+    other:   t('auth.group_types.other'),
+    sensitive: t('auth.group_types.sensitive'),
+  };
 
   // ── Voice room context ─────────────────────────────────────
   const { getRoomInfo, fetchStatusBatch, isInRoom } = useVoiceRoomContext();
@@ -103,12 +105,29 @@ export default function LeftSidebar({
 
   const myStatus = user?.status || 'online';
   const STATUS_CONFIG = {
-    online:    { color: '#3ba55c', label: 'Online' },
-    idle:      { color: '#faa61a', label: 'Vắng mặt' },
-    dnd:       { color: '#ed4245', label: 'Không làm phiền' },
-    invisible: { color: '#80848e', label: 'Ẩn' },
+    online:    { color: '#3ba55c', label: t('chat.status.online') },
+    idle:      { color: '#faa61a', label: t('chat.status.idle') },
+    dnd:       { color: '#ed4245', label: t('chat.status.dnd') },
+    invisible: { color: '#80848e', label: t('chat.status.invisible') },
   };
   const myStatusConfig = STATUS_CONFIG[myStatus] || STATUS_CONFIG.online;
+  
+  // ── Helper to translate hardcoded backend strings ────────────────────────
+  const translateTopicContent = (val) => {
+    if (!val) return val;
+    const mapping = {
+      // Categories
+      '📚 Học tập': t('chat.topics.study_cat'),
+      '🔔 Hệ thống': t('chat.topics.system_cat'),
+      // Channels
+      'học-tập-chung': t('chat.topics.study_general'),
+      'hỏi-bài': t('chat.topics.study_qa'),
+      'chia-sẻ-tài-liệu': t('chat.topics.study_files'),
+      'nhật-ký-nhóm': t('chat.topics.system_log'),
+      'thảo-luận-chung': t('chat.topics.general_chat'),
+    };
+    return mapping[val] || val;
+  };
 
   const handleLogout = useCallback(() => {
     setShowLogoutConfirm(false);
@@ -147,7 +166,7 @@ export default function LeftSidebar({
         >
           <ChannelIcon size={isMobile ? 17 : 14} style={{ color: active ? '#fff' : voiceParts.length > 0 ? '#3ba55c' : 'var(--text-muted)', flexShrink: 0 }} />
           <span style={{ fontSize: isMobile ? 15 : 13, flex: 1, color: active ? '#fff' : 'var(--text-primary)', fontWeight: active ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {topic.name}
+            {translateTopicContent(topic.name)}
           </span>
           {topic.isLocked && <Lock size={11} style={{ color: active ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)', flexShrink: 0 }} />}
           {isVoice && voiceParts.length > 0 && (
@@ -212,11 +231,11 @@ export default function LeftSidebar({
           alignItems: 'center', justifyContent: 'center', gap: 14, padding: 28,
         }}>
           <div style={{ fontSize: 40 }}>👋</div>
-          <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text-primary)', textAlign: 'center' }}>Đăng xuất?</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>Bạn sẽ cần đăng nhập lại để sử dụng ZoloChat.</div>
+          <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text-primary)', textAlign: 'center' }}>{t('auth.logout')}?</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>{t('auth.logout_confirm_desc')}</div>
           <div style={{ display: 'flex', gap: 10, width: '100%', maxWidth: 260 }}>
-            <button onClick={() => setShowLogoutConfirm(false)} style={{ flex: 1, background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: 'none', borderRadius: 10, padding: '10px', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Hủy</button>
-            <button onClick={handleLogout} style={{ flex: 1, background: '#ed4245', color: '#fff', border: 'none', borderRadius: 10, padding: '10px', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>Đăng xuất</button>
+            <button onClick={() => setShowLogoutConfirm(false)} style={{ flex: 1, background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: 'none', borderRadius: 10, padding: '10px', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{t('common.cancel')}</button>
+            <button onClick={handleLogout} style={{ flex: 1, background: '#ed4245', color: '#fff', border: 'none', borderRadius: 10, padding: '10px', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>{t('auth.logout')}</button>
           </div>
         </div>
       )}
@@ -243,7 +262,7 @@ export default function LeftSidebar({
             >
               <ArrowLeft size={15} style={{ flexShrink: 0 }} />
               <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)' }}>
-                Tin nhắn
+                {t('navbar.chat')}
               </span>
             </button>
           </div>
@@ -263,7 +282,7 @@ export default function LeftSidebar({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                   {activeConv.groupType && (
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {GROUP_TYPE_LABEL[activeConv.groupType] || activeConv.groupType}
+                      {GROUP_TYPE_LABEL_T[activeConv.groupType] || activeConv.groupType}
                     </span>
                   )}
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -285,12 +304,12 @@ export default function LeftSidebar({
             {/* Category header label */}
             <div style={{ padding: isMobile ? '12px 14px 4px' : '10px 12px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px' }}>
-                Kênh chat
+                {t('chat.channels_label', { defaultValue: 'Kênh chat' })}
               </span>
               {canManage && (
                 <button
                   onClick={() => { /* open topic manager in right sidebar via a flag — handled by onTopicSelect */ }}
-                  title="Quản lý kênh (mở tab Kênh)"
+                  title={t('auth.manage_channels')}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', borderRadius: 4 }}
                 >
                   <Plus size={14} />
@@ -300,13 +319,13 @@ export default function LeftSidebar({
 
             {/* #chung */}
             <ChannelRow
-              topic={{ _id: null, name: 'chung', isLocked: false }}
+              topic={{ _id: null, name: t('chat.general_channel'), isLocked: false }}
               active={!activeTopic}
               onSelect={() => onTopicSelect && onTopicSelect(null)}
             />
 
             {topicsLoading && (
-              <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>Đang tải kênh...</div>
+              <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
             )}
 
             {/* Topics grouped by category */}
@@ -326,7 +345,7 @@ export default function LeftSidebar({
                       : <ChevronDown size={11} style={{ color: 'var(--text-muted)' }} />
                     }
                     <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px' }}>
-                      {cat}
+                      {translateTopicContent(cat)}
                     </span>
                   </div>
                 )}
@@ -344,7 +363,7 @@ export default function LeftSidebar({
 
             {!topicsLoading && topics.length === 0 && (
               <div style={{ padding: isMobile ? '10px 14px' : '8px 12px', fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                Chưa có kênh nào. {canManage ? 'Tạo kênh trong tab "Kênh" bên phải.' : ''}
+                {t('auth.no_channels')}
               </div>
             )}
           </div>
@@ -371,7 +390,7 @@ export default function LeftSidebar({
               <IconBtn
                 icon={collapsed ? ChevronRight : ChevronLeft}
                 onClick={() => setCollapsed(v => !v)}
-                title={collapsed ? 'Mở rộng' : 'Thu gọn'}
+                title={collapsed ? t('auth.expand') : t('auth.collapse')}
               />
             )}
           </div>
@@ -384,7 +403,7 @@ export default function LeftSidebar({
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  placeholder="Tìm hội thoại..."
+                  placeholder={t('chat.search_chat')}
                   style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: isMobile ? 15 : 13 }}
                 />
                 {search && (
@@ -393,7 +412,7 @@ export default function LeftSidebar({
                   </button>
                 )}
               </div>
-              <button onClick={onOpenSearch} title="Tìm kiếm người dùng" style={{ background: 'var(--bg-primary)', border: 'none', borderRadius: 10, padding: isMobile ? '9px 12px' : '6px 9px', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+              <button onClick={onOpenSearch} title={t('auth.search_users')} style={{ background: 'var(--bg-primary)', border: 'none', borderRadius: 10, padding: isMobile ? '9px 12px' : '6px 9px', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
                 <UserSearch size={isMobile ? 18 : 15} />
               </button>
             </div>
@@ -401,7 +420,7 @@ export default function LeftSidebar({
 
           {collapsed && (
             <div style={{ padding: '6px 10px', flexShrink: 0 }}>
-              <button onClick={onOpenSearch} title="Tìm kiếm" style={{ width: '100%', background: 'var(--bg-primary)', border: 'none', borderRadius: 8, padding: '7px', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <button onClick={onOpenSearch} title={t('chat.search_chat')} style={{ width: '100%', background: 'var(--bg-primary)', border: 'none', borderRadius: 8, padding: '7px', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <UserSearch size={16} />
               </button>
             </div>
@@ -412,9 +431,9 @@ export default function LeftSidebar({
             {!collapsed && dms.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '14px 16px 6px' : '10px 16px 4px' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                  Tin nhắn ({dms.length})
+                  {t('navbar.chat')} ({dms.length})
                 </span>
-                {!isMobile && <IconBtn icon={Plus} title="Tin nhắn mới" size={14} />}
+                {!isMobile && <IconBtn icon={Plus} title={t('auth.new_message')} size={14} />}
               </div>
             )}
             {dms.map(conv => (
@@ -426,9 +445,9 @@ export default function LeftSidebar({
                 {!collapsed && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '14px 16px 6px' : '10px 16px 4px', marginTop: 4 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                      Nhóm ({groups.length})
+                      {t('chat.group_chat')} ({groups.length})
                     </span>
-                    {!isMobile && <IconBtn icon={Plus} title="Tạo nhóm" size={14} onClick={onOpenCreateGroup} />}
+                    {!isMobile && <IconBtn icon={Plus} title={t('auth.create_group_btn')} size={14} onClick={onOpenCreateGroup} />}
                   </div>
                 )}
                 {groups.map(conv => (
@@ -440,7 +459,7 @@ export default function LeftSidebar({
             {filtered.length === 0 && (
               <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)', fontSize: 13 }}>
                 <MessageCircle size={32} style={{ opacity: 0.3, marginBottom: 8, display: 'block', margin: '0 auto 8px' }} />
-                Không tìm thấy hội thoại
+                {t('auth.no_conversations_found')}
               </div>
             )}
           </div>
@@ -471,15 +490,15 @@ export default function LeftSidebar({
           </div>
           {!collapsed && (
             <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-              <IconBtn icon={Settings} onClick={onOpenSettings} title="Cài đặt hồ sơ" size={isMobile ? 18 : 15} />
-              <IconBtn icon={LogOut} onClick={() => setShowLogoutConfirm(true)} title="Đăng xuất" size={isMobile ? 18 : 15} danger />
+              <IconBtn icon={Settings} onClick={onOpenSettings} title={t('auth.profile_settings')} size={isMobile ? 18 : 15} />
+              <IconBtn icon={LogOut} onClick={() => setShowLogoutConfirm(true)} title={t('auth.logout')} size={isMobile ? 18 : 15} danger />
             </div>
           )}
         </div>
         {collapsed && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', marginTop: 4 }}>
-            <IconBtn icon={Settings} onClick={onOpenSettings} title="Cài đặt" size={15} />
-            <IconBtn icon={LogOut} onClick={() => setShowLogoutConfirm(true)} title="Đăng xuất" size={15} danger />
+            <IconBtn icon={Settings} onClick={onOpenSettings} title={t('auth.profile_settings')} size={15} />
+            <IconBtn icon={LogOut} onClick={() => setShowLogoutConfirm(true)} title={t('auth.logout')} size={15} danger />
           </div>
         )}
       </div>

@@ -9,6 +9,7 @@ import friendApi from '../api/friendApi';
 import { STATUS_CONFIG, getAvatarColor, getInitials } from '../../../theme';
 import { useTheme } from '../../../context/ThemeContext';
 import { useFocusEffect } from '@react-navigation/native';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const Avatar = ({ name, avatar, size = 46 }) => {
   const bg = getAvatarColor(name);
@@ -23,6 +24,7 @@ const Avatar = ({ name, avatar, size = 46 }) => {
 
 export default function FriendsScreen({ navigation }) {
   const { theme: THEME } = useTheme();
+  const { t } = useLanguage();
   const s = useStyles(THEME);
   
   // UI Modes
@@ -100,7 +102,7 @@ export default function FriendsScreen({ navigation }) {
 
       let finalSections = [];
       if (searchResults.length > 0) {
-          finalSections.push({ title: 'KẾT QUẢ TÌM KIẾM TỪ HỆ THỐNG', data: searchResults, isGlobal: true });
+          finalSections.push({ title: t('friends.global_search_results'), data: searchResults, isGlobal: true });
       }
       if (localSections.length > 0) {
           finalSections.push(...localSections);
@@ -128,30 +130,30 @@ export default function FriendsScreen({ navigation }) {
   const handleSendRequestGlobal = async (targetId) => {
     try {
         await friendApi.sendRequest(targetId);
-        Alert.alert('Thành công', 'Đã gửi lời mời thành công!');
+        Alert.alert(t('common.success'), t('friends.request_sent'));
         fetchContacts();
     } catch (error) {
-        Alert.alert('Lỗi', error.response?.data?.message || 'Có lỗi xảy ra');
+        Alert.alert(t('common.error'), error.response?.data?.message || t('common.something_wrong'));
     }
   };
 
   const handleAcceptGlobal = async (reqId) => {
     try {
         await friendApi.acceptRequest(reqId);
-        Alert.alert('Thành công', 'Đã chấp nhận kết bạn!');
+        Alert.alert(t('common.success'), t('friends.request_accepted'));
         fetchContacts();
     } catch (error) {
-        Alert.alert('Lỗi', error.response?.data?.message || 'Không thể đồng ý');
+        Alert.alert(t('common.error'), error.response?.data?.message || t('common.something_wrong'));
     }
   };
 
   const handleCancelGlobal = async (reqId) => {
     try {
         await friendApi.cancelRequest(reqId);
-        Alert.alert('Thành công', 'Đã thu hồi lời mời');
+        Alert.alert(t('common.success'), t('friends.request_cancelled'));
         fetchContacts();
     } catch (error) {
-        Alert.alert('Lỗi', error.response?.data?.message || 'Không thể thu hồi');
+        Alert.alert(t('common.error'), error.response?.data?.message || t('common.something_wrong'));
     }
   };
 
@@ -167,21 +169,21 @@ export default function FriendsScreen({ navigation }) {
       const conversationApi = require('../../chat/api/conversationApi').default;
       const targetId = friend.friendId || friend._id || friend.userId;
 
-      const res = await conversationApi.createDm(targetId, 'Xin chào!');
+      const res = await conversationApi.createDm(targetId, t('chat.default_greeting'));
       const conv = res?.data?.data || res?.data;
 
       // Lấy đúng id
       const convId = conv?._id?.toString() || conv?.id?.toString();
 
       if (!convId) {
-        Alert.alert('Lỗi', 'Không tạo được cuộc trò chuyện');
+        Alert.alert(t('common.error'), t('chat.error_create_conv'));
         return;
       }
 
       navigation.navigate('Message', {
         conversation: {
           id: convId,           // ← phải có id đúng
-          name: friend.displayName || 'Đoạn chat',
+          name: friend.displayName || t('chat.default_chat_name'),
           avatar: friend.avatar || null,
           type: 'dm',
           otherUserId: targetId.toString(),
@@ -191,7 +193,7 @@ export default function FriendsScreen({ navigation }) {
       });
     } catch (error) {
       console.error('handleOpenChat error:', error.response?.data);
-      Alert.alert('Lỗi', error.response?.data?.message || 'Không thể mở cuộc trò chuyện');
+      Alert.alert(t('common.error'), error.response?.data?.message || t('common.something_wrong'));
     } finally {
       setOpeningChat(false);
     }
@@ -200,10 +202,10 @@ export default function FriendsScreen({ navigation }) {
   const handleUnblockFromList = async (userId) => {
     try {
       await friendApi.blockFriend(userId);
-      Alert.alert('Thành công', 'Đã bỏ chặn người dùng');
+      Alert.alert(t('common.success'), t('friends.unblocked_success'));
       fetchContacts();
     } catch (error) {
-      Alert.alert('Lỗi', error.response?.data?.message || 'Không thể bỏ chặn');
+      Alert.alert(t('common.error'), error.response?.data?.message || t('common.something_wrong'));
     }
   };
 
@@ -214,8 +216,8 @@ export default function FriendsScreen({ navigation }) {
     setScanning(true);
     const match = data.match(/\/user\/([a-f0-9]{24})/i);
     if (!match) {
-      Alert.alert('Chưa nhận dạng được', 'Mã này không phải QR hồ sơ ZoloChat.', [
-        { text: 'Quét lại', onPress: () => { setScanned(false); setScanning(false); } },
+      Alert.alert(t('friends.qr_not_recognized_title'), t('friends.qr_not_recognized_desc'), [
+        { text: t('friends.retry_scan'), onPress: () => { setScanned(false); setScanning(false); } },
       ]);
       return;
     }
@@ -227,8 +229,8 @@ export default function FriendsScreen({ navigation }) {
       setScanning(false);
       navigation.navigate('UserProfile', { user: u });
     } catch (e) {
-      Alert.alert('Không tìm thấy', 'Người dùng không tồn tại hoặc đã bị xóa.', [
-        { text: 'Quét lại', onPress: () => { setScanned(false); setScanning(false); } },
+      Alert.alert(t('friends.user_not_found'), t('friends.user_not_found_desc'), [
+        { text: t('friends.retry_scan'), onPress: () => { setScanned(false); setScanning(false); } },
       ]);
     }
   }, [scanned, navigation]);
@@ -237,7 +239,7 @@ export default function FriendsScreen({ navigation }) {
     if (!permission?.granted) {
       const r = await requestPermission();
       if (!r.granted) {
-        Alert.alert('Cần quyền camera', 'Vào cài đặt thiết bị để cấp quyền cho ZoloChat.');
+        Alert.alert(t('common.camera_permission_title'), t('common.camera_permission_desc'));
         return;
       }
     }
@@ -248,28 +250,28 @@ export default function FriendsScreen({ navigation }) {
 
   const handleFriendOptions = (friendInfo) => {
     Alert.alert(
-      'Tùy chọn',
-      `Thao tác với ${friendInfo.displayName}?`,
+      t('friends.options_title', { name: friendInfo.displayName }),
+      '',
       [
         {
-           text: 'Nhắn tin',
+           text: t('friends.send_message'),
            onPress: () => handleOpenChat(friendInfo),
         },
         {
-           text: 'Xem hồ sơ',
+           text: t('friends.view_profile'),
            onPress: () => navigation.navigate('UserProfile', {
-               userId: friendInfo.friendId,  // 👈 tương tự
+               userId: friendInfo.friendId,
              }),
         },
         {
-           text: 'Đổi biệt danh',
+           text: t('friends.change_nickname'),
            onPress: () => {
              Alert.prompt(
-               'Đổi biệt danh',
-               'Nhập biệt danh mới:',
+               t('friends.change_nickname'),
+               t('friends.enter_nickname'),
                [
-                 { text: 'Hủy', style: 'cancel' },
-                 { text: 'Lưu', onPress: async (val) => {
+                 { text: t('common.cancel'), style: 'cancel' },
+                 { text: t('common.save'), onPress: async (val) => {
                      if (!val) return;
                      try {
                         await friendApi.updateNickname(friendInfo.friendId, val);
@@ -281,29 +283,29 @@ export default function FriendsScreen({ navigation }) {
            }
         },
         {
-           text: friendInfo.iBlocked ? 'Bỏ chặn' : 'Chặn',
+           text: friendInfo.iBlocked ? t('friends.unblock') : t('friends.block'),
            style: 'destructive',
            onPress: async () => {
                try {
                   await friendApi.blockFriend(friendInfo.friendId);
-                  Alert.alert('Thành công', friendInfo.iBlocked ? 'Đã bỏ chặn' : 'Đã chặn');
+                  Alert.alert(t('common.success'), friendInfo.iBlocked ? t('friends.unblocked_success') : t('friends.blocked_success'));
                   fetchContacts();
                } catch (e) {}
            }
         },
         {
-           text: 'Hủy kết bạn',
+           text: t('friends.unfriend'),
            style: 'destructive',
            onPress: async () => {
              try {
                 await friendApi.unfriend(friendInfo.friendId);
                 fetchContacts();
              } catch (e) {
-                Alert.alert('Lỗi', 'Không thể xóa bạn');
+                Alert.alert(t('common.error'), t('friends.unfriend_error'));
              }
            }
         },
-        { text: 'Đóng', style: 'cancel' }
+        { text: t('common.close'), style: 'cancel' }
       ]
     );
   };
@@ -314,23 +316,23 @@ export default function FriendsScreen({ navigation }) {
         const incomingReq = incomingReqs.find(req => req.fromUserId?._id === item._id);
         const outgoingReq = outgoingReqs.find(req => req.toUserId?._id === item._id);
 
-        let btnText = 'Kết bạn';
+        let btnText = t('friends.add_friend');
         let btnAction = () => handleSendRequestGlobal(item._id);
         let curStyle = { backgroundColor: THEME.bgHover, opacity: 1 };
         let textStyle = { color: THEME.accent };
 
         if (isFriend) {
-            btnText = 'Bạn bè';
+            btnText = t('friends.already_friend');
             btnAction = () => {};
             curStyle = { backgroundColor: 'transparent', opacity: 0.5 };
             textStyle = { color: THEME.textMuted };
         } else if (incomingReq) {
-            btnText = 'Đồng ý';
+            btnText = t('friends.accept');
             btnAction = () => handleAcceptGlobal(incomingReq._id);
             curStyle = { backgroundColor: THEME.accent, opacity: 1 };
             textStyle = { color: '#fff' };
         } else if (outgoingReq) {
-            btnText = 'Thu hồi';
+            btnText = t('friends.cancel_request');
             btnAction = () => handleCancelGlobal(outgoingReq._id);
             curStyle = { backgroundColor: THEME.bgInput, opacity: 1 };
             textStyle = { color: THEME.textPrimary };
@@ -369,7 +371,7 @@ export default function FriendsScreen({ navigation }) {
                     </Text>
                     {item.theyBlockedMe && (
                         <View style={{ backgroundColor: '#ef444420', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
-                            <Text style={{ color: '#ef4444', fontSize: 10, fontWeight: '700' }}>Đã chặn bạn</Text>
+                            <Text style={{ color: '#ef4444', fontSize: 10, fontWeight: '700' }}>{t('friends.blocked_you')}</Text>
                         </View>
                     )}
                 </View>
@@ -399,7 +401,7 @@ export default function FriendsScreen({ navigation }) {
             <Text style={{fontSize: 16, color: THEME.textMuted}}>🔍</Text>
             <TextInput
                 style={{ flex: 1, color: THEME.textPrimary, marginLeft: 8, fontSize: 16, paddingVertical: 0 }}
-                placeholder="Tìm kiếm bạn bè, sđt..."
+                placeholder={t('friends.search_placeholder')}
                 placeholderTextColor={THEME.textMuted}
                 value={searchQuery}
                 onChangeText={(text) => {
@@ -446,7 +448,7 @@ export default function FriendsScreen({ navigation }) {
                     <View style={s.iconWrapper}>
                         <Text style={{ fontSize: 24, color: '#fff' }}>👥</Text>
                     </View>
-                    <Text style={[s.bigRequestText, { color: THEME.textPrimary }]}>Lời mời kết bạn</Text>
+                    <Text style={[s.bigRequestText, { color: THEME.textPrimary }]}>{t('friends.tab_requests')}</Text>
                     {incomingReqs.length > 0 && (
                         <View style={s.badge}>
                             <Text style={s.badgeText}>{incomingReqs.length}</Text>
@@ -457,7 +459,7 @@ export default function FriendsScreen({ navigation }) {
                  {blockedList.length > 0 && (
                    <View>
                      <View style={[s.sectionHeader, { backgroundColor: THEME.bgSecondary }]}>
-                       <Text style={[s.sectionTitle, { color: '#ef4444' }]}>🚫 Đã chặn ({blockedList.length})</Text>
+                       <Text style={[s.sectionTitle, { color: '#ef4444' }]}>🚫 {t('friends.tab_blocked')} ({blockedList.length})</Text>
                      </View>
                      {blockedList.map((u) => (
                        <View key={u.userId?.toString()} style={[s.userCard, { backgroundColor: THEME.bgSecondary }]}>
@@ -470,7 +472,7 @@ export default function FriendsScreen({ navigation }) {
                            style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: THEME.accent }}
                            onPress={() => handleUnblockFromList(u.userId)}
                          >
-                           <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Bỏ chặn</Text>
+                           <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{t('friends.unblock')}</Text>
                          </TouchableOpacity>
                        </View>
                      ))}
@@ -487,11 +489,11 @@ export default function FriendsScreen({ navigation }) {
               !loadingContacts && (
                 <View style={s.emptyWrap}>
                     <Text style={s.emptyIcon}>{searchQuery ? '🔎' : '👥'}</Text>
-                    <Text style={s.emptyTitle}>{searchQuery ? 'Không tìm thấy kết quả' : 'Chưa có bạn bè'}</Text>
+                    <Text style={s.emptyTitle}>{searchQuery ? t('friends.no_search_results') : t('friends.no_friends')}</Text>
                     <Text style={s.emptyDesc}>
                         {searchQuery
-                            ? 'Bấm phím tìm kiếm trên bàn phím để tra người lạ trên toàn hệ thống ZoloChat.'
-                            : 'Hãy quét mã QR hoặc đồng ý các lời mời để thêm bạn mới nhé!'}
+                            ? t('friends.global_search_hint')
+                            : t('friends.no_friends_hint')}
                     </Text>
                 </View>
               )
@@ -514,9 +516,9 @@ export default function FriendsScreen({ navigation }) {
           ) : (
             <View style={s.permWrap}>
               <Text style={{ fontSize: 40, marginBottom: 16 }}>📷</Text>
-              <Text style={s.permTitle}>Cần quyền camera</Text>
+              <Text style={s.permTitle}>{t('common.camera_permission_title')}</Text>
               <TouchableOpacity style={s.permBtn} onPress={requestPermission}>
-                <Text style={s.permBtnText}>Cấp quyền</Text>
+                <Text style={s.permBtnText}>{t('common.grant_permission')}</Text>
               </TouchableOpacity>
             </View>
           )}

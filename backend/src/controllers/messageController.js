@@ -83,7 +83,7 @@ const sendMessage = async (req, res) => {
 
         const { type = 'text', content = '', attachmentId, replyToMessageId, forwardFromMessageId, topicId,mentions } = req.body;
 
-        const ALLOWED_TYPES = ['text', 'voice', 'image', 'file'];
+        const ALLOWED_TYPES = ['text', 'voice', 'image', 'file', 'reminder'];
         if (!ALLOWED_TYPES.includes(type)) {
             return res.status(400).json({ message: `type phải là: ${ALLOWED_TYPES.join(', ')}` });
         }
@@ -111,7 +111,7 @@ const sendMessage = async (req, res) => {
             }
 
             // ── Xử lý attachment cho voice / image / file ───────────────────
-            if (type !== 'text') {
+            if (type !== 'text' && type !== 'reminder') {
                 if (!isValidId(attachmentId)) {
                     return res.status(400).json({ message: 'attachmentId không hợp lệ' });
                 }
@@ -124,11 +124,37 @@ const sendMessage = async (req, res) => {
                 }
 
                 finalPayload = {
+                    ...finalPayload,
                     url: attachment.url,
                     fileName: attachment.fileName || '',
                     fileSize: attachment.fileSize || 0,
                     mimeType: attachment.mimeType || '',
                     duration: attachment.duration || null,
+                };
+            }
+
+            if (type === 'reminder') {
+                const { payload } = req.body;
+                // Robustness: check both payload and root level
+                const reminderTimeStr = payload?.reminderTime || req.body.reminderTime;
+                const reminderTime = new Date(reminderTimeStr);
+                
+                if (isNaN(reminderTime.getTime())) {
+                    return res.status(400).json({ message: 'Thời gian nhắc hẹn không hợp lệ' });
+                }
+
+                // Add 60s grace period for minor clock drift or network latency
+                const now = new Date();
+                const buffer = 60 * 1000; // 60 seconds
+                if (reminderTime.getTime() + buffer < now.getTime()) {
+                    return res.status(400).json({ message: 'Thời gian nhắc hẹn phải ở tương lai' });
+                }
+
+                finalPayload = {
+                    ...(payload || {}),
+                    reminderTime: reminderTime, // Save as Date object for Cron job
+                    content: content.trim(),
+                    isTriggered: false
                 };
             }
         }
@@ -138,6 +164,7 @@ const sendMessage = async (req, res) => {
             finalType === 'text' ? finalContent.trim() :
                 finalType === 'voice' ? '[Tin nhắn thoại]' :
                     finalType === 'image' ? '[Hình ảnh]' :
+                    finalType === 'reminder' ? '[Nhắc hẹn]' :
             /* file */         (finalPayload?.fileName || '[File đính kèm]');
 
         // ── Tạo message ────────────────────────────────────────────────
@@ -223,9 +250,15 @@ const sendMessage = async (req, res) => {
         }
         return res.status(201).json({ message: 'Gửi tin nhắn thành công', data: formatted });
     } catch (err) {
-        if (err.statusCode) return res.status(err.statusCode).json({ message: err.message });
         console.error('sendMessage error:', err);
-        return res.status(500).json({ message: 'Lỗi server khi gửi tin nhắn' });
+        if (err.statusCode) return res.status(err.statusCode).json({ message: err.message });
+        
+        // Return detailed error if in development mode or just for debugging
+        return res.status(500).json({ 
+            message: 'Lỗi server khi gửi tin nhắn', 
+            error: err.message,
+            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        });
     }
 
 };

@@ -14,6 +14,7 @@ import JoinRequestsTab from './JoinRequestsTab';
 import AddMembersModal from './AddMembersModal';
 import conversationApi from '../api/conversationApi';
 import { useAuth } from '../../../context/AuthContext';
+import { useLanguage } from '../../../context/LanguageContext';
 
 // ── InfoPanel ─────────────────────────────────────────────────────────────────
 const InfoPanel = ({
@@ -30,6 +31,7 @@ const InfoPanel = ({
   THEME, styles,
 }) => {
   const { user: currentUser } = useAuth();
+  const { t } = useLanguage();
   const myUserId = currentUser?._id || currentUser?.id;
 
   const isGroup = conversation?.type === 'group';
@@ -81,16 +83,24 @@ const InfoPanel = ({
   // ── Main tab definitions ─────────────────────────────────────────────────
   // Group into 4 main sections max
   const tabs = [
-    { key: 'overview',  label: 'Tổng quan',  icon: 'info' },
-    { key: 'content',   label: 'Nội dung',   icon: 'image' },
-    ...(isGroup ? [{ key: 'members',  label: 'Thành viên', icon: 'users' }] : []),
-    ...(isGroup ? [{ key: 'channels', label: 'Kênh',       icon: 'hash'  }] : []),
-    ...(conversation?.type === 'dm' ? [{ key: 'calls', label: 'Cuộc gọi', icon: 'phone' }] : []),
+    { key: 'overview',  label: t('info_panel.tabs.overview'),  icon: 'info' },
+    { key: 'content',   label: t('info_panel.tabs.content'),   icon: 'image' },
+    ...(isGroup ? [{ key: 'members',  label: t('info_panel.tabs.members'), icon: 'users' }] : []),
+    ...(isGroup ? [{ key: 'channels', label: t('info_panel.tabs.channels'), icon: 'hash'  }] : []),
+    ...(conversation?.type === 'dm' ? [{ key: 'calls', label: t('info_panel.tabs.calls'), icon: 'phone' }] : []),
   ];
 
   // ── Action handlers ──────────────────────────────────────────────────────
-  const handleLeave   = () => Alert.alert('Rời nhóm',     'Bạn có chắc muốn rời khỏi nhóm này?',         [{ text: 'Huỷ', style: 'cancel' }, { text: 'Rời nhóm',  style: 'destructive', onPress: () => onLeaveGroup?.() }]);
-  const handleDisband = () => Alert.alert('Giải tán nhóm','Hành động này không thể hoàn tác. Xác nhận?', [{ text: 'Huỷ', style: 'cancel' }, { text: 'Giải tán', style: 'destructive', onPress: () => onDisbandGroup?.() }]);
+  const handleLeave   = () => Alert.alert(
+    t('info_panel.actions.leave_confirm_title'),
+    t('info_panel.actions.leave_confirm_desc'),
+    [{ text: t('common.cancel'), style: 'cancel' }, { text: t('info_panel.actions.leave_group'),  style: 'destructive', onPress: () => onLeaveGroup?.() }]
+  );
+  const handleDisband = () => Alert.alert(
+    t('info_panel.actions.disband_confirm_title'),
+    t('info_panel.actions.disband_confirm_desc'),
+    [{ text: t('common.cancel'), style: 'cancel' }, { text: t('info_panel.actions.disband_group'), style: 'destructive', onPress: () => onDisbandGroup?.() }]
+  );
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
@@ -118,24 +128,24 @@ const InfoPanel = ({
               </Text>
               {conversation.type === 'dm' && (
                 <Text style={{ fontSize: 12, color: isOnline ? THEME.statusOnline : THEME.textMuted, marginTop: 2 }}>
-                  {isOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}
+                  {isOnline ? t('info_panel.labels.active_now') : t('info_panel.labels.offline')}
                 </Text>
               )}
               {isGroup && (
                 <Text style={{ fontSize: 12, color: THEME.textMuted, marginTop: 2 }}>
-                  {loadingMem ? 'Đang tải...' : members.length > 0 ? `${members.length} thành viên` : 'Nhóm chat'}
+                  {loadingMem ? t('info_panel.labels.loading') : members.length > 0 ? t('info_panel.labels.member_count', { count: members.length }) : t('info_panel.labels.group_chat')}
                 </Text>
               )}
             </View>
 
             {/* Main tab bar */}
             <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 10, gap: 6 }}>
-              {tabs.map(t => {
-                const active = infoTab === t.key;
+              {tabs.map(tab => {
+                const active = infoTab === tab.key;
                 return (
                   <TouchableOpacity
-                    key={t.key}
-                    onPress={() => onTabChange(t.key)}
+                    key={tab.key}
+                    onPress={() => onTabChange(tab.key)}
                     style={{
                       flex: 1,
                       flexDirection: 'column',
@@ -148,9 +158,9 @@ const InfoPanel = ({
                       gap: 3,
                     }}
                   >
-                    <Feather name={t.icon} size={16} color={active ? THEME.accent : THEME.textMuted} />
+                    <Feather name={tab.icon} size={16} color={active ? THEME.accent : THEME.textMuted} />
                     <Text style={{ fontSize: 10, fontWeight: '700', color: active ? THEME.accent : THEME.textMuted }}>
-                      {t.label}
+                      {tab.label}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -165,21 +175,21 @@ const InfoPanel = ({
                 <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
 
                   {/* Basic info */}
-                  <SectionHeader label="Thông tin" THEME={THEME} />
+                  <SectionHeader label={t('info_panel.sections.information')} THEME={THEME} />
                   <InfoCard>
-                    <InfoRow label="Loại" value={conversation.type === 'dm' ? 'Tin nhắn trực tiếp' : 'Nhóm chat'} THEME={THEME} border />
+                    <InfoRow label={t('info_panel.labels.type')} value={conversation.type === 'dm' ? t('info_panel.labels.dm') : t('info_panel.labels.group')} THEME={THEME} border />
                     {isGroup && conversation.groupType && (
-                      <InfoRow label="Phân loại" value={conversation.groupType} THEME={THEME} border />
+                      <InfoRow label={t('info_panel.labels.group_type')} value={conversation.groupType} THEME={THEME} border />
                     )}
                     {isGroup && conversation.description ? (
-                      <InfoRow label="Mô tả" value={conversation.description} THEME={THEME} />
+                      <InfoRow label={t('info_panel.labels.description')} value={conversation.description} THEME={THEME} />
                     ) : null}
                     {conversation.type === 'dm' && conversation.otherUserId && (
                       <TouchableOpacity
                         style={{ padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
                         onPress={onViewProfile}
                       >
-                        <Text style={{ fontSize: 13, color: THEME.textMuted }}>Xem hồ sơ</Text>
+                        <Text style={{ fontSize: 13, color: THEME.textMuted }}>{t('info_panel.labels.view_profile')}</Text>
                         <Text style={{ fontSize: 13, color: THEME.accent, fontWeight: '600' }}>→</Text>
                       </TouchableOpacity>
                     )}
@@ -192,13 +202,14 @@ const InfoPanel = ({
                       onBlockConfirm={onBlockConfirm} blockBusy={blockBusy}
                       onBlockUser={onBlockUser} name={conversation.name}
                       THEME={THEME}
+                      t={t}
                     />
                   )}
 
                   {/* Group admin: settings inline */}
                   {isGroup && isAdmin && (
                     <>
-                      <SectionHeader label="Cài đặt nhóm" THEME={THEME} />
+                      <SectionHeader label={t('info_panel.sections.group_settings')} THEME={THEME} />
                       <GroupSettingsTab
                         conversation={conversation}
                         THEME={THEME}
@@ -212,10 +223,10 @@ const InfoPanel = ({
                   {isGroup && (
                     <View style={{ marginTop: 12, gap: 10 }}>
                       {!isOwner && (
-                        <DangerBtn icon="log-out" label="Rời nhóm" onPress={handleLeave} />
+                        <DangerBtn icon="log-out" label={t('info_panel.actions.leave_group')} onPress={handleLeave} />
                       )}
                       {isOwner && (
-                        <DangerBtn icon="trash-2" label="Giải tán nhóm" onPress={handleDisband} />
+                        <DangerBtn icon="trash-2" label={t('info_panel.actions.disband_group')} onPress={handleDisband} />
                       )}
                     </View>
                   )}
@@ -228,8 +239,8 @@ const InfoPanel = ({
                   {/* Inner sub-tabs: Ảnh / File */}
                   <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingTop: 4, paddingBottom: 10, gap: 8 }}>
                     {[
-                      { key: 'photos', label: 'Ảnh',  icon: 'image' },
-                      { key: 'files',  label: 'File', icon: 'file'  },
+                      { key: 'photos', label: t('info_panel.content.photos'),  icon: 'image' },
+                      { key: 'files',  label: t('info_panel.content.files'), icon: 'file'  },
                     ].map(s => (
                       <TouchableOpacity
                         key={s.key}
@@ -262,9 +273,9 @@ const InfoPanel = ({
                   {/* Photos */}
                   {contentSub === 'photos' && (
                     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
-                      {loadingMedia && <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Đang tải...</Text>}
+                      {loadingMedia && <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>{t('info_panel.labels.loading')}</Text>}
                       {!loadingMedia && mediaData.images.length === 0 && (
-                        <EmptyState icon="image" label="Chưa có ảnh nào" THEME={THEME} />
+                        <EmptyState icon="image" label={t('info_panel.content.no_photos')} THEME={THEME} />
                       )}
                       {!loadingMedia && mediaData.images.length > 0 && (
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
@@ -281,9 +292,9 @@ const InfoPanel = ({
                   {/* Files */}
                   {contentSub === 'files' && (
                     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
-                      {loadingMedia && <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>Đang tải...</Text>}
+                      {loadingMedia && <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 20 }}>{t('info_panel.labels.loading')}</Text>}
                       {!loadingMedia && mediaData.files.length === 0 && (
-                        <EmptyState icon="file" label="Chưa có file nào" THEME={THEME} />
+                        <EmptyState icon="file" label={t('info_panel.content.no_files')} THEME={THEME} />
                       )}
                       {!loadingMedia && mediaData.files.map(file => (
                         <TouchableOpacity key={file._id} onPress={() => onFilePress(file.url, file.fileName)}
@@ -292,8 +303,8 @@ const InfoPanel = ({
                             <Feather name="file" size={20} color={THEME.accent} />
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: THEME.textPrimary }}>{file.fileName || 'Không rõ tên'}</Text>
-                            <Text style={{ fontSize: 11, color: THEME.textMuted, marginTop: 2 }}>{file.fileSize ? `${(file.fileSize / 1024).toFixed(0)} KB` : ''} · Nhấn để tải</Text>
+                            <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: THEME.textPrimary }}>{file.fileName || t('info_panel.content.unknown_name')}</Text>
+                            <Text style={{ fontSize: 11, color: THEME.textMuted, marginTop: 2 }}>{file.fileSize ? `${(file.fileSize / 1024).toFixed(0)} KB` : ''} · {t('info_panel.content.tap_to_download')}</Text>
                           </View>
                           <Feather name="download" size={16} color={THEME.accent} />
                         </TouchableOpacity>
@@ -334,9 +345,9 @@ const InfoPanel = ({
                       }}
                     >
                       {[
-                        { key: 'list',     label: 'Danh sách', icon: 'users' },
-                        { key: 'roles',    label: 'Phân quyền', icon: 'shield' },
-                        { key: 'requests', label: 'Duyệt vào', icon: 'user-plus' },
+                        { key: 'list',     label: t('info_panel.members.list'), icon: 'users' },
+                        { key: 'roles',    label: t('info_panel.members.roles'), icon: 'shield' },
+                        { key: 'requests', label: t('info_panel.members.requests'), icon: 'user-plus' },
                       ].map((s) => {
                         const active = memberSub === s.key;
                         return (
@@ -493,12 +504,12 @@ function DangerBtn({ icon, label, onPress }) {
   );
 }
 
-function BlockSection({ blockStatus, blockConfirm, onBlockConfirm, blockBusy, onBlockUser, name, THEME }) {
+function BlockSection({ blockStatus, blockConfirm, onBlockConfirm, blockBusy, onBlockUser, name, THEME, t }) {
   if (blockStatus?.iBlocked) {
     return (
       <TouchableOpacity onPress={onBlockUser} disabled={blockBusy} style={{ backgroundColor: THEME.bgHover, borderRadius: 12, padding: 14, flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: THEME.border, opacity: blockBusy ? 0.6 : 1, marginTop: 4 }}>
         <Text style={{ fontSize: 18 }}>✅</Text>
-        <Text style={{ color: THEME.textPrimary, fontWeight: '700', fontSize: 15 }}>{blockBusy ? 'Đang xử lý...' : `Bỏ chặn ${name}`}</Text>
+        <Text style={{ color: THEME.textPrimary, fontWeight: '700', fontSize: 15 }}>{blockBusy ? t('info_panel.actions.processing') : t('info_panel.actions.unblock_user', { name })}</Text>
       </TouchableOpacity>
     );
   }
@@ -506,20 +517,20 @@ function BlockSection({ blockStatus, blockConfirm, onBlockConfirm, blockBusy, on
     return (
       <TouchableOpacity onPress={() => onBlockConfirm(true)} style={{ backgroundColor: 'rgba(237,66,69,0.12)', borderRadius: 12, padding: 14, flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: 'rgba(237,66,69,0.3)', marginTop: 4 }}>
         <Text style={{ fontSize: 18 }}>🚫</Text>
-        <Text style={{ color: '#ed4245', fontWeight: '700', fontSize: 15 }}>Chặn {name}</Text>
+        <Text style={{ color: '#ed4245', fontWeight: '700', fontSize: 15 }}>{t('info_panel.actions.block_user', { name })}</Text>
       </TouchableOpacity>
     );
   }
   return (
     <View style={{ backgroundColor: 'rgba(237,66,69,0.12)', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: 'rgba(237,66,69,0.4)', marginTop: 4 }}>
-      <Text style={{ color: '#f2f3f5', fontWeight: '700', fontSize: 14, marginBottom: 6 }}>Xác nhận chặn {name}?</Text>
-      <Text style={{ color: '#80848e', fontSize: 12, marginBottom: 14 }}>Bạn sẽ không thể gửi tin nhắn cho người này.</Text>
+      <Text style={{ color: '#f2f3f5', fontWeight: '700', fontSize: 14, marginBottom: 6 }}>{t('info_panel.actions.block_confirm', { name })}</Text>
+      <Text style={{ color: '#80848e', fontSize: 12, marginBottom: 14 }}>{t('info_panel.actions.block_desc')}</Text>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <TouchableOpacity onPress={() => onBlockConfirm(false)} style={{ flex: 1, padding: 10, borderRadius: 8, backgroundColor: '#35373c', alignItems: 'center' }}>
-          <Text style={{ color: '#f2f3f5', fontWeight: '600' }}>Hủy</Text>
+          <Text style={{ color: '#f2f3f5', fontWeight: '600' }}>{t('common.cancel')}</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onBlockUser} disabled={blockBusy} style={{ flex: 1, padding: 10, borderRadius: 8, backgroundColor: '#ed4245', alignItems: 'center', opacity: blockBusy ? 0.6 : 1 }}>
-          <Text style={{ color: '#fff', fontWeight: '700' }}>{blockBusy ? 'Đang chặn...' : 'Chặn'}</Text>
+          <Text style={{ color: '#fff', fontWeight: '700' }}>{blockBusy ? t('info_panel.actions.processing') : t('friends.block')}</Text>
         </TouchableOpacity>
       </View>
     </View>

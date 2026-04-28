@@ -54,6 +54,7 @@ const userSchema = new mongoose.Schema(
         usernameColor: { type: String, default: '#5865f2' },
         themeName: { type: String, default: 'dark' },
         themeColors: { type: Object, default: null },
+        language: { type: String, default: 'vi', enum: ['vi', 'en'] },
 
         // ── Trạng thái xác thực ────────────────────────────────────
         isEmailVerified: {

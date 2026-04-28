@@ -32,12 +32,10 @@ import VoiceChannelView from '../../voice/components/VoiceChannelView';
 
 // ── Utils ──────────────────────────────────────────────
 import { getAvatarColor, getInitials } from './chatArea/utils/avatarUtils';
+import { useLanguage } from '../../../context/LanguageContext';
+import { translateTopicName } from '../../../utils/translationUtils';
+
 // ─────────────────────────────────────────────────────────────────────
-const STATUS_LABEL = {
-  online: 'Đang hoạt động',
-  idle:   'Vắng mặt',
-  dnd:    'Không làm phiền',
-};
 const STATUS_COLOR_MAP = {
   online: '#3ba55c',
   idle:   '#faa61a',
@@ -70,6 +68,7 @@ export default function ChatArea({
   onTopicSelect,
   myPermissions,
 }) {
+  const { t } = useLanguage();
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
 
   const [openMenuId,      setOpenMenuId]      = useState(null);
@@ -123,6 +122,9 @@ export default function ChatArea({
     setMessages,
     onPinnedMessagesChange: (newPins) => setPinnedMessages(newPins)
   });
+
+  // ── Helper to translate hardcoded backend strings ────────────────────────
+  const translateTopicContent = useCallback((val) => translateTopicName(val, t), [t]);
 
   // ── Auto scroll (uses visibleMessages so topic switch scrolls to bottom) ──
   const { bottomRef } = useScrollBehavior({ messages: messages, currentUserId });
@@ -192,7 +194,7 @@ export default function ChatArea({
         setPendingPinMsgId(msgId);
         setShowPinLimitModal(true);
       } else {
-        window.alert(err?.response?.data?.message || 'Không thể ghim tin nhắn');
+        window.alert(err?.response?.data?.message || t('chat.pin_error'));
       }
     }
   };
@@ -210,7 +212,7 @@ export default function ChatArea({
       setShowPinLimitModal(false);
       setPendingPinMsgId(null);
     } catch (err) {
-      window.alert('Lỗi khi cập nhật danh sách ghim');
+      window.alert(t('chat_area.pin_update_error'));
     }
   };
 
@@ -227,7 +229,7 @@ export default function ChatArea({
       setShowUnpinModal(false);
       setMessageIdToUnpin(null);
     } catch (err) {
-      window.alert(err?.response?.data?.message || 'Không thể bỏ ghim tin nhắn');
+      window.alert(err?.response?.data?.message || t('chat.unpin_error'));
     }
   };
     const myRole = myPermissions?.systemRole || conversation?.myMembership?.role || null;
@@ -285,10 +287,10 @@ export default function ChatArea({
           <MessageCircle size={40} />
         </div>
         <p style={{ color: 'var(--text-primary)', fontSize: 22, fontWeight: 800, margin: 0, textAlign: 'center' }}>
-          Chào mừng đến ZoloChat
+          {t('chat.welcome_title')}
         </p>
         <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0, textAlign: 'center', maxWidth: 280 }}>
-          Chọn một cuộc trò chuyện để bắt đầu nhắn tin
+          {t('chat.welcome_subtitle')}
         </p>
       </div>
     );
@@ -310,7 +312,7 @@ export default function ChatArea({
   const visibleMessages = conversation?.type === 'group' && !activeTopic
     ? messages.filter(m => {
         const mTopicId = m.topicId?.toString?.() || m.topicId || null;
-        return !mTopicId && m.type !== 'system';
+        return !mTopicId;
       })
     : messages; // đã được filter đúng từ Chat.jsx rồi
 
@@ -327,7 +329,7 @@ export default function ChatArea({
     displayItems.push({
       type:      msg.type === 'system' ? 'system' : 'msg',
       msg,
-      isMine:    msg.senderId === currentUserId,
+      isMine:    msg.senderId?.toString() === currentUserId?.toString(),
       showHeader: msg.type === 'system' ? false : !sameGroup,
       onForward: (m) => { setForwardingMsg(m); setShowForwardModal(true); },
       key:       msg._id || msg.id,
@@ -385,12 +387,12 @@ export default function ChatArea({
 
   const onlineStatus = conversation.type === 'dm'
     ? (dmOnline
-      ? (STATUS_LABEL[dmStatus] || 'Đang hoạt động')
+      ? (t(`chat.status.${dmStatus}`) || t('chat.online'))
       : (() => {
         const ls = conversation.otherUserId ? getLastSeen(conversation.otherUserId) : null;
-        return ls ? formatLastSeen(ls) : 'Ngoại tuyến';
+        return ls ? formatLastSeen(ls) : t('chat.offline');
       })())
-    : `${conversation.memberCount || conversation.members || 0} thành viên`;
+    : t('chat.members_count', { count: conversation.memberCount || conversation.members || 0 });
 
   const headerDotColor = conversation.type === 'dm'
     ? (dmOnline ? (STATUS_COLOR_MAP[dmStatus] || '#3ba55c') : '#80848e')
@@ -443,7 +445,7 @@ export default function ChatArea({
                                       ? <Volume2 size={13} style={{ color: '#57f287', marginRight: 3, display: 'inline', verticalAlign: 'middle' }} />
                                       : <span style={{ color: 'var(--accent)', marginRight: 1 }}>#</span>
                                     }
-                  {activeTopic ? activeTopic.name : 'chung'}
+                  {activeTopic ? translateTopicContent(activeTopic.name) : t('chat.topics.general')}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1 }}>
                   {conversation.name} · {onlineStatus}
@@ -466,11 +468,11 @@ export default function ChatArea({
           {isMobile ? (
             <>
               {[
-                ...(conversation?.type === 'group' ? [{ icon: <Hash size={20} />, title: 'Kênh chat', onClick: openChannelSheet }] : []),
-                ...(conversation?.type === 'group' ? [{ icon: <Volume2 size={20} />, title: 'Phòng thoại', onClick: onVoiceRoom, active: voiceRoomActive }] : []),
-                { icon: <Phone size={20} />, title: 'Gọi thoại', onClick: conversation?.type === 'dm' ? onPhoneCall : undefined },
-                { icon: <Video size={20} />, title: 'Gọi video', onClick: conversation?.type === 'dm' ? onVideoCall : undefined },
-                { icon: <Users size={20} />, title: 'Thông tin', onClick: onToggleRight, active: showRight },
+                ...(conversation?.type === 'group' ? [{ icon: <Hash size={20} />, title: t('chat.header.channels'), onClick: openChannelSheet }] : []),
+                ...(conversation?.type === 'group' ? [{ icon: <Volume2 size={20} />, title: t('chat.header.voice_room'), onClick: onVoiceRoom, active: voiceRoomActive }] : []),
+                { icon: <Phone size={20} />, title: t('chat.header.call_voice'), onClick: conversation?.type === 'dm' ? onPhoneCall : undefined },
+                { icon: <Video size={20} />, title: t('chat.header.call_video'), onClick: conversation?.type === 'dm' ? onVideoCall : undefined },
+                { icon: <Users size={20} />, title: t('chat.header.info'), onClick: onToggleRight, active: showRight },
               ].map((btn, i) => (
                 <button key={i} onClick={btn.onClick} title={btn.title}
                   style={{
@@ -487,13 +489,13 @@ export default function ChatArea({
           ) : (
             <>
               {[
-                { icon: <Phone size={16} />, title: 'Gọi thoại', onClick: conversation?.type === 'dm' ? onPhoneCall : undefined },
-                { icon: <Video size={16} />, title: 'Gọi video', onClick: conversation?.type === 'dm' ? onVideoCall : undefined },
-                ...(conversation?.type === 'group' ? [{ icon: <Volume2 size={16} />, title: 'Phòng thoại', onClick: onVoiceRoom, active: voiceRoomActive }] : []),
-                { icon: <Search size={16} />, title: 'Tìm kiếm' },
-                { icon: <Users size={16} />, title: 'Thành viên', onClick: onToggleRight, active: showRight },
-                { icon: <Pin size={16} />, title: 'Tin nhắn đã ghim' },
-                { icon: <MoreHorizontal size={16} />, title: 'Thêm' },
+                { icon: <Phone size={16} />, title: t('chat.header.call_voice'), onClick: conversation?.type === 'dm' ? onPhoneCall : undefined },
+                { icon: <Video size={16} />, title: t('chat.header.call_video'), onClick: conversation?.type === 'dm' ? onVideoCall : undefined },
+                ...(conversation?.type === 'group' ? [{ icon: <Volume2 size={16} />, title: t('chat.header.voice_room'), onClick: onVoiceRoom, active: voiceRoomActive }] : []),
+                { icon: <Search size={16} />, title: t('chat.header.search') },
+                { icon: <Users size={16} />, title: t('chat.header.members'), onClick: onToggleRight, active: showRight },
+                { icon: <Pin size={16} />, title: t('chat.header.pinned') },
+                { icon: <MoreHorizontal size={16} />, title: t('chat.header.more') },
               ].map((btn, i) => (
                 <button key={i} onClick={btn.onClick} title={btn.title}
                   style={{
@@ -554,16 +556,16 @@ export default function ChatArea({
             ? <Volume2 size={13} style={{ color: 'var(--text-muted)' }} />
             : <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>#</span>
           }
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{activeTopic.name}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{translateTopicContent(activeTopic.name)}</span>
           {activeTopic.description && (
             <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>— {activeTopic.description}</span>
           )}
           <button
             onClick={() => onTopicSelect && onTopicSelect(null)}
             style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, padding: '2px 6px', borderRadius: 4 }}
-            title="Quay về kênh chung"
+            title={t('chat.topics.back_to_general')}
           >
-            ✕ Thoát kênh
+            ✕ {t('chat.topics.exit_channel')}
           </button>
         </div>
       )}
@@ -590,13 +592,13 @@ export default function ChatArea({
               display: 'inline-block', fontSize: 11, fontWeight: 700,
               color: 'var(--text-muted)', padding: '3px 8px', borderRadius: 999, background: 'var(--bg-hover)',
             }}>
-              {conversation.type === 'dm' ? 'Tin nhắn trực tiếp' : 'Nhóm chat'}
+              {conversation.type === 'dm' ? t('chat.dm_label') : t('chat.group_label')}
             </span>
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0, lineHeight: 1.5 }}>
             {conversation.type === 'dm'
-              ? `Đây là nơi bắt đầu cuộc trò chuyện giữa bạn và ${conversation.name}.`
-              : `Đây là kênh đầu tiên của nhóm ${conversation.name}.`}
+              ? t('chat.dm_start', { name: conversation.name })
+              : t('chat.group_start', { name: conversation.name })}
           </p>
         </div>
 
@@ -667,7 +669,7 @@ export default function ChatArea({
           borderTop: '1px solid var(--border)', display: 'flex',
           alignItems: 'center', justifyContent: 'center', gap: 12, flexShrink: 0,
         }}>
-          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Bạn đã chặn người này. Không thể gửi tin nhắn.</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('chat.i_blocked')}</span>
           <button
             onClick={async () => {
               try {
@@ -680,7 +682,7 @@ export default function ChatArea({
               background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 700,
             }}
           >
-            Bỏ chặn
+            {t('chat.unblock')}
           </button>
         </div>
       )}
@@ -690,7 +692,7 @@ export default function ChatArea({
           padding: '7px 16px', background: '#fef3c7', borderTop: '1px solid #fcd34d',
           textAlign: 'center', flexShrink: 0, color: '#92400e', fontSize: 12,
         }}>
-          Bạn đã bị người này chặn. Tin nhắn của bạn sẽ không được nhận.
+          {t('chat.they_blocked_me')}
         </div>
       )}
 
@@ -707,8 +709,8 @@ export default function ChatArea({
             }}
             placeholder={
               conversation.type === 'group'
-                ? `Nhắn tin tới #${activeTopic ? activeTopic.name : 'chung'}...`
-                : `Nhắn tin tới ${conversation.name}...`
+                ? t('chat.input_group_placeholder', { name: activeTopic ? activeTopic.name : 'chung' })
+                : t('chat.input_dm_placeholder', { name: conversation.name })
             }
             isMobile={isMobile}
             isGroup={conversation.type === 'group'}
@@ -731,8 +733,8 @@ export default function ChatArea({
             <span style={{ fontSize: 18 }}>🔒</span>
             <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
               {isGroupLockedReadOnly
-                ? 'Nhóm đang khóa. Chỉ owner/admin mới được gửi tin nhắn.'
-                : `Bạn không có quyền gửi tin nhắn trong kênh${activeTopic ? ` #${activeTopic.name}` : ' này'}.`}
+                ? t('chat.group_locked')
+                : t('chat.no_permission', { topic: activeTopic ? ` #${activeTopic.name}` : '' })}
             </span>
           </div>
         )
@@ -783,7 +785,7 @@ export default function ChatArea({
             </div>
             {/* Sheet header */}
             <div style={{ padding: '0 18px 10px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-primary)' }}>Kênh chat</div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-primary)' }}>{t('chat_area.channels_title')}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{conversation.name}</div>
             </div>
             {/* Channel list */}
@@ -800,12 +802,12 @@ export default function ChatArea({
               >
                 <Hash size={18} style={{ color: !activeTopic ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
                 <span style={{ fontSize: 15, fontWeight: !activeTopic ? 700 : 500, color: !activeTopic ? '#fff' : 'var(--text-primary)' }}>
-                  chung
+                  {t('chat_area.general_channel')}
                 </span>
               </div>
 
               {sheetLoading && (
-                <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 10px' }}>Đang tải kênh...</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 10px' }}>{t('chat_area.loading_channels')}</div>
               )}
 
               {sheetTopics.map(topic => {
@@ -832,7 +834,7 @@ export default function ChatArea({
                                     {topic.name}
                                   </span>
                                   {isVoice && !isActive && (
-                                    <span style={{ fontSize: 11, color: '#57f287', background: 'rgba(87,242,135,0.15)', borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>Thoại</span>
+                                    <span style={{ fontSize: 11, color: '#57f287', background: 'rgba(87,242,135,0.15)', borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{t('chat_area.voice_label')}</span>
                                   )}
                                   {topic.isLocked && <Lock size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
                                 </div>
@@ -842,7 +844,7 @@ export default function ChatArea({
 
               {!sheetLoading && sheetTopics.length === 0 && (
                 <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 10px', fontStyle: 'italic' }}>
-                  Chưa có kênh nào.
+                  {t('chat_area.no_channels')}
                 </div>
               )}
             </div>

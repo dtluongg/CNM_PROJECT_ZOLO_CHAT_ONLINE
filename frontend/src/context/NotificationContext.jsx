@@ -1,7 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { useLanguage } from './LanguageContext';
 import notificationApi from '../features/notifications/api/notificationApi';
+import { translateLastMessage } from '../utils/translationUtils';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
 
@@ -44,6 +46,7 @@ const playBeep = () => {
 
 export const NotificationProvider = ({ children }) => {
   const { token } = useAuth();
+  const { t } = useLanguage();
 
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -72,8 +75,8 @@ export const NotificationProvider = ({ children }) => {
       if (!latest?._id) return;
       setToast({
         id: latest._id,
-        title: latest.title || 'Thông báo mới',
-        body: latest.body || '',
+        title: translateLastMessage(latest.title, t) || t('notifications.default_title'),
+        body: translateLastMessage(latest.body, t) || '',
       });
     } catch (_) {
       // Ignore fallback fetch errors.
@@ -107,7 +110,13 @@ export const NotificationProvider = ({ children }) => {
       const list = Array.isArray(res?.data?.data) ? res.data.data : [];
       const meta = res?.data?.meta || {};
 
-      setItems((prev) => (append ? [...prev, ...list] : list));
+      const translatedList = list.map(item => ({
+        ...item,
+        title: translateLastMessage(item.title, t),
+        body: translateLastMessage(item.body, t),
+      }));
+
+      setItems((prev) => (append ? [...prev, ...translatedList] : translatedList));
       setHasMore(Boolean(meta.hasMore));
       setNextCursor(meta.nextCursor || null);
       nextCursorRef.current = meta.nextCursor || null;
@@ -206,12 +215,19 @@ export const NotificationProvider = ({ children }) => {
     socket.on('notifications:new', ({ notification }) => {
       if (!notification?._id) return;
 
+      // Translate notification title and body
+      const translatedNotif = {
+        ...notification,
+        title: translateLastMessage(notification.title, t),
+        body: translateLastMessage(notification.body, t),
+      };
+
       setItems((prev) => {
-        if (prev.some((item) => item._id === notification._id)) return prev;
-        return [notification, ...prev];
+        if (prev.some((item) => item._id === translatedNotif._id)) return prev;
+        return [translatedNotif, ...prev];
       });
 
-      if (notification.isRead !== true) {
+      if (translatedNotif.isRead !== true) {
         setUnreadCount((prev) => prev + 1);
       }
 
@@ -221,7 +237,7 @@ export const NotificationProvider = ({ children }) => {
 
       if (bannerEnabled) {
         setToast({
-          notification,
+          notification: translatedNotif,
         });
       }
     });

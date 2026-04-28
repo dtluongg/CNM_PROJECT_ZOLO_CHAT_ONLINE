@@ -1,13 +1,14 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Camera, X } from 'lucide-react';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const GROUP_TYPES = [
-  { value: 'general', label: '💬 Thảo luận chung' },
-  { value: 'study',   label: '📚 Học tập' },
-  { value: 'gaming',  label: '🎮 Gaming' },
-  { value: 'project', label: '📌 Dự án / Làm việc' },
-  { value: 'other',   label: '🗂️ Khác' },
-  { value: 'sensitive', label: '🔐 Nhóm nhạy cảm' },
+  { value: 'general', label: 'create_group.types.general' },
+  { value: 'study',   label: 'create_group.types.study' },
+  { value: 'gaming',  label: 'create_group.types.gaming' },
+  { value: 'project', label: 'create_group.types.project' },
+  { value: 'other',   label: 'create_group.types.other' },
+  { value: 'sensitive', label: 'create_group.types.sensitive' },
 ];
 
 const INVITE_MODE_BY_GROUP = {
@@ -17,12 +18,6 @@ const INVITE_MODE_BY_GROUP = {
   project: 'approval_required',
   other: 'approval_required',
   sensitive: 'admin_only',
-};
-
-const INVITE_MODE_LABEL = {
-  open_invite: 'Open Invite: Người có quyền mời sẽ thêm trực tiếp',
-  approval_required: 'Approval Required: Member giới thiệu, admin/owner duyệt',
-  admin_only: 'Admin Only: Chỉ owner/admin được thêm trực tiếp',
 };
 
 function useIsMobile() {
@@ -52,6 +47,7 @@ const CreateGroupModal = ({
   onCreateGroup,
   onClose,
 }) => {
+  const { t } = useLanguage();
   const avatarInputRef = useRef(null);
   const isMobile = useIsMobile();
   const inviteMode = INVITE_MODE_BY_GROUP[groupType] || 'open_invite';
@@ -100,10 +96,10 @@ const CreateGroupModal = ({
         }}>
           <div>
             <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: isMobile ? 20 : 18 }}>
-              Tạo nhóm chat
+              {t('create_group.title')}
             </div>
             <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>
-              Chọn tối thiểu 2 người bạn để tạo nhóm
+              {t('create_group.subtitle')}
             </div>
           </div>
           {isMobile && (
@@ -132,7 +128,7 @@ const CreateGroupModal = ({
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: 'pointer', overflow: 'hidden', position: 'relative',
               }}
-              title="Chọn ảnh đại diện nhóm"
+              title={t('create_group.avatar_title')}
             >
               {groupAvatarPreview ? (
                 <img src={groupAvatarPreview} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -150,7 +146,7 @@ const CreateGroupModal = ({
 
             <input
               type="text"
-              placeholder="Nhập tên nhóm..."
+              placeholder={t('create_group.group_name_placeholder')}
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               style={{
@@ -165,7 +161,7 @@ const CreateGroupModal = ({
 
           {/* Group type */}
           <div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Loại nhóm</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{t('create_group.group_type')}</div>
             <select
               value={groupType}
               onChange={(e) => setGroupType(e.target.value)}
@@ -176,22 +172,22 @@ const CreateGroupModal = ({
                 outline: 'none', fontSize: isMobile ? 16 : 14, cursor: 'pointer',
               }}
             >
-              {GROUP_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
+              {GROUP_TYPES.map((t_item) => (
+                <option key={t_item.value} value={t_item.value}>{t(t_item.label)}</option>
               ))}
             </select>
             <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 5 }}>
-              {INVITE_MODE_LABEL[inviteMode]}
+              {t(`create_group.invite_labels.${inviteMode}`)}
             </div>
           </div>
 
           {/* Description */}
           <div>
             <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-              Mô tả nhóm <span style={{ fontWeight: 400 }}>(tùy chọn)</span>
+              {t('create_group.description')} <span style={{ fontWeight: 400 }}>({t('create_group.optional')})</span>
             </div>
             <textarea
-              placeholder="Mô tả ngắn về nhóm..."
+              placeholder={t('create_group.desc_placeholder')}
               value={groupDescription}
               onChange={(e) => setGroupDescription(e.target.value)}
               maxLength={200}
@@ -213,7 +209,7 @@ const CreateGroupModal = ({
           {selectedFriends.length > 0 && (
             <div>
               <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                Đã chọn ({selectedFriends.length})
+                {t('create_group.selected_label', { count: selectedFriends.length })}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {selectedFriends.map(f => (
@@ -239,7 +235,7 @@ const CreateGroupModal = ({
           {/* Friend list */}
           <div>
             <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-              Thêm thành viên
+              {t('create_group.add_members')}
             </div>
             <div style={{
               maxHeight: isMobile ? 260 : 220, overflowY: 'auto',
@@ -247,11 +243,11 @@ const CreateGroupModal = ({
               padding: isMobile ? '6px 4px' : 8, background: 'var(--bg-primary)',
             }}>
               {loadingFriends && (
-                <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 10 }}>Đang tải danh sách bạn bè...</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 10 }}>{t('create_group.loading_friends')}</div>
               )}
 
               {!loadingFriends && friendsForGroup.length === 0 && (
-                <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 10 }}>Bạn chưa có bạn bè để tạo nhóm.</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 10 }}>{t('create_group.no_friends')}</div>
               )}
 
               {!loadingFriends && friendsForGroup.map((f) => {
@@ -307,7 +303,7 @@ const CreateGroupModal = ({
                 color: 'var(--text-primary)', fontWeight: 600,
               }}
             >
-              Hủy
+              {t('common.cancel')}
             </button>
           )}
           <button
@@ -322,7 +318,7 @@ const CreateGroupModal = ({
               opacity: (creatingGroup || !groupName.trim() || selectedFriendIds.length < 2) ? 0.6 : 1,
             }}
           >
-            {creatingGroup ? 'Đang tạo...' : `Tạo nhóm${selectedFriendIds.length >= 2 ? ` (${selectedFriendIds.length})` : ''}`}
+            {creatingGroup ? t('create_group.creating') : (selectedFriendIds.length > 0 ? t('create_group.create_btn_with_count', { count: selectedFriendIds.length }) : t('create_group.create_btn'))}
           </button>
         </div>
       </div>

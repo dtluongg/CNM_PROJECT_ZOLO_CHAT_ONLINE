@@ -5,16 +5,18 @@ import {
     Platform, ActivityIndicator, Alert, Pressable, Animated
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { Video } from 'expo-av';
+import { Video, Audio } from 'expo-av';
 import storiesApi from '../api/storiesApi';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const { width, height } = Dimensions.get('window');
 
 export default function StoryViewerModal({ visible, user: storyUser, stories, startIndex = 0, onClose, onDeleteSuccess }) {
     const { user: currentUser } = useAuth();
     const { theme: THEME } = useTheme();
+    const { t } = useLanguage();
     const [currentIndex, setCurrentIndex] = useState(startIndex);
     const [replyText, setReplyText] = useState('');
     const [loading, setLoading] = useState(true);
@@ -22,6 +24,7 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
     const [viewersData, setViewersData] = useState({ viewers: [], totalViews: 0, totalHearts: 0 });
     const [showViewersList, setShowViewersList] = useState(false);
     const [showHeartAnim, setShowHeartAnim] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
     const heartAnimValue = useRef(new Animated.Value(0)).current;
     
     const progress = useRef(0);
@@ -39,6 +42,15 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
                 fetchViewers();
             }
             resetStoryTimer();
+
+            // Configure audio for silent mode
+            if (story.mediaType === 'video') {
+                Audio.setAudioModeAsync({
+                    playsInSilentModeIOS: true,
+                    staysActiveInBackground: false,
+                    shouldRouteThroughEarpieceAndroid: false,
+                }).catch(err => console.log('Audio mode error:', err));
+            }
         }
         return () => clearInterval(timerRef.current);
     }, [visible, currentIndex]);
@@ -79,10 +91,10 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
     };
 
     const handleDelete = async () => {
-        Alert.alert('Xóa tin', 'Bạn có chắc muốn xóa tin này không?', [
-            { text: 'Hủy', style: 'cancel' },
+        Alert.alert(t('stories.delete_title'), t('stories.delete_confirm'), [
+            { text: t('common.cancel'), style: 'cancel' },
             { 
-                text: 'Xóa', 
+                text: t('stories.delete_btn'), 
                 style: 'destructive',
                 onPress: async () => {
                     try {
@@ -90,7 +102,7 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
                         onDeleteSuccess && onDeleteSuccess();
                         handleNext();
                     } catch (err) {
-                        Alert.alert('Lỗi', 'Không thể xóa tin.');
+                        Alert.alert(t('common.error'), t('stories.delete_error'));
                     }
                 }
             }
@@ -128,10 +140,10 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
                 // Thả tim visual animation thay vì Alert
                 triggerHeartAnimation();
             } else {
-                Alert.alert('Thành công', 'Đã gửi phản hồi!');
+                Alert.alert(t('common.success'), t('stories.reply_success'));
             }
         } catch (err) {
-            Alert.alert('Lỗi', 'Gửi phản hồi thất bại.');
+            Alert.alert(t('common.error'), t('stories.reply_error'));
         } finally {
             setSending(false);
         }
@@ -144,23 +156,41 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
             <View style={styles.container}>
                 {/* Media */}
                 <View style={styles.mediaContainer}>
-                    {story.mediaType === 'video' ? (
-                        <Video
-                            source={{ uri: story.mediaUrl }}
-                            style={styles.media}
-                            resizeMode="contain"
-                            shouldPlay={visible}
-                            isMuted={false}
-                            onLoad={() => setLoading(false)}
-                        />
-                    ) : (
-                        <Image 
-                            source={{ uri: story.mediaUrl }} 
-                            style={styles.media} 
-                            resizeMode="contain"
-                            onLoad={() => setLoading(false)}
-                        />
-                    )}
+                    {(() => {
+                        console.log(`[StoryViewerModal] Loading ${story.mediaType}:`, story.mediaUrl);
+                        return story.mediaType === 'video' ? (
+                            <Video
+                                source={{ uri: story.mediaUrl }}
+                                style={styles.media}
+                                resizeMode="contain"
+                                shouldPlay={visible}
+                                isMuted={isMuted}
+                                onLoad={() => {
+                                    console.log('[StoryViewerModal] Video loaded successfully');
+                                    setLoading(false);
+                                }}
+                                onError={(err) => {
+                                    console.error('[StoryViewerModal] Video load error:', err);
+                                    setLoading(false);
+                                }}
+                            />
+                        ) : (
+                            <Image 
+                                source={{ uri: story.mediaUrl }} 
+                                style={styles.media} 
+                                resizeMode="contain"
+                                onLoad={() => {
+                                    console.log('[StoryViewerModal] Image loaded successfully');
+                                    setLoading(false);
+                                }}
+                                onError={(err) => {
+                                    console.error('[StoryViewerModal] Image load error:', err.nativeEvent.error);
+                                    setLoading(false);
+                                    Alert.alert(t('stories.image_load_error_title'), t('stories.image_load_error'));
+                                }}
+                            />
+                        );
+                    })()}
                     {loading && (
                         <View style={styles.loader}>
                             <ActivityIndicator size="large" color="#fff" />
@@ -217,6 +247,11 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
                             </View>
                         </View>
                         <View style={styles.headerActions}>
+                            {story.mediaType === 'video' && (
+                                <TouchableOpacity onPress={() => setIsMuted(!isMuted)} style={styles.iconBtn}>
+                                    <Feather name={isMuted ? "volume-x" : "volume-2"} size={24} color="#fff" />
+                                </TouchableOpacity>
+                            )}
                             {isMyStory && (
                                 <TouchableOpacity onPress={handleDelete} style={styles.iconBtn}>
                                     <Feather name="trash-2" size={24} color="#fff" />
@@ -252,7 +287,7 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
                                 )}
                             </View>
                             <Text style={styles.viewerText}>
-                                {viewersData.totalViews} người xem • {viewersData.totalHearts} ❤️
+                                {viewersData.totalViews} {t('stories.viewers')} • {viewersData.totalHearts} {t('stories.hearts')}
                             </Text>
                             <Feather name="chevron-up" size={20} color="#fff" />
                         </TouchableOpacity>
@@ -260,7 +295,7 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
                         <View style={styles.replyRow}>
                             <TextInput
                                 style={styles.input}
-                                placeholder={`Phản hồi ${storyUser?.displayName || 'tin'}...`}
+                                placeholder={t('stories.reply_placeholder', { name: storyUser?.displayName || t('user.unknown') })}
                                 placeholderTextColor="rgba(255,255,255,0.6)"
                                 value={replyText}
                                 onChangeText={setReplyText}
@@ -285,7 +320,7 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
                             <Pressable style={styles.modalOverlay} onPress={() => setShowViewersList(false)} />
                             <View style={[styles.viewerContent, { backgroundColor: THEME.bgSecondary }]}>
                                 <View style={[styles.modalHeader, { borderBottomColor: THEME.border }]}>
-                                    <Text style={[styles.modalTitle, { color: THEME.textPrimary }]}>Người đã xem</Text>
+                                    <Text style={[styles.modalTitle, { color: THEME.textPrimary }]}>{t('stories.viewers_modal_title')}</Text>
                                     <TouchableOpacity onPress={() => setShowViewersList(false)}>
                                         <Feather name="x" size={24} color={THEME.textPrimary} />
                                     </TouchableOpacity>
@@ -296,7 +331,7 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
                                             <View key={v.userId?._id} style={styles.viewerItem}>
                                                 <Image source={{ uri: v.userId?.avatar || 'https://via.placeholder.com/150' }} style={styles.listAvatar} />
                                                 <View style={styles.viewerInfo}>
-                                                    <Text style={[styles.listName, { color: THEME.textPrimary }]}>{v.userId?.displayName || 'Người dùng'}</Text>
+                                                    <Text style={[styles.listName, { color: THEME.textPrimary }]}>{v.userId?.displayName || t('user.unknown')}</Text>
                                                     <Text style={[styles.listTime, { color: THEME.textMuted }]}>
                                                         {new Date(v.viewedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                     </Text>
@@ -306,7 +341,7 @@ export default function StoryViewerModal({ visible, user: storyUser, stories, st
                                         ))
                                     ) : (
                                         <View style={styles.emptyViewers}>
-                                            <Text style={{ color: THEME.textMuted }}>Chưa có lượt xem nào.</Text>
+                                            <Text style={{ color: THEME.textMuted }}>{t('stories.no_viewers')}</Text>
                                         </View>
                                     )}
                                 </View>

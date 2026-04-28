@@ -9,9 +9,11 @@
  * Thiết bị thật / Expo Go: http://<IP_LAN_máy>:2026/backend/api
  */
 
+// ── CONFIG ──
+// Ưu tiên biến môi trường từ .env (EXPO_PUBLIC_ prefix là bắt buộc cho Expo Go)
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
-  'http://172.20.10.3:2026/backend/api';
+  'http://172.20.10.3:2026/backend/api'; // Thay IP này bằng IP máy bạn (ipconfig)
 
 const SOCKET_URL =
   process.env.EXPO_PUBLIC_SOCKET_URL ||

@@ -7,8 +7,10 @@ import {
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 import { Feather } from '@expo/vector-icons';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const CreatePollModal = ({ visible, onClose, onCreate, THEME }) => {
+  const { t } = useLanguage();
   const [topic, setTopic] = useState('');
   const [options, setOptions] = useState(['', '']);
   const [multipleChoice, setMultipleChoice] = useState(false);
@@ -56,29 +58,29 @@ const CreatePollModal = ({ visible, onClose, onCreate, THEME }) => {
         >
           <View style={[styles.content, { backgroundColor: THEME.bgSecondary }]}>
             <View style={styles.header}>
-              <Text style={[styles.title, { color: THEME.textPrimary }]}>Tạo bình chọn</Text>
+              <Text style={[styles.title, { color: THEME.textPrimary }]}>{t('poll.create_title')}</Text>
               <TouchableOpacity onPress={onClose}>
                 <Feather name="x" size={24} color={THEME.textMuted} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.scroll}>
-              <Text style={[styles.label, { color: THEME.textMuted }]}>CHỦ ĐỀ BÌNH CHỌN</Text>
+              <Text style={[styles.label, { color: THEME.textMuted }]}>{t('poll.topic_label')}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: THEME.bgTertiary, color: THEME.textPrimary }]}
-                placeholder="Nhập chủ đề..."
+                placeholder={t('poll.topic_placeholder')}
                 placeholderTextColor={THEME.textMuted}
                 value={topic}
                 onChangeText={setTopic}
                 multiline
               />
 
-              <Text style={[styles.label, { color: THEME.textMuted, marginTop: 20 }]}>CÁC LỰA CHỌN</Text>
+              <Text style={[styles.label, { color: THEME.textMuted, marginTop: 20 }]}>{t('poll.options_label')}</Text>
               {options.map((opt, index) => (
                 <View key={index} style={styles.optionRow}>
                   <TextInput
                     style={[styles.input, { backgroundColor: THEME.bgTertiary, color: THEME.textPrimary, flex: 1, marginBottom: 0 }]}
-                    placeholder={`Lựa chọn ${index + 1}`}
+                    placeholder={t('poll.option_placeholder', { index: index + 1 })}
                     placeholderTextColor={THEME.textMuted}
                     value={opt}
                     onChangeText={(text) => handleUpdateOption(text, index)}
@@ -105,15 +107,15 @@ const CreatePollModal = ({ visible, onClose, onCreate, THEME }) => {
                     }
                   ]}
                 >
-                  <Text style={{ color: THEME.accent, fontWeight: '700' }}>+ Thêm lựa chọn</Text>
+                  <Text style={{ color: THEME.accent, fontWeight: '700' }}>{t('poll.add_option')}</Text>
                 </TouchableOpacity>
               )}
 
               {/* Toggle Chọn nhiều */}
               <View style={[styles.switchContainer, { backgroundColor: THEME.bgTertiary, borderColor: 'rgba(255,255,255,0.05)' }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.switchTitle, { color: THEME.textPrimary }]}>Chọn nhiều phương án</Text>
-                  <Text style={[styles.switchSubtitle, { color: THEME.textMuted }]}>Cho phép bầu chọn nhiều mục</Text>
+                  <Text style={[styles.switchTitle, { color: THEME.textPrimary }]}>{t('poll.multi_choice')}</Text>
+                  <Text style={[styles.switchSubtitle, { color: THEME.textMuted }]}>{t('poll.multi_choice_desc')}</Text>
                 </View>
                 <Switch
                   value={multipleChoice}
@@ -129,14 +131,14 @@ const CreatePollModal = ({ visible, onClose, onCreate, THEME }) => {
                 onPress={onClose} 
                 style={[styles.btn, { backgroundColor: THEME.bgTertiary }]}
               >
-                <Text style={{ color: THEME.textPrimary }}>Hủy</Text>
+                <Text style={{ color: THEME.textPrimary }}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 onPress={handleCreate} 
                 disabled={!topic.trim() || options.filter(o => o.trim()).length < 2}
                 style={[styles.btn, { backgroundColor: THEME.accent, opacity: (!topic.trim() || options.filter(o => o.trim()).length < 2) ? 0.5 : 1 }]}
               >
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Tạo bình chọn</Text>
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{t('poll.create_btn')}</Text>
               </TouchableOpacity>
             </View>
           </View>
