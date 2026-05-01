@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback ,useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock, Volume2 } from 'lucide-react';
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
@@ -35,13 +35,13 @@ import { getAvatarColor, getInitials } from './chatArea/utils/avatarUtils';
 // ─────────────────────────────────────────────────────────────────────
 const STATUS_LABEL = {
   online: 'Đang hoạt động',
-  idle:   'Vắng mặt',
-  dnd:    'Không làm phiền',
+  idle: 'Vắng mặt',
+  dnd: 'Không làm phiền',
 };
 const STATUS_COLOR_MAP = {
   online: '#3ba55c',
-  idle:   '#faa61a',
-  dnd:    '#ed4245',
+  idle: '#faa61a',
+  dnd: '#ed4245',
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -72,15 +72,15 @@ export default function ChatArea({
 }) {
   const { isUserOnline, getPresenceStatus, getLastSeen } = usePresence();
 
-  const [openMenuId,      setOpenMenuId]      = useState(null);
-  const [reactionTypes,   setReactionTypes]   = useState([]);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [reactionTypes, setReactionTypes] = useState([]);
   const [showReactionList, setShowReactionList] = useState(null);
   const [reactionDetails, setReactionDetails] = useState([]);
-  const [showReadList,    setShowReadList]    = useState(null);
-  const [editingMessage,  setEditingMessage]  = useState(null);
+  const [showReadList, setShowReadList] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
   const [replyingMessage, setReplyingMessage] = useState(null);
-  const [highlightedId,   setHighlightedId]   = useState(null);
-  const [forwardingMsg,   setForwardingMsg]   = useState(null);
+  const [highlightedId, setHighlightedId] = useState(null);
+  const [forwardingMsg, setForwardingMsg] = useState(null);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState(conversation?.pinnedMessages || []);
   const [showPinLimitModal, setShowPinLimitModal] = useState(false);
@@ -88,26 +88,41 @@ export default function ChatArea({
   const [showUnpinModal, setShowUnpinModal] = useState(false);
   const [messageIdToUnpin, setMessageIdToUnpin] = useState(null);
   const [showChannelSheet, setShowChannelSheet] = useState(false);
-  const [sheetTopics, setSheetTopics]           = useState([]);
-  const [sheetLoading, setSheetLoading]         = useState(false);
-
+  const [sheetTopics, setSheetTopics] = useState([]);
+  const [sheetLoading, setSheetLoading] = useState(false);
+  const [groupMembers, setGroupMembers] = useState([]);
   // Sync pinned messages khi đổi conversation
   useEffect(() => {
     setPinnedMessages(conversation?.pinnedMessages || []);
   }, [conversation?.id]);
-
+  console.log("Dữ liệu nhóm hiện tại:", conversation);
   // ── Snapshot lastReadMessageId tại thời điểm mở conversation ────────
   // Phải capture inline (không dùng useEffect) để lấy giá trị trước khi markAsRead chạy
-  const prevConvIdRef  = useRef(null);
-  const aiSnapshotRef  = useRef({ unreadCount: 0, lastReadId: null });
+  const prevConvIdRef = useRef(null);
+  const aiSnapshotRef = useRef({ unreadCount: 0, lastReadId: null });
   if (conversation?.id !== prevConvIdRef.current) {
     prevConvIdRef.current = conversation?.id;
     aiSnapshotRef.current = {
       unreadCount: conversation?.unread || 0,
-      lastReadId:  conversation?.myMembership?.lastReadMessageId || null,
+      lastReadId: conversation?.myMembership?.lastReadMessageId || null,
     };
   }
-
+  // ── THÊM USE-EFFECT NÀY ĐỂ TỰ ĐỘNG LẤY THÀNH VIÊN KHI MỞ NHÓM ──
+  useEffect(() => {
+    if (conversation?.type === 'group' && conversation?.id) {
+      // Gọi API lấy danh sách thành viên (Bạn hãy kiểm tra xem hàm trong file conversationApi của bạn tên là gì nhé, thường là getMembers)
+      conversationApi.getConversationMembers(conversation.id)
+        .then(res => {
+          const membersData = Array.isArray(res.data?.data) ? res.data.data : [];
+          // Bóc tách lấy thông tin User từ dữ liệu trả về
+          const formattedMembers = membersData.map(m => m.userId || m.user || m);
+          setGroupMembers(formattedMembers);
+        })
+        .catch(err => console.error("Lỗi lấy thành viên để Tag:", err));
+    } else {
+      setGroupMembers([]); // Xóa rỗng nếu là chat 1-1
+    }
+  }, [conversation?.id, conversation?.type]);
   // ── Fetch reaction types khi mount ─────────────────────────
   useEffect(() => {
     messageApi.getReactionTypes()
@@ -230,32 +245,32 @@ export default function ChatArea({
       window.alert(err?.response?.data?.message || 'Không thể bỏ ghim tin nhắn');
     }
   };
-    const myRole = myPermissions?.systemRole || conversation?.myMembership?.role || null;
-    const isGroupLockedReadOnly =
-      conversation?.type === 'group' &&
-      !!conversation?.isLocked &&
-      myRole === 'member';
+  const myRole = myPermissions?.systemRole || conversation?.myMembership?.role || null;
+  const isGroupLockedReadOnly =
+    conversation?.type === 'group' &&
+    !!conversation?.isLocked &&
+    myRole === 'member';
 
-    const canSendInActiveTopic = useMemo(() => {
-      if (isGroupLockedReadOnly) return false;
-      if (conversation?.type === 'group' && !myPermissions) {
-        // Fallback theo role cục bộ để tránh cho gõ khi quyền chưa kịp đồng bộ.
-        if (!myRole) return false;
-        return myRole === 'owner' || myRole === 'admin' || conversation?.myMembership?.canSendMessages !== false;
-      }
-      if (!myPermissions) return true;
-      if (conversation?.type !== 'group') return true; // DM luôn được gửi
-      if (!activeTopic) {
-        // Kênh chung — check globalPermissions
-        return myPermissions.globalPermissions?.canSendMessages !== false;
-      }
-      // Kênh cụ thể — check topicPermissions
-      const topicPerm = myPermissions.topicPermissions?.find(
-        t => t._id?.toString() === activeTopic._id?.toString()
-      );
-      if (!topicPerm) return true; // không có entry → cho phép
-      return topicPerm.canSend !== false;
-    }, [myPermissions, activeTopic, conversation?.type, conversation?.myMembership?.canSendMessages, isGroupLockedReadOnly, myRole]);
+  const canSendInActiveTopic = useMemo(() => {
+    if (isGroupLockedReadOnly) return false;
+    if (conversation?.type === 'group' && !myPermissions) {
+      // Fallback theo role cục bộ để tránh cho gõ khi quyền chưa kịp đồng bộ.
+      if (!myRole) return false;
+      return myRole === 'owner' || myRole === 'admin' || conversation?.myMembership?.canSendMessages !== false;
+    }
+    if (!myPermissions) return true;
+    if (conversation?.type !== 'group') return true; // DM luôn được gửi
+    if (!activeTopic) {
+      // Kênh chung — check globalPermissions
+      return myPermissions.globalPermissions?.canSendMessages !== false;
+    }
+    // Kênh cụ thể — check topicPermissions
+    const topicPerm = myPermissions.topicPermissions?.find(
+      t => t._id?.toString() === activeTopic._id?.toString()
+    );
+    if (!topicPerm) return true; // không có entry → cho phép
+    return topicPerm.canSend !== false;
+  }, [myPermissions, activeTopic, conversation?.type, conversation?.myMembership?.canSendMessages, isGroupLockedReadOnly, myRole]);
 
 
   const openChannelSheet = useCallback(async () => {
@@ -309,15 +324,15 @@ export default function ChatArea({
   // ── Filter messages by active topic (groups only) ─────────
   const visibleMessages = conversation?.type === 'group' && !activeTopic
     ? messages.filter(m => {
-        const mTopicId = m.topicId?.toString?.() || m.topicId || null;
-        return !mTopicId && m.type !== 'system';
-      })
+      const mTopicId = m.topicId?.toString?.() || m.topicId || null;
+      return !mTopicId && m.type !== 'system';
+    })
     : messages; // đã được filter đúng từ Chat.jsx rồi
 
   // ── Build display items ────────────────────────────────────
   const displayItems = [];
   visibleMessages.forEach((msg, i) => {
-    const prev    = visibleMessages[i - 1];
+    const prev = visibleMessages[i - 1];
     const msgDate = msg.time?.split(' ')[0];
     const prevDate = prev?.time?.split(' ')[0];
     if (i === 0 || (msgDate && prevDate && msgDate !== prevDate && msg.time?.includes(' '))) {
@@ -325,19 +340,19 @@ export default function ChatArea({
     }
     const sameGroup = prev && prev.senderId === msg.senderId && !prev.time?.includes(' ') && !msg.time?.includes(' ');
     displayItems.push({
-      type:      msg.type === 'system' ? 'system' : 'msg',
+      type: msg.type === 'system' ? 'system' : 'msg',
       msg,
-      isMine:    msg.senderId === currentUserId,
+      isMine: msg.senderId === currentUserId,
       showHeader: msg.type === 'system' ? false : !sameGroup,
       onForward: (m) => { setForwardingMsg(m); setShowForwardModal(true); },
-      key:       msg._id || msg.id,
+      key: msg._id || msg.id,
     });
   });
 
   // ── Chèn UnreadDivider + AiSummaryCard nếu có tin chưa đọc ─────────────
   // Dùng snapshot (không bị timing) thay vì live values
-  const unreadCount    = aiSnapshotRef.current.unreadCount;
-  const lastReadId     = aiSnapshotRef.current.lastReadId;
+  const unreadCount = aiSnapshotRef.current.unreadCount;
+  const lastReadId = aiSnapshotRef.current.lastReadId;
   const savedAiSummary = conversation?.aiSummary || null;  // từ DB
 
   if (unreadCount > 0) {
@@ -369,8 +384,8 @@ export default function ChatArea({
     displayItems.push({
       type: 'ai-summary',
       key: `ai-summary-${conversation.id}`,
-      conversationId:   conversation.id,
-      initialSummary:   savedAiSummary,
+      conversationId: conversation.id,
+      initialSummary: savedAiSummary,
       snapshotLastReadId: lastReadId,    // snapshot trước markAsRead
     });
   }
@@ -440,9 +455,9 @@ export default function ChatArea({
               <>
                 <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.2 }}>
                   {activeTopic?.channelType === 'voice'
-                                      ? <Volume2 size={13} style={{ color: '#57f287', marginRight: 3, display: 'inline', verticalAlign: 'middle' }} />
-                                      : <span style={{ color: 'var(--accent)', marginRight: 1 }}>#</span>
-                                    }
+                    ? <Volume2 size={13} style={{ color: '#57f287', marginRight: 3, display: 'inline', verticalAlign: 'middle' }} />
+                    : <span style={{ color: 'var(--accent)', marginRight: 1 }}>#</span>
+                  }
                   {activeTopic ? activeTopic.name : 'chung'}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1 }}>
@@ -655,89 +670,91 @@ export default function ChatArea({
         <div ref={bottomRef} style={{ height: 8 }} />
       </div>
 
-      {sendBlockError && (
-        <div style={{ padding: '8px 16px', background: '#ed4245', color: '#fff', fontSize: 13, textAlign: 'center', flexShrink: 0 }}>
-          {sendBlockError}
-        </div>
-      )}
-
-      {conversation.type === 'dm' && blockStatus?.iBlocked && (
-        <div style={{
-          padding: '10px 16px', background: 'var(--bg-secondary)',
-          borderTop: '1px solid var(--border)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', gap: 12, flexShrink: 0,
-        }}>
-          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Bạn đã chặn người này. Không thể gửi tin nhắn.</span>
-          <button
-            onClick={async () => {
-              try {
-                await import('../../friends/api/friendApi').then(m => m.default.unblockFriend(conversation.otherUserId));
-                onBlockStatusChanged?.();
-              } catch (err) { window.alert(err?.response?.data?.message || 'Không thể bỏ chặn'); }
-            }}
-            style={{
-              padding: '5px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
-              background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 700,
-            }}
-          >
-            Bỏ chặn
-          </button>
-        </div>
-      )}
-
-      {conversation.type === 'dm' && blockStatus?.theyBlockedMe && (
-        <div style={{
-          padding: '7px 16px', background: '#fef3c7', borderTop: '1px solid #fcd34d',
-          textAlign: 'center', flexShrink: 0, color: '#92400e', fontSize: 12,
-        }}>
-          Bạn đã bị người này chặn. Tin nhắn của bạn sẽ không được nhận.
-        </div>
-      )}
-
-      {!(conversation.type === 'dm' && blockStatus?.iBlocked) && activeTopic?.channelType !== 'voice' && (
-        canSendInActiveTopic ? (
-          <MessageInput
-            onSend={async (payload) => {
-              const enriched = (conversation.type === 'group' && activeTopic)
-                ? { ...payload, topicId: activeTopic._id }
-                : payload;
-              await onSendMessage(enriched);
-              if (payload.isEdit) setEditingMessage(null);
-              setReplyingMessage(null);
-            }}
-            placeholder={
-              conversation.type === 'group'
-                ? `Nhắn tin tới #${activeTopic ? activeTopic.name : 'chung'}...`
-                : `Nhắn tin tới ${conversation.name}...`
-            }
-            isMobile={isMobile}
-            isGroup={conversation.type === 'group'}
-            conversationId={conversation.id}
-            socket={socket}
-            editingMessage={editingMessage}
-            replyingMessage={replyingMessage}
-            onCancelEdit={() => setEditingMessage(null)}
-            onCancelReply={() => setReplyingMessage(null)}
-          />
-        ) : (
-          // Không có quyền gửi tin trong kênh này
-          <div style={{
-            padding: '12px 16px',
-            background: 'var(--bg-secondary)',
-            borderTop: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', gap: 10,
-            flexShrink: 0,
-          }}>
-            <span style={{ fontSize: 18 }}>🔒</span>
-            <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              {isGroupLockedReadOnly
-                ? 'Nhóm đang khóa. Chỉ owner/admin mới được gửi tin nhắn.'
-                : `Bạn không có quyền gửi tin nhắn trong kênh${activeTopic ? ` #${activeTopic.name}` : ' này'}.`}
-            </span>
+        {sendBlockError && (
+          <div style={{ padding: '8px 16px', background: '#ed4245', color: '#fff', fontSize: 13, textAlign: 'center', flexShrink: 0 }}>
+            {sendBlockError}
           </div>
-        )
-      )}
-  </>}{/* end voice conditional */}
+        )}
+
+        {conversation.type === 'dm' && blockStatus?.iBlocked && (
+          <div style={{
+            padding: '10px 16px', background: 'var(--bg-secondary)',
+            borderTop: '1px solid var(--border)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', gap: 12, flexShrink: 0,
+          }}>
+            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Bạn đã chặn người này. Không thể gửi tin nhắn.</span>
+            <button
+              onClick={async () => {
+                try {
+                  await import('../../friends/api/friendApi').then(m => m.default.unblockFriend(conversation.otherUserId));
+                  onBlockStatusChanged?.();
+                } catch (err) { window.alert(err?.response?.data?.message || 'Không thể bỏ chặn'); }
+              }}
+              style={{
+                padding: '5px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 700,
+              }}
+            >
+              Bỏ chặn
+            </button>
+          </div>
+        )}
+
+        {conversation.type === 'dm' && blockStatus?.theyBlockedMe && (
+          <div style={{
+            padding: '7px 16px', background: '#fef3c7', borderTop: '1px solid #fcd34d',
+            textAlign: 'center', flexShrink: 0, color: '#92400e', fontSize: 12,
+          }}>
+            Bạn đã bị người này chặn. Tin nhắn của bạn sẽ không được nhận.
+          </div>
+        )}
+
+        {!(conversation.type === 'dm' && blockStatus?.iBlocked) && activeTopic?.channelType !== 'voice' && (
+          canSendInActiveTopic ? (
+            <MessageInput
+              onSend={async (payload) => {
+                const enriched = (conversation.type === 'group' && activeTopic)
+                  ? { ...payload, topicId: activeTopic._id }
+                  : payload;
+                await onSendMessage(enriched);
+                if (payload.isEdit) setEditingMessage(null);
+                setReplyingMessage(null);
+              }}
+              placeholder={
+                conversation.type === 'group'
+                  ? `Nhắn tin tới #${activeTopic ? activeTopic.name : 'chung'}...`
+                  : `Nhắn tin tới ${conversation.name}...`
+              }
+              isMobile={isMobile}
+              isGroup={conversation.type === 'group'}
+              conversationId={conversation.id}
+              // groupMembers={conversation.members ? conversation.members.map(m => m.userId || m.user || m) : []}
+              groupMembers={groupMembers}
+              socket={socket}
+              editingMessage={editingMessage}
+              replyingMessage={replyingMessage}
+              onCancelEdit={() => setEditingMessage(null)}
+              onCancelReply={() => setReplyingMessage(null)}
+            />
+          ) : (
+            // Không có quyền gửi tin trong kênh này
+            <div style={{
+              padding: '12px 16px',
+              background: 'var(--bg-secondary)',
+              borderTop: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', gap: 10,
+              flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 18 }}>🔒</span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                {isGroupLockedReadOnly
+                  ? 'Nhóm đang khóa. Chỉ owner/admin mới được gửi tin nhắn.'
+                  : `Bạn không có quyền gửi tin nhắn trong kênh${activeTopic ? ` #${activeTopic.name}` : ' này'}.`}
+              </span>
+            </div>
+          )
+        )}
+      </>}{/* end voice conditional */}
 
       <ReactionListModal
         messageId={showReactionList}
@@ -809,35 +826,35 @@ export default function ChatArea({
               )}
 
               {sheetTopics.map(topic => {
-                              const isActive = activeTopic?._id === topic._id;
-                              const isVoice  = topic.channelType === 'voice';
-                              return (
-                                <div
-                                  key={topic._id}
-                                  onClick={() => { if (!topic.isLocked) { onTopicSelect && onTopicSelect(topic); setShowChannelSheet(false); } }}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: 10,
-                                    padding: '11px 10px', borderRadius: 10,
-                                    cursor: topic.isLocked ? 'not-allowed' : 'pointer',
-                                    background: isActive ? 'var(--accent)' : 'transparent',
-                                    opacity: topic.isLocked ? 0.5 : 1,
-                                    marginBottom: 2,
-                                  }}
-                                >
-                                  {isVoice
-                                    ? <Volume2 size={18} style={{ color: isActive ? '#fff' : '#57f287', flexShrink: 0 }} />
-                                    : <Hash size={18} style={{ color: isActive ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
-                                  }
-                                  <span style={{ fontSize: 15, fontWeight: isActive ? 700 : 500, color: isActive ? '#fff' : 'var(--text-primary)', flex: 1 }}>
-                                    {topic.name}
-                                  </span>
-                                  {isVoice && !isActive && (
-                                    <span style={{ fontSize: 11, color: '#57f287', background: 'rgba(87,242,135,0.15)', borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>Thoại</span>
-                                  )}
-                                  {topic.isLocked && <Lock size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
-                                </div>
-                              );
-                            })}
+                const isActive = activeTopic?._id === topic._id;
+                const isVoice = topic.channelType === 'voice';
+                return (
+                  <div
+                    key={topic._id}
+                    onClick={() => { if (!topic.isLocked) { onTopicSelect && onTopicSelect(topic); setShowChannelSheet(false); } }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '11px 10px', borderRadius: 10,
+                      cursor: topic.isLocked ? 'not-allowed' : 'pointer',
+                      background: isActive ? 'var(--accent)' : 'transparent',
+                      opacity: topic.isLocked ? 0.5 : 1,
+                      marginBottom: 2,
+                    }}
+                  >
+                    {isVoice
+                      ? <Volume2 size={18} style={{ color: isActive ? '#fff' : '#57f287', flexShrink: 0 }} />
+                      : <Hash size={18} style={{ color: isActive ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
+                    }
+                    <span style={{ fontSize: 15, fontWeight: isActive ? 700 : 500, color: isActive ? '#fff' : 'var(--text-primary)', flex: 1 }}>
+                      {topic.name}
+                    </span>
+                    {isVoice && !isActive && (
+                      <span style={{ fontSize: 11, color: '#57f287', background: 'rgba(87,242,135,0.15)', borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>Thoại</span>
+                    )}
+                    {topic.isLocked && <Lock size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+                  </div>
+                );
+              })}
 
 
               {!sheetLoading && sheetTopics.length === 0 && (

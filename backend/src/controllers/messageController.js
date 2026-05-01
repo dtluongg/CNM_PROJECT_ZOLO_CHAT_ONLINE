@@ -81,14 +81,24 @@ const sendMessage = async (req, res) => {
 
         await requireMembership(conversationId, userId);
 
-        const { type = 'text', content = '', attachmentId, replyToMessageId, forwardFromMessageId, topicId,mentions } = req.body;
+        // 1. Gom tất cả dữ liệu từ req.body vào một lần lấy duy nhất
+        const {
+            type = 'text',
+            content = '',
+            attachmentId,
+            replyToMessageId,
+            forwardFromMessageId,
+            topicId,
+            mentions = [],     // <-- Dữ liệu Tag
+            mentionAll = false // <-- Dữ liệu Tag @all
+        } = req.body;
 
         const ALLOWED_TYPES = ['text', 'voice', 'image', 'file'];
         if (!ALLOWED_TYPES.includes(type)) {
             return res.status(400).json({ message: `type phải là: ${ALLOWED_TYPES.join(', ')}` });
         }
 
-        // ── Xử lý Forward (nếu có) ──────────────────────────────────────
+        // ── Xử lý Forward & Attachment (Giữ nguyên logic của bạn) ──────
         let finalType = type;
         let finalContent = content;
         let finalPayload = {};
@@ -102,15 +112,11 @@ const sendMessage = async (req, res) => {
             finalType = originalMsg.type;
             finalContent = originalMsg.content;
             finalPayload = originalMsg.payload || {};
-            // Đối với forward, ta không bắt buộc check attachment ownership lại
-            // vì ta copy payload trực tiếp từ tin nhắn đã tồn tại hợp lệ.
         } else {
-            // ── Validate nội dung thông thường ─────────────────────────────
             if (type === 'text' && !content.trim()) {
                 return res.status(400).json({ message: 'Nội dung tin nhắn không được trống' });
             }
 
-            // ── Xử lý attachment cho voice / image / file ───────────────────
             if (type !== 'text') {
                 if (!isValidId(attachmentId)) {
                     return res.status(400).json({ message: 'attachmentId không hợp lệ' });
@@ -133,14 +139,13 @@ const sendMessage = async (req, res) => {
             }
         }
 
-        // ── Preview text hiển thị ở danh sách conversation ────────────
         const preview =
             finalType === 'text' ? finalContent.trim() :
                 finalType === 'voice' ? '[Tin nhắn thoại]' :
                     finalType === 'image' ? '[Hình ảnh]' :
-            /* file */         (finalPayload?.fileName || '[File đính kèm]');
+                        (finalPayload?.fileName || '[File đính kèm]');
 
-        // ── Tạo message ────────────────────────────────────────────────
+        // ── 2. Tạo message duy nhất tích hợp cả dữ liệu TAG ────────────
         const message = await Message.create({
             conversationId,
             senderId: userId,
@@ -148,13 +153,13 @@ const sendMessage = async (req, res) => {
             type: finalType,
             payload: finalPayload,
             topicId: isValidId(topicId) ? topicId : null,
-            replyToMessageId:
-                isValidId(replyToMessageId) ? replyToMessageId : null,
-            forwardFromMessageId:
-                isValidId(forwardFromMessageId) ? forwardFromMessageId : null,
+            replyToMessageId: isValidId(replyToMessageId) ? replyToMessageId : null,
+            forwardFromMessageId: isValidId(forwardFromMessageId) ? forwardFromMessageId : null,
+            mentions: mentions,     // <-- Lưu ID người bị tag
+            mentionAll: mentionAll, // <-- Lưu trạng thái @all
         });
 
-        // Populate replyToMessageId if exists
+        // ── 3. Populate dữ liệu cần thiết ──────────────────────────────
         if (message.replyToMessageId) {
             await message.populate({
                 path: 'replyToMessageId',
@@ -162,12 +167,16 @@ const sendMessage = async (req, res) => {
             });
         }
 
-        // ── Gắn messageId vào attachment (nếu gửi mới, không phải forward) ──
+        // Populate cho mảng mentions để Socket gửi về Frontend có tên & avatar
+        if (mentions && mentions.length > 0) {
+            await message.populate('mentions', 'displayName avatar');
+        }
+
         if (attachment) {
             await Attachment.findByIdAndUpdate(attachment._id, { messageId: message._id });
         }
 
-        // ── Cập nhật lastMessage của conversation ─────────────────────
+        // ── Cập nhật Conversation & Unread ────────────────────────────
         const shortPreview = preview.length > 60 ? preview.slice(0, 60) + '…' : preview;
         await Conversation.findByIdAndUpdate(conversationId, {
             lastMessageId: message._id,
@@ -175,20 +184,19 @@ const sendMessage = async (req, res) => {
             lastMessageTime: message.createdAt,
         });
 
-        // ── Tăng unreadCount cho tất cả thành viên khác ───────────────
         await ConversationMember.updateMany(
             { conversationId, userId: { $ne: userId }, leftAt: null },
             { $inc: { unreadCount: 1 } }
         );
 
-        // ── Phát real-time tới tất cả thành viên ─────────────────────
+        // ── 4. Phát Socket & Gửi Thông Báo ────────────────────────────
         const allMembers = await ConversationMember.find(
             { conversationId, leftAt: null },
             { userId: 1 }
         );
 
         const io = getIO();
-        const formatted = formatMsg(message, req.user);
+        const formatted = formatMsg(message, req.user); // formatMsg nên giữ lại field 'mentions' nhé
 
         allMembers.forEach(({ userId: memberId }) => {
             io.to(`user:${memberId.toString()}`).emit('chat:new-message', {
@@ -197,7 +205,7 @@ const sendMessage = async (req, res) => {
             });
         });
 
-        // ── Tạo thông báo cho các thành viên khác theo notification settings ──
+        // Thông báo tin nhắn bình thường
         try {
             await notifyNewMessage({
                 conversationId,
@@ -211,23 +219,25 @@ const sendMessage = async (req, res) => {
         } catch (notifyErr) {
             console.error('notifyNewMessage error:', notifyErr.message);
         }
-        // ── BỔ SUNG: XỬ LÝ THÔNG BÁO TAG TÊN (MENTION) ────────────────
-        // Chạy ngầm (không dùng await) để API trả về nhanh chóng
+
+        // Thông báo đặc biệt cho người bị Tag (Mentions)
         if (mentions && Array.isArray(mentions) && mentions.length > 0) {
             handleMentionsNotification({
                 senderId: userId,
                 conversationId: conversationId,
-                messageId: message._id, // Dùng ID của tin nhắn vừa được create ở trên
+                messageId: message._id,
                 mentions: mentions
             });
         }
+
+        // ── 5. Trả về Response DUY NHẤT ở cuối hàm ────────────────────
         return res.status(201).json({ message: 'Gửi tin nhắn thành công', data: formatted });
+
     } catch (err) {
         if (err.statusCode) return res.status(err.statusCode).json({ message: err.message });
         console.error('sendMessage error:', err);
         return res.status(500).json({ message: 'Lỗi server khi gửi tin nhắn' });
     }
-
 };
 
 // ═════════════════════════════════════════════════════════════════════════
