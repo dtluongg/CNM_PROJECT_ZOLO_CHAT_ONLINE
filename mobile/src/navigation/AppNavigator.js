@@ -58,6 +58,7 @@ const AppNavigator = () => {
             <Stack.Screen name="Message" component={MessageScreen} />
             <Stack.Screen name="UserProfile" component={UserProfileScreen} />
             <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+            <Stack.Screen name="DeviceManagement" component={require('../features/user/screens/DeviceManagementScreen').default} />
             <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
             <Stack.Screen name="Friends" component={FriendsScreen} />
             <Stack.Screen name="FriendRequests" component={require('../features/friends/screens/FriendRequestsScreen').default} />

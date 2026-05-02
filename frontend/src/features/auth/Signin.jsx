@@ -157,12 +157,12 @@ const Signin = () => {
     try {
       const response = await authApi.signin(formData);
       if (response.status === 200) {
-        const { accessToken, user } = response.data;
+        const { accessToken, user, sessionId } = response.data;
         setFailedAttempts(0);
         setLockUntil(null);
         setRemainingSeconds(0);
         localStorage.removeItem(SIGNIN_LOCK_STORAGE_KEY);
-        login(accessToken, user);
+        login(accessToken, user, sessionId);
         navigate('/dashboard');
       }
     } catch (err) {

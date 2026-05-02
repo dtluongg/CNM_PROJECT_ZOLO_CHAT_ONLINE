@@ -28,7 +28,7 @@ export default function DashboardScreen() {
       setProfile(res.data.user);
       setDisplayName(res.data.user.displayName || '');
     } catch (err) {
-      console.error('fetchProfile error:', err);
+      console.warn('fetchProfile error:', err.message || err);
       // Use cached user data
       if (user) {
         setProfile(user);

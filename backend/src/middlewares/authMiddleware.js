@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
+const sessionModel = require('../models/sessionModel');
 
 const authMiddleware = async (req, res, next) => {
     try {
@@ -22,6 +23,24 @@ const authMiddleware = async (req, res, next) => {
             }
 
             req.user = userFind;
+            
+            let sessionId = decodedUserPayload.session_id;
+
+            // Fallback nếu login cũ thiếu session_id
+            if (!sessionId) {
+                const ua = req.headers['user-agent'];
+                const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
+                let session = await sessionModel.findOne({ 
+                    userId: userFind._id, 
+                    userAgent: ua,
+                    isActive: true
+                }).sort({ lastActiveAt: -1 });
+
+                sessionId = session?.sessionId || null;
+            }
+
+            req.sessionId = sessionId;
             next();
         });
     } catch (error) {

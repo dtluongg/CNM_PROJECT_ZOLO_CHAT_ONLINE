@@ -172,7 +172,8 @@
       "appearance": "Giao diện",
       "status": "Trạng thái",
       "qr": "QR của tôi",
-      "language": "Ngôn ngữ"
+      "language": "Ngôn ngữ",
+      "devices": "Thiết bị"
     },
     "profile": {
       "banner": "Ảnh bìa (Banner)",
@@ -182,8 +183,11 @@
       "change_avatar": "Đổi ảnh đại diện",
       "avatar_hint": "JPG, PNG, WebP — tối đa 5MB",
       "gif_hint": "GIF động — tối đa 8MB",
-      "username_color": "Màu sắc Username",
+      "display_name": "Tên hiển thị",
+      "display_name_placeholder": "Nhập tên của bạn...",
+      "username_color": "Màu tên người dùng",
       "preview_name": "Tên hiển thị mẫu",
+      "bio": "Giới thiệu",
       "bio_placeholder": "Giới thiệu ngắn về bản thân...",
       "save_success": "Đã lưu thay đổi",
       "save_error": "Lưu thất bại",
@@ -236,8 +240,48 @@
     },
     "language": {
       "title": "Ngôn ngữ hệ thống",
-      "default": "Mặc định hệ thống",
+      "default": "Ngôn ngữ mặc định",
       "international": "Ngôn ngữ quốc tế"
+    },
+    "devices": {
+      "title": "Quản lý thiết bị đăng nhập",
+      "this_device": "Thiết bị này",
+      "other_devices": "Thiết bị khác đang đăng nhập",
+      "history": "Lịch sử đăng xuất",
+      "logged_out": "Đã đăng xuất",
+      "unknown_device": "Thiết bị không xác định",
+      "logout_all": "Đăng xuất tất cả thiết bị khác",
+      "logout_all_confirm": "Bạn có chắc muốn đăng xuất tất cả các thiết bị khác không?",
+      "logout_this_confirm": "Xác nhận đăng xuất thiết bị này?",
+      "view_details": "Xem chi tiết",
+      "logout_this": "Đăng xuất",
+      "logout_this_device": "Đăng xuất thiết bị này?",
+      "detail_title": "Chi tiết thiết bị",
+      "login_time": "Thời gian đăng nhập",
+      "last_active": "Hoạt động gần đây",
+      "location": "Vị trí",
+      "ip_address": "Địa chỉ IP",
+      "method": "Phương thức",
+      "login_qr": "Đăng nhập bằng mã QR",
+      "login_password": "Đăng nhập bằng mật khẩu",
+      "trusted": "Thiết bị quen",
+      "logout_btn": "Đăng xuất",
+      "no_other_devices": "Không tìm thấy thiết bị nào khác",
+      "no_other_devices_desc": "Tài khoản của bạn hiện chỉ đang đăng nhập trên trình duyệt này.",
+      "strange_device_warning": "Vị trí đăng nhập lạ!",
+      "just_now": "Vừa xong",
+      "minutes_ago": "{{count}} phút trước",
+      "hours_ago": "{{count}} giờ trước",
+      "days_ago": "{{count}} ngày trước",
+      "methods": {
+        "password": "Mật khẩu",
+        "qr": "Mã QR",
+        "google": "Google",
+        "facebook": "Facebook",
+        "otp": "Mã OTP",
+        "supabase": "Google",
+        "legacy": "Mật khẩu"
+      }
     }
   },
   "profile": {

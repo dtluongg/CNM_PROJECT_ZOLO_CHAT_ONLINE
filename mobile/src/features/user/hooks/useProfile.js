@@ -44,7 +44,7 @@ export function useProfile({ user, updateUser, navigation }) {
       setSelStatus(u.status || 'online');
       await updateUser(u);
     } catch (e) {
-      console.error('[ProfileScreen] fetchProfile error:', e.message);
+      console.warn('[ProfileScreen] fetchProfile error:', e.message);
       if (!profile && user) {
         setProfile(user);
         setDisplayName(user.displayName || '');

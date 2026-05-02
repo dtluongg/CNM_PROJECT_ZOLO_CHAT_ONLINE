@@ -72,8 +72,6 @@ export default function ProfileScreen({ navigation }) {
 
   const handleLogout = async () => {
     setLogoutModal(false);
-    try { await apiClient.post('/users/signout'); } catch {}
-    try { await supabase.auth.signOut(); } catch {}
     await logout();
   };
 
@@ -321,6 +319,8 @@ export default function ProfileScreen({ navigation }) {
             <SettingRow icon="🔲" label={t('profile.my_qr')} sub={t('profile.my_qr_sub')} onPress={() => setTab('qr')} />
             <View style={s.sep} />
             <SettingRow icon="🔒" label={t('profile.change_password')} sub={t('profile.change_password_sub')} onPress={() => navigation?.navigate('ChangePassword')} />
+            <View style={s.sep} />
+            <SettingRow icon="📱" label={t('profile.devices.title')} sub={t('profile.devices.this_device')} onPress={() => navigation?.navigate('DeviceManagement')} />
           </View>
 
           <TouchableOpacity style={s.logoutBtn} onPress={() => setLogoutModal(true)} activeOpacity={0.8}>

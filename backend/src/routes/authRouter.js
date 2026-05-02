@@ -31,7 +31,7 @@ router.post('/signup', signup);
 router.post('/signin', signin);
 
 // ── Đăng xuất ────────────────────────────────────────────────────
-router.post('/signout', signout);
+router.post('/signout', verifyToken, signout);
 
 // ── Lấy access token mới bằng refresh token ──────────────────────
 router.post('/refreshme', getNewAccessToken);

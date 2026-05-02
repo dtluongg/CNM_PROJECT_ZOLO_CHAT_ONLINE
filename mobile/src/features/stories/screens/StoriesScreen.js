@@ -47,7 +47,7 @@ export default function StoriesScreen() {
             const res = await storiesApi.getFeed();
             setFeed(res.data.feed || []);
         } catch (err) {
-            console.error('Fetch stories feed error:', err);
+            console.warn('Fetch stories feed error:', err.message || err);
         } finally {
             setLoading(false);
             setRefreshing(false);

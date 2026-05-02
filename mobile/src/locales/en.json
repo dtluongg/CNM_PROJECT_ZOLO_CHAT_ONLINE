@@ -340,7 +340,38 @@
     "select_status": "Select Status",
     "logout_confirm_title": "Logout?",
     "logout_confirm_desc": "Are you sure you want to log out? You will need to log in again to use ZoloChat.",
-    "select_language": "Select Language"
+    "select_language": "Select Language",
+    "devices": {
+      "title": "Login Device Management",
+      "this_device": "This Device",
+      "other_devices": "Other Active Devices",
+      "history": "Recently Logged Out Devices",
+      "logout_all": "Logout all other devices",
+      "logout_all_confirm": "Do you want to log out from all other sessions?",
+      "logout_this_confirm": "Confirm logout from this device?",
+      "detail_title": "Device Details",
+      "login_time": "Login Time",
+      "last_active": "Last Active",
+      "location": "Location",
+      "ip_address": "IP Address",
+      "method": "Login Method",
+      "trusted_device": "Known Device",
+      "unknown_device": "Unknown Device",
+      "logout_btn": "Logout this device",
+      "view_all_history": "View all history",
+      "strange_device_warning": "This device logged in from a strange location!",
+      "methods": {
+        "password": "Via Password",
+        "qr": "Via QR Code",
+        "google": "Via Google",
+        "facebook": "Via Facebook",
+        "otp": "Via OTP"
+      },
+      "just_now": "Just now",
+      "minutes_ago": "{{count}}m ago",
+      "hours_ago": "{{count}}h ago",
+      "days_ago": "{{count}}d ago"
+    }
   },
   "friends": {
     "no_friends": "No friends yet",

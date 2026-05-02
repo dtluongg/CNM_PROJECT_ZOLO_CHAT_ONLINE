@@ -45,11 +45,10 @@ const initSocket = (httpServer) => {
 
                 if (!dbUser) return next(new Error('USER_NOT_SYNCED'));
                 socket.user = dbUser;
+                socket.sessionId = 'oauth'; // Default cho OAuth, sẽ được gán lại chính xác nếu tìm thấy session
                 return next();
             }
-        } catch (_) {
-            // Supabase lỗi → thử local JWT
-        }
+        } catch (_) {}
 
         // Thử local JWT
         try {
@@ -57,6 +56,7 @@ const initSocket = (httpServer) => {
             const user = await userModel.findById(decoded.user_id).select('-passwordHash');
             if (!user) return next(new Error('USER_NOT_FOUND'));
             socket.user = user;
+            socket.sessionId = decoded.session_id; // Đính kèm sessionId từ token
             return next();
         } catch (_) {
             return next(new Error('AUTH_INVALID: Token không hợp lệ'));

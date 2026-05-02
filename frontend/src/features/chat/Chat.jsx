@@ -148,8 +148,7 @@ const Chat = () => {
             if (changes.groupType)   patch.groupType    = changes.groupType.newValue;
             return { ...prev, ...patch };
           });
-        },
-
+        }
   });
 
   // ── location state effects ────────────────────────────────────────────────

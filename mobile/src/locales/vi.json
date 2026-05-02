@@ -340,7 +340,38 @@
     "select_status": "Chọn trạng thái",
     "logout_confirm_title": "Đăng xuất?",
     "logout_confirm_desc": "Bạn có chắc chắn muốn đăng xuất không? Bạn sẽ cần đăng nhập lại để sử dụng ZoloChat.",
-    "select_language": "Chọn ngôn ngữ"
+    "select_language": "Chọn ngôn ngữ",
+    "devices": {
+      "title": "Quản lý thiết bị đăng nhập",
+      "this_device": "Thiết bị này",
+      "other_devices": "Thiết bị khác đang đăng nhập",
+      "history": "Thiết bị đã đăng xuất gần đây",
+      "logout_all": "Đăng xuất tất cả thiết bị khác",
+      "logout_all_confirm": "Bạn có muốn đăng xuất tất cả các phiên đăng nhập khác không?",
+      "logout_this_confirm": "Xác nhận đăng xuất thiết bị này?",
+      "detail_title": "Chi tiết thiết bị",
+      "login_time": "Thời gian đăng nhập",
+      "last_active": "Hoạt động gần đây",
+      "location": "Vị trí",
+      "ip_address": "Địa chỉ IP",
+      "method": "Phương thức đăng nhập",
+      "trusted_device": "Thiết bị quen",
+      "unknown_device": "Thiết bị không xác định",
+      "logout_btn": "Đăng xuất thiết bị này",
+      "view_all_history": "Xem tất cả lịch sử",
+      "strange_device_warning": "Thiết bị này đăng nhập từ vị trí lạ!",
+      "methods": {
+        "password": "Bằng mật khẩu",
+        "qr": "Bằng mã QR",
+        "google": "Qua Google",
+        "facebook": "Qua Facebook",
+        "otp": "Qua mã OTP"
+      },
+      "just_now": "Vừa xong",
+      "minutes_ago": "{{count}} phút trước",
+      "hours_ago": "{{count}} giờ trước",
+      "days_ago": "{{count}} ngày trước"
+    }
   },
   "friends": {
     "no_friends": "Chưa có bạn bè",

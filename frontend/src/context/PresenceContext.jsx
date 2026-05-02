@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-import { getAccessToken } from '../utils/authStorage';
+import { getAccessToken, getSessionId, removeAccessToken, removeCurrentUserRaw, removeSessionId } from '../utils/authStorage';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
 
@@ -28,11 +28,12 @@ const PresenceContext = createContext({
 });
 
 export const PresenceProvider = ({ children }) => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [onlineSet, setOnlineSet]         = useState(new Set());
   const [statusMap, setStatusMap]         = useState({}); // userId → 'online'|'idle'|'dnd'
   const [statusTextMap, setStatusTextMap] = useState({}); // userId → custom status text
   const [lastSeenMap, setLastSeenMap]     = useState({}); // userId → ISO timestamp
+  const [sessionUpdateCounter, setSessionUpdateCounter] = useState(0);
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -56,9 +57,11 @@ export const PresenceProvider = ({ children }) => {
     });
     socketRef.current = socket;
 
-    // Khi kết nối, yêu cầu danh sách online hiện tại
+    // Khi kết nối, yêu cầu danh sách online hiện tại + làm mới session
     socket.on('connect', () => {
       socket.emit('presence:subscribe');
+      // Tự động làm mới danh sách thiết bị khi vừa kết nối/reconnect
+      setSessionUpdateCounter(prev => prev + 1);
     });
 
     // Nhận snapshot toàn bộ danh sách online (có kèm statusMap + statusTextMap)
@@ -118,11 +121,55 @@ export const PresenceProvider = ({ children }) => {
       });
     });
 
+    // ── Xử lý bị đăng xuất từ xa ────────────────────────────────
+    socket.on('session:terminated', ({ sessionId, initiatedBy, reason }) => {
+      const mySid = getSessionId();
+      
+      // Nếu mình là người khởi tạo lệnh kick → bỏ qua
+      if (initiatedBy && initiatedBy === mySid) return;
+
+      // CHỈ logout nếu sessionId CHÍNH XÁC là của mình
+      // (Bỏ check !sessionId vì nó gây logout nhầm khi event thiếu sessionId)
+      if (sessionId && sessionId === mySid) {
+        alert(reason || 'Phiên đăng nhập của bạn đã bị kết thúc từ thiết bị khác.');
+        removeAccessToken();
+        removeCurrentUserRaw();
+        removeSessionId();
+        window.location.href = '/login';
+      }
+    });
+
+    socket.on('session:terminated-others', ({ exceptSessionId, reason }) => {
+      const mySid = getSessionId();
+      
+      // Nếu ID của mình nằm trong danh sách ngoại trừ -> bỏ qua
+      if (exceptSessionId && exceptSessionId === mySid) return;
+
+      // Còn lại thì logout hết
+      alert(reason || 'Tất cả các phiên đăng nhập khác đã bị kết thúc.');
+      removeAccessToken();
+      removeCurrentUserRaw();
+      removeSessionId();
+      window.location.href = '/login';
+    });
+    
+    // ── Lắng nghe cập nhật danh sách session ────────────────────
+    socket.on('session:update', () => {
+      setSessionUpdateCounter(prev => prev + 1);
+    });
+
+    // Tín hiệu định danh cá nhân (Double check)
+    if (user?._id) {
+      socket.on(`session:update:${String(user._id)}`, () => {
+        setSessionUpdateCounter(prev => prev + 1);
+      });
+    }
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [token]);
+  }, [token, user]);
 
   const isUserOnline = useCallback(
     (userId) => onlineSet.has(String(userId)),
@@ -163,6 +210,7 @@ export const PresenceProvider = ({ children }) => {
       getLastSeen,
       getStatusText,
       totalOnline: onlineSet.size,
+      sessionUpdateCounter,
     }}>
       {children}
     </PresenceContext.Provider>

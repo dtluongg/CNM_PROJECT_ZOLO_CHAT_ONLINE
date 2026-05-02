@@ -172,7 +172,8 @@
       "appearance": "Appearance",
       "status": "Status",
       "qr": "My QR",
-      "language": "Language"
+      "language": "Language",
+      "devices": "Devices"
     },
     "profile": {
       "banner": "Cover Image (Banner)",
@@ -182,8 +183,11 @@
       "change_avatar": "Change Avatar",
       "avatar_hint": "JPG, PNG, WebP — max 5MB",
       "gif_hint": "Animated GIF — max 8MB",
+      "display_name": "Display Name",
+      "display_name_placeholder": "Enter your name...",
       "username_color": "Username Color",
       "preview_name": "Preview Name",
+      "bio": "About Me",
       "bio_placeholder": "Tell us about yourself...",
       "save_success": "Changes saved",
       "save_error": "Save failed",
@@ -236,8 +240,48 @@
     },
     "language": {
       "title": "System Language",
-      "default": "System Default",
+      "default": "Default Language",
       "international": "International Language"
+    },
+    "devices": {
+      "title": "Login Device Management",
+      "this_device": "This Device",
+      "other_devices": "Other Active Devices",
+      "history": "Logout History",
+      "logged_out": "Logged out",
+      "unknown_device": "Unknown Device",
+      "logout_all": "Logout all other devices",
+      "logout_all_confirm": "Are you sure you want to log out from all other devices?",
+      "logout_this_confirm": "Confirm logout from this device?",
+      "view_details": "View details",
+      "logout_this": "Logout",
+      "logout_this_device": "Logout this device?",
+      "detail_title": "Device Details",
+      "login_time": "Login Time",
+      "last_active": "Last Active",
+      "location": "Location",
+      "ip_address": "IP Address",
+      "method": "Method",
+      "login_qr": "Login via QR Code",
+      "login_password": "Login via Password",
+      "trusted": "Trusted Device",
+      "logout_btn": "Logout",
+      "no_other_devices": "No other active devices found",
+      "no_other_devices_desc": "Your account is currently only logged in on this browser.",
+      "strange_device_warning": "Strange login location!",
+      "just_now": "Just now",
+      "minutes_ago": "{{count}}m ago",
+      "hours_ago": "{{count}}h ago",
+      "days_ago": "{{count}}d ago",
+      "methods": {
+        "password": "Password",
+        "qr": "QR Code",
+        "google": "Google",
+        "facebook": "Facebook",
+        "otp": "OTP Code",
+        "supabase": "Google",
+        "legacy": "Password"
+      }
     }
   },
   "profile": {

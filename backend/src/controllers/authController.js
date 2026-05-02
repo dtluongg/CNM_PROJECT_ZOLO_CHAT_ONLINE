@@ -1,11 +1,14 @@
 const userModel = require('../models/userModel');
 const authModel = require('../models/authModel');
+const sessionModel = require('../models/sessionModel');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { saveOtp, verifyOtp } = require('../services/otpService');
 const { sendOtpEmail } = require('../services/emailService');
 const { supabaseAdmin } = require('../config/supabase');
+const { parseUserAgent, getLocationFromIP } = require('../untils/sessionHelper');
+const { getIO } = require('../socket/socketManager');
 
 // ── Helper: validate mật khẩu mới ───────────────────────────────
 const validatePassword = (password) => {
@@ -25,32 +28,130 @@ const validatePassword = (password) => {
     return null;
 };
 
-// ── Helper: tạo cặp token local ──────────────────────────────────
-const createLocalTokens = async (userId, res) => {
-    // Access token 7 ngày (mobile không thể dùng cookie-based refresh)
+// ── Helper: tạo cặp token local kèm Session ─────────────────────
+const createLocalTokens = async (userId, res, req = null, loginMethod = 'password') => {
+    const sessionId = crypto.randomBytes(16).toString('hex');
+    
+    // 1. Tạo Access token (7 ngày) - Chứa sessionId
     const accessToken = jwt.sign(
-        { user_id: userId },
+        { user_id: userId, session_id: sessionId },
         process.env.acc_secret,
         { expiresIn: '7d' }
     );
 
-    // Refresh token dài hạn (7 ngày) lưu vào DB
+    // 2. Tạo Refresh token
     const refreshToken = crypto.randomBytes(64).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    // 3. Xử lý Session Info (nếu có req)
+    let sessionData = {
+        userId,
+        sessionId,
+        refreshToken,
+        expiresAt,
+        loginMethod,
+    };
+
+    if (req) {
+        const ua = req.headers['user-agent'];
+        const { deviceName, platform } = parseUserAgent(
+            ua, 
+            req.headers['x-zolo-client'],
+            req.headers['x-device-name'],
+            req.headers['x-device-platform']
+        );
+
+        // Lấy IP chính xác (ưu tiên x-forwarded-for cho proxy/ngrok)
+        let ip = req.headers['x-forwarded-for'] || req.ip || req.connection.remoteAddress;
+        if (ip && typeof ip === 'string' && ip.includes(',')) {
+            ip = ip.split(',')[0].trim();
+        }
+
+        const location = await getLocationFromIP(ip);
+
+        sessionData = {
+            ...sessionData,
+            deviceName,
+            platform,
+            ipAddress: ip,
+            location,
+            userAgent: ua,
+        };
+
+        // ── CHÍNH SÁCH QUẢN LÝ PHIÊN: THÂN AI NẤY LO (STRICT ISOLATION) ──
+        try {
+            const clientType = req.headers['x-zolo-client'];
+            const isMobile = clientType === 'Mobile-App';
+            
+            // Tìm các phiên cũ CÙNG NHÓM để dọn dẹp
+            const oldSessionsInGroup = await sessionModel.find({
+                userId,
+                isActive: true,
+                platform: isMobile ? { $in: ['Android', 'iOS'] } : { $nin: ['Android', 'iOS'] }
+            });
+
+            if (oldSessionsInGroup.length > 0) {
+                const oldIds = oldSessionsInGroup.map(s => s.sessionId);
+                await sessionModel.updateMany(
+                    { sessionId: { $in: oldIds } },
+                    { isActive: false }
+                );
+
+                // Thông báo Real-time
+                try {
+                    const io = getIO();
+                    const groupName = isMobile ? 'điện thoại' : 'trình duyệt';
+                    oldIds.forEach(sid => {
+                        io.to(`user:${userId}`).emit('session:terminated', { 
+                            sessionId: sid,
+                            reason: `Tài khoản vừa được đăng nhập trên một ${groupName} khác.` 
+                        });
+                    });
+                } catch (e) {}
+            }
+        } catch (cleanError) {
+            console.error('[Session Cleanup] Error:', cleanError.message);
+        }
+    }
+
+    // Lưu Session mới
+    await sessionModel.create(sessionData);
+
+    // Thông báo Real-time về việc cập nhật danh sách session (Trì hoãn 1.5s cho ổn định)
+    const userIdStr = String(userId);
+    const roomName = `user:${userIdStr}`;
+    setTimeout(() => {
+        try {
+            const io = getIO();
+            io.to(roomName).emit('session:update');
+            // Phát thêm sự kiện định danh cá nhân
+            io.emit(`session:update:${userIdStr}`);
+        } catch (e) {
+            console.error('[Session] Created emit error:', e.message);
+        }
+    }, 500);
+
+    // Backwards compatibility: Lưu vào authModel cũ nếu cần (hoặc skip nếu đã dùng sessionModel)
     await authModel.create({
         userId,
         refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt,
     });
 
-    // Gửi refresh token qua cookie httpOnly
-    res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    // Gửi refresh token qua cookie httpOnly (TUYỆT ĐỐI KHÔNG GỬI CHO MOBILE APP)
+    const clientType = req.headers['x-zolo-client'];
+    const isMobileApp = clientType === 'Mobile-App';
 
-    return accessToken;
+    if (!isMobileApp && ['Windows', 'macOS', 'Linux', 'Web'].includes(platform)) {
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+    }
+
+    return { accessToken, refreshToken, sessionId };
 };
 
 // ── SIGNUP ────────────────────────────────────────────────────────
@@ -152,29 +253,14 @@ const signin = async (req, res) => {
             return res.status(400).json({ message: 'Mật khẩu không chính xác' });
         }
 
-        // Tạo tokens (refreshToken cũng trả về body để mobile lưu vào AsyncStorage)
-        const plainRefreshToken = crypto.randomBytes(64).toString('hex');
-        await authModel.create({
-            userId: userFind._id,
-            refreshToken: plainRefreshToken,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        });
-        res.cookie('refreshToken', plainRefreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
-        const accessToken = jwt.sign(
-            { user_id: userFind._id },
-            process.env.acc_secret,
-            { expiresIn: '7d' }
-        );
+        // Tạo tokens kèm Session
+        const { accessToken, refreshToken, sessionId } = await createLocalTokens(userFind._id, res, req, 'password');
 
         return res.status(200).json({
             message: 'Đăng nhập thành công',
             accessToken,
-            refreshToken: plainRefreshToken,
+            refreshToken,
+            sessionId,
             user: {
                 _id: userFind._id,
                 username: userFind.username || null,
@@ -206,21 +292,51 @@ const signin = async (req, res) => {
 // ── SIGNOUT ───────────────────────────────────────────────────────
 const signout = async (req, res) => {
     try {
-        const refreshToken = req.cookies.refreshToken;
-        if (!refreshToken) {
-            // OAuth user không có refresh token cookie — vẫn trả 200
-            return res.status(200).json({ message: 'Đăng xuất thành công' });
+        // Ưu tiên sessionId gửi từ body (cho mobile) hoặc từ middleware (cho web/local)
+        const sessionId = req.body.sessionId || req.sessionId;
+        const userId = req.user?._id;
+
+        // Vô hiệu hóa session hiện tại
+        if (sessionId) {
+            // Nếu có userId (đã xác thực), lọc theo userId cho an toàn. 
+            // Nếu không có (token hết hạn), chỉ dựa vào sessionId (vẫn an toàn vì sessionId khó đoán)
+            const query = userId ? { sessionId, userId } : { sessionId };
+            const session = await sessionModel.findOneAndUpdate(query, { isActive: false });
+            
+            // Thông báo Real-time cho các thiết bị khác cập nhật danh sách
+            const targetUserId = userId || session?.userId;
+            if (targetUserId) {
+                try {
+                    const userIdStr = String(targetUserId);
+                    const io = getIO();
+                    io.to(`user:${userIdStr}`).emit('session:update');
+                    // Tín hiệu định danh cá nhân
+                    io.emit(`session:update:${userIdStr}`);
+                } catch (e) {}
+            }
         }
 
-        // Xóa cookie
-        res.clearCookie('refreshToken', {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-        });
+        const refreshToken = req.cookies.refreshToken;
+        const ua = req.headers['user-agent'] || '';
+        const clientType = req.headers['x-zolo-client'];
+        const isMobileApp = clientType === 'Mobile-App' || (/Android|iPhone|iPad|iPod/i.test(ua) && !/Safari|Chrome|Firefox|Edg/i.test(ua));
 
-        // Xóa trong DB
-        await authModel.findOneAndDelete({ refreshToken });
+        // Chỉ xóa cookie nếu:
+        // 1. Yêu cầu KHÔNG đến từ Mobile App
+        // 2. VÀ (Đây là yêu cầu đăng xuất chuẩn HOẶC sessionId khớp với session hiện tại)
+        const isExplicitOtherSession = req.body.sessionId && req.body.sessionId !== req.sessionId;
+        
+        if (refreshToken && !isMobileApp && !isExplicitOtherSession) {
+            // Xóa cookie
+            res.clearCookie('refreshToken', {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+            });
+
+            // Xóa trong DB authModel (nếu dùng local login)
+            await authModel.findOneAndDelete({ refreshToken });
+        }
 
         return res.status(200).json({ message: 'Đăng xuất thành công' });
 
@@ -257,9 +373,15 @@ const getNewAccessToken = async (req, res) => {
             return res.status(401).json({ message: 'User không tồn tại' });
         }
 
+        // Tìm sessionId tương ứng trong sessionModel để duy trì phiên
+        let session = await sessionModel.findOne({ refreshToken });
+        // Nếu session bị kick → không hồi sinh, session_id sẽ là null trong token mới
+
+        const sessionId = (session && session.isActive) ? session.sessionId : null;
+
         // Tạo access token mới (7 ngày)
         const newAccessToken = jwt.sign(
-            { user_id: user._id },
+            { user_id: user._id, session_id: sessionId },
             process.env.acc_secret,
             { expiresIn: '7d' }
         );
@@ -504,8 +626,87 @@ const syncOAuthUser = async (req, res) => {
             console.log(`✅ New OAuth user created: ${email} (${provider})`);
         }
 
+        // ── Tạo Session cho OAuth User ──────────────────────────────
+        const crypto = require('crypto');
+        
+        const ua = req.headers['user-agent'];
+        const clientType = req.headers['x-zolo-client'];
+        const { deviceName, platform } = parseUserAgent(
+            ua, 
+            clientType,
+            req.headers['x-device-name'],
+            req.headers['x-device-platform']
+        );
+        const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+        const location = await getLocationFromIP(ip);
+
+        // ── Quản lý chính sách: SAME-GROUP CLEANUP (dùng X-Zolo-Client) ──
+        try {
+            const isMobile = clientType === 'Mobile-App';
+            await sessionModel.updateMany(
+                { 
+                    userId: dbUser._id, 
+                    platform: isMobile ? { $in: ['Android', 'iOS'] } : { $nin: ['Android', 'iOS'] }, 
+                    isActive: true 
+                },
+                { isActive: false }
+            );
+        } catch (e) {
+            console.error('[OAuth Session Cleanup] Error:', e.message);
+        }
+
+        const sessionId = crypto.randomBytes(16).toString('hex');
+        const refreshToken = crypto.randomBytes(64).toString('hex');
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+        await sessionModel.create({
+            userId: dbUser._id,
+            sessionId,
+            refreshToken,
+            deviceName,
+            platform,
+            ipAddress: ip,
+            userAgent: ua,
+            location,
+            isActive: true,
+            loginMethod: provider,
+            expiresAt,
+        });
+
+        // Tạo record trong authModel để /auth/refreshme hoạt động
+        await authModel.create({
+            userId: dbUser._id,
+            refreshToken,
+            expiresAt,
+        });
+
+        // Gửi refreshToken cookie cho Web (KHÔNG gửi cho Mobile App)
+        const isMobileApp = clientType === 'Mobile-App';
+        if (!isMobileApp) {
+            res.cookie('refreshToken', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+            });
+        }
+
+        // Thông báo Real-time
+        const userIdStr = String(dbUser._id);
+        const roomName = `user:${userIdStr}`;
+        setTimeout(() => {
+            try {
+                const io = getIO();
+                io.to(roomName).emit('session:update');
+                io.emit(`session:update:${userIdStr}`);
+            } catch (e) {
+                console.error('[syncOAuth] Socket emit error:', e.message);
+            }
+        }, 1500);
+
         return res.status(200).json({
             message: 'Đồng bộ tài khoản thành công',
+            sessionId, // Trả về sessionId để client lưu trữ
             user: {
                 _id: dbUser._id,
                 username: dbUser.username || null,

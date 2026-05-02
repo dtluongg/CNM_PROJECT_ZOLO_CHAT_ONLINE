@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { supabase } from '../config/supabase';
-import { getAccessToken, setAccessToken } from '../utils/authStorage';
+import { getAccessToken, setAccessToken, getSessionId } from '../utils/authStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:2026/backend/api';
 
@@ -13,8 +13,12 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const token = getAccessToken();
+    const sessionId = getSessionId();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    if (sessionId) {
+      config.headers['X-Zolo-Session-Id'] = sessionId;
     }
     return config;
   },

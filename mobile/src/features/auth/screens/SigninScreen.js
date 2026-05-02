@@ -131,8 +131,8 @@ const SigninScreen = ({ navigation, route }) => {
         password,
       });
       if (response.status === 200) {
-        const { accessToken, refreshToken, user } = response.data;
-        await login(accessToken, user, refreshToken);
+        const { accessToken, refreshToken, sessionId, user } = response.data;
+        await login(accessToken, user, refreshToken, sessionId);
         // Navigation happens automatically via AppNavigator when token is set
       }
     } catch (err) {
@@ -298,7 +298,7 @@ const SigninScreen = ({ navigation, route }) => {
         return;
       }
 
-      await login(session.access_token, res.data.user);
+      await login(session.access_token, res.data.user, null, res.data.sessionId);
       // AppNavigator will redirect to Dashboard automatically
     } catch (err) {
       setError(

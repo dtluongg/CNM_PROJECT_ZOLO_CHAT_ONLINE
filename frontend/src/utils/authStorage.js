@@ -1,5 +1,6 @@
 const ACCESS_TOKEN_KEY = 'accessToken';
 const CURRENT_USER_KEY = 'currentUser';
+const SESSION_ID_KEY = 'sessionId';
 
 const hasWindow = () => typeof window !== 'undefined';
 
@@ -88,4 +89,29 @@ export const setCurrentUserRaw = (userRaw) => {
 export const removeCurrentUserRaw = () => {
   if (!hasWindow()) return;
   safeRemove(window.sessionStorage, CURRENT_USER_KEY);
+};
+
+export const getSessionId = () => {
+  if (!hasWindow()) return null;
+  // Thử lấy từ localStorage (mới) trước
+  let sid = safeGet(window.localStorage, SESSION_ID_KEY);
+  // Nếu không có, thử fallback sang sessionStorage (cũ)
+  if (!sid) {
+    sid = safeGet(window.sessionStorage, SESSION_ID_KEY);
+  }
+  return sid;
+};
+
+export const setSessionId = (sid) => {
+  if (!hasWindow()) return;
+  if (!sid) {
+    safeRemove(window.localStorage, SESSION_ID_KEY);
+    return;
+  }
+  safeSet(window.localStorage, SESSION_ID_KEY, sid);
+};
+
+export const removeSessionId = () => {
+  if (!hasWindow()) return;
+  safeRemove(window.localStorage, SESSION_ID_KEY);
 };

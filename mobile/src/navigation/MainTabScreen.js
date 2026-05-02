@@ -449,7 +449,7 @@ export default function MainTabScreen({ navigation, route }) {
       const list = Array.isArray(res?.data?.data) ? res.data.data : [];
       setConversations(list.map(c => mapConv(c, t, language)));
     } catch (err) {
-      console.error('fetchConversations error:', err);
+      console.warn('fetchConversations error:', err.message || err);
     }
   }, [t, language]);
 

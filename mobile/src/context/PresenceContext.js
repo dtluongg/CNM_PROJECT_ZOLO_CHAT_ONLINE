@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { SOCKET_URL } from '../config/env';
@@ -22,11 +23,12 @@ export const formatLastSeen = (dateOrIso) => {
 const PresenceContext = createContext();
 
 export const PresenceProvider = ({ children }) => {
-  const { user, token } = useAuth();
+  const { user, token, logout } = useAuth();
   const [onlineSet, setOnlineSet]         = useState(new Set());
   const [statusMap, setStatusMap]         = useState({}); // userId → 'online'|'idle'|'dnd'
   const [statusTextMap, setStatusTextMap] = useState({}); // userId → custom status text
   const [lastSeenMap, setLastSeenMap]     = useState({}); // userId → ISO timestamp
+  const [sessionUpdateCounter, setSessionUpdateCounter] = useState(0);
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -43,9 +45,10 @@ export const PresenceProvider = ({ children }) => {
     });
     socketRef.current = socket;
 
-    // Khi kết nối, yêu cầu danh sách online hiện tại
+    // Khi kết nối, yêu cầu danh sách online hiện tại + làm mới session
     socket.on('connect', () => {
       socket.emit('presence:subscribe');
+      setSessionUpdateCounter(prev => prev + 1);
     });
 
     // Nhận snapshot danh sách online (có kèm statusMap + statusTextMap)
@@ -103,6 +106,55 @@ export const PresenceProvider = ({ children }) => {
       });
     });
 
+    // ── Xử lý bị đăng xuất từ xa ────────────────────────────────
+    socket.on('session:terminated', async ({ sessionId, initiatedBy, reason }) => {
+      const mySessionId = await AsyncStorage.getItem('sessionId');
+
+      // Nếu mình là người khởi tạo lệnh, không tự logout mình
+      if (initiatedBy && mySessionId && initiatedBy === mySessionId) {
+        console.log('[PresenceContext] Ignoring self-initiated termination');
+        return;
+      }
+
+      // CHỈ logout nếu sessionId CHÍNH XÁC là của mình
+      if (sessionId && sessionId === mySessionId) {
+        Alert.alert(
+          'Phiên đăng nhập kết thúc',
+          reason || 'Tài khoản của bạn đã được đăng nhập từ một thiết bị khác.',
+          [{ text: 'Đã hiểu', onPress: () => { logout(); } }]
+        );
+      }
+    });
+
+    socket.on('session:terminated-others', async ({ exceptSessionId, reason }) => {
+      const mySessionId = await AsyncStorage.getItem('sessionId');
+
+      // Nếu ID của mình nằm trong danh sách ngoại trừ -> bỏ qua
+      if (exceptSessionId && mySessionId && exceptSessionId === mySessionId) {
+        console.log('[PresenceContext] Ignoring collective termination (self-exempt)');
+        return;
+      }
+
+      // Còn lại thì logout hết
+      Alert.alert(
+        'Phiên đăng nhập kết thúc',
+        reason || 'Tất cả các phiên đăng nhập khác đã bị kết thúc từ thiết bị của bạn.',
+        [{ text: 'Đã hiểu', onPress: () => { logout(); } }]
+      );
+    });
+
+    // ── Lắng nghe cập nhật danh sách session ────────────────────
+    socket.on('session:update', () => {
+      setSessionUpdateCounter(prev => prev + 1);
+    });
+
+    // Tín hiệu định danh cá nhân (Double check — đảm bảo nhận được dù socket room bị stale)
+    if (user?._id) {
+      socket.on(`session:update:${String(user._id)}`, () => {
+        setSessionUpdateCounter(prev => prev + 1);
+      });
+    }
+
     // Reconnect khi app vào foreground
     const appSub = AppState.addEventListener('change', (state) => {
       if (state === 'active' && socketRef.current && !socketRef.current.connected) {
@@ -149,7 +201,7 @@ export const PresenceProvider = ({ children }) => {
   );
 
   return (
-    <PresenceContext.Provider value={{ isUserOnline, getPresenceStatus, getLastSeen, getStatusText }}>
+    <PresenceContext.Provider value={{ isUserOnline, getPresenceStatus, getLastSeen, getStatusText, sessionUpdateCounter }}>
       {children}
     </PresenceContext.Provider>
   );

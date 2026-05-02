@@ -8,6 +8,8 @@ import {
   removeAccessToken,
   removeCurrentUserRaw,
   migrateLegacyAuthStorage,
+  setSessionId,
+  removeSessionId,
 } from '../utils/authStorage';
 
 export const AuthContext = createContext();
@@ -90,11 +92,12 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const login = (accessToken, userData) => {
+  const login = (accessToken, userData, sessionId) => {
     setToken(accessToken);
     setUser(userData);
     setAccessToken(accessToken);
     setCurrentUserRaw(JSON.stringify(userData));
+    if (sessionId) setSessionId(sessionId);
   };
 
   const logout = () => {
@@ -102,6 +105,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     removeAccessToken();
     removeCurrentUserRaw();
+    removeSessionId();
     // Đăng xuất khỏi Supabase session nếu là OAuth
     supabase.auth.signOut().catch(() => {});
   };

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CircleX } from 'lucide-react';
 import { supabase } from '../../config/supabase';
@@ -13,9 +13,13 @@ const AuthCallback = () => {
   const { login } = useAuth();
   const [status, setStatus] = useState('Đang xác thực...');
   const [error, setError] = useState('');
+  const isSyncing = useRef(false);
 
   useEffect(() => {
     const handleCallback = async () => {
+      if (isSyncing.current) return;
+      isSyncing.current = true;
+      
       try {
         // Supabase tự parse hash/code từ URL và thiết lập session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -68,7 +72,7 @@ const AuthCallback = () => {
         return;
       }
 
-      login(session.access_token, syncData.user);
+      login(session.access_token, syncData.user, syncData.sessionId);
       navigate('/chat', { replace: true });
     };
 

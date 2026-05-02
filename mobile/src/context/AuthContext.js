@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setLogoutCallback } from '../services/apiClient';
 import { supabase } from '../config/supabase';
 import { API_BASE_URL } from '../config/env';
+import apiClient from '../services/apiClient';
 
 export const AuthContext = createContext();
 
@@ -40,20 +41,32 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(async () => {
+    try {
+      // Lấy sessionId từ storage để gửi lên server
+      const storedSid = await AsyncStorage.getItem('sessionId');
+      
+      // Gọi API logout lên server để hủy session trong DB
+      if (token) {
+        await apiClient.post('/auth/signout', { sessionId: storedSid });
+      }
+    } catch (e) {
+      console.log('[AuthContext] Signout API error:', e.message);
+    }
+
     setToken(null);
     setUser(null);
     try {
       await supabase.auth.signOut();
-      await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'currentUser']);
+      await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'currentUser', 'sessionId']);
     } catch {}
-  }, []);
+  }, [token]);
 
   // Register logout with apiClient so it can force-logout on 401 refresh failure
   useEffect(() => {
     setLogoutCallback(logout);
   }, [logout]);
 
-  const login = async (accessToken, userData, refreshToken) => {
+  const login = async (accessToken, userData, refreshToken, sessionId) => {
     setToken(accessToken);
     setUser(userData);
     try {
@@ -62,6 +75,7 @@ export const AuthProvider = ({ children }) => {
         ['currentUser', JSON.stringify(userData)],
       ];
       if (refreshToken) items.push(['refreshToken', refreshToken]);
+      if (sessionId) items.push(['sessionId', sessionId]);
       await AsyncStorage.multiSet(items);
     } catch (e) {
       console.error('[AuthContext] login error:', e);

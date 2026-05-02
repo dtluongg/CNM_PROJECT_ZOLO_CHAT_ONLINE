@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { Copy, Check, User, Palette, Activity, QrCode, Globe } from 'lucide-react';
+import { Copy, Check, User, Palette, Activity, QrCode, Globe, Shield, Monitor, Smartphone, History, LogOut, MoreVertical, Trash2, RefreshCw, CheckCircle2 } from 'lucide-react';
+import sessionApi from '../api/sessionApi';
+import DeviceManagementTab from './settings/DeviceManagementTab';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { useLanguage } from '../../../context/LanguageContext';
@@ -77,6 +79,7 @@ export default function ProfileSettings({ onClose }) {
   const navigate = useNavigate();
 
   const [tab, setTab] = useState('profile');
+
   const [copiedLink, setCopiedLink] = useState(false);
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [bio, setBio] = useState(user?.bio || '');
@@ -207,6 +210,7 @@ export default function ProfileSettings({ onClose }) {
     { key: 'status', label: <Activity size={18} />, title: t('settings.tabs.status') },
     { key: 'myqr', label: <QrCode size={18} />, title: t('settings.tabs.qr') },
     { key: 'language', label: <Globe size={18} />, title: t('settings.tabs.language') },
+    { key: 'devices', label: <Shield size={18} />, title: t('settings.tabs.devices') },
   ];
 
   const myId = user?._id || user?.id;
@@ -240,7 +244,7 @@ export default function ProfileSettings({ onClose }) {
       <div style={{
         background: 'var(--bg-secondary)',
         borderRadius: 14,
-        width: 600,
+        width: 710,
         maxWidth: '96vw',
         maxHeight: '88vh',
         display: 'flex',
@@ -562,7 +566,7 @@ export default function ProfileSettings({ onClose }) {
                 <TextInput
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Tên của bạn..."
+                  placeholder={t('settings.profile.display_name_placeholder')}
                 />
               </div>
 
@@ -1039,6 +1043,7 @@ export default function ProfileSettings({ onClose }) {
               </div>
             </div>
           )}
+          {tab === 'devices' && <DeviceManagementTab />}
         </div>
 
         {/* Modal Footer */}
