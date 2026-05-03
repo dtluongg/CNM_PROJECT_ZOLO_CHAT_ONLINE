@@ -19,6 +19,12 @@ import friendApi from '../features/friends/api/friendApi';
 import { SOCKET_URL } from '../config/env';
 import NotificationModal from '../features/chat/components/NotificationModal'; // Điều chỉnh đường dẫn cho đúng
 import { useNotifications } from '../context/NotificationContext';
+// Thêm import useFocusEffect từ thư viện điều hướng
+import { useFocusEffect } from '@react-navigation/native';
+// Thêm thư viện hỗ trợ vuốt
+import { Swipeable } from 'react-native-gesture-handler';
+// Thêm Component Modal tắt thông báo của chúng ta
+import MuteConversationModal from '../features/chat/components/MuteConversationModal';
 const GROUP_TYPES = [
   { key: 'general', label: '💬 Thảo luận' },
   { key: 'study', label: '📚 Học tập' },
@@ -53,6 +59,8 @@ const mapConv = (item) => {
     type: item.type,
     online: false,
     memberCount: item.totalMembers || 0,
+    // THÊM DÒNG NÀY (Đọc dữ liệu isMuted từ Backend)
+    isMuted: item.isMuted || item.myMembership?.isMuted || false,
     // ── Cần cho AI Summary feature ──────────────────────────────────
     myMembership: item.myMembership || null,   // có lastReadMessageId, unreadCount
     aiSummary: item.myMembership?.aiSummary || null,  // summary đã lưu trong DB
@@ -247,10 +255,30 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
 function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh, THEME, styles }) {
   const [search, setSearch] = useState('');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
-  // 2. State mở bảng thông báo
+  //  State mở bảng thông báo
   const [showNotifications, setShowNotifications] = useState(false);
-  // 3. Lấy số lượng thông báo chưa đọc
-  const { unreadCount: notifUnread } = useNotifications();
+  //  Kéo thêm updateConversationSetting từ Context
+  const { unreadCount: notifUnread, updateConversationSetting } = useNotifications();
+
+  //  Thêm State lưu ID của hội thoại đang cần tắt thông báo
+  const [muteConvId, setMuteConvId] = useState(null);
+  // 3. Hàm xử lý logic Tắt/Bật thông minh
+  const handleToggleMute = async (item) => {
+    if (item.isMuted) {
+      // Đang tắt -> Bật lại trực tiếp
+      try {
+        if (updateConversationSetting) {
+          await updateConversationSetting(item.id, { isMuted: false, muteUntil: null });
+          onRefresh(); // Cập nhật lại danh sách ngay lập tức
+        }
+      } catch (error) {
+        console.error("Lỗi khi bật thông báo từ danh sách:", error);
+      }
+    } else {
+      // Đang bật -> Mở Modal chọn thời gian tắt
+      setMuteConvId(item.id);
+    }
+  };
   const filtered = conversations.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -278,40 +306,69 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh,
     const liveOnline = item.type === 'dm' && item.otherUserId
       ? isUserOnline(item.otherUserId)
       : false;
+    // HÀM RENDER GIAO DIỆN NÚT KHI VUỐT SANG TRÁI
+    const renderRightActions = () => {
+      return (
+        <TouchableOpacity
+          style={{
+            backgroundColor: item.isMuted ? THEME.bgHover : THEME.bgSecondary,
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: 80,
+            borderLeftWidth: 1,
+            borderLeftColor: THEME.border,
+          }}
+          onPress={() => handleToggleMute(item)}
+        >
+          <Text style={{ fontSize: 20, marginBottom: 4 }}>
+            {item.isMuted ? '🔔' : '🔕'}
+          </Text>
+          <Text style={{ color: THEME.textPrimary, fontSize: 11, fontWeight: '600' }}>
+            {item.isMuted ? 'Bật TB' : 'Tắt TB'}
+          </Text>
+        </TouchableOpacity>
+      );
+    };
     return (
-      <TouchableOpacity
-        onPress={() => openConversation(item)}
-        onPressIn={() => setPressed(true)}
-        onPressOut={() => setPressed(false)}
-        activeOpacity={1}
-        style={[styles.convItem, pressed && { backgroundColor: THEME.bgHover }]}
-      >
-        <Avatar
-          name={item.name}
-          avatar={item.avatar}
-          size={48}
-          status={liveOnline ? 'online' : null}
-          online={item.type === 'dm' ? liveOnline : null}
-          THEME={THEME}
-          styles={styles}
-        />
-        <View style={styles.convInfo}>
-          <View style={styles.convTop}>
-            <Text style={[styles.convName, { color: item.usernameColor || THEME.textPrimary }]} numberOfLines={1}>
-              {item.type === 'group' ? `# ${item.name}` : item.name}
-            </Text>
-            <Text style={styles.convTime}>{item.time}</Text>
+      <Swipeable renderRightActions={renderRightActions} friction={2}>
+        <TouchableOpacity
+          onPress={() => openConversation(item)}
+          onPressIn={() => setPressed(true)}
+          onPressOut={() => setPressed(false)}
+          activeOpacity={1}
+          style={[styles.convItem, pressed && { backgroundColor: THEME.bgHover }]}
+        >
+          <Avatar
+            name={item.name}
+            avatar={item.avatar}
+            size={48}
+            status={liveOnline ? 'online' : null}
+            online={item.type === 'dm' ? liveOnline : null}
+            THEME={THEME}
+            styles={styles}
+          />
+          <View style={styles.convInfo}>
+            <View style={styles.convTop}>
+              <Text style={[styles.convName, { color: item.usernameColor || THEME.textPrimary }]} numberOfLines={1}>
+                {item.type === 'group' ? `# ${item.name}` : item.name}
+              </Text>
+              {/* HIỂN THỊ CHUÔNG NẾU BỊ TẮT THÔNG BÁO */}
+              {item.isMuted && (
+                <Text style={{ fontSize: 12, marginLeft: 6 }}>🔕</Text>
+              )}
+              <Text style={styles.convTime}>{item.time}</Text>
+            </View>
+            <View style={styles.convBottom}>
+              <Text style={styles.convLast} numberOfLines={1}>{item.lastMessage}</Text>
+              {item.unread > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{item.unread > 99 ? '99+' : item.unread}</Text>
+                </View>
+              )}
+            </View>
           </View>
-          <View style={styles.convBottom}>
-            <Text style={styles.convLast} numberOfLines={1}>{item.lastMessage}</Text>
-            {item.unread > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{item.unread > 99 ? '99+' : item.unread}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </Swipeable >
     );
   };
 
@@ -365,7 +422,16 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh,
         THEME={THEME}
         styles={styles}
       />
-
+      {/* THÊM MODAL ĐỂ CHỌN THỜI GIAN KHI VUỐT */}
+      <MuteConversationModal
+        visible={!!muteConvId}
+        onClose={() => setMuteConvId(null)}
+        conversationId={muteConvId}
+        THEME={THEME}
+        onSuccess={() => {
+          onRefresh(); // Cập nhật lại danh sách ngay khi tắt thành công
+        }}
+      />
       {/* Search */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBox}>
@@ -475,10 +541,15 @@ export default function MainTabScreen({ navigation, route }) {
     }
   }, []);
 
-  useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
-
+  // useEffect(() => {
+  //   fetchConversations();
+  // }, [fetchConversations]);
+  useFocusEffect(
+    useCallback(() => {
+      // Mỗi khi người dùng quay lại màn hình này, nó sẽ tự động lấy dữ liệu mới nhất
+      fetchConversations();
+    }, [fetchConversations])
+  );
   // Socket: live preview + unread count in conversation list
   useEffect(() => {
     if (!token) return;

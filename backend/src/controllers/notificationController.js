@@ -128,39 +128,29 @@ const getNotificationSetting = async (req, res, next) => {
 const upsertNotificationSetting = async (req, res, next) => {
     try {
         const { conversationId } = req.params;
+
+        // 1. CHỈNH SỬA QUAN TRỌNG: Lấy đúng 'muteUntil' từ Frontend gửi lên, xóa bỏ 'minutes'
+        const { isMuted, muteUntil, mentionConfig, pushEnabled } = req.body;
+        const updates = {};
+
         if (!isValidObjectId(conversationId)) {
             return res.status(400).json({ message: 'conversationId không hợp lệ' });
         }
 
-        const { isMuted, muteUntil, mentionConfig, pushEnabled } = req.body;
-        const updates = {};
-        // 1. Xử lý isMuted
+        // 2. Xử lý isMuted
         if (isMuted !== undefined) {
             if (typeof isMuted !== 'boolean') {
                 return res.status(400).json({ message: 'isMuted phải là boolean' });
             }
             updates.isMuted = isMuted;
-            // [BỔ SUNG AN TOÀN]: Nếu user muốn MỞ LẠI thông báo, tự động xóa mốc thời gian tắt
+
+            // Nếu MỞ LẠI thông báo, tự động xóa mốc thời gian
             if (isMuted === false) {
                 updates.muteUntil = null;
             }
-            //
         }
 
-        if (pushEnabled !== undefined) {
-            if (typeof pushEnabled !== 'boolean') {
-                return res.status(400).json({ message: 'pushEnabled phải là boolean' });
-            }
-            updates.pushEnabled = pushEnabled;
-        }
-
-        if (mentionConfig !== undefined) {
-            if (!['all', 'mentions_only', 'none'].includes(mentionConfig)) {
-                return res.status(400).json({ message: 'mentionConfig không hợp lệ' });
-            }
-            updates.mentionConfig = mentionConfig;
-        }
-
+        // 3. Xử lý muteUntil (Chỉ cập nhật nếu isMuted là true)
         if (muteUntil !== undefined) {
             if (muteUntil === null || muteUntil === '') {
                 updates.muteUntil = null;
@@ -169,22 +159,31 @@ const upsertNotificationSetting = async (req, res, next) => {
                 if (Number.isNaN(parsed.getTime())) {
                     return res.status(400).json({ message: 'muteUntil không hợp lệ' });
                 }
-                // Chỉ cập nhật nếu ở trên chưa bị ép về null do isMuted === false
+                // Nếu user tắt thông báo, lưu mốc thời gian này vào
                 if (updates.muteUntil !== null) {
                     updates.muteUntil = parsed;
                 }
-                //
             }
+        }
+
+        // 4. Xử lý pushEnabled
+        if (pushEnabled !== undefined) {
+            updates.pushEnabled = pushEnabled === true;
+        }
+
+        if (mentionConfig !== undefined) {
+            updates.mentionConfig = mentionConfig;
         }
 
         if (!Object.keys(updates).length) {
             return res.status(400).json({ message: 'Không có dữ liệu để cập nhật' });
         }
 
+        // 6. Lưu vào Database
         const setting = await NotificationSetting.findOneAndUpdate(
             { userId: req.user._id, conversationId },
             { $set: updates },
-            { new: true, upsert: true, setDefaultsOnInsert: true }
+            { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
         );
 
         return res.status(200).json({
@@ -192,6 +191,7 @@ const upsertNotificationSetting = async (req, res, next) => {
             data: setting,
         });
     } catch (error) {
+        console.error("Lỗi Controller upsertNotificationSetting:", error);
         next(error);
     }
 };

@@ -661,6 +661,7 @@ export default function ChatArea({
                 onUnpin={handleUnpin}
                 isPinned={pinnedMessages.some(p => (p.messageId?._id || p.messageId?.id || p.messageId)?.toString() === (item.msg?._id || item.msg?.id)?.toString())}
                 onVote={onPollVote}
+                groupMembers={groupMembers}
               />
             </div>
           );

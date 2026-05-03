@@ -5,14 +5,14 @@ import apiClient from '../../../services/apiClient';
 import { usePresence } from '../../../context/PresenceContext';
 
 const STATUS_CONFIG = {
-  online:    { color: '#3ba55c', label: 'Đang hoạt động' },
-  idle:      { color: '#faa61a', label: 'Vắng mặt' },
-  dnd:       { color: '#ed4245', label: 'Không làm phiền' },
+  online: { color: '#3ba55c', label: 'Đang hoạt động' },
+  idle: { color: '#faa61a', label: 'Vắng mặt' },
+  dnd: { color: '#ed4245', label: 'Không làm phiền' },
   invisible: { color: '#80848e', label: 'Ẩn' },
-  offline:   { color: '#80848e', label: 'Offline' },
+  offline: { color: '#80848e', label: 'Offline' },
 };
 
-const AVATAR_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245','#9b59b6','#e67e22'];
+const AVATAR_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245', '#9b59b6', '#e67e22'];
 const getAvatarColor = (name) => AVATAR_COLORS[(name || '?').charCodeAt(0) % AVATAR_COLORS.length];
 const getInitials = (name) => {
   if (!name) return '?';

@@ -1,6 +1,7 @@
 import './polyfills';
 import 'react-native-url-polyfill/auto';
-
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 const { Platform } = require('react-native');
 
 if (Platform.OS !== 'web') {
@@ -126,25 +127,27 @@ WebBrowser.maybeCompleteAuthSession();
 
 function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        {/* 2. BỌC NotificationProvider BÊN TRONG AuthProvider */}
-        <NotificationProvider>
-          <ThemeProvider>
-            <PresenceProvider>
-              <CallProvider>
-                <VoiceRoomProvider>
-                  <AppNavigator />
-                  <IncomingCallScreen />
-                  <OutgoingCallScreen />
-                  <ActiveCallScreen />
-                </VoiceRoomProvider>
-              </CallProvider>
-            </PresenceProvider>
-          </ThemeProvider>
-        </NotificationProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          {/* 2. BỌC NotificationProvider BÊN TRONG AuthProvider */}
+          <NotificationProvider>
+            <ThemeProvider>
+              <PresenceProvider>
+                <CallProvider>
+                  <VoiceRoomProvider>
+                    <AppNavigator />
+                    <IncomingCallScreen />
+                    <OutgoingCallScreen />
+                    <ActiveCallScreen />
+                  </VoiceRoomProvider>
+                </CallProvider>
+              </PresenceProvider>
+            </ThemeProvider>
+          </NotificationProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
