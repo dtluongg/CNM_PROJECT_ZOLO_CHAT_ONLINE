@@ -109,6 +109,9 @@ const { ThemeProvider } = require('./src/context/ThemeContext');
 const { CallProvider } = require('./src/features/call/CallContext');
 const { VoiceRoomProvider } = require('./src/features/voice/VoiceRoomContext');
 
+// 1. THÊM IMPORT NotificationProvider Ở ĐÂY
+const { NotificationProvider } = require('./src/context/NotificationContext');
+
 const IncomingCallScreen =
   require('./src/features/call/screens/IncomingCallScreen').default;
 const OutgoingCallScreen =
@@ -125,18 +128,21 @@ function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <ThemeProvider>
-          <PresenceProvider>
-            <CallProvider>
-              <VoiceRoomProvider>
-                <AppNavigator />
-                <IncomingCallScreen />
-                <OutgoingCallScreen />
-                <ActiveCallScreen />
-              </VoiceRoomProvider>
-            </CallProvider>
-          </PresenceProvider>
-        </ThemeProvider>
+        {/* 2. BỌC NotificationProvider BÊN TRONG AuthProvider */}
+        <NotificationProvider>
+          <ThemeProvider>
+            <PresenceProvider>
+              <CallProvider>
+                <VoiceRoomProvider>
+                  <AppNavigator />
+                  <IncomingCallScreen />
+                  <OutgoingCallScreen />
+                  <ActiveCallScreen />
+                </VoiceRoomProvider>
+              </CallProvider>
+            </PresenceProvider>
+          </ThemeProvider>
+        </NotificationProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );
