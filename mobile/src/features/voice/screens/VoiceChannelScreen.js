@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  StatusBar, ActivityIndicator, Alert, Platform, PermissionsAndroid,
+  StatusBar, ActivityIndicator, Platform, PermissionsAndroid,
+  Image,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useVoiceRoomContext } from '../VoiceRoomContext';
@@ -19,7 +20,7 @@ const avatarBg = (name) => COLORS[(name || '?').charCodeAt(0) % COLORS.length];
 // ── Permission states ─────────────────────────────────────────────────────────
 const PERM = { idle: 'idle', checking: 'checking', granted: 'granted', denied: 'denied' };
 
-// ── Permission gate (mirrors web MediaPermissionModal) ────────────────────────
+// ── Permission gate ───────────────────────────────────────────────────────────
 function PermissionGate({ topic, onConfirm, onCancel }) {
   const [micStatus, setMicStatus] = useState(PERM.idle);
   const [camStatus, setCamStatus] = useState(PERM.idle);
@@ -67,14 +68,13 @@ function PermissionGate({ topic, onConfirm, onCancel }) {
         setErrorMsg('Không thể yêu cầu quyền. Hãy kiểm tra cài đặt ứng dụng.');
       }
     } else {
-      // iOS: system prompt appears automatically when LiveKit accesses mic
+      // iOS: system prompt tự hiện khi LiveKit truy cập mic
       setMicStatus(PERM.granted);
       setCamStatus(PERM.granted);
     }
     setChecking(false);
   }, []);
 
-  // Auto-request on mount
   useEffect(() => { requestPermissions(); }, []); // eslint-disable-line
 
   const canJoin = micStatus === PERM.granted;
@@ -82,11 +82,7 @@ function PermissionGate({ topic, onConfirm, onCancel }) {
   return (
     <View style={{ flex: 1, backgroundColor: '#1a1b1e', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
       <StatusBar barStyle="light-content" backgroundColor="#1a1b1e" />
-
-      {/* Card */}
       <View style={{ width: '100%', maxWidth: 380, backgroundColor: '#2b2d31', borderRadius: 18, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-
-        {/* Header */}
         <View style={{ alignItems: 'center', marginBottom: 20 }}>
           <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(87,242,135,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
             <Feather name="volume-2" size={28} color="#57f287" />
@@ -100,25 +96,12 @@ function PermissionGate({ topic, onConfirm, onCancel }) {
           </Text>
         </View>
 
-        {/* Permission rows */}
         <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 12, marginBottom: 14 }}>
-          <PermRow
-            icon="mic"
-            label="Micro"
-            desc="Bắt buộc để nói chuyện trong phòng"
-            status={micStatus}
-            required
-          />
+          <PermRow icon="mic"   label="Micro"  desc="Bắt buộc để nói chuyện trong phòng" status={micStatus} required />
           <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginVertical: 8 }} />
-          <PermRow
-            icon="video"
-            label="Camera"
-            desc="Tuỳ chọn — có thể bật/tắt sau"
-            status={camStatus}
-          />
+          <PermRow icon="video" label="Camera" desc="Tuỳ chọn — có thể bật/tắt sau"       status={camStatus} />
         </View>
 
-        {/* Error */}
         {!!errorMsg && (
           <View style={{ flexDirection: 'row', gap: 8, backgroundColor: 'rgba(237,66,69,0.15)', borderRadius: 10, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(237,66,69,0.3)' }}>
             <Feather name="alert-circle" size={14} color="#ed4245" style={{ marginTop: 1 }} />
@@ -126,41 +109,28 @@ function PermissionGate({ topic, onConfirm, onCancel }) {
           </View>
         )}
 
-        {/* Camera denied notice (non-blocking) */}
         {camStatus === PERM.denied && micStatus === PERM.granted && (
           <View style={{ backgroundColor: 'rgba(250,166,26,0.12)', borderRadius: 10, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(250,166,26,0.25)' }}>
             <Text style={{ color: '#faa61a', fontSize: 12 }}>Camera bị từ chối — bạn vẫn có thể tham gia bằng micro.</Text>
           </View>
         )}
 
-        {/* Actions */}
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity
-            onPress={onCancel}
-            style={{ flex: 1, padding: 12, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center' }}
-          >
+          <TouchableOpacity onPress={onCancel} style={{ flex: 1, padding: 12, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center' }}>
             <Text style={{ color: '#ccc', fontSize: 14, fontWeight: '600' }}>Hủy</Text>
           </TouchableOpacity>
 
           {!canJoin ? (
-            <TouchableOpacity
-              onPress={requestPermissions}
-              disabled={checking}
-              style={{ flex: 2, padding: 12, borderRadius: 10, backgroundColor: '#5865f2', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6, opacity: checking ? 0.7 : 1 }}
-            >
-              {checking
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Feather name="shield" size={15} color="#fff" />
-              }
+            <TouchableOpacity onPress={requestPermissions} disabled={checking}
+              style={{ flex: 2, padding: 12, borderRadius: 10, backgroundColor: '#5865f2', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6, opacity: checking ? 0.7 : 1 }}>
+              {checking ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="shield" size={15} color="#fff" />}
               <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>
                 {checking ? 'Đang kiểm tra...' : 'Cho phép truy cập'}
               </Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              onPress={onConfirm}
-              style={{ flex: 2, padding: 12, borderRadius: 10, backgroundColor: '#57f287', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
-            >
+            <TouchableOpacity onPress={onConfirm}
+              style={{ flex: 2, padding: 12, borderRadius: 10, backgroundColor: '#57f287', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
               <Feather name="volume-2" size={15} color="#000" />
               <Text style={{ color: '#000', fontSize: 14, fontWeight: '700' }}>Tham gia</Text>
             </TouchableOpacity>
@@ -172,20 +142,13 @@ function PermissionGate({ topic, onConfirm, onCancel }) {
 }
 
 function PermRow({ icon, label, desc, status, required }) {
-  const statusColor = {
-    [PERM.idle]:     '#888',
-    [PERM.checking]: '#faa61a',
-    [PERM.granted]:  '#57f287',
-    [PERM.denied]:   '#ed4245',
-  }[status] || '#888';
-
+  const statusColor = { [PERM.idle]: '#888', [PERM.checking]: '#faa61a', [PERM.granted]: '#57f287', [PERM.denied]: '#ed4245' }[status] || '#888';
   const StatusIcon = () => {
     if (status === PERM.checking) return <ActivityIndicator size="small" color="#faa61a" />;
     if (status === PERM.granted)  return <Feather name="check-circle" size={16} color="#57f287" />;
-    if (status === PERM.denied)   return <Feather name="x-circle" size={16} color="#ed4245" />;
+    if (status === PERM.denied)   return <Feather name="x-circle"     size={16} color="#ed4245" />;
     return null;
   };
-
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       <Feather name={icon} size={20} color={statusColor} />
@@ -205,11 +168,12 @@ function PermRow({ icon, label, desc, status, required }) {
   );
 }
 
-// ── Participant card ──────────────────────────────────────────────────────────
+// ── Participant card ───────────────────────────────────────────────────────────
 function ParticipantCard({ participant, size, localVideoURL, getRemoteVideoURL }) {
   const videoURL  = participant.isLocal ? localVideoURL : getRemoteVideoURL(participant.identity);
   const showVideo = !!videoURL && participant.hasCamera;
   const name      = participant.displayName || participant.name || 'Người dùng';
+  const [imgErr, setImgErr] = useState(false);
 
   return (
     <View style={{
@@ -227,33 +191,35 @@ function ParticipantCard({ participant, size, localVideoURL, getRemoteVideoURL }
           mirror={participant.isLocal}
         />
       ) : (
-        <View style={{ width: '58%', height: '58%', borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: '#fff', fontWeight: '800', fontSize: size * 0.2 }}>
-            {getInitials(name)}
-          </Text>
+        <View style={{ width: '58%', height: '58%', borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+          {participant.avatar && !imgErr ? (
+            <Image source={{ uri: participant.avatar }} style={{ width: '100%', height: '100%' }} onError={() => setImgErr(true)} />
+          ) : (
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: size * 0.2 }}>
+              {getInitials(name)}
+            </Text>
+          )}
         </View>
       )}
 
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingVertical: 4, paddingHorizontal: 6, backgroundColor: 'rgba(0,0,0,0.65)', flexDirection: 'row', alignItems: 'center', gap: 3 }}>
         {participant.isMuted && <Feather name="mic-off" size={Math.max(9, size * 0.09)} color="#ed4245" />}
-        <Text numberOfLines={1} style={{ flex: 1, color: '#fff', fontSize: Math.max(9, size * 0.1), fontWeight: '700' }}>{name}</Text>
+        <Text numberOfLines={1} style={{ flex: 1, color: '#fff', fontSize: Math.max(9, size * 0.1), fontWeight: '700' }}>
+          {name}
+        </Text>
         {participant.isSpeaking && <Feather name="volume-2" size={Math.max(9, size * 0.09)} color="#57f287" />}
       </View>
     </View>
   );
 }
 
-// ── Control button ────────────────────────────────────────────────────────────
+// ── Control button ─────────────────────────────────────────────────────────────
 function CtrlBtn({ onPress, active, danger, icon, label, disabled }) {
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled}
+    <TouchableOpacity onPress={onPress} disabled={disabled}
       style={{
         alignItems: 'center', gap: 5,
-        backgroundColor: active
-          ? (danger ? '#ed4245' : 'rgba(87,242,135,0.6)')
-          : 'rgba(255,255,255,0.08)',
+        backgroundColor: active ? (danger ? '#ed4245' : 'rgba(87,242,135,0.6)') : 'rgba(255,255,255,0.08)',
         borderRadius: 14, paddingHorizontal: 18, paddingVertical: 12,
         minWidth: 64, opacity: disabled ? 0.5 : 1,
       }}
@@ -266,13 +232,107 @@ function CtrlBtn({ onPress, active, danger, icon, label, disabled }) {
   );
 }
 
-// ── Main screen ───────────────────────────────────────────────────────────────
+// ── Screen share viewer ────────────────────────────────────────────────────────
+function ScreenShareViewer({ screenURL, isRemoteScreenSharing, isScreenSharing }) {
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // Không có gì để hiển thị
+  if (!isRemoteScreenSharing && !isScreenSharing) return null;
+
+  if (fullscreen) {
+    return (
+      <View style={{
+        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+        zIndex: 999, backgroundColor: '#000',
+        justifyContent: 'center', alignItems: 'center',
+      }}>
+        {screenURL && RTCView ? (
+          <RTCView
+            streamURL={screenURL}
+            style={{ width: '100%', height: '100%' }}
+            objectFit="contain"
+          />
+        ) : (
+          <Text style={{ color: '#aaa', fontSize: 13 }}>Đang chờ màn hình...</Text>
+        )}
+
+        {/* Overlay top bar */}
+        <View style={{
+          position: 'absolute', top: 0, left: 0, right: 0,
+          paddingTop: Platform.OS === 'ios' ? 50 : 16,
+          paddingHorizontal: 16, paddingBottom: 12,
+          backgroundColor: 'rgba(0,0,0,0.55)',
+          flexDirection: 'row', alignItems: 'center', gap: 8,
+        }}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#57f287' }} />
+          <Text style={{ flex: 1, color: '#fff', fontSize: 14, fontWeight: '700' }}>
+            Màn hình được chia sẻ
+          </Text>
+          <TouchableOpacity onPress={() => setFullscreen(false)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+            <Feather name="minimize-2" size={14} color="#fff" />
+            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>Thu nhỏ</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Mini preview
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={() => setFullscreen(true)}
+      style={{
+        height: 180,
+        backgroundColor: '#000',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.06)',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      {screenURL && RTCView ? (
+        <RTCView
+          streamURL={screenURL}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          objectFit="contain"
+        />
+      ) : (
+        // Local đang share — remote chưa nhận được stream của chính mình
+        <View style={{ alignItems: 'center', gap: 8 }}>
+          <Feather name="monitor" size={28} color="#57f287" />
+          <Text style={{ color: '#aaa', fontSize: 12 }}>Đang chia sẻ màn hình của bạn...</Text>
+        </View>
+      )}
+
+      {/* Label + fullscreen hint */}
+      <View style={{
+        position: 'absolute', bottom: 8, left: 0, right: 0,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingHorizontal: 10,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#57f287' }} />
+          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '600' }}>
+            {isRemoteScreenSharing ? 'Màn hình được chia sẻ' : 'Bạn đang chia sẻ màn hình'}
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+          <Feather name="maximize-2" size={10} color="#fff" />
+          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '600' }}>Toàn màn hình</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// ── Main screen ────────────────────────────────────────────────────────────────
 export default function VoiceChannelScreen({ route, navigation }) {
   const { conversation, topic } = route.params;
   const { theme: THEME } = useTheme();
-  const { user }        = useAuth();
+  const { user }         = useAuth();
 
-  // Normalize conversation id (API may return _id or id)
   const convId  = conversation?.id || conversation?._id;
   const topicId = topic?._id || null;
 
@@ -280,13 +340,14 @@ export default function VoiceChannelScreen({ route, navigation }) {
     getRoomInfo, getMergedParticipants, isInRoom,
     loading, error,
     connected, isMuted, isCameraOff,
-    localVideoURL, getRemoteVideoURL,
+    isScreenSharing, isRemoteScreenSharing,
+    localVideoURL, screenURL,
+    getRemoteVideoURL,
     createRoom, joinRoom, leaveRoom,
-    toggleMute, toggleCamera,
+    toggleMute, toggleCamera, toggleScreenShare,
     fetchStatus,
   } = useVoiceRoomContext();
 
-  // Permission gate state (null = show gate, true = proceed)
   const [permGranted, setPermGranted] = useState(null);
 
   const roomInfo     = getRoomInfo(topicId);
@@ -295,15 +356,13 @@ export default function VoiceChannelScreen({ route, navigation }) {
   const participants = getMergedParticipants(topicId);
   const autoJoinDone = useRef(false);
 
-  // Fetch room status on mount
   useEffect(() => {
     if (convId && topicId) fetchStatus(convId, topicId);
   }, [topicId, convId]);
 
-  // Auto-join once permissions are granted
   useEffect(() => {
     if (!convId || !topicId || inThisRoom || loading || autoJoinDone.current) return;
-    if (permGranted !== true) return; // wait for permission gate
+    if (permGranted !== true) return;
     autoJoinDone.current = true;
     const doJoin = async () => {
       await new Promise(r => setTimeout(r, 300));
@@ -319,23 +378,20 @@ export default function VoiceChannelScreen({ route, navigation }) {
     navigation.goBack();
   }, [convId, topicId, leaveRoom, navigation]);
 
-  // ── Show permission gate first ────────────────────────────────────────────
+  // ── Permission gate ──────────────────────────────────────────────────────────
   if (permGranted !== true) {
     return (
       <PermissionGate
         topic={topic}
         onConfirm={() => setPermGranted(true)}
-        onCancel={() => {
-          setPermGranted(false);
-          navigation.goBack();
-        }}
+        onCancel={() => { setPermGranted(false); navigation.goBack(); }}
       />
     );
   }
 
-  // ── Room UI ───────────────────────────────────────────────────────────────
   const cardSize = participants.length <= 1 ? 200 : participants.length <= 4 ? 160 : 120;
   const numCols  = participants.length <= 1 ? 1 : 2;
+  const hasScreen = isRemoteScreenSharing || isScreenSharing;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#1a1b1e' }}>
@@ -363,6 +419,13 @@ export default function VoiceChannelScreen({ route, navigation }) {
         </TouchableOpacity>
       </View>
 
+      {/* ✅ Screen share viewer — hiển thị khi có ai đó đang share */}
+      <ScreenShareViewer
+        screenURL={screenURL}
+        isRemoteScreenSharing={isRemoteScreenSharing}
+        isScreenSharing={isScreenSharing}
+      />
+
       {/* Error */}
       {!!error && (
         <View style={{ margin: 12, padding: 10, backgroundColor: '#ed424520', borderRadius: 10 }}>
@@ -373,7 +436,10 @@ export default function VoiceChannelScreen({ route, navigation }) {
       {/* Participant grid */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: numCols === 1 ? 'center' : 'flex-start' }}
+        contentContainerStyle={{
+          padding: 16, flexDirection: 'row', flexWrap: 'wrap', gap: 10,
+          justifyContent: numCols === 1 ? 'center' : 'flex-start',
+        }}
       >
         {inThisRoom && connected ? (
           participants.length > 0 ? (
@@ -430,8 +496,7 @@ export default function VoiceChannelScreen({ route, navigation }) {
         }}>
           <CtrlBtn
             onPress={toggleMute}
-            active={isMuted}
-            danger
+            active={isMuted} danger
             icon={isMuted ? 'mic-off' : 'mic'}
             label={isMuted ? 'Đang tắt' : 'Micro'}
           />
@@ -441,12 +506,16 @@ export default function VoiceChannelScreen({ route, navigation }) {
             icon={isCameraOff ? 'video-off' : 'video'}
             label="Camera"
           />
+          <CtrlBtn
+            onPress={toggleScreenShare}
+            active={isScreenSharing}
+            icon={isScreenSharing ? 'monitor-off' : 'monitor'}
+            label={isScreenSharing ? 'Dừng' : 'Màn hình'}
+          />
           <View style={{ flex: 1 }} />
           <CtrlBtn
             onPress={handleLeave}
-            active
-            danger
-            disabled={loading}
+            active danger disabled={loading}
             icon={loading ? 'loader' : 'phone-off'}
             label="Rời phòng"
           />
