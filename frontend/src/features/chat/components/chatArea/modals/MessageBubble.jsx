@@ -36,6 +36,7 @@ const MessageBubble = ({
   onUnpin,
   isPinned,
   onVote,
+  groupMembers = [],
 }) => {
   const observerRef = useRef(null);
   const menuRef = useRef(null);
@@ -188,7 +189,89 @@ const MessageBubble = ({
       </div>
     );
   };
+  // ── Hàm render văn bản có kèm Tag (Đã sửa lỗi Click và Màu sắc tàng hình) ──
+  // ── Hàm render văn bản có kèm Tag (Đã sửa lỗi Click và Màu sắc tàng hình) ──
+  const renderContentWithMentions = (content, members, isMineMsg) => {
+    if (!content) return null;
 
+    // 1. Chuẩn hóa danh sách: Xử lý triệt để việc thiếu _id hoặc displayName
+    const searchableUsers = [{ id: 'all', displayName: 'all' }, ...members].map(m => ({
+      ...m,
+      id: m._id || m.id, // Bắt chính xác ID dù API trả về dạng nào
+      displayName: m.displayName || m.username || m.name || 'Người dùng'
+    }));
+
+    const usersInContent = searchableUsers.filter(user => {
+      const tag = user.id === 'all' ? '@all' : `@${user.displayName}`;
+      return content.includes(tag);
+    });
+
+    if (usersInContent.length === 0) {
+      return <span>{content}</span>;
+    }
+
+    usersInContent.sort((a, b) => b.displayName.length - a.displayName.length);
+
+    let parts = [{ text: content, isMention: false }];
+
+    usersInContent.forEach(user => {
+      const tag = user.id === 'all' ? '@all' : `@${user.displayName}`;
+      const newParts = [];
+
+      parts.forEach(part => {
+        if (part.isMention) {
+          newParts.push(part);
+          return;
+        }
+
+        const splitText = part.text.split(tag);
+        splitText.forEach((textChunk, index) => {
+          newParts.push({ text: textChunk, isMention: false });
+          if (index < splitText.length - 1) {
+            newParts.push({ text: tag, isMention: true, user: user });
+          }
+        });
+      });
+      parts = newParts;
+    });
+
+    // 2. Xử lý UI: Tránh lỗi "Chữ Xanh trên nền Xanh"
+    const tagColor = isMineMsg ? '#ffffff' : '#0084ff';
+    const tagBg = isMineMsg ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 132, 255, 0.12)';
+
+    return (
+      <>
+        {parts.map((part, i) =>
+          part.isMention ? (
+            <span
+              key={i}
+              onClick={(e) => {
+                e.stopPropagation();
+                // Sử dụng part.user.id đã được chuẩn hóa ở bước 1
+                if (part.user.id !== 'all' && onAvatarClick) {
+                  onAvatarClick(part.user.id);
+                }
+              }}
+              style={{
+                color: tagColor,
+                fontWeight: '700',
+                cursor: part.user.id === 'all' ? 'default' : 'pointer',
+                background: tagBg,
+                padding: '2px 5px',
+                borderRadius: '6px',
+                margin: '0 2px',
+                textDecoration: isMineMsg ? 'underline' : 'none', // Thêm gạch chân cho dễ nhìn nếu là tin nhắn của mình
+              }}
+            >
+              {part.text}
+            </span>
+          ) : (
+            <span key={i}>{part.text}</span>
+          )
+        )}
+      </>
+    );
+  };
   // ── Render nội dung tin nhắn ───────────────────────────────
   const renderContent = () => {
     if (msg.revoked || msg.recalled) {
@@ -272,7 +355,8 @@ const MessageBubble = ({
 
     return (
       <>
-        {msg.content}
+        {/* Truyền groupMembers thay vì msg.mentions */}
+        {renderContentWithMentions(msg.content, groupMembers, isMine)}
         {msg.edited && (
           <span style={{ fontSize: 10, opacity: 0.5, marginLeft: 6, fontStyle: 'italic', fontWeight: 400 }}>
             (đã chỉnh sửa)
