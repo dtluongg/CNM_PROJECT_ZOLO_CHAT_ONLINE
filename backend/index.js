@@ -21,6 +21,7 @@ app.use(cors({
     'http://172.27.130.18:5173',
     'http://172.27.130.18:8081',
     'http://172.27.130.18:2026',
+    "http://nhom3zolochat.dotienluong.id.vn"
   ],
   credentials: true,
 }));

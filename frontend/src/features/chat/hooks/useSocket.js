@@ -3,7 +3,8 @@ import { io } from 'socket.io-client';
 import { normalizeMsg } from '../utils/normalizeMsg';
 import { getAccessToken } from '../../../utils/authStorage';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
+// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:2026');
 
 /**
  * @param {object} options
@@ -41,6 +42,7 @@ export const useSocket = ({
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 2000,
+      transports: ['polling'],
     });
 
     socketRef.current = socket;
