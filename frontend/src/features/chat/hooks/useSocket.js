@@ -4,7 +4,9 @@ import { normalizeMsg } from '../utils/normalizeMsg';
 import { getAccessToken } from '../../../utils/authStorage';
 
 // const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:2026');
+// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:2026');
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL
+
 
 /**
  * @param {object} options
