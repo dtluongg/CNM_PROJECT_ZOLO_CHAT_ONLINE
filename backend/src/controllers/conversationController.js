@@ -854,7 +854,7 @@ const updateConversationInfo = async (req, res, next) => {
         const VALID_GROUP_TYPES = ['study', 'gaming', 'general', 'project', 'other', 'sensitive'];
         const VALID_INVITE_MODES = ['open_invite', 'approval_required', 'admin_only'];
         const updates = {};
-        const infoChanges = {};
+        const infoChanges = {}; // Dùng để ghi lại sự thay đổi thông tin (oldValue/newValue) cho việc gửi system message sau này
         if (name !== undefined) {
             if (!name || !name.trim()) {
                 return res.status(400).json({ message: 'Tên nhóm không được để trống' });

@@ -1,6 +1,7 @@
 import './polyfills';
 import 'react-native-url-polyfill/auto';
-
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 const { Platform } = require('react-native');
 
 if (Platform.OS !== 'web') {
@@ -109,6 +110,9 @@ const { ThemeProvider } = require('./src/context/ThemeContext');
 const { CallProvider } = require('./src/features/call/CallContext');
 const { VoiceRoomProvider } = require('./src/features/voice/VoiceRoomContext');
 
+// 1. THÊM IMPORT NotificationProvider Ở ĐÂY
+const { NotificationProvider } = require('./src/context/NotificationContext');
+
 const IncomingCallScreen =
   require('./src/features/call/screens/IncomingCallScreen').default;
 const OutgoingCallScreen =
@@ -123,22 +127,27 @@ WebBrowser.maybeCompleteAuthSession();
 
 function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <ThemeProvider>
-          <PresenceProvider>
-            <CallProvider>
-              <VoiceRoomProvider>
-                <AppNavigator />
-                <IncomingCallScreen />
-                <OutgoingCallScreen />
-                <ActiveCallScreen />
-              </VoiceRoomProvider>
-            </CallProvider>
-          </PresenceProvider>
-        </ThemeProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          {/* 2. BỌC NotificationProvider BÊN TRONG AuthProvider */}
+          <NotificationProvider>
+            <ThemeProvider>
+              <PresenceProvider>
+                <CallProvider>
+                  <VoiceRoomProvider>
+                    <AppNavigator />
+                    <IncomingCallScreen />
+                    <OutgoingCallScreen />
+                    <ActiveCallScreen />
+                  </VoiceRoomProvider>
+                </CallProvider>
+              </PresenceProvider>
+            </ThemeProvider>
+          </NotificationProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

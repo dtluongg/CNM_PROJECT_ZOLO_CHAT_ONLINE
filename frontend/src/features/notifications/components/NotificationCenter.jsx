@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck } from 'lucide-react';
 import { useNotifications } from '../../../context/NotificationContext';
@@ -30,12 +30,29 @@ export default function NotificationCenter({ open, onClose }) {
     setBannerEnabled,
   } = useNotifications();
   const navigate = useNavigate();
-
+  const modalRef = useRef(null);
   const sorted = useMemo(
     () => [...items].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
     [items]
   );
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Nếu bảng thông báo đang mở, VÀ cái click đó KHÔNG nằm trong modalRef -> Đóng!
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        onClose?.();
+      }
+    };
 
+    // Chỉ bật lắng nghe khi bảng thông báo đang mở (open === true)
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    // Dọn dẹp sự kiện khi component bị hủy hoặc khi bảng thông báo đóng lại
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open, onClose]);
   const openNotification = useCallback(async (item) => {
     if (!item?._id) return;
     await markRead(item._id);
@@ -68,6 +85,7 @@ export default function NotificationCenter({ open, onClose }) {
 
   return (
     <div
+      ref={modalRef}
       style={{
         position: 'absolute',
         left: 72,

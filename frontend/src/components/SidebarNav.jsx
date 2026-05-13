@@ -8,21 +8,21 @@ import { useNotifications } from '../context/NotificationContext';
 import NotificationCenter from '../features/notifications/components/NotificationCenter';
 
 const getInitials = (name) => {
-  if (!name) return '?';
-  const p = name.trim().split(' ');
-  return p.length === 1 ? p[0][0].toUpperCase() : (p[0][0] + p[p.length - 1][0]).toUpperCase();
+    if (!name) return '?';
+    const p = name.trim().split(' ');
+    return p.length === 1 ? p[0][0].toUpperCase() : (p[0][0] + p[p.length - 1][0]).toUpperCase();
 };
 
 const TinIcon = ({ size = 24, strokeWidth = 2, ...props }) => (
-    <svg 
-        width={size} 
-        height={size} 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        stroke="currentColor" 
-        strokeWidth={strokeWidth} 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
         {...props}
     >
         <rect x="3" y="5" width="9" height="14" rx="2" />
@@ -48,15 +48,15 @@ const SidebarNav = () => {
     };
 
     return (
-        <div 
-            style={{ 
-                width: 64, 
-                minWidth: 64, 
-                height: '100vh', 
+        <div
+            style={{
+                width: 64,
+                minWidth: 64,
+                height: '100vh',
                 backgroundColor: 'var(--bg-secondary)', // Bắt nguồn biến CSS thay vì fix cứng màu
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
                 padding: '24px 0',
                 borderRight: '1px solid var(--border)',
                 zIndex: 50,
@@ -64,11 +64,11 @@ const SidebarNav = () => {
             }}
         >
             {/* User Avatar */}
-            <div 
+            <div
                 style={{
-                    width: 44, height: 44, 
-                    borderRadius: '50%', 
-                    backgroundColor: 'var(--bg-hover)', 
+                    width: 44, height: 44,
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--bg-hover)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     marginBottom: 32, cursor: 'pointer',
                     color: 'var(--text-primary)',
@@ -86,9 +86,9 @@ const SidebarNav = () => {
 
             {/* Navigation Icons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 26, flex: 1, width: '100%', alignItems: 'center' }}>
-                
+
                 {/* Tin Nhắn */}
-                <button 
+                <button
                     onClick={() => handleNavigate('/chat')}
                     title="Tin nhắn"
                     style={{
@@ -131,7 +131,7 @@ const SidebarNav = () => {
                 </button>
 
                 {/* Danh bạ */}
-                <button 
+                <button
                     onClick={() => handleNavigate('/friends')}
                     title="Danh bạ"
                     style={{
@@ -147,7 +147,7 @@ const SidebarNav = () => {
                 </button>
 
                 {/* Bản tin (Custom Tin Icon) */}
-                <button 
+                <button
                     onClick={() => handleNavigate('/stories')}
                     title="Bản tin"
                     style={{
@@ -163,7 +163,7 @@ const SidebarNav = () => {
                 </button>
 
                 {/* Đám mây (Static for UI) */}
-                <button 
+                <button
                     title="Truyền file"
                     style={{
                         width: 44, height: 44, borderRadius: 12, backgroundColor: 'transparent',
@@ -173,9 +173,9 @@ const SidebarNav = () => {
                 >
                     <Cloud strokeWidth={2} size={24} />
                 </button>
-                
+
                 {/* Công cụ (Static for UI) */}
-                <button 
+                <button
                     title="Công cụ"
                     style={{
                         width: 44, height: 44, borderRadius: 12, backgroundColor: 'transparent',
@@ -191,7 +191,7 @@ const SidebarNav = () => {
             {/* Bottom Actions */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* Cài đặt */}
-                <button 
+                <button
                     onClick={() => setShowSettings(true)}
                     title="Cài đặt"
                     style={{
@@ -203,7 +203,7 @@ const SidebarNav = () => {
                     <Settings strokeWidth={showSettings ? 2.5 : 2} size={24} />
                 </button>
             </div>
-            
+
             {/* Modal Settings */}
             {showSettings && <ProfileSettings onClose={() => setShowSettings(false)} />}
             <NotificationCenter
