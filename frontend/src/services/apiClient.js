@@ -7,6 +7,9 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:2026/back
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
+  headers: {
+    'X-Zolo-Client': 'Web-App',
+  },
 });
 
 // Request interceptor: gắn token vào mọi request

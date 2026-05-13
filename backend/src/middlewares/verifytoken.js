@@ -2,7 +2,7 @@ const { supabase } = require('../config/supabase');
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
 const sessionModel = require('../models/sessionModel');
-const { parseUserAgent, getLocationFromIP } = require('../untils/sessionHelper');
+const { parseUserAgent, getLocationFromIP, extractClientIP } = require('../untils/sessionHelper');
 const { getIO } = require('../socket/socketManager');
 
 const verifyToken = async (req, res, next) => {
@@ -51,8 +51,7 @@ const verifyToken = async (req, res, next) => {
                 const ua = req.headers['user-agent'];
                 const clientSessionId = req.headers['x-zolo-session-id'];
                 
-                let ip = req.headers['x-forwarded-for'] || req.ip || req.connection.remoteAddress;
-                if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
+                let ip = extractClientIP(req);
 
                 const findQuery = { userId: dbUser._id };
                 if (clientSessionId) {
@@ -73,7 +72,8 @@ const verifyToken = async (req, res, next) => {
                     session.lastActiveAt = new Date();
                     
                     // CẬP NHẬT VỊ TRÍ ĐỘNG: Nếu IP thay đổi, cập nhật lại vị trí
-                    if (ip !== session.ipAddress || !session.location || session.location === 'Localhost (Phát triển)' || session.location === 'Không rõ vị trí') {
+                    // KHÔNG overwrite nếu location đã được GPS cập nhật (chính xác hơn IP)
+                    if (session.locationSource !== 'gps' && (ip !== session.ipAddress || !session.location || session.location === 'Localhost (Phát triển)' || session.location === 'Không rõ vị trí')) {
                         const newLocation = await getLocationFromIP(ip);
                         if (newLocation && newLocation !== 'Không rõ vị trí') {
                             session.location = newLocation;
@@ -135,13 +135,13 @@ const verifyToken = async (req, res, next) => {
 
         // Cập nhật background
         (async () => {
-            let currentIp = req.headers['x-forwarded-for'] || req.ip || req.connection.remoteAddress;
-            if (currentIp && typeof currentIp === 'string' && currentIp.includes(',')) currentIp = currentIp.split(',')[0].trim();
+            let currentIp = extractClientIP(req);
 
             const updates = { lastActiveAt: new Date() };
             
             // CẬP NHẬT VỊ TRÍ ĐỘNG: Nếu IP thay đổi, cập nhật lại vị trí
-            if (currentIp !== session.ipAddress || !session.location || session.location === 'Localhost (Phát triển)' || session.location === 'Không rõ vị trí') {
+            // KHÔNG overwrite nếu location đã được GPS cập nhật (chính xác hơn IP)
+            if (session.locationSource !== 'gps' && (currentIp !== session.ipAddress || !session.location || session.location === 'Localhost (Phát triển)' || session.location === 'Không rõ vị trí')) {
                 const newLoc = await getLocationFromIP(currentIp);
                 if (newLoc && newLoc !== 'Không rõ vị trí') {
                     updates.location = newLoc;

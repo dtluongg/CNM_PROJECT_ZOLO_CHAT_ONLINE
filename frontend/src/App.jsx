@@ -28,6 +28,7 @@ import FriendsPage from './features/friends/FriendsPage';
 import SidebarNav from './components/SidebarNav';
 import NotificationToast from './features/notifications/components/NotificationToast';
 import StoriesPage from './features/stories/StoriesPage';
+import useSessionLocation from './hooks/useSessionLocation';
 
 // Các route có Sidebar bên trái kiểu AppShell (Zalo)
 const APP_SHELL_ROUTES = ['/chat', '/friends', '/user', '/stories'];
@@ -45,6 +46,17 @@ const ThemeSyncHandler = () => {
   }, [user, syncTheme]);
 
   return null;
+};
+
+// Cập nhật GPS location cho session hiện tại (silent, non-blocking)
+const SessionLocationInner = () => {
+  useSessionLocation();
+  return null;
+};
+const SessionLocationUpdater = () => {
+  const { user } = useAuth();
+  // Chỉ mount hook khi user đã authenticated
+  return user ? <SessionLocationInner /> : null;
 };
 
 const Layout = ({ children }) => {
@@ -80,6 +92,7 @@ const App = () => {
         <AuthProvider>
           <LanguageProvider>
             <ThemeSyncHandler />
+            <SessionLocationUpdater />
             <PresenceProvider>
               <NotificationProvider>
                 <CallProvider>

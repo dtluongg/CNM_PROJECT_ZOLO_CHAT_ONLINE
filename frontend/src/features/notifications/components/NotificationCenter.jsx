@@ -63,6 +63,13 @@ export default function NotificationCenter({ open, onClose }) {
       return;
     }
 
+    // Thông báo đăng nhập thiết bị mới → mở trang quản lý thiết bị
+    if (item.type === 'new_device_login') {
+      navigate('/settings', { state: { activeTab: 'devices' } });
+      onClose?.();
+      return;
+    }
+
     onClose?.();
   }, [markRead, navigate, onClose]);
 

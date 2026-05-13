@@ -30,8 +30,23 @@ const sessionSchema = new mongoose.Schema(
             type: String,
             default: 'Không rõ vị trí',
         },
+        locationSource: {
+            type: String,
+            enum: ['ip', 'gps', 'unknown'],
+            default: 'ip',
+        },
+        coordinates: {
+            lat: { type: Number, default: null },
+            lng: { type: Number, default: null },
+        },
         userAgent: {
             type: String,
+        },
+        // Fingerprint thiết bị: dùng để xác định thiết bị cũ/mới khi login
+        deviceFingerprint: {
+            type: String,
+            index: true,
+            default: null,
         },
         loginMethod: {
             type: String,

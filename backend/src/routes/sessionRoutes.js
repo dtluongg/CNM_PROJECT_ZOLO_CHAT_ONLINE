@@ -9,5 +9,6 @@ router.use(verifyToken);
 router.get('/list', sessionController.listSessions);
 router.post('/logout-session', sessionController.logoutSession);
 router.post('/logout-others', sessionController.logoutAllOthers);
+router.patch('/update-location', sessionController.updateSessionLocation);
 
 module.exports = router;

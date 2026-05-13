@@ -1,6 +1,6 @@
 const sessionModel = require('../models/sessionModel');
 const { getIO } = require('../socket/socketManager');
-const { parseUserAgent } = require('../untils/sessionHelper');
+const { parseUserAgent, reverseGeocode } = require('../untils/sessionHelper');
 
 /**
  * Liệt kê danh sách các phiên đăng nhập
@@ -134,8 +134,48 @@ const logoutAllOthers = async (req, res) => {
     }
 };
 
+/**
+ * Cập nhật vị trí session bằng GPS coordinates (post-login async).
+ * Frontend/Mobile gọi SAU KHI login thành công nếu đã có geolocation permission.
+ */
+const updateSessionLocation = async (req, res) => {
+    try {
+        const { latitude, longitude } = req.body;
+        const sessionId = req.sessionId;
+
+        // Validation
+        if (latitude == null || longitude == null || !sessionId) {
+            return res.status(400).json({ message: 'Thiếu tọa độ hoặc session' });
+        }
+
+        // Range check
+        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+            return res.status(400).json({ message: 'Tọa độ không hợp lệ' });
+        }
+
+        // Reverse geocode → city name (fail-safe: trả fallback nếu API lỗi)
+        const locationStr = await reverseGeocode(latitude, longitude);
+
+        // Update session với GPS location
+        await sessionModel.updateOne(
+            { sessionId },
+            {
+                location: locationStr,
+                locationSource: 'gps',
+                coordinates: { lat: latitude, lng: longitude },
+            }
+        );
+
+        return res.status(200).json({ location: locationStr, source: 'gps' });
+    } catch (error) {
+        console.error('[SessionController] updateSessionLocation error:', error.message);
+        return res.status(500).json({ message: 'Cập nhật vị trí thất bại' });
+    }
+};
+
 module.exports = {
     listSessions,
     logoutSession,
     logoutAllOthers,
+    updateSessionLocation,
 };

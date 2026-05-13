@@ -7,8 +7,9 @@ const crypto = require('crypto');
 const { saveOtp, verifyOtp } = require('../services/otpService');
 const { sendOtpEmail } = require('../services/emailService');
 const { supabaseAdmin } = require('../config/supabase');
-const { parseUserAgent, getLocationFromIP } = require('../untils/sessionHelper');
+const { parseUserAgent, getLocationFromIP, extractClientIP, buildSessionMeta, generateDeviceFingerprint } = require('../untils/sessionHelper');
 const { getIO } = require('../socket/socketManager');
+const { createAndEmitNotification } = require('../services/notificationService');
 
 // ── Helper: validate mật khẩu mới ───────────────────────────────
 const validatePassword = (password) => {
@@ -43,45 +44,30 @@ const createLocalTokens = async (userId, res, req = null, loginMethod = 'passwor
     const refreshToken = crypto.randomBytes(64).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    // 3. Xử lý Session Info (nếu có req)
+    // 3. Thu thập metadata phiên (fail-safe: login KHÔNG BAO GIỜ crash vì metadata)
+    const meta = await buildSessionMeta(req);
+
+    // 4. Tạo fingerprint thiết bị để xác định thiết bị cũ/mới
+    const deviceFingerprint = generateDeviceFingerprint(meta.platform, meta.ua);
+
     let sessionData = {
         userId,
         sessionId,
         refreshToken,
         expiresAt,
         loginMethod,
+        deviceName: meta.deviceName,
+        platform: meta.platform,
+        ipAddress: meta.ip,
+        location: meta.location,
+        userAgent: meta.ua,
+        deviceFingerprint,
     };
 
     if (req) {
-        const ua = req.headers['user-agent'];
-        const { deviceName, platform } = parseUserAgent(
-            ua, 
-            req.headers['x-zolo-client'],
-            req.headers['x-device-name'],
-            req.headers['x-device-platform']
-        );
-
-        // Lấy IP chính xác (ưu tiên x-forwarded-for cho proxy/ngrok)
-        let ip = req.headers['x-forwarded-for'] || req.ip || req.connection.remoteAddress;
-        if (ip && typeof ip === 'string' && ip.includes(',')) {
-            ip = ip.split(',')[0].trim();
-        }
-
-        const location = await getLocationFromIP(ip);
-
-        sessionData = {
-            ...sessionData,
-            deviceName,
-            platform,
-            ipAddress: ip,
-            location,
-            userAgent: ua,
-        };
-
         // ── CHÍNH SÁCH QUẢN LÝ PHIÊN: THÂN AI NẤY LO (STRICT ISOLATION) ──
         try {
-            const clientType = req.headers['x-zolo-client'];
-            const isMobile = clientType === 'Mobile-App';
+            const isMobile = meta.clientType === 'Mobile-App';
             
             // Tìm các phiên cũ CÙNG NHÓM để dọn dẹp
             const oldSessionsInGroup = await sessionModel.find({
@@ -117,6 +103,9 @@ const createLocalTokens = async (userId, res, req = null, loginMethod = 'passwor
     // Lưu Session mới
     await sessionModel.create(sessionData);
 
+    // ── Thông báo nếu là thiết bị mới (fail-safe, không block login) ──
+    await notifyNewDeviceLogin(userId, sessionData);
+
     // Thông báo Real-time về việc cập nhật danh sách session (Trì hoãn 1.5s cho ổn định)
     const userIdStr = String(userId);
     const roomName = `user:${userIdStr}`;
@@ -139,10 +128,9 @@ const createLocalTokens = async (userId, res, req = null, loginMethod = 'passwor
     });
 
     // Gửi refresh token qua cookie httpOnly (TUYỆT ĐỐI KHÔNG GỬI CHO MOBILE APP)
-    const clientType = req.headers['x-zolo-client'];
-    const isMobileApp = clientType === 'Mobile-App';
+    const isMobileApp = meta.clientType === 'Mobile-App';
 
-    if (!isMobileApp && ['Windows', 'macOS', 'Linux', 'Web'].includes(platform)) {
+    if (!isMobileApp && ['Windows', 'macOS', 'Linux', 'Web'].includes(meta.platform)) {
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
@@ -152,6 +140,48 @@ const createLocalTokens = async (userId, res, req = null, loginMethod = 'passwor
     }
 
     return { accessToken, refreshToken, sessionId };
+};
+
+// ── Helper: Tạo thông báo khi phát hiện đăng nhập trên thiết bị mới ─────
+// So sánh deviceFingerprint với các session cũ. Nếu chưa từng thấy → tạo notification.
+// Bọc try-catch riêng: TUYỆT ĐỐI không block login nếu notification lỗi.
+const notifyNewDeviceLogin = async (userId, sessionData) => {
+    try {
+        if (!sessionData.deviceFingerprint) return;
+
+        // Tìm session cũ cùng fingerprint (bất kỳ, active hoặc inactive)
+        const existingSession = await sessionModel.findOne({
+            userId,
+            deviceFingerprint: sessionData.deviceFingerprint,
+            sessionId: { $ne: sessionData.sessionId }, // Loại trừ session vừa tạo
+        });
+
+        if (existingSession) {
+            // Thiết bị cũ → không thông báo
+            return;
+        }
+
+        // Thiết bị MỚI → tạo notification
+        const timeStr = new Date().toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+        await createAndEmitNotification({
+            userId,
+            type: 'new_device_login',
+            title: `Đăng nhập mới trên ${sessionData.deviceName || 'thiết bị không xác định'}`,
+            body: `${sessionData.platform || 'Unknown'} • ${sessionData.location || 'Không rõ vị trí'} • ${timeStr}`,
+            data: {
+                sessionId: sessionData.sessionId,
+                deviceName: sessionData.deviceName,
+                platform: sessionData.platform,
+                location: sessionData.location,
+                loginMethod: sessionData.loginMethod,
+            },
+        });
+
+        console.log(`[NewDeviceNotification] Đã tạo thông báo thiết bị mới cho user ${userId}`);
+    } catch (err) {
+        // Fail-safe: log lỗi nhưng KHÔNG throw, login vẫn thành công
+        console.error('[NewDeviceNotification] Error (non-blocking):', err.message);
+    }
 };
 
 // ── SIGNUP ────────────────────────────────────────────────────────
@@ -626,23 +656,13 @@ const syncOAuthUser = async (req, res) => {
             console.log(`✅ New OAuth user created: ${email} (${provider})`);
         }
 
-        // ── Tạo Session cho OAuth User ──────────────────────────────
+        // ── Tạo Session cho OAuth User (dùng shared helper cho consistency) ──
         const crypto = require('crypto');
-        
-        const ua = req.headers['user-agent'];
-        const clientType = req.headers['x-zolo-client'];
-        const { deviceName, platform } = parseUserAgent(
-            ua, 
-            clientType,
-            req.headers['x-device-name'],
-            req.headers['x-device-platform']
-        );
-        const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-        const location = await getLocationFromIP(ip);
+        const oauthMeta = await buildSessionMeta(req);
 
         // ── Quản lý chính sách: SAME-GROUP CLEANUP (dùng X-Zolo-Client) ──
         try {
-            const isMobile = clientType === 'Mobile-App';
+            const isMobile = oauthMeta.clientType === 'Mobile-App';
             await sessionModel.updateMany(
                 { 
                     userId: dbUser._id, 
@@ -659,19 +679,27 @@ const syncOAuthUser = async (req, res) => {
         const refreshToken = crypto.randomBytes(64).toString('hex');
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-        await sessionModel.create({
+        // Tạo fingerprint cho OAuth session
+        const oauthFingerprint = generateDeviceFingerprint(oauthMeta.platform, oauthMeta.ua);
+
+        const oauthSessionData = {
             userId: dbUser._id,
             sessionId,
             refreshToken,
-            deviceName,
-            platform,
-            ipAddress: ip,
-            userAgent: ua,
-            location,
+            deviceName: oauthMeta.deviceName,
+            platform: oauthMeta.platform,
+            ipAddress: oauthMeta.ip,
+            userAgent: oauthMeta.ua,
+            location: oauthMeta.location,
             isActive: true,
             loginMethod: provider,
             expiresAt,
-        });
+            deviceFingerprint: oauthFingerprint,
+        };
+        await sessionModel.create(oauthSessionData);
+
+        // Thông báo nếu là thiết bị mới (fail-safe)
+        await notifyNewDeviceLogin(dbUser._id, oauthSessionData);
 
         // Tạo record trong authModel để /auth/refreshme hoạt động
         await authModel.create({
@@ -681,7 +709,7 @@ const syncOAuthUser = async (req, res) => {
         });
 
         // Gửi refreshToken cookie cho Web (KHÔNG gửi cho Mobile App)
-        const isMobileApp = clientType === 'Mobile-App';
+        const isMobileApp = oauthMeta.clientType === 'Mobile-App';
         if (!isMobileApp) {
             res.cookie('refreshToken', refreshToken, {
                 httpOnly: true,

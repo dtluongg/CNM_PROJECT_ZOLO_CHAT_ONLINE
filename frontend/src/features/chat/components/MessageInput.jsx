@@ -473,12 +473,16 @@ export default function MessageInput({ onSend, placeholder, isMobile, isGroup, c
         </div>
       )}
 
-      {/* Thanh hiển thị đang chỉnh sửa/trả lời tin nhắn (giữ nguyên logic) */}
+      {/* Thanh hiển thị đang chỉnh sửa/trả lời tin nhắn */}
       {(editingMessage || replyingMessage) && (
         <div style={{
           position: 'absolute', bottom: '100%', left: isMobile ? 0 : 16, right: isMobile ? 0 : 16,
-          background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: isMobile ? 0 : '12px 12px 0 0',
-          padding: '8px 12px', zIndex: 10, animation: 'fadeInUp 0.15s ease'
+          background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+          borderLeft: replyingMessage ? '4px solid var(--accent)' : '1px solid var(--border)', // Chỉ báo đứng màu xanh lề trái
+          borderRadius: isMobile ? 0 : '12px 12px 0 0',
+          padding: replyingMessage ? '8px 16px' : '8px 12px',
+          zIndex: 10, animation: 'fadeInUp 0.15s ease',
+          boxSizing: 'border-box'
         }}>
           {editingMessage && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -487,9 +491,52 @@ export default function MessageInput({ onSend, placeholder, isMobile, isGroup, c
             </div>
           )}
           {replyingMessage && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 12 }}>Đang trả lời {replyingMessage.senderName}</span>
-              <button onClick={onCancelReply} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={14} /></button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, marginRight: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {/* Ký hiệu nháy kép */}
+                  <span style={{ color: 'var(--accent)', fontSize: 13, fontWeight: 700, lineHeight: 1 }}>❝</span>
+                  <span style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 500 }}>
+                    Trả lời <strong style={{ fontWeight: 700 }}>{replyingMessage.senderName}</strong>
+                  </span>
+                </div>
+                {/* Trích dẫn nội dung tin nhắn gốc */}
+                <div style={{
+                  color: 'var(--text-muted)',
+                  fontSize: 12,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: '100%',
+                  paddingLeft: 12
+                }}>
+                  {replyingMessage.type === 'image' ? '[Hình ảnh]' : 
+                   replyingMessage.type === 'file' ? '[Tệp đính kèm]' : 
+                   replyingMessage.type === 'voice' ? '[Ghi âm]' : 
+                   replyingMessage.content}
+                </div>
+              </div>
+              
+              {/* Nút đóng */}
+              <button
+                onClick={onCancelReply}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px',
+                  borderRadius: '50%',
+                  transition: 'background 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <X size={16} />
+              </button>
             </div>
           )}
         </div>

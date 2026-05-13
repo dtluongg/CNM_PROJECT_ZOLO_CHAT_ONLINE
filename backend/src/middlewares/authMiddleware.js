@@ -29,7 +29,6 @@ const authMiddleware = async (req, res, next) => {
             // Fallback nếu login cũ thiếu session_id
             if (!sessionId) {
                 const ua = req.headers['user-agent'];
-                const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 
                 let session = await sessionModel.findOne({ 
                     userId: userFind._id, 
