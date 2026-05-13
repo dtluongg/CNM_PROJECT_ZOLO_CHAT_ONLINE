@@ -674,7 +674,7 @@ const Home = () => {
             </p>
 
             <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <a href="/signup" style={{
+              <Link to="/signup" style={{
                 background: 'white',
                 color: '#C84B8A',
                 padding: '15px 40px',
@@ -692,7 +692,7 @@ const Home = () => {
                 onMouseLeave={e => { e.target.style.transform = ''; e.target.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)'; }}
               >
                  Đăng Ký Miễn Phí
-              </a>
+              </Link>
               <Link to="/signin" style={{
                 background: 'rgba(255,255,255,0.15)',
                 color: 'white',

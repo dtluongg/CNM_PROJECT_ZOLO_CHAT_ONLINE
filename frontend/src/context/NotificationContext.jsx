@@ -3,7 +3,10 @@ import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import notificationApi from '../features/notifications/api/notificationApi';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
+// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
+// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:2026');
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL
+
 
 const NotificationContext = createContext(null);
 
@@ -199,6 +202,7 @@ export const NotificationProvider = ({ children }) => {
       reconnection: true,
       reconnectionAttempts: 8,
       reconnectionDelay: 1500,
+      transports: ['polling'],
     });
 
     socketRef.current = socket;
