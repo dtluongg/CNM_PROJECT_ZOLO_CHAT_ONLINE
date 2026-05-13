@@ -20,7 +20,13 @@ const onlineUsers = new Map();
 const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
-            origin:      ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:8081'],
+            origin:      [
+                'http://localhost:5173',
+                'http://localhost:5174',
+                'http://localhost:8081',
+                'http://nhom3zolochat.dotienluong.id.vn',
+                'https://nhom3zolochat.dotienluong.id.vn',
+            ],
             credentials: true,
         },
         // Tăng buffer cho video signaling (SDP có thể dài)
