@@ -341,6 +341,7 @@
     "they_blocked_me": "You have been blocked by this person. Your messages will not be received.",
     "unblock": "Unblock",
     "group_locked": "Group is locked. Only owner/admin can send messages.",
+    "group_locked_reply_alert": "Only owners/admins can send messages to this group.",
     "no_permission": "You don't have permission to send messages in {{topic}} channel.",
     "reactions": {
       "title": "Reactions",
@@ -1038,8 +1039,17 @@
     "offline": "Offline"
   },
   "months": {
-    "jan": "Jan", "feb": "Feb", "mar": "Mar", "apr": "Apr",
-    "may": "May", "jun": "Jun", "jul": "Jul", "aug": "Aug",
-    "sep": "Sep", "oct": "Oct", "nov": "Nov", "dec": "Dec"
+    "jan": "Jan",
+    "feb": "Feb",
+    "mar": "Mar",
+    "apr": "Apr",
+    "may": "May",
+    "jun": "Jun",
+    "jul": "Jul",
+    "aug": "Aug",
+    "sep": "Sep",
+    "oct": "Oct",
+    "nov": "Nov",
+    "dec": "Dec"
   }
 }

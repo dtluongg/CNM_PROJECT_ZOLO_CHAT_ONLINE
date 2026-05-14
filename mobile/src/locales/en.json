@@ -125,6 +125,7 @@
     "all_messages": "All messages",
     "no_access_topic": "You don't have permission to view this channel",
     "view_only_topic": "You can only view, not send messages in this channel",
+    "group_locked_reply_alert": "Only community owners/admins can send messages to this community.",
     "voice_call": "Voice Call",
     "direct_message": "Direct Message",
     "group_chat": "Group Chat",

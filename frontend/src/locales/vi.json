@@ -341,6 +341,7 @@
     "they_blocked_me": "Bạn đã bị chặn bởi người này. Tin nhắn sẽ không được gửi đi.",
     "unblock": "Bỏ chặn",
     "group_locked": "Nhóm đã bị khóa. Chỉ chủ nhóm/admin mới có thể nhắn tin.",
+    "group_locked_reply_alert": "Chỉ trưởng/Quản trị viên được gửi tin nhắn vào nhóm này.",
     "no_permission": "Bạn không có quyền nhắn tin tại kênh {{topic}}.",
     "reactions": {
       "title": "Cảm xúc",
@@ -1038,8 +1039,17 @@
     "offline": "Ngoại tuyến"
   },
   "months": {
-    "jan": "Th1", "feb": "Th2", "mar": "Th3", "apr": "Th4",
-    "may": "Th5", "jun": "Th6", "jul": "Th7", "aug": "Th8",
-    "sep": "Th9", "oct": "Th10", "nov": "Th11", "dec": "Th12"
+    "jan": "Th1",
+    "feb": "Th2",
+    "mar": "Th3",
+    "apr": "Th4",
+    "may": "Th5",
+    "jun": "Th6",
+    "jul": "Th7",
+    "aug": "Th8",
+    "sep": "Th9",
+    "oct": "Th10",
+    "nov": "Th11",
+    "dec": "Th12"
   }
 }

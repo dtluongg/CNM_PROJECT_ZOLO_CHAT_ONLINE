@@ -36,7 +36,7 @@ async function checkDB() {
     }
 
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error(' Error:', error);
   } finally {
     await mongoose.disconnect();
   }

@@ -128,6 +128,7 @@ export default function MessageScreen({ route, navigation }) {
 
   // State info panel (modal 3 chấm)
   const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [showLockAlert, setShowLockAlert] = useState(false);
   const [showPinLimitModal, setShowPinLimitModal] = useState(false);
   const [pendingPinMsgId, setPendingPinMsgId] = useState(null);
   const [infoTab, setInfoTab] = useState('overview');
@@ -344,6 +345,17 @@ export default function MessageScreen({ route, navigation }) {
     fetchBlockStatus();
   }, [fetchBlockStatus]);
 
+  // ── Auto-dismiss lock alert ────────────────────────────────
+  useEffect(() => {
+    if (showLockAlert) {
+      const timer = setTimeout(() => setShowLockAlert(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [showLockAlert]);
+
+  const myRole = conversation?.myMembership?.role || 'member';
+  const isGroupLockedReadOnly = conversation?.type === 'group' && !!conversation?.isLocked && myRole === 'member';
+
   // ── Rời nhóm ────────────────────────────────────────────────────────────
   const handleLeaveGroup = async () => {
     try {
@@ -473,6 +485,10 @@ export default function MessageScreen({ route, navigation }) {
 
   // ── Bắt đầu trả lời tin nhắn ──────────────────────────────────────────
   const handleReply = (msg) => {
+    if (isGroupLockedReadOnly) {
+      setShowLockAlert(true);
+      return;
+    }
     setReplyingMessage(msg);
     setEditingMessage(null);
     setTimeout(() => inputRef.current?.focus(), 100);
@@ -1424,6 +1440,45 @@ export default function MessageScreen({ route, navigation }) {
             </TouchableOpacity>
           </View>
         </Pressable>
+      </Modal>
+
+      {/* ── Locked Group Reply Alert (Zalo style) ── */}
+      <Modal
+        visible={showLockAlert}
+        transparent
+        animationType="fade"
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.1)', // Light dim to keep it looking like a toast
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <View style={{
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            padding: 24,
+            borderRadius: 20,
+            alignItems: 'center',
+            width: 240,
+            gap: 16,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 10,
+            elevation: 8,
+          }}>
+            <Ionicons name="alert-circle" size={60} color="#fff" />
+            <Text style={{
+              color: '#fff',
+              fontSize: 15,
+              fontWeight: '600',
+              textAlign: 'center',
+              lineHeight: 22,
+            }}>
+              {t('chat.group_locked_reply_alert', { defaultValue: 'Chỉ trưởng/phó cộng đồng được gửi tin nhắn vào cộng đồng này.' })}
+            </Text>
+          </View>
+        </View>
       </Modal>
     </View>
   );

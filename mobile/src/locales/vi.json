@@ -125,6 +125,7 @@
     "all_messages": "Tất cả tin nhắn",
     "no_access_topic": "Bạn không có quyền xem kênh này",
     "view_only_topic": "Bạn chỉ có thể xem, không thể gửi tin nhắn trong kênh này",
+    "group_locked_reply_alert": "Chỉ trưởng/phó cộng đồng được gửi tin nhắn vào cộng đồng này.",
     "voice_call": "Gọi điện",
     "direct_message": "Đoạn chat trực tiếp",
     "group_chat": "Nhóm",

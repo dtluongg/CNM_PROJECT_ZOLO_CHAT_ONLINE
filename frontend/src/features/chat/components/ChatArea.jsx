@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback ,useMemo } from 'react';
-import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock, Volume2 } from 'lucide-react';
+import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock, Volume2, AlertCircle } from 'lucide-react';
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
 import conversationApi from '../api/conversationApi';
@@ -89,6 +89,7 @@ export default function ChatArea({
   const [showChannelSheet, setShowChannelSheet] = useState(false);
   const [sheetTopics, setSheetTopics]           = useState([]);
   const [sheetLoading, setSheetLoading]         = useState(false);
+  const [showLockAlert, setShowLockAlert]       = useState(false);
 
   // Sync pinned messages khi đổi conversation
   useEffect(() => {
@@ -113,6 +114,14 @@ export default function ChatArea({
       .then(res => setReactionTypes(res.data.data))
       .catch(console.error);
   }, []);
+
+  // ── Auto-dismiss lock alert ────────────────────────────────
+  useEffect(() => {
+    if (showLockAlert) {
+      const timer = setTimeout(() => setShowLockAlert(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [showLockAlert]);
 
   // ── Socket listeners ───────────────────────────────────────
   useChatSocket({
@@ -337,14 +346,12 @@ export default function ChatArea({
   });
 
   // ── Chèn UnreadDivider + AiSummaryCard nếu có tin chưa đọc ─────────────
-  // Dùng snapshot (không bị timing) thay vì live values
   const unreadCount    = aiSnapshotRef.current.unreadCount;
   const lastReadId     = aiSnapshotRef.current.lastReadId;
-  const savedAiSummary = conversation?.aiSummary || null;  // từ DB
+  const savedAiSummary = conversation?.aiSummary || null;
 
   if (unreadCount > 0) {
     if (lastReadId) {
-      // Tìm vị trí của tin đã đọc cuối cùng trong displayItems
       const insertIdx = displayItems.findIndex(
         (item) => item.type === 'msg' && (item.msg?._id || item.msg?.id) === lastReadId
       );
@@ -354,26 +361,23 @@ export default function ChatArea({
           key: `unread-divider-${conversation.id}`,
         });
       } else {
-        // lastReadId không có trong 30 tin đang load → chèn ở đầu list
         displayItems.unshift({
           type: 'unread-divider',
           key: `unread-divider-${conversation.id}`,
         });
       }
     } else {
-      // Chưa từng đọc tin nào → tất cả là unread, chèn ở đầu
       displayItems.unshift({
         type: 'unread-divider',
         key: `unread-divider-${conversation.id}`,
       });
     }
-    // AiSummaryCard luôn nằm ở cuối
     displayItems.push({
       type: 'ai-summary',
       key: `ai-summary-${conversation.id}`,
       conversationId:   conversation.id,
       initialSummary:   savedAiSummary,
-      snapshotLastReadId: lastReadId,    // snapshot trước markAsRead
+      snapshotLastReadId: lastReadId,
     });
   }
 
@@ -535,7 +539,7 @@ export default function ChatArea({
         onConfirm={confirmUnpin}
       />
 
-      {/* Voice channel view — replaces messages when voice topic is active */}
+      {/* Voice channel view */}
       {activeTopic?.channelType === 'voice' && (
         <VoiceChannelView
           topic={activeTopic}
@@ -545,7 +549,7 @@ export default function ChatArea({
         />
       )}
 
-      {/* Topic bar - only for text/system topics */}
+      {/* Topic bar */}
       {conversation.type === 'group' && activeTopic && activeTopic.channelType !== 'voice' && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
@@ -570,176 +574,185 @@ export default function ChatArea({
         </div>
       )}
 
-      {activeTopic?.channelType === 'voice' ? null : <><div style={{
-        flex: 1, overflowY: 'auto', overflowX: 'hidden',
-        scrollbarWidth: 'thin', scrollbarColor: 'var(--bg-hover) transparent',
-        WebkitOverflowScrolling: 'touch',
-      }}>
-        <div style={{ padding: isMobile ? '24px 16px 16px' : '28px 20px 20px', borderBottom: '1px solid var(--border)', marginBottom: 8 }}>
+      {activeTopic?.channelType === 'voice' ? null : (
+        <>
           <div style={{
-            width: isMobile ? 56 : 60, height: isMobile ? 56 : 60, borderRadius: '50%',
-            background: getAvatarColor(conversation.name),
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            marginBottom: 12, color: '#fff', fontWeight: 800, fontSize: isMobile ? 22 : 26,
+            flex: 1, overflowY: 'auto', overflowX: 'hidden',
+            scrollbarWidth: 'thin', scrollbarColor: 'var(--bg-hover) transparent',
+            WebkitOverflowScrolling: 'touch',
           }}>
-            {getInitials(conversation.name)}
-          </div>
-          <h2 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: isMobile ? 20 : 22, margin: '0 0 6px' }}>
-            {conversation.type === 'dm' ? conversation.name : `# ${conversation.name}`}
-          </h2>
-          <div style={{ marginBottom: 6 }}>
-            <span style={{
-              display: 'inline-block', fontSize: 11, fontWeight: 700,
-              color: 'var(--text-muted)', padding: '3px 8px', borderRadius: 999, background: 'var(--bg-hover)',
-            }}>
-              {conversation.type === 'dm' ? t('chat.dm_label') : t('chat.group_label')}
-            </span>
-          </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0, lineHeight: 1.5 }}>
-            {conversation.type === 'dm'
-              ? t('chat.dm_start', { name: conversation.name })
-              : t('chat.group_start', { name: conversation.name })}
-          </p>
-        </div>
-
-        {displayItems.map(item => {
-          if (item.type === 'date') return <DateDivider key={item.key} label={item.label} />;
-          if (item.type === 'system') return <SystemMessage key={item.key} msg={item.msg} />;
-          if (item.type === 'unread-divider') return <UnreadDivider key={item.key} />;
-          if (item.type === 'ai-summary') return (
-            <AiSummaryCard
-              key={item.key}
-              conversationId={item.conversationId}
-              initialSummary={item.initialSummary}
-              snapshotLastReadId={item.snapshotLastReadId}
-            />
-          );
-          return (
-            <div
-              key={item.key}
-              id={item.type === 'msg' ? `msg-${item.msg?._id || item.msg?.id}` : undefined}
-              className={item.type === 'msg' && (highlightedId === item.msg?._id || highlightedId === item.msg?.id) ? 'msg-highlight' : ''}
-              style={{ padding: '0 16px' }}
-            >
-              <MessageBubble
-                msg={item.msg}
-                isMine={item.isMine}
-                showHeader={item.showHeader}
-                isMobile={isMobile}
-                openMenuId={openMenuId}
-                setOpenMenuId={setOpenMenuId}
-                reactionTypes={reactionTypes}
-                onReact={handleReact}
-                onShowDetails={handleShowReactionDetails}
-                onRecall={handleRevoke}
-                onDelete={handleDeleteForMe}
-                onEdit={(msg) => { setEditingMessage(msg); setReplyingMessage(null); }}
-                onReply={(msg) => { setReplyingMessage(msg); setEditingMessage(null); }}
-                replyingTargetId={replyingMessage?._id || replyingMessage?.id}
-                onJumpToMessage={handleJumpToMessage}
-                onRead={handleMarkAsRead}
-                onShowReadDetails={(readBy) => setShowReadList(readBy)}
-                onForward={(msg) => { setForwardingMsg(msg); setShowForwardModal(true); }}
-                conversationType={conversation.type}
-                currentUserId={currentUserId}
-                onAvatarClick={onViewProfile}
-                onImageLoad={handleImageLoad}
-                onPin={handlePin}
-                onUnpin={handleUnpin}
-                isPinned={pinnedMessages.some(p => (p.messageId?._id || p.messageId?.id || p.messageId)?.toString() === (item.msg?._id || item.msg?.id)?.toString())}
-                onVote={onPollVote}
-              />
+            <div style={{ padding: isMobile ? '24px 16px 16px' : '28px 20px 20px', borderBottom: '1px solid var(--border)', marginBottom: 8 }}>
+              <div style={{
+                width: isMobile ? 56 : 60, height: isMobile ? 56 : 60, borderRadius: '50%',
+                background: getAvatarColor(conversation.name),
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: 12, color: '#fff', fontWeight: 800, fontSize: isMobile ? 22 : 26,
+              }}>
+                {getInitials(conversation.name)}
+              </div>
+              <h2 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: isMobile ? 20 : 22, margin: '0 0 6px' }}>
+                {conversation.type === 'dm' ? conversation.name : `# ${conversation.name}`}
+              </h2>
+              <div style={{ marginBottom: 6 }}>
+                <span style={{
+                  display: 'inline-block', fontSize: 11, fontWeight: 700,
+                  color: 'var(--text-muted)', padding: '3px 8px', borderRadius: 999, background: 'var(--bg-hover)',
+                }}>
+                  {conversation.type === 'dm' ? t('chat.dm_label') : t('chat.group_label')}
+                </span>
+              </div>
+              <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0, lineHeight: 1.5 }}>
+                {conversation.type === 'dm'
+                  ? t('chat.dm_start', { name: conversation.name })
+                  : t('chat.group_start', { name: conversation.name })}
+              </p>
             </div>
-          );
-        })}
 
-        {typingUser && <TypingIndicator name={typingUser.displayName} />}
-        <div ref={bottomRef} style={{ height: 8 }} />
-      </div>
+            {displayItems.map(item => {
+              if (item.type === 'date') return <DateDivider key={item.key} label={item.label} />;
+              if (item.type === 'system') return <SystemMessage key={item.key} msg={item.msg} />;
+              if (item.type === 'unread-divider') return <UnreadDivider key={item.key} />;
+              if (item.type === 'ai-summary') return (
+                <AiSummaryCard
+                  key={item.key}
+                  conversationId={item.conversationId}
+                  initialSummary={item.initialSummary}
+                  snapshotLastReadId={item.snapshotLastReadId}
+                />
+              );
+              return (
+                <div
+                  key={item.key}
+                  id={item.type === 'msg' ? `msg-${item.msg?._id || item.msg?.id}` : undefined}
+                  className={item.type === 'msg' && (highlightedId === item.msg?._id || highlightedId === item.msg?.id) ? 'msg-highlight' : ''}
+                  style={{ padding: '0 16px' }}
+                >
+                  <MessageBubble
+                    msg={item.msg}
+                    isMine={item.isMine}
+                    showHeader={item.showHeader}
+                    isMobile={isMobile}
+                    openMenuId={openMenuId}
+                    setOpenMenuId={setOpenMenuId}
+                    reactionTypes={reactionTypes}
+                    onReact={handleReact}
+                    onShowDetails={handleShowReactionDetails}
+                    onRecall={handleRevoke}
+                    onDelete={handleDeleteForMe}
+                    onEdit={(msg) => { setEditingMessage(msg); setReplyingMessage(null); }}
+                    onReply={(msg) => {
+                      if (isGroupLockedReadOnly) {
+                        setShowLockAlert(true);
+                        return;
+                      }
+                      setReplyingMessage(msg);
+                      setEditingMessage(null);
+                    }}
+                    replyingTargetId={replyingMessage?._id || replyingMessage?.id}
+                    onJumpToMessage={handleJumpToMessage}
+                    onRead={handleMarkAsRead}
+                    onShowReadDetails={(readBy) => setShowReadList(readBy)}
+                    onForward={(msg) => { setForwardingMsg(msg); setShowForwardModal(true); }}
+                    conversationType={conversation.type}
+                    currentUserId={currentUserId}
+                    onAvatarClick={onViewProfile}
+                    onImageLoad={handleImageLoad}
+                    onPin={handlePin}
+                    onUnpin={handleUnpin}
+                    isPinned={pinnedMessages.some(p => (p.messageId?._id || p.messageId?.id || p.messageId)?.toString() === (item.msg?._id || item.msg?.id)?.toString())}
+                    onVote={onPollVote}
+                  />
+                </div>
+              );
+            })}
 
-      {sendBlockError && (
-        <div style={{ padding: '8px 16px', background: '#ed4245', color: '#fff', fontSize: 13, textAlign: 'center', flexShrink: 0 }}>
-          {sendBlockError}
-        </div>
-      )}
-
-      {conversation.type === 'dm' && blockStatus?.iBlocked && (
-        <div style={{
-          padding: '10px 16px', background: 'var(--bg-secondary)',
-          borderTop: '1px solid var(--border)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', gap: 12, flexShrink: 0,
-        }}>
-          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('chat.i_blocked')}</span>
-          <button
-            onClick={async () => {
-              try {
-                await import('../../friends/api/friendApi').then(m => m.default.unblockFriend(conversation.otherUserId));
-                onBlockStatusChanged?.();
-              } catch (err) { window.alert(err?.response?.data?.message || 'Không thể bỏ chặn'); }
-            }}
-            style={{
-              padding: '5px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
-              background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 700,
-            }}
-          >
-            {t('chat.unblock')}
-          </button>
-        </div>
-      )}
-
-      {conversation.type === 'dm' && blockStatus?.theyBlockedMe && (
-        <div style={{
-          padding: '7px 16px', background: '#fef3c7', borderTop: '1px solid #fcd34d',
-          textAlign: 'center', flexShrink: 0, color: '#92400e', fontSize: 12,
-        }}>
-          {t('chat.they_blocked_me')}
-        </div>
-      )}
-
-      {!(conversation.type === 'dm' && blockStatus?.iBlocked) && activeTopic?.channelType !== 'voice' && (
-        canSendInActiveTopic ? (
-          <MessageInput
-            onSend={async (payload) => {
-              const enriched = (conversation.type === 'group' && activeTopic)
-                ? { ...payload, topicId: activeTopic._id }
-                : payload;
-              await onSendMessage(enriched);
-              if (payload.isEdit) setEditingMessage(null);
-              setReplyingMessage(null);
-            }}
-            placeholder={
-              conversation.type === 'group'
-                ? t('chat.input_group_placeholder', { name: activeTopic ? activeTopic.name : 'chung' })
-                : t('chat.input_dm_placeholder', { name: conversation.name })
-            }
-            isMobile={isMobile}
-            isGroup={conversation.type === 'group'}
-            conversationId={conversation.id}
-            socket={socket}
-            editingMessage={editingMessage}
-            replyingMessage={replyingMessage}
-            onCancelEdit={() => setEditingMessage(null)}
-            onCancelReply={() => setReplyingMessage(null)}
-          />
-        ) : (
-          // Không có quyền gửi tin trong kênh này
-          <div style={{
-            padding: '12px 16px',
-            background: 'var(--bg-secondary)',
-            borderTop: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', gap: 10,
-            flexShrink: 0,
-          }}>
-            <span style={{ fontSize: 18 }}>🔒</span>
-            <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              {isGroupLockedReadOnly
-                ? t('chat.group_locked')
-                : t('chat.no_permission', { topic: activeTopic ? ` #${activeTopic.name}` : '' })}
-            </span>
+            {typingUser && <TypingIndicator name={typingUser.displayName} />}
+            <div ref={bottomRef} style={{ height: 8 }} />
           </div>
-        )
+
+          {sendBlockError && (
+            <div style={{ padding: '8px 16px', background: '#ed4245', color: '#fff', fontSize: 13, textAlign: 'center', flexShrink: 0 }}>
+              {sendBlockError}
+            </div>
+          )}
+
+          {conversation.type === 'dm' && blockStatus?.iBlocked && (
+            <div style={{
+              padding: '10px 16px', background: 'var(--bg-secondary)',
+              borderTop: '1px solid var(--border)', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', gap: 12, flexShrink: 0,
+            }}>
+              <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('chat.i_blocked')}</span>
+              <button
+                onClick={async () => {
+                  try {
+                    await import('../../friends/api/friendApi').then(m => m.default.unblockFriend(conversation.otherUserId));
+                    onBlockStatusChanged?.();
+                  } catch (err) { window.alert(err?.response?.data?.message || 'Không thể bỏ chặn'); }
+                }}
+                style={{
+                  padding: '5px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                  background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 700,
+                }}
+              >
+                {t('chat.unblock')}
+              </button>
+            </div>
+          )}
+
+          {conversation.type === 'dm' && blockStatus?.theyBlockedMe && (
+            <div style={{
+              padding: '7px 16px', background: '#fef3c7', borderTop: '1px solid #fcd34d',
+              textAlign: 'center', flexShrink: 0, color: '#92400e', fontSize: 12,
+            }}>
+              {t('chat.they_blocked_me')}
+            </div>
+          )}
+
+          {!(conversation.type === 'dm' && blockStatus?.iBlocked) && activeTopic?.channelType !== 'voice' && (
+            canSendInActiveTopic ? (
+              <MessageInput
+                onSend={async (payload) => {
+                  const enriched = (conversation.type === 'group' && activeTopic)
+                    ? { ...payload, topicId: activeTopic._id }
+                    : payload;
+                  await onSendMessage(enriched);
+                  if (payload.isEdit) setEditingMessage(null);
+                  setReplyingMessage(null);
+                }}
+                placeholder={
+                  conversation.type === 'group'
+                    ? t('chat.input_group_placeholder', { name: activeTopic ? activeTopic.name : 'chung' })
+                    : t('chat.input_dm_placeholder', { name: conversation.name })
+                }
+                isMobile={isMobile}
+                isGroup={conversation.type === 'group'}
+                conversationId={conversation.id}
+                socket={socket}
+                editingMessage={editingMessage}
+                replyingMessage={replyingMessage}
+                onCancelEdit={() => setEditingMessage(null)}
+                onCancelReply={() => setReplyingMessage(null)}
+              />
+            ) : (
+              <div style={{
+                padding: '12px 16px',
+                background: 'var(--bg-secondary)',
+                borderTop: '1px solid var(--border)',
+                display: 'flex', alignItems: 'center', gap: 10,
+                flexShrink: 0,
+              }}>
+                <span style={{ fontSize: 18 }}>🔒</span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  {isGroupLockedReadOnly
+                    ? t('chat.group_locked')
+                    : t('chat.no_permission', { topic: activeTopic ? ` #${activeTopic.name}` : '' })}
+                </span>
+              </div>
+            )
+          )}
+        </>
       )}
-  </>}{/* end voice conditional */}
 
       <ReactionListModal
         messageId={showReactionList}
@@ -759,7 +772,6 @@ export default function ChatArea({
         onForward={() => console.log('Forwarded successfully')}
       />
 
-      {/* Mobile channel bottom sheet (groups only) */}
       {showChannelSheet && (
         <div
           onClick={() => setShowChannelSheet(false)}
@@ -779,18 +791,14 @@ export default function ChatArea({
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             }}
           >
-            {/* Sheet handle */}
             <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 6px' }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--bg-hover)' }} />
             </div>
-            {/* Sheet header */}
             <div style={{ padding: '0 18px 10px', borderBottom: '1px solid var(--border)' }}>
               <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-primary)' }}>{t('chat_area.channels_title')}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{conversation.name}</div>
             </div>
-            {/* Channel list */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 12px' }}>
-              {/* #chung */}
               <div
                 onClick={() => { onTopicSelect && onTopicSelect(null); setShowChannelSheet(false); }}
                 style={{
@@ -811,36 +819,35 @@ export default function ChatArea({
               )}
 
               {sheetTopics.map(topic => {
-                              const isActive = activeTopic?._id === topic._id;
-                              const isVoice  = topic.channelType === 'voice';
-                              return (
-                                <div
-                                  key={topic._id}
-                                  onClick={() => { if (!topic.isLocked) { onTopicSelect && onTopicSelect(topic); setShowChannelSheet(false); } }}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: 10,
-                                    padding: '11px 10px', borderRadius: 10,
-                                    cursor: topic.isLocked ? 'not-allowed' : 'pointer',
-                                    background: isActive ? 'var(--accent)' : 'transparent',
-                                    opacity: topic.isLocked ? 0.5 : 1,
-                                    marginBottom: 2,
-                                  }}
-                                >
-                                  {isVoice
-                                    ? <Volume2 size={18} style={{ color: isActive ? '#fff' : '#57f287', flexShrink: 0 }} />
-                                    : <Hash size={18} style={{ color: isActive ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
-                                  }
-                                  <span style={{ fontSize: 15, fontWeight: isActive ? 700 : 500, color: isActive ? '#fff' : 'var(--text-primary)', flex: 1 }}>
-                                    {topic.name}
-                                  </span>
-                                  {isVoice && !isActive && (
-                                    <span style={{ fontSize: 11, color: '#57f287', background: 'rgba(87,242,135,0.15)', borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{t('chat_area.voice_label')}</span>
-                                  )}
-                                  {topic.isLocked && <Lock size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
-                                </div>
-                              );
-                            })}
-
+                const isActive = activeTopic?._id === topic._id;
+                const isVoice  = topic.channelType === 'voice';
+                return (
+                  <div
+                    key={topic._id}
+                    onClick={() => { if (!topic.isLocked) { onTopicSelect && onTopicSelect(topic); setShowChannelSheet(false); } }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '11px 10px', borderRadius: 10,
+                      cursor: topic.isLocked ? 'not-allowed' : 'pointer',
+                      background: isActive ? 'var(--accent)' : 'transparent',
+                      opacity: topic.isLocked ? 0.5 : 1,
+                      marginBottom: 2,
+                    }}
+                  >
+                    {isVoice
+                      ? <Volume2 size={18} style={{ color: isActive ? '#fff' : '#57f287', flexShrink: 0 }} />
+                      : <Hash size={18} style={{ color: isActive ? '#fff' : 'var(--text-muted)', flexShrink: 0 }} />
+                    }
+                    <span style={{ fontSize: 15, fontWeight: isActive ? 700 : 500, color: isActive ? '#fff' : 'var(--text-primary)', flex: 1 }}>
+                      {topic.name}
+                    </span>
+                    {isVoice && !isActive && (
+                      <span style={{ fontSize: 11, color: '#57f287', background: 'rgba(87,242,135,0.15)', borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{t('chat_area.voice_label')}</span>
+                    )}
+                    {topic.isLocked && <Lock size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+                  </div>
+                );
+              })}
 
               {!sheetLoading && sheetTopics.length === 0 && (
                 <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 10px', fontStyle: 'italic' }}>
@@ -852,10 +859,41 @@ export default function ChatArea({
         </div>
       )}
 
+      {showLockAlert && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 100002,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          color: '#fff',
+          padding: '24px 32px',
+          borderRadius: 16,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 12,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+          animation: 'fadeInOut 0.25s ease',
+          maxWidth: 320,
+          textAlign: 'center'
+        }}>
+          <AlertCircle size={48} strokeWidth={1.5} />
+          <div style={{ fontSize: 15, fontWeight: 500, lineHeight: 1.5 }}>
+            {t('chat.group_locked_reply_alert', { defaultValue: 'Chỉ trưởng/phó cộng đồng được gửi tin nhắn vào cộng đồng này.' })}
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes bounce { 0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-5px);opacity:1} }
         @keyframes fadeInUp { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
         @keyframes slideUpSheet { from{transform:translateY(100%)} to{transform:translateY(0)} }
+        @keyframes fadeInOut {
+          0% { opacity: 0; transform: translate(-50%, -45%); }
+          100% { opacity: 1; transform: translate(-50%, -50%); }
+        }
       `}</style>
     </div>
   );
