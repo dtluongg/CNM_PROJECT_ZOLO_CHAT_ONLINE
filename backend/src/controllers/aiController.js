@@ -29,22 +29,7 @@ exports.summarizeUnread = async (req, res) => {
       return res.status(403).json({ message: 'Bạn không thuộc cuộc trò chuyện này' });
     }
 
-    // ── 2. Nếu đã có summary trong DB còn hiệu lực (unreadCount chưa đổi) ──
-    const savedSummary = membership.aiSummary;
-    if (
-      savedSummary?.summary &&
-      savedSummary.unreadCount === membership.unreadCount &&
-      membership.unreadCount > 0
-    ) {
-      return res.json({
-        summary:         savedSummary.summary,
-        reason:          'cached_db',
-        unreadCount:     membership.unreadCount,
-        summarizedAt:    savedSummary.summarizedAt,
-      });
-    }
-
-    // ── 3. Không có tin chưa đọc ─────────────────────────────────────────
+    // ── 2. Không có tin chưa đọc ─────────────────────────────────────────
     if (!membership.lastReadMessageId && membership.unreadCount === 0) {
       return res.json({
         summary: null,
@@ -96,19 +81,6 @@ exports.summarizeUnread = async (req, res) => {
     // ── 7. Gọi Gemini ────────────────────────────────────────────────────────
     rateLimitMap.set(rateKey, Date.now());
     const summary = await summarize(messagesForAI, '');
-
-    // ── 8. Lưu vào DB (ConversationMember.aiSummary) ─────────────────────────
-    await ConversationMember.findOneAndUpdate(
-      { conversationId, userId },
-      {
-        aiSummary: {
-          summary,
-          summarizedAt:  new Date(),
-          unreadCount:   membership.unreadCount,
-          fromMessageId: membership.lastReadMessageId,
-        },
-      }
-    );
 
     return res.json({
       summary,

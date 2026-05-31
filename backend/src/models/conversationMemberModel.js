@@ -31,14 +31,6 @@ const conversationMemberSchema = new mongoose.Schema(
     unreadCount:       { type: Number, default: 0 },
     lastReadMessageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' },
 
-    // AI Summary
-    aiSummary: {
-      summary:       { type: String, default: null },
-      summarizedAt:  { type: Date,   default: null },
-      unreadCount:   { type: Number, default: 0 },
-      fromMessageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
-    },
-
     // Quyền đặc biệt cá nhân (override cứng, không qua role)
     canSendMessages:  { type: Boolean, default: true },
     canInviteMembers: { type: Boolean, default: false },
