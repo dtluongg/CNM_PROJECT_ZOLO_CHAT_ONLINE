@@ -145,6 +145,7 @@ const initSocket = (httpServer) => {
         require('./callSocket')(io, socket, onlineUsers);
         require('./chatSocket')(io, socket, onlineUsers);
         require('./voiceRoomSocket')(io, socket, onlineUsers);
+        require('./groupCallSocket')(io, socket, onlineUsers);
 
         // Khi socket ngắt kết nối
         socket.on('disconnect', () => {

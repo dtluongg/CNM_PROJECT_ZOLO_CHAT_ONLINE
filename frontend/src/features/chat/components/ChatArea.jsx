@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock, Volume2 } from 'lucide-react';
+import GroupCallButton from '../../call/components/GroupCallButton';
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
 import conversationApi from '../api/conversationApi';
@@ -483,8 +484,10 @@ export default function ChatArea({
               {[
                 ...(conversation?.type === 'group' ? [{ icon: <Hash size={20} />, title: 'Kênh chat', onClick: openChannelSheet }] : []),
                 ...(conversation?.type === 'group' ? [{ icon: <Volume2 size={20} />, title: 'Phòng thoại', onClick: onVoiceRoom, active: voiceRoomActive }] : []),
-                { icon: <Phone size={20} />, title: 'Gọi thoại', onClick: conversation?.type === 'dm' ? onPhoneCall : undefined },
-                { icon: <Video size={20} />, title: 'Gọi video', onClick: conversation?.type === 'dm' ? onVideoCall : undefined },
+                ...(conversation?.type === 'dm' ? [
+                  { icon: <Phone size={20} />, title: 'Gọi thoại', onClick: onPhoneCall },
+                  { icon: <Video size={20} />, title: 'Gọi video', onClick: onVideoCall },
+                ] : []),
                 { icon: <Users size={20} />, title: 'Thông tin', onClick: onToggleRight, active: showRight },
               ].map((btn, i) => (
                 <button key={i} onClick={btn.onClick} title={btn.title}
@@ -498,13 +501,21 @@ export default function ChatArea({
                   {btn.icon}
                 </button>
               ))}
+              {/* Group call buttons cho mobile */}
+              {conversation?.type === 'group' && (
+                <GroupCallButton conversationId={conversation.id || conversation._id} />
+              )}
             </>
           ) : (
             <>
               {[
-                { icon: <Phone size={16} />, title: 'Gọi thoại', onClick: conversation?.type === 'dm' ? onPhoneCall : undefined },
-                { icon: <Video size={16} />, title: 'Gọi video', onClick: conversation?.type === 'dm' ? onVideoCall : undefined },
+                // Phone/Video chỉ cho DM; group dùng GroupCallButton riêng bên dưới
+                ...(conversation?.type === 'dm' ? [
+                  { icon: <Phone size={16} />, title: 'Gọi thoại', onClick: onPhoneCall },
+                  { icon: <Video size={16} />, title: 'Gọi video', onClick: onVideoCall },
+                ] : []),
                 ...(conversation?.type === 'group' ? [{ icon: <Volume2 size={16} />, title: 'Phòng thoại', onClick: onVoiceRoom, active: voiceRoomActive }] : []),
+                // GroupCallButton sẽ tự render bên dưới cho group
                 { icon: <Search size={16} />, title: 'Tìm kiếm' },
                 { icon: <Users size={16} />, title: 'Thành viên', onClick: onToggleRight, active: showRight },
                 { icon: <Pin size={16} />, title: 'Tin nhắn đã ghim' },
@@ -523,6 +534,10 @@ export default function ChatArea({
                   {btn.icon}
                 </button>
               ))}
+              {/* Group call buttons – chỉ hiện cho group */}
+              {conversation?.type === 'group' && (
+                <GroupCallButton conversationId={conversation.id || conversation._id} />
+              )}
             </>
           )}
         </div>
