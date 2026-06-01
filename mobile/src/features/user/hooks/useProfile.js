@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Alert, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,6 +15,7 @@ export function useProfile({ user, updateUser, navigation }) {
   const [logoutModal, setLogoutModal] = useState(false);
   const [statusModal, setStatusModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const hasFetchedRef = useRef(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -25,13 +26,19 @@ export function useProfile({ user, updateUser, navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      fetchProfile(false);
+      if (!hasFetchedRef.current) {
+        hasFetchedRef.current = true;
+        fetchProfile(false);
+      } else {
+        fetchProfile('silent');
+      }
     }, [])
   );
 
   const fetchProfile = async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+    if (isRefresh === true) setRefreshing(true);
+    else if (isRefresh === false) setLoading(true);
+    // 'silent': no spinner, just update data in background
 
     try {
       const res = await apiClient.get('/auth/authme');
@@ -53,7 +60,7 @@ export function useProfile({ user, updateUser, navigation }) {
         setSelStatus(user.status || 'online');
       }
     } finally {
-      setLoading(false);
+      if (isRefresh !== 'silent') setLoading(false);
       setRefreshing(false);
     }
   };

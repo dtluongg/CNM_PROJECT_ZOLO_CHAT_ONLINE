@@ -19,6 +19,7 @@ const onlineUsers = new Map();
 // ═════════════════════════════════════════════════════════════════════════════
 const initSocket = (httpServer) => {
     io = new Server(httpServer, {
+        transports: ['polling', 'websocket'],
         cors: {
             origin: (origin, cb) => {
                 // Mobile app không gửi Origin header → cho phép
@@ -30,12 +31,13 @@ const initSocket = (httpServer) => {
                     process.env.FRONTEND_URL,
                 ].filter(Boolean);
                 if (allowed.some(o => origin.startsWith(o))) return cb(null, true);
-                cb(null, true); // allow all for now – tighten in production
+                cb(null, true);
             },
             credentials: true,
         },
-        // Tăng buffer cho video signaling (SDP có thể dài)
-        maxHttpBufferSize: 1e6, // 1 MB
+        maxHttpBufferSize: 1e6,
+        pingTimeout: 20000,
+        pingInterval: 25000,
     });
 
     // ── Auth middleware: dùng cùng logic với verifytoken.js ───────────────

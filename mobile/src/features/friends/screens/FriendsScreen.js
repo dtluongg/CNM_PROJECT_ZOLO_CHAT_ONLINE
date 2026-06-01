@@ -37,6 +37,7 @@ export default function FriendsScreen({ navigation }) {
   const [blockedList, setBlockedList] = useState([]);
   const [loadingContacts, setLoadingContacts] = useState(true);
   const [openingChat, setOpeningChat] = useState(false);
+  const hasFetchedRef = useRef(false);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,9 +49,9 @@ export default function FriendsScreen({ navigation }) {
   const [scanning, setScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
 
-  const fetchContacts = async () => {
+  const fetchContacts = async (silent = false) => {
     try {
-      setLoadingContacts(true);
+      if (!silent) setLoadingContacts(true);
       const [friendRes, inReqRes, outReqRes, blockedRes] = await Promise.all([
          friendApi.getFriendList().catch(() => ({ data: { success: false } })),
          friendApi.getIncomingRequests().catch(() => ({ data: { success: false } })),
@@ -72,7 +73,13 @@ export default function FriendsScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      fetchContacts();
+      // Lần đầu: show loading. Các lần sau: fetch ngầm, không block UI
+      if (!hasFetchedRef.current) {
+        hasFetchedRef.current = true;
+        fetchContacts(false);
+      } else {
+        fetchContacts(true);
+      }
     }, [])
   );
 

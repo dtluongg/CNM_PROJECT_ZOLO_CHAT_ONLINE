@@ -6,9 +6,14 @@ const { Platform } = require('react-native');
 
 if (Platform.OS !== 'web') {
   try {
-    require('react-native-webrtc').registerGlobals();
+    require('@livekit/react-native').registerGlobals();
   } catch (e) {
-    console.warn('[WebRTC] registerGlobals failed:', e?.message);
+    // fallback to react-native-webrtc for 1-on-1 calls
+    try {
+      require('react-native-webrtc').registerGlobals();
+    } catch (e2) {
+      console.warn('[WebRTC] registerGlobals failed:', e2?.message);
+    }
   }
 
   if (typeof global.navigator === 'undefined') {
