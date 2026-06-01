@@ -98,11 +98,15 @@ export default function ActiveCallScreen() {
   }, [localStream, isCameraOff]); // ← thêm isCameraOff
 
   // ── Gán remoteStream vào video (video call) ───────────────────────────────
+  // Phụ thuộc vào callState vì ontrack có thể bắn TRƯỚC khi video element mount
+  // (khi callState còn INCOMING). Khi callState → ACTIVE element mới tồn tại,
+  // effect phải chạy lại dù remoteStream reference không đổi.
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch(() => {});
     }
-  }, [remoteStream]);
+  }, [remoteStream, callState]);
 
   // ── Auto-hide controls (video only) ──────────────────────────────────────
   const resetHideTimer = () => {

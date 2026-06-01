@@ -309,12 +309,13 @@ module.exports = (io, socket, onlineUsers) => {
             //         Delay nhỏ để callee kịp setRemoteDescription trước khi addIceCandidate
             const buffered = iceCandidateBuffers.get(callId) || [];
             if (buffered.length > 0) {
-                setTimeout(() => {
-                    for (const candidate of buffered) {
-                        socket.emit('call:ice-candidate', { callId, candidate });
-                    }
-                }, 100);
+              setTimeout(() => {
+                for (const candidate of buffered) {
+                  socket.emit('call:ice-candidate', { callId, candidate });
+                }
+              }, 300); // ← tăng lên 300ms
             }
+            iceCandidateBuffers.delete(callId);
 
             // Bước 4: Xóa buffer tránh memory leak
             iceCandidateBuffers.delete(callId);

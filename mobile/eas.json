@@ -6,13 +6,25 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://nhom3zolochat.dotienluong.id.vn/backend/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://nhom3zolochat.dotienluong.id.vn"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://nhom3zolochat.dotienluong.id.vn/backend/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://nhom3zolochat.dotienluong.id.vn"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://nhom3zolochat.dotienluong.id.vn/backend/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://nhom3zolochat.dotienluong.id.vn"
+      }
     }
   },
   "submit": {

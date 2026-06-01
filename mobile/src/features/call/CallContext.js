@@ -222,7 +222,7 @@ export const CallProvider = ({ children }) => {
     }
 
     try {
-      createPeer();
+      await createPeer();
 
       const stream = await getLocalStream(type);
 
@@ -284,7 +284,7 @@ export const CallProvider = ({ children }) => {
     const { callId: cid, offer, type, callerInfo } = data;
 
     try {
-      createPeer();
+      await createPeer();
 
       InCallManager.stopRingtone();
 

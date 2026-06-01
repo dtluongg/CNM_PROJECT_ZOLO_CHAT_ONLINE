@@ -4,6 +4,7 @@
 
 import { useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
+import { getIceServers } from '../../../utils/turnUtils';
 
 let RN_RTC_AVAILABLE = false;
 let RTCPeerConnection_ = null;
@@ -37,25 +38,10 @@ if (Platform.OS === 'web') {
 
 export { RTCView_ as RTCView, RN_RTC_AVAILABLE };
 
-const ICE_SERVERS = {
+const FALLBACK_ICE = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
   ],
 };
 
@@ -68,14 +54,15 @@ export function useCallWebRTC({ onIceCandidate, onRemoteStream }) {
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
 
-  const createPeer = useCallback(() => {
+  const createPeer = useCallback(async () => {
     if (!RN_RTC_AVAILABLE) throw new Error('WebRTC_UNAVAILABLE');
 
     pcRef.current?.close();
     pcRef.current = null;
     remoteStreamRef.current = null;
 
-    const pc = new RTCPeerConnection_(ICE_SERVERS);
+    const iceServers = await getIceServers();
+    const pc = new RTCPeerConnection_({ iceServers });
 
     pc.onicecandidate = (e) => {
       if (e.candidate) {
