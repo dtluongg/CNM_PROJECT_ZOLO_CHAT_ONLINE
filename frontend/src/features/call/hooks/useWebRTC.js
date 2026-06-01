@@ -17,8 +17,11 @@ export function useWebRTC({ onIceCandidate, onRemoteStream }) {
 
     pc.onicecandidate = (e) => { if (e.candidate) onIceCandidate(e.candidate); };
     pc.ontrack = (e) => {
-      if (e.streams?.[0]) onRemoteStream(e.streams[0]);
-      else onRemoteStream(new MediaStream([e.track]));
+      // Tạo MediaStream mới mỗi lần ontrack để React luôn nhận reference mới.
+      // Cần thiết vì audio và video track share cùng e.streams[0] object —
+      // nếu pass thẳng, React bail out khi reference không đổi (state giống cũ).
+      const src = e.streams?.[0];
+      onRemoteStream(src ? new MediaStream(src.getTracks()) : new MediaStream([e.track]));
     };
     pc.oniceconnectionstatechange = () => console.log('[ICE]', pc.iceConnectionState);
     pc.onicegatheringstatechange  = () => console.log('[Gather]', pc.iceGatheringState);
