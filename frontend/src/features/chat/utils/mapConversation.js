@@ -8,7 +8,7 @@ export const mapConversationItem = (item, dmOverrides) => {
   return {
     id:          item._id,
     name:        isDm
-      ? (override?.name    || other?.displayName || item.name || 'Đoạn chat trực tiếp')
+      ? (override?.name    || other?.nickname || item.name || other?.displayName || 'Đoạn chat trực tiếp')
       : (item.name || 'Nhóm chưa đặt tên'),
     avatar:      isDm
       ? (override?.avatar  || other?.avatar      || item.avatar || null)

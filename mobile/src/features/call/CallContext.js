@@ -192,12 +192,17 @@ export const CallProvider = ({ children }) => {
   ]);
 
   const prepareAudioSession = useCallback((type) => {
-    setTimeout(() => {
-      InCallManager.start({ media: 'audio' });
+    try {
+      InCallManager.start({ media: type === 'video' ? 'video' : 'audio' });
       InCallManager.setMicrophoneMute(false);
-      InCallManager.setForceSpeakerphoneOn(type === 'video');
-      InCallManager.setSpeakerphoneOn(type === 'video');
-    }, 800);
+      // Luôn bật speakerphone — người dùng có thể tắt sau; tắt forceSpeaker có thể block audio Android
+      InCallManager.setSpeakerphoneOn(true);
+      if (type === 'video') {
+        InCallManager.setForceSpeakerphoneOn(true);
+      }
+    } catch (e) {
+      console.warn('[InCallManager] prepareAudioSession error:', e?.message);
+    }
   }, []);
 
   const initiateCall = useCallback(async (targetUser, type) => {

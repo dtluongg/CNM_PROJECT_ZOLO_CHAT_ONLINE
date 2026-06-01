@@ -217,24 +217,56 @@ const getDmDisplayInfo = async (conversationIds, currentUserId) => {
         .populate('userId', '_id displayName avatar status')
         .lean();
 
-    const map = new Map();
+    // Collect all other-user IDs for a single Friendship batch query
+    const otherUserIds = [];
+    const convOtherMap = new Map();
     for (const conversationId of conversationIds) {
-        const convoMembers = members.filter((member) => member.conversationId.toString() === conversationId.toString());
-        const otherMember = convoMembers.find((member) => member.userId && member.userId._id.toString() !== currentUserId) || null;
-
+        const convoMembers = members.filter((m) => m.conversationId.toString() === conversationId.toString());
+        const otherMember = convoMembers.find((m) => m.userId && m.userId._id.toString() !== currentUserId) || null;
         if (otherMember?.userId) {
-            map.set(conversationId.toString(), {
-                otherUserId: otherMember.userId._id.toString(),
-                name: otherMember.userId.displayName || 'Đoạn chat trực tiếp',
-                avatar: otherMember.userId.avatar || '',
-                otherUser: {
-                    _id: otherMember.userId._id,
-                    displayName: otherMember.userId.displayName || 'Đoạn chat trực tiếp',
-                    avatar: otherMember.userId.avatar || '',
-                    status: otherMember.userId.status || 'online',
-                },
-            });
+            const otherId = otherMember.userId._id.toString();
+            otherUserIds.push(otherId);
+            convOtherMap.set(conversationId.toString(), otherMember);
         }
+    }
+
+    // Fetch all relevant friendships in one query
+    const friendships = await Friendship.find({
+        $or: [
+            { userId1: currentUserId, userId2: { $in: otherUserIds } },
+            { userId2: currentUserId, userId1: { $in: otherUserIds } },
+        ],
+    }).select('userId1 userId2 nickname1 nickname2').lean();
+
+    // Build lookup: otherId → nickname that currentUser gave them
+    // nickname2 = name userId1 gave to userId2
+    // nickname1 = name userId2 gave to userId1
+    const nicknameMap = new Map();
+    for (const fs of friendships) {
+        const u1 = fs.userId1.toString();
+        const u2 = fs.userId2.toString();
+        const cur = currentUserId.toString();
+        if (u1 === cur && fs.nickname2) nicknameMap.set(u2, fs.nickname2);
+        else if (u2 === cur && fs.nickname1) nicknameMap.set(u1, fs.nickname1);
+    }
+
+    const map = new Map();
+    for (const [convIdStr, otherMember] of convOtherMap) {
+        const otherId = otherMember.userId._id.toString();
+        const nickname = nicknameMap.get(otherId);
+        const displayName = nickname || otherMember.userId.displayName || 'Đoạn chat trực tiếp';
+        map.set(convIdStr, {
+            otherUserId: otherId,
+            name: displayName,
+            avatar: otherMember.userId.avatar || '',
+            otherUser: {
+                _id: otherMember.userId._id,
+                displayName: otherMember.userId.displayName || 'Đoạn chat trực tiếp',
+                nickname: nickname || null,
+                avatar: otherMember.userId.avatar || '',
+                status: otherMember.userId.status || 'online',
+            },
+        });
     }
 
     return map;

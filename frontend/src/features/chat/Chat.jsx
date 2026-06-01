@@ -167,9 +167,13 @@ const Chat = () => {
 
   useEffect(() => {
     if (!activeConversation?.id) return;
-    if (activeConversation.type !== 'group') return;
-    loadMessages(activeConversation.id, activeTopic?._id || null);
-    fetchMyPermissions(activeConversation.id, currentUser?._id?.toString());
+    if (activeConversation.type === 'group') {
+      loadMessages(activeConversation.id, activeTopic?._id || null);
+      fetchMyPermissions(activeConversation.id, currentUser?._id?.toString());
+    } else {
+      // DM or other: load messages when active conversation changes
+      loadMessages(activeConversation.id);
+    }
   }, [activeTopic?._id, activeConversation?.id]);
 
   useEffect(() => { fetchConversations(); }, [fetchConversations]);

@@ -56,7 +56,7 @@ export default function MessageScreen({ route, navigation }) {
   const { theme: THEME } = useTheme();
   const { isUserOnline, getLastSeen } = usePresence();
   const { initiateCall } = useCall();
-  const { initiateGroupCall, callState: gcState } = useGroupCall();
+  const { initiateGroupCall, callState: gcState, socketReady } = useGroupCall();
   const { isInRoom, fetchStatusBatch } = useVoiceRoomContext();
   const styles = useStyles(THEME);
   const currentUserId = user?._id?.toString() || null;
@@ -763,17 +763,17 @@ export default function MessageScreen({ route, navigation }) {
               {/* Group: gọi nhóm qua LiveKit */}
               <TouchableOpacity
                 style={styles.headerBtn}
-                disabled={gcState !== GROUP_CALL_STATE.IDLE}
+                disabled={gcState !== GROUP_CALL_STATE.IDLE || !socketReady}
                 onPress={() => initiateGroupCall(conversation.id || conversation._id, 'audio')}
               >
-                <Feather name="phone" size={20} color={gcState !== GROUP_CALL_STATE.IDLE ? THEME.textMuted + '55' : THEME.textMuted} />
+                <Feather name="phone" size={20} color={(gcState !== GROUP_CALL_STATE.IDLE || !socketReady) ? THEME.textMuted + '55' : THEME.textMuted} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.headerBtn}
-                disabled={gcState !== GROUP_CALL_STATE.IDLE}
+                disabled={gcState !== GROUP_CALL_STATE.IDLE || !socketReady}
                 onPress={() => initiateGroupCall(conversation.id || conversation._id, 'video')}
               >
-                <Feather name="video" size={20} color={gcState !== GROUP_CALL_STATE.IDLE ? THEME.textMuted + '55' : THEME.textMuted} />
+                <Feather name="video" size={20} color={(gcState !== GROUP_CALL_STATE.IDLE || !socketReady) ? THEME.textMuted + '55' : THEME.textMuted} />
               </TouchableOpacity>
             </>
           )}
