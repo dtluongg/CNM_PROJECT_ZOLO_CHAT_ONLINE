@@ -233,19 +233,19 @@ const getDmDisplayInfo = async (conversationIds, currentUserId) => {
     // Fetch all relevant friendships in one query
     const friendships = await Friendship.find({
         $or: [
-            { user1: currentUserId, user2: { $in: otherUserIds } },
-            { user2: currentUserId, user1: { $in: otherUserIds } },
+            { userId1: currentUserId, userId2: { $in: otherUserIds } },
+            { userId2: currentUserId, userId1: { $in: otherUserIds } },
         ],
-        status: 'accepted',
-    }).select('user1 user2 nickname1 nickname2').lean();
+    }).select('userId1 userId2 nickname1 nickname2').lean();
 
     // Build lookup: otherId → nickname that currentUser gave them
+    // nickname2 = name userId1 gave to userId2
+    // nickname1 = name userId2 gave to userId1
     const nicknameMap = new Map();
     for (const fs of friendships) {
-        const u1 = fs.user1.toString();
-        const u2 = fs.user2.toString();
+        const u1 = fs.userId1.toString();
+        const u2 = fs.userId2.toString();
         const cur = currentUserId.toString();
-        // nickname2 = name user1 assigned to user2
         if (u1 === cur && fs.nickname2) nicknameMap.set(u2, fs.nickname2);
         else if (u2 === cur && fs.nickname1) nicknameMap.set(u1, fs.nickname1);
     }

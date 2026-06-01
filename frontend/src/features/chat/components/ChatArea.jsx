@@ -622,14 +622,17 @@ export default function ChatArea({
         WebkitOverflowScrolling: 'touch',
       }}>
         <div style={{ padding: isMobile ? '24px 16px 16px' : '28px 20px 20px', borderBottom: '1px solid var(--border)', marginBottom: 8 }}>
-          <div style={{
-            width: isMobile ? 56 : 60, height: isMobile ? 56 : 60, borderRadius: '50%',
-            background: getAvatarColor(conversation.name),
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            marginBottom: 12, color: '#fff', fontWeight: 800, fontSize: isMobile ? 22 : 26,
-          }}>
-            {getInitials(conversation.name)}
-          </div>
+          {conversation.avatar
+            ? <img src={conversation.avatar} alt={conversation.name} style={{ width: isMobile ? 56 : 60, height: isMobile ? 56 : 60, borderRadius: '50%', objectFit: 'cover', marginBottom: 12 }} />
+            : <div style={{
+                width: isMobile ? 56 : 60, height: isMobile ? 56 : 60, borderRadius: '50%',
+                background: getAvatarColor(conversation.name),
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: 12, color: '#fff', fontWeight: 800, fontSize: isMobile ? 22 : 26,
+              }}>
+                {getInitials(conversation.name)}
+              </div>
+          }
           <h2 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: isMobile ? 20 : 22, margin: '0 0 6px' }}>
             {conversation.type === 'dm' ? conversation.name : `# ${conversation.name}`}
           </h2>
