@@ -17,9 +17,8 @@ export const useMessages = ({
   const [messages, setMessages] = useState({});
 
   const loadMessages = useCallback(async (convId, topicId = null, force = false) => {
-    // Key riêng cho từng topic
     const stateKey = topicId ? `${convId}__${topicId}` : convId;
-    if (messages[stateKey] && !force) return;
+    if (!force && stateKey in messages) return;
     try {
       const res  = await messageApi.getMessages(convId, { topicId: topicId || undefined });
       const msgs = (res.data.messages || []).map(normalizeMsg);
