@@ -9,6 +9,7 @@ import React, {
   useEffect, useRef, useState,
 } from 'react';
 import { io } from 'socket.io-client';
+import { Alert } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useVoiceRoom } from '../voice/hooks/useVoiceRoom';
 
@@ -95,13 +96,24 @@ export function GroupCallProvider({ children }) {
     }
 
     if (!socketRef.current?.connected) {
+      Alert.alert('Lỗi kết nối', 'Không có kết nối mạng, thử lại sau.');
       setError('Không có kết nối mạng, thử lại sau');
       return;
     }
     setError(null);
 
     socketRef.current.emit('group-call:initiate', { conversationId, type }, async (res) => {
-      if (res?.error) { setError(res.error); return; }
+      if (res?.error) {
+        setError(res.error);
+        Alert.alert('Không thể gọi nhóm', res.error);
+        return;
+      }
+      if (!res?.livekitUrl) {
+        const msg = 'Server chưa cấu hình LiveKit. Liên hệ admin để thiết lập LIVEKIT_URL.';
+        setError(msg);
+        Alert.alert('Tính năng chưa sẵn sàng', msg);
+        return;
+      }
       try {
         await voiceRoom.connect({ livekitUrl: res.livekitUrl, token: res.token });
         setGCId(res.groupCallId);
@@ -111,7 +123,9 @@ export function GroupCallProvider({ children }) {
         startTimer();
       } catch (err) {
         console.error('[GroupCall] connect error:', err);
-        setError('Không thể kết nối phòng gọi');
+        const msg = `Không thể kết nối phòng gọi: ${err?.message || 'Lỗi không xác định'}`;
+        setError(msg);
+        Alert.alert('Lỗi kết nối', msg);
         socketRef.current?.emit('group-call:end', { groupCallId: res.groupCallId });
         resetAll();
       }
@@ -125,7 +139,11 @@ export function GroupCallProvider({ children }) {
     setError(null);
 
     socketRef.current.emit('group-call:accept', { groupCallId: data.groupCallId }, async (res) => {
-      if (res?.error) { setError(res.error); resetAll(); return; }
+      if (res?.error) { setError(res.error); Alert.alert('Lỗi', res.error); resetAll(); return; }
+      if (!res?.livekitUrl) {
+        Alert.alert('Tính năng chưa sẵn sàng', 'Server chưa cấu hình LiveKit.');
+        resetAll(); return;
+      }
       try {
         await voiceRoom.connect({ livekitUrl: res.livekitUrl, token: res.token });
         setGCId(res.groupCallId);
@@ -135,7 +153,9 @@ export function GroupCallProvider({ children }) {
         startTimer();
       } catch (err) {
         console.error('[GroupCall] accept connect error:', err);
-        setError('Không thể kết nối');
+        const msg = `Không thể kết nối: ${err?.message || 'Lỗi không xác định'}`;
+        setError(msg);
+        Alert.alert('Lỗi kết nối', msg);
         resetAll();
       }
     });

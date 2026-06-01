@@ -20,7 +20,18 @@ const onlineUsers = new Map();
 const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
-            origin:      ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:8081' , "https://warehouseposlvsh.dotienluong.id.vn"],
+            origin: (origin, cb) => {
+                // Mobile app không gửi Origin header → cho phép
+                if (!origin) return cb(null, true);
+                const allowed = [
+                    'http://localhost:5173', 'http://localhost:5174', 'http://localhost:8081',
+                    'http://nhom3zolochat.dotienluong.id.vn',
+                    'https://nhom3zolochat.dotienluong.id.vn',
+                    process.env.FRONTEND_URL,
+                ].filter(Boolean);
+                if (allowed.some(o => origin.startsWith(o))) return cb(null, true);
+                cb(null, true); // allow all for now – tighten in production
+            },
             credentials: true,
         },
         // Tăng buffer cho video signaling (SDP có thể dài)

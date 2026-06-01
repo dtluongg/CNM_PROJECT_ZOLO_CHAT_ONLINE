@@ -1,102 +1,91 @@
-/**
- * useWebRTC – quản lý RTCPeerConnection cho trình duyệt.
- * Backend chỉ là signaling server, media đi P2P qua WebRTC.
- *
- * Sử dụng:
- *   const webrtc = useWebRTC({ onIceCandidate, onRemoteStream });
- */
-
 import { useCallback, useRef } from 'react';
 import { getCallStream } from '../../../utils/mediaUtils';
 
-// STUN: giúp tìm địa chỉ public IP
-// TURN: relay media khi 2 bên sau NAT khác nhau (bắt buộc để gọi được từ các mạng khác nhau)
 const ICE_SERVERS = {
   iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    // OpenRelay TURN miễn phí (https://www.metered.ca/tools/openrelay)
-    {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-  ],
+        {
+          urls: "stun:stun.relay.metered.ca:80",
+        },
+        {
+          urls: "turn:global.relay.metered.ca:80",
+          username: "a9bdd19646fd4ff93af81747",
+          credential: "rkhaDcGCqTQBkooi",
+        },
+        {
+          urls: "turn:global.relay.metered.ca:80?transport=tcp",
+          username: "a9bdd19646fd4ff93af81747",
+          credential: "rkhaDcGCqTQBkooi",
+        },
+        {
+          urls: "turn:global.relay.metered.ca:443",
+          username: "a9bdd19646fd4ff93af81747",
+          credential: "rkhaDcGCqTQBkooi",
+        },
+        {
+          urls: "turns:global.relay.metered.ca:443?transport=tcp",
+          username: "a9bdd19646fd4ff93af81747",
+          credential: "rkhaDcGCqTQBkooi",
+        },
+    ],
 };
 
-/**
- * @param {{ onIceCandidate: (candidate) => void, onRemoteStream: (stream) => void }} opts
- */
 export function useWebRTC({ onIceCandidate, onRemoteStream }) {
-  const pcRef           = useRef(null);
-  const localStreamRef  = useRef(null);
+  const pcRef              = useRef(null);
+  const localStreamRef     = useRef(null);
+  // ✅ SỬA LỖI 1: chuyển vào trong hook
+  const pendingCandidatesRef = useRef([]);
 
-  // ── Tạo RTCPeerConnection mới ──────────────────────────────────────────────
   const createPeer = useCallback(() => {
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
     }
-
     const pc = new RTCPeerConnection(ICE_SERVERS);
-
-    pc.onicecandidate = (e) => {
-      if (e.candidate) onIceCandidate(e.candidate);
-    };
-
+    pc.onicecandidate = (e) => { if (e.candidate) onIceCandidate(e.candidate); };
     pc.ontrack = (e) => {
-      console.log('[WebRTC] ontrack:', e.track.kind, 'streams:', e.streams.length);
-      if (e.streams?.[0]) {
-        onRemoteStream(e.streams[0]);
-      } else {
-        const fallback = new MediaStream([e.track]);
-        onRemoteStream(fallback);
-      }
+      if (e.streams?.[0]) onRemoteStream(e.streams[0]);
+      else onRemoteStream(new MediaStream([e.track]));
     };
-
-    // ← TẤT CẢ handlers phải nằm trong đây
-    pc.oniceconnectionstatechange = () => {
-      console.log('[ICE state]', pc.iceConnectionState);
-    };
-
-    pc.onicegatheringstatechange = () => {
-      console.log('[ICE gathering]', pc.iceGatheringState);
-    };
-
-    pc.onconnectionstatechange = () => {
-      console.log('[Connection state]', pc.connectionState);
-    };
-
+    pc.oniceconnectionstatechange = () => console.log('[ICE]', pc.iceConnectionState);
+    pc.onicegatheringstatechange  = () => console.log('[Gather]', pc.iceGatheringState);
+    pc.onconnectionstatechange    = () => console.log('[Conn]', pc.connectionState);
     pcRef.current = pc;
     return pc;
   }, [onIceCandidate, onRemoteStream]);
 
-
-  // ── Lấy luồng media từ thiết bị người dùng ────────────────────────────────
   const getLocalStream = useCallback(async (callType) => {
-    const stream = await getCallStream(callType); // throws with friendly message on HTTP
-    localStreamRef.current = stream;
-    return stream;
+    // ✅ SỬA LỖI 3: bắt lỗi permission rõ ràng
+    try {
+      const stream = await getCallStream(callType);
+      localStreamRef.current = stream;
+      return stream;
+    } catch (err) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        throw new Error('Bạn cần cấp quyền truy cập microphone/camera trong trình duyệt.');
+      }
+      if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        throw new Error('Không tìm thấy microphone hoặc camera. Kiểm tra lại thiết bị.');
+      }
+      throw err;
+    }
   }, []);
 
-  // ── Thêm các track của stream vào peer connection ─────────────────────────
   const addLocalStream = useCallback((stream) => {
     const pc = pcRef.current;
     if (!pc || !stream) return;
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
   }, []);
 
-  // ── Tạo SDP offer (caller) ─────────────────────────────────────────────────
+  // ✅ SỬA LỖI 2: khai báo flushPendingCandidates TRƯỚC khi dùng
+  const flushPendingCandidates = useCallback(async () => {
+    const pc = pcRef.current;
+    if (!pc) return;
+    for (const c of pendingCandidatesRef.current) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+    }
+    pendingCandidatesRef.current = [];
+  }, []);
+
   const createOffer = useCallback(async () => {
     const pc = pcRef.current;
     if (!pc) throw new Error('No RTCPeerConnection');
@@ -105,50 +94,52 @@ export function useWebRTC({ onIceCandidate, onRemoteStream }) {
     return offer;
   }, []);
 
-  // ── Nhận offer, tạo answer (callee) ───────────────────────────────────────
+  // ✅ flushPendingCandidates đã được khai báo ở trên
   const createAnswer = useCallback(async (offer) => {
     const pc = pcRef.current;
     if (!pc) throw new Error('No RTCPeerConnection');
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    await flushPendingCandidates();
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     return answer;
-  }, []);
+  }, [flushPendingCandidates]);
 
-  // ── Nhận answer từ callee (caller gọi hàm này) ────────────────────────────
   const setRemoteAnswer = useCallback(async (answer) => {
     const pc = pcRef.current;
     if (!pc) throw new Error('No RTCPeerConnection');
     await pc.setRemoteDescription(new RTCSessionDescription(answer));
-  }, []);
+    await flushPendingCandidates();
+  }, [flushPendingCandidates]);
 
-  // ── Thêm ICE candidate nhận được từ peer ──────────────────────────────────
   const addIceCandidate = useCallback(async (candidate) => {
     const pc = pcRef.current;
     if (!pc) return;
+    if (!pc.remoteDescription) {
+      pendingCandidatesRef.current.push(candidate);
+      return;
+    }
     try {
       await pc.addIceCandidate(new RTCIceCandidate(candidate));
     } catch (err) {
-      console.warn('addIceCandidate error (có thể bỏ qua):', err.message);
+      console.warn('addIceCandidate error:', err.message);
     }
   }, []);
 
-  // ── Tắt/bật mic ───────────────────────────────────────────────────────────
   const setMuted = useCallback((muted) => {
     localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = !muted; });
   }, []);
 
-  // ── Tắt/bật camera ────────────────────────────────────────────────────────
   const setCameraEnabled = useCallback((enabled) => {
     localStreamRef.current?.getVideoTracks().forEach((t) => { t.enabled = enabled; });
   }, []);
 
-  // ── Dọn dẹp khi kết thúc cuộc gọi ────────────────────────────────────────
   const cleanup = useCallback(() => {
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     pcRef.current?.close();
     pcRef.current = null;
+    pendingCandidatesRef.current = [];
   }, []);
 
   return {
@@ -164,5 +155,6 @@ export function useWebRTC({ onIceCandidate, onRemoteStream }) {
     setMuted,
     setCameraEnabled,
     cleanup,
+    flushPendingCandidates,
   };
 }
