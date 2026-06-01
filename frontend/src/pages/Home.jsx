@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 const LotusFlower = ({ size = 80, opacity = 1 }) => (
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ opacity }}>
     <ellipse cx="50" cy="70" rx="8" ry="12" fill="#E8B4C8" />
@@ -434,12 +435,12 @@ const Home = () => {
             display: 'flex', gap: '16px', marginTop: '36px',
             flexWrap: 'wrap', justifyContent: 'center',
           }}>
-            <a href="/signin" className="btn-primary">
-               Đăng Nhập
-            </a>
-            <a href="/signup" className="btn-secondary">
-               Tạo Tài Khoản
-            </a>
+            <Link to="/signin" className="btn-primary">
+              Đăng Nhập
+            </Link>
+            <Link to="/signup" className="btn-secondary">
+              Tạo Tài Khoản
+            </Link>
           </div>
 
           {/* Scroll hint */}
@@ -673,7 +674,7 @@ const Home = () => {
             </p>
 
             <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <a href="/signup" style={{
+              <Link to="/signup" style={{
                 background: 'white',
                 color: '#C84B8A',
                 padding: '15px 40px',
@@ -691,8 +692,8 @@ const Home = () => {
                 onMouseLeave={e => { e.target.style.transform = ''; e.target.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)'; }}
               >
                  Đăng Ký Miễn Phí
-              </a>
-              <a href="/signin" style={{
+              </Link>
+              <Link to="/signin" style={{
                 background: 'rgba(255,255,255,0.15)',
                 color: 'white',
                 padding: '13px 38px',
@@ -711,7 +712,7 @@ const Home = () => {
                 onMouseLeave={e => { e.target.style.transform = ''; e.target.style.background = 'rgba(255,255,255,0.15)'; }}
               >
                 Đăng Nhập
-              </a>
+              </Link>
             </div>
 
             {/* Trust badges */}
