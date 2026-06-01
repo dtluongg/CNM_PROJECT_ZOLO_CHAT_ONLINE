@@ -41,45 +41,20 @@ export function useUserProfile({ route, navigation, authUser, isUserOnline, getP
 
   const loadFriendStatus = async (targetId) => {
     try {
-      const [friendsRes, outgoingRes, incomingRes] = await Promise.all([
-        friendApi.getFriendList(),
-        friendApi.getOutgoingRequests(),
-        friendApi.getIncomingRequests(),
-      ]);
-
-      const friends = friendsRes.data?.data || [];
-      const outgoing = outgoingRes.data?.data || [];
-      const incoming = incomingRes.data?.data || [];
-
-      const tid = String(targetId);
-
-      const isFriend = friends.some(f => String(f.friendId) === tid);
-      if (isFriend) {
+      const res = await friendApi.getFriendStatus(targetId);
+      const d = res.data;
+      // Backend trả về: { status: 'friends'|'sent'|'received'|'none', requestId?, isBlocked? }
+      if (d.status === 'friends') {
         setFriendStatus('friends');
-        return;
-      }
-
-      const sent = outgoing.find(r => {
-        const id = r.toUserId?._id ?? r.toUserId;
-        return String(id) === tid;
-      });
-      if (sent) {
+      } else if (d.status === 'sent') {
         setFriendStatus('sent');
-        setFriendRequestId(sent._id);
-        return;
-      }
-
-      const received = incoming.find(r => {
-        const id = r.fromUserId?._id ?? r.fromUserId;
-        return String(id) === tid;
-      });
-      if (received) {
+        setFriendRequestId(d.requestId || null);
+      } else if (d.status === 'received') {
         setFriendStatus('received');
-        setFriendRequestId(received._id);
-        return;
+        setFriendRequestId(d.requestId || null);
+      } else {
+        setFriendStatus('none');
       }
-
-      setFriendStatus('none');
     } catch {
       setFriendStatus('none');
     }

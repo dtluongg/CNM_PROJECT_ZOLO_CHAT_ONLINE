@@ -8,17 +8,15 @@ import {
   PermissionsAndroid, Modal, Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { VideoView } from '@livekit/react-native';
 import { useGroupCall, GROUP_CALL_STATE } from '../GroupCallContext';
 import { THEME, getAvatarColor, getInitials } from '../../../theme';
 
-let RTCView = null;
-try { RTCView = require('react-native-webrtc').RTCView; } catch {}
-
 // ── Participant tile ──────────────────────────────────────────────────────────
-function ParticipantTile({ participant, tileSize, localVideoURL, getRemoteVideoURL, isSpeaking }) {
+function ParticipantTile({ participant, tileSize, localVideoTrack, getRemoteVideoTrack, isSpeaking }) {
   const [imgErr, setImgErr] = useState(false);
-  const videoURL  = participant.isLocal ? localVideoURL : getRemoteVideoURL(participant.identity);
-  const showVideo = !!videoURL && participant.hasCamera && RTCView;
+  const track     = participant.isLocal ? localVideoTrack : getRemoteVideoTrack(participant.identity);
+  const showVideo = !!track && participant.hasCamera;
   const name      = participant.displayName || participant.name || 'Người dùng';
 
   return (
@@ -32,7 +30,7 @@ function ParticipantTile({ participant, tileSize, localVideoURL, getRemoteVideoU
       justifyContent: 'center', alignItems: 'center',
     }}>
       {showVideo ? (
-        <RTCView streamURL={videoURL} style={StyleSheet.absoluteFill} objectFit="cover" mirror={participant.isLocal} />
+        <VideoView track={track} style={StyleSheet.absoluteFill} objectFit="cover" mirror={participant.isLocal} />
       ) : (
         <View style={{ width: '52%', aspectRatio: 1, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
           {participant.avatar && !imgErr
@@ -71,8 +69,8 @@ export default function GroupCallScreen() {
   const {
     callState, callType, callDuration, formatDuration,
     isMuted, isCameraOff, isScreenSharing,
-    liveParts, localVideoURL, screenURL, speaking,
-    getRemoteVideoURL,
+    liveParts, localVideoURL: localVideoTrack, screenURL: screenTrack, speaking,
+    getRemoteVideoURL: getRemoteVideoTrack,
     toggleMute, toggleCamera, toggleScreenShare,
     leaveGroupCall,
   } = useGroupCall();
@@ -142,9 +140,9 @@ export default function GroupCallScreen() {
       <View style={styles.container}>
 
         {/* Screen share overlay */}
-        {screenURL && RTCView && (
+        {screenTrack && (
           <View style={StyleSheet.absoluteFill}>
-            <RTCView streamURL={screenURL} style={{ flex: 1 }} objectFit="contain" />
+            <VideoView track={screenTrack} style={{ flex: 1 }} objectFit="contain" />
             <View style={styles.screenShareBadge}>
               <Feather name="monitor" size={14} color="#fff" />
               <Text style={{ color: '#fff', fontSize: 12, marginLeft: 6 }}>Đang chia sẻ màn hình</Text>
@@ -181,8 +179,8 @@ export default function GroupCallScreen() {
                   key={p.identity}
                   participant={p}
                   tileSize={tileSize}
-                  localVideoURL={localVideoURL}
-                  getRemoteVideoURL={getRemoteVideoURL}
+                  localVideoTrack={localVideoTrack}
+                  getRemoteVideoTrack={getRemoteVideoTrack}
                   isSpeaking={speaking instanceof Set ? speaking.has(p.identity) : false}
                 />
               ))}

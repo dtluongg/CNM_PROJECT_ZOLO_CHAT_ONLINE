@@ -541,15 +541,9 @@ export default function MainTabScreen({ navigation, route }) {
     }
   }, []);
 
-  // useEffect(() => {
-  //   fetchConversations();
-  // }, [fetchConversations]);
-  useFocusEffect(
-    useCallback(() => {
-      // Mỗi khi người dùng quay lại màn hình này, nó sẽ tự động lấy dữ liệu mới nhất
-      fetchConversations();
-    }, [fetchConversations])
-  );
+  useEffect(() => {
+    fetchConversations();
+  }, [fetchConversations]);
   // Socket: live preview + unread count in conversation list
   useEffect(() => {
     if (!token) return;
@@ -587,25 +581,24 @@ export default function MainTabScreen({ navigation, route }) {
 
   const unreadTotal = conversations.reduce((s, c) => s + (c.unread || 0), 0);
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'chats':
-        return <ChatsTab navigation={navigation} conversations={conversations} onUpdateConversations={setConversations} onRefresh={fetchConversations} THEME={THEME} styles={styles} />;
-      case 'friends':
-        return <FriendsScreen navigation={navigation} />;
-      case 'profile':
-        return <ProfileScreen navigation={navigation} />;
-      case 'tin':
-        return <StoriesScreen />;
-      default:
-        return null;
-    }
-  };
+  // Dùng display style để ẩn tab thay vì unmount → giữ nguyên state, không fetch lại
+  const tabStyle = (tab) => ({ flex: 1, display: activeTab === tab ? 'flex' : 'none' });
 
   return (
     <View style={{ flex: 1, backgroundColor: THEME.bgPrimary }}>
       <View style={{ flex: 1 }}>
-        {renderContent()}
+        <View style={tabStyle('chats')}>
+          <ChatsTab navigation={navigation} conversations={conversations} onUpdateConversations={setConversations} onRefresh={fetchConversations} THEME={THEME} styles={styles} />
+        </View>
+        <View style={tabStyle('friends')}>
+          <FriendsScreen navigation={navigation} />
+        </View>
+        <View style={tabStyle('tin')}>
+          <StoriesScreen />
+        </View>
+        <View style={tabStyle('profile')}>
+          <ProfileScreen navigation={navigation} />
+        </View>
       </View>
       <BottomTabBar activeTab={activeTab} onTabChange={setActiveTab} unreadTotal={unreadTotal} THEME={THEME} styles={styles} />
     </View>

@@ -30,7 +30,8 @@
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.INTERNET",
-        "android.permission.FOREGROUND_SERVICE"
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"
       ]
     },
     "scheme": "chatapp",
