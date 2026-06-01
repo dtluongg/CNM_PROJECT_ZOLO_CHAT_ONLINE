@@ -9,21 +9,27 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://nhom3zolochat.dotienluong.id.vn/backend/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://nhom3zolochat.dotienluong.id.vn"
+        "EXPO_PUBLIC_SOCKET_URL": "https://nhom3zolochat.dotienluong.id.vn",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://qrtlxbxfhrzdsyftrnoe.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFydGx4YnhmaHJ6ZHN5ZnRybm9lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMjY0MDUsImV4cCI6MjA5MDcwMjQwNX0.jCf8gb0atlhcqnSfk5ILudYGl3O2CXHlSskN0QyqMeI"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://nhom3zolochat.dotienluong.id.vn/backend/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://nhom3zolochat.dotienluong.id.vn"
+        "EXPO_PUBLIC_SOCKET_URL": "https://nhom3zolochat.dotienluong.id.vn",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://qrtlxbxfhrzdsyftrnoe.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFydGx4YnhmaHJ6ZHN5ZnRybm9lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMjY0MDUsImV4cCI6MjA5MDcwMjQwNX0.jCf8gb0atlhcqnSfk5ILudYGl3O2CXHlSskN0QyqMeI"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://nhom3zolochat.dotienluong.id.vn/backend/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://nhom3zolochat.dotienluong.id.vn"
+        "EXPO_PUBLIC_SOCKET_URL": "https://nhom3zolochat.dotienluong.id.vn",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://qrtlxbxfhrzdsyftrnoe.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFydGx4YnhmaHJ6ZHN5ZnRybm9lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMjY0MDUsImV4cCI6MjA5MDcwMjQwNX0.jCf8gb0atlhcqnSfk5ILudYGl3O2CXHlSskN0QyqMeI"
       }
     }
   },

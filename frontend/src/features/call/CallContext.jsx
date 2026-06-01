@@ -205,8 +205,7 @@ export const CallProvider = ({ children }) => {
 
     try {
       // ✅ Fetch TURN credentials trước khi tạo peer
-      const accessToken = token || getAccessToken();
-      const iceServers  = await getIceServers(accessToken);
+      const iceServers  = await getIceServers();
 
       createPeer(iceServers);
 
@@ -267,8 +266,8 @@ export const CallProvider = ({ children }) => {
     setCallError(null);
 
     try {
-      const accessToken = token || getAccessToken();
-      const iceServers  = await getIceServers(accessToken);
+      // ✅ Fetch TURN credentials trước khi tạo peer
+      const iceServers  = await getIceServers();
 
       createPeer(iceServers);
 
@@ -279,20 +278,24 @@ export const CallProvider = ({ children }) => {
 
       const answer = await createAnswer(offer);
 
-      socketRef.current.emit('call:answer', { callId: cid, answer }, async (res) => {
-        if (res?.error) {
-          setCallError(res.error);
-          resetAll();
-          return;
-        }
+      socketRef.current.emit(
+        'call:answer',
+        { callId: cid, answer },
+        async (res) => {
+          if (res?.error) {
+            setCallError(res.error);
+            resetAll();
+            return;
+          }
 
-        setCallState(CALL_STATE.ACTIVE);
-        setCallType(type);
-        setRemoteUser(callerInfo);
-        startTimer();
-        flushLocalCandidates(cid);
-        await flushRemoteCandidates();
-      });
+          setCallState(CALL_STATE.ACTIVE);
+          setCallType(type);
+          setRemoteUser(callerInfo);
+          startTimer();
+          flushLocalCandidates(cid);
+          await flushRemoteCandidates();
+        },
+      );
     } catch (err) {
       console.error('answerCall error:', err);
       setCallError(err.message || 'Không thể trả lời cuộc gọi');
@@ -388,12 +391,8 @@ export const CallProvider = ({ children }) => {
     // Callee đã nhấc máy → caller nhận answer
     socket.on('call:answered', async ({ callId: cid, answer }) => {
       try {
-        // ✅ Set callIdRef TRƯỚC setRemoteAnswer
-        // để onIceCandidate có callId khi flush
-        setCallId(cid);
-
         await setRemoteAnswer(answer);
-
+        setCallId(cid);
         setCallState(CALL_STATE.ACTIVE);
         startTimer();
         flushLocalCandidates(cid);
