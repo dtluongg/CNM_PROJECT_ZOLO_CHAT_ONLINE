@@ -12,17 +12,25 @@ const app = express();
 const server = http.createServer(app);
 
 // ── MIDDLEWARE ──
+const ALLOWED_ORIGINS = [
+  'https://nhom3zolochat.dotienluong.id.vn', // production HTTPS
+  'http://nhom3zolochat.dotienluong.id.vn',  // HTTP fallback trước khi có SSL
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://localhost:5173',
+  'http://localhost:8081',
+  'http://172.27.130.18:5173',
+  'http://172.27.130.18:8081',
+  'http://172.27.130.18:2026',
+];
+if (process.env.FRONTEND_URL) ALLOWED_ORIGINS.push(process.env.FRONTEND_URL);
+
 app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'https://localhost:5173',
-    'http://localhost:8081',
-    'http://172.27.130.18:5173',
-    'http://172.27.130.18:8081',
-    'http://172.27.130.18:2026',
-    "http://nhom3zolochat.dotienluong.id.vn"
-  ],
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // mobile / curl / postman
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: '${origin}' không được phép`));
+  },
   credentials: true,
 }));
 
@@ -46,6 +54,7 @@ const reactionRouter     = require('./src/routes/reactionRouter');
 const notificationRouter = require('./src/routes/notificationRouter');
 const groupRoleRouter = require('./src/routes/groupRoleRouter');
 const voiceRoomRouter    = require('./src/routes/voiceRoomRouter');
+const groupCallRouter    = require('./src/routes/groupCallRouter');
 const storyRouter        = require('./src/routes/storyRoutes');
 const { initReminderCron } = require('./src/services/reminderService');
 
@@ -65,6 +74,7 @@ app.use('/backend/api/stories',       storyRouter);
 
 app.use('/backend/api/conversations/:id', groupRoleRouter);
 app.use('/backend/api/voice-rooms',   voiceRoomRouter);
+app.use('/backend/api/group-calls',   groupCallRouter);
 
 // ── SOCKET ──
 const { initSocket } = require('./src/socket/socketManager');

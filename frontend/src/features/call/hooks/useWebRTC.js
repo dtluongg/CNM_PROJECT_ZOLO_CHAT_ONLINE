@@ -7,12 +7,30 @@
  */
 
 import { useCallback, useRef } from 'react';
+import { getCallStream } from '../../../utils/mediaUtils';
 
+// STUN: giúp tìm địa chỉ public IP
+// TURN: relay media khi 2 bên sau NAT khác nhau (bắt buộc để gọi được từ các mạng khác nhau)
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
+    // OpenRelay TURN miễn phí (https://www.metered.ca/tools/openrelay)
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
 };
 
@@ -66,13 +84,7 @@ export function useWebRTC({ onIceCandidate, onRemoteStream }) {
 
   // ── Lấy luồng media từ thiết bị người dùng ────────────────────────────────
   const getLocalStream = useCallback(async (callType) => {
-    const constraints = {
-      audio: true,
-      video: callType === 'video'
-        ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
-        : false,
-    };
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const stream = await getCallStream(callType); // throws with friendly message on HTTP
     localStreamRef.current = stream;
     return stream;
   }, []);

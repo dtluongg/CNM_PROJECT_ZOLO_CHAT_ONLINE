@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Paperclip, Smile, Mic, Send, Image, X, BarChart2 } from 'lucide-react';
 import CreatePollModal from './chatArea/modals/CreatePollModal';
+import { getAudioStream, getMediaErrorMessage } from '../../../utils/mediaUtils';
 
 const EMOJIS = [
   '😀', '😂', '😍', '🥺', '😭', '😊', '😎', '🤔',
@@ -300,7 +301,7 @@ export default function MessageInput({
   // ... (Phần logic Voice/Mic giữ nguyên)
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getAudioStream();
       const mimeType = getBestMimeType();
       const options = mimeType ? { mimeType } : {};
       const mr = new MediaRecorder(stream, options);
@@ -326,7 +327,8 @@ export default function MessageInput({
         setRecordingSec(s => s + 1);
       }, 1000);
     } catch (err) {
-      console.error('Microphone access denied:', err);
+      console.error('Microphone error:', err);
+      alert(err.message || 'Không thể truy cập microphone');
     }
   };
 

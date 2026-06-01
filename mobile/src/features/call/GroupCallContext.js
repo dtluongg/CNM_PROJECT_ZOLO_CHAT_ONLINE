@@ -39,6 +39,7 @@ export function GroupCallProvider({ children }) {
   const [callDuration, setCallDuration]= useState(0);
   const [error,        setError]       = useState(null);
   const [convId,       setConvId]      = useState(null);
+  const [socketReady,  setSocketReady] = useState(false);
 
   const setCallState = useCallback(v => { callStateRef.current = v; _setCallState(v); }, []);
   const setGCId      = useCallback(v => { groupCallIdRef.current = v; _setGCId(v); }, []);
@@ -78,8 +79,23 @@ export function GroupCallProvider({ children }) {
   // ── Initiate ───────────────────────────────────────────────────────────────
   const initiateGroupCall = useCallback(async (conversationId, type) => {
     if (callStateRef.current !== GROUP_CALL_STATE.IDLE) return;
+
+    // Wait up to 4s for socket to connect
     if (!socketRef.current?.connected) {
-      setError('Không có kết nối socket');
+      let waited = 0;
+      await new Promise(resolve => {
+        const check = setInterval(() => {
+          waited += 200;
+          if (socketRef.current?.connected || waited >= 4000) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 200);
+      });
+    }
+
+    if (!socketRef.current?.connected) {
+      setError('Không có kết nối mạng, thử lại sau');
       return;
     }
     setError(null);
@@ -158,8 +174,16 @@ export function GroupCallProvider({ children }) {
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
+      transports: ['websocket'],
     });
     socketRef.current = socket;
+
+    socket.on('connect', () => {
+      setSocketReady(true);
+      console.log('[GroupCallSocket] connected:', socket.id);
+    });
+    socket.on('disconnect', () => setSocketReady(false));
+    socket.on('connect_error', (e) => console.warn('[GroupCallSocket] error:', e?.message));
 
     socket.on('group-call:incoming', (data) => {
       if (callStateRef.current !== GROUP_CALL_STATE.IDLE) {
@@ -183,6 +207,7 @@ export function GroupCallProvider({ children }) {
     return () => {
       socket.disconnect();
       socketRef.current = null;
+      setSocketReady(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -207,6 +232,7 @@ export function GroupCallProvider({ children }) {
       toggleMute:         voiceRoom.toggleMute,
       toggleCamera:       voiceRoom.toggleCamera,
       toggleScreenShare:  voiceRoom.toggleScreenShare,
+      socketReady,
       // actions
       initiateGroupCall,
       acceptGroupCall,
@@ -219,8 +245,20 @@ export function GroupCallProvider({ children }) {
   );
 }
 
+const NO_OP = () => {};
+const DEFAULT_CTX = {
+  callState: GROUP_CALL_STATE.IDLE, callType: null, groupCallId: null,
+  conversationId: null, incomingData: null, callDuration: 0, error: null, socketReady: false,
+  formatDuration: (s) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`,
+  connected: false, isMuted: false, isCameraOff: true, isScreenSharing: false,
+  liveParts: [], localVideoURL: null, screenURL: null, speaking: new Set(),
+  getRemoteVideoURL: () => null,
+  toggleMute: NO_OP, toggleCamera: NO_OP, toggleScreenShare: NO_OP,
+  initiateGroupCall: NO_OP, acceptGroupCall: NO_OP, declineGroupCall: NO_OP,
+  leaveGroupCall: NO_OP, endGroupCall: NO_OP,
+};
+
 export function useGroupCall() {
   const ctx = useContext(GroupCallContext);
-  if (!ctx) throw new Error('useGroupCall phải dùng bên trong GroupCallProvider');
-  return ctx;
+  return ctx || DEFAULT_CTX;
 }

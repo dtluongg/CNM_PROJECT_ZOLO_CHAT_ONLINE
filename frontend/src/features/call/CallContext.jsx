@@ -15,10 +15,9 @@ import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import { getAccessToken } from '../../utils/authStorage';
 import { useWebRTC } from './hooks/useWebRTC';
+import { isSecureContext } from '../../utils/mediaUtils';
 
-// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
-// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:2026');
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
 
 export const CALL_STATE = {
   IDLE: 'idle',
@@ -202,6 +201,14 @@ export const CallProvider = ({ children }) => {
       return;
     }
 
+    if (!isSecureContext()) {
+      setCallError(
+        'Trình duyệt chặn microphone/camera trên HTTP. ' +
+        'Hãy truy cập qua HTTPS để thực hiện cuộc gọi.'
+      );
+      return;
+    }
+
     setCallError(null);
 
     try {
@@ -367,7 +374,6 @@ export const CallProvider = ({ children }) => {
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
-      transports: ['polling'],
     });
 
     socketRef.current = socket;
