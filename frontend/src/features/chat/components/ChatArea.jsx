@@ -517,23 +517,41 @@ export default function ChatArea({
                 ...(conversation?.type === 'group' ? [{ icon: <Volume2 size={16} />, title: 'Phòng thoại', onClick: onVoiceRoom, active: voiceRoomActive }] : []),
                 // GroupCallButton sẽ tự render bên dưới cho group
                 { icon: <Search size={16} />, title: 'Tìm kiếm' },
-                { icon: <Users size={16} />, title: 'Thành viên', onClick: onToggleRight, active: showRight },
                 { icon: <Pin size={16} />, title: 'Tin nhắn đã ghim' },
                 { icon: <MoreHorizontal size={16} />, title: 'Thêm' },
               ].map((btn, i) => (
                 <button key={i} onClick={btn.onClick} title={btn.title}
                   style={{
-                    background: btn.active ? 'var(--bg-hover)' : 'none', border: 'none', cursor: 'pointer',
-                    color: btn.active ? 'var(--text-primary)' : 'var(--text-muted)',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--text-muted)',
                     padding: '6px 8px', borderRadius: 6,
                     display: 'flex', alignItems: 'center', transition: 'background 0.12s, color 0.12s',
                   }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = btn.active ? 'var(--bg-hover)' : 'none'; e.currentTarget.style.color = btn.active ? 'var(--text-primary)' : 'var(--text-muted)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)'; }}
                 >
                   {btn.icon}
                 </button>
               ))}
+              {/* Nút toggle info panel – tách riêng để luôn nổi bật */}
+              <button
+                onClick={onToggleRight}
+                title={showRight ? 'Đóng thông tin' : 'Mở thông tin'}
+                style={{
+                  background: showRight ? 'var(--accent)' : 'var(--bg-hover)',
+                  border: 'none', cursor: 'pointer',
+                  color: showRight ? '#fff' : 'var(--text-secondary)',
+                  padding: '5px 8px', borderRadius: 6,
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  transition: 'background 0.15s, color 0.15s',
+                  fontSize: 12, fontWeight: 600,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = showRight ? 'var(--accent-hover, #4752c4)' : 'var(--bg-hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = showRight ? 'var(--accent)' : 'var(--bg-hover)'; }}
+              >
+                <Users size={15} />
+                <span style={{ display: 'inline' }}>Info</span>
+              </button>
               {/* Group call buttons – chỉ hiện cho group */}
               {conversation?.type === 'group' && (
                 <GroupCallButton conversationId={conversation.id || conversation._id} />

@@ -415,22 +415,26 @@ const Chat = () => {
           <ChatArea {...chatAreaProps} />
         </div>
 
-        {showRightSidebar && (
-          <div style={{ flexShrink: 0 }}>
-            {activeConversation ? (
-              <RightSidebar {...rightSidebarProps} />
-            ) : (
-              <div style={{
-                width: 280, minWidth: 280, height: '100%',
-                borderLeft: '1px solid var(--border)', background: 'var(--bg-secondary)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: 20, color: 'var(--text-muted)', fontSize: 13, textAlign: 'center',
-              }}>
-                Chọn một cuộc trò chuyện để xem thông tin chi tiết.
-              </div>
-            )}
-          </div>
-        )}
+        {/* Right sidebar – always mounted, hidden via CSS to avoid unmount/layout-shift bug */}
+        <div style={{
+          width: showRightSidebar ? 'auto' : 0,
+          overflow: showRightSidebar ? 'visible' : 'hidden',
+          flexShrink: 0,
+          transition: 'width 0.18s ease',
+        }}>
+          {activeConversation ? (
+            <RightSidebar {...rightSidebarProps} />
+          ) : (
+            <div style={{
+              width: 280, minWidth: 280, height: '100%',
+              borderLeft: '1px solid var(--border)', background: 'var(--bg-secondary)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 20, color: 'var(--text-muted)', fontSize: 13, textAlign: 'center',
+            }}>
+              Chọn một cuộc trò chuyện để xem thông tin chi tiết.
+            </div>
+          )}
+        </div>
 
         {showProfileSettings && <ProfileSettings onClose={() => setShowProfileSettings(false)} />}
         {showUserSearch && <UserSearchModal onClose={() => setShowUserSearch(false)} />}
