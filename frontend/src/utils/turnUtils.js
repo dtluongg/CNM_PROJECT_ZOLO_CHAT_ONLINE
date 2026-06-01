@@ -1,5 +1,9 @@
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
-const API_URL = SOCKET_URL.replace(/\/socket\.io.*/, '');
+/**
+ * turnUtils.js
+ * Fetch TURN credentials từ backend – giấu API key khỏi client.
+ */
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:2026';
 
 const FALLBACK_ICE = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -8,12 +12,16 @@ const FALLBACK_ICE = [
 
 export async function getIceServers(token) {
   try {
+    if (!token) throw new Error('no token');
+
     const res = await fetch(`${API_URL}/api/calls/turn-credentials`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) throw new Error('fetch failed');
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
     const servers = await res.json();
-    console.log('[TURN] credentials fetched:', servers.length, 'servers');
+    console.log('[TURN] fetched:', servers.length, 'servers');
     return servers;
   } catch (err) {
     console.warn('[TURN] fallback to STUN only:', err.message);
