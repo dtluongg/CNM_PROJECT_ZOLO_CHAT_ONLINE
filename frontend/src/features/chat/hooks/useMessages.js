@@ -61,6 +61,14 @@ export const useMessages = ({
     updateMessage(convId, msg._id?.toString(), (m) => ({ ...m, ...msg }));
   }, [updateMessage]);
 
+  const deleteMessageForMe = useCallback((convId, messageId) => {
+    setMessages((prev) => {
+      const key = prev[convId] ? convId : Object.keys(prev).find(k => k.startsWith(convId));
+      if (!key) return prev;
+      return { ...prev, [key]: prev[key].filter(m => (m._id || m.id)?.toString() !== messageId?.toString()) };
+    });
+  }, []);
+
   const resetMessages = useCallback((convId) => {
     setMessages((prev) => {
       const next = { ...prev };
@@ -209,7 +217,7 @@ export const useMessages = ({
         setActiveConversation((prev) =>
           prev?.id === convId ? { ...prev, lastMessage: msg.content, time: msg.time } : prev
         );
-      
+
       // ── POLL ─────────────────────────────────────────────────────────────
       } else if (payload.type === 'poll') {
         const { topic, options, multipleChoice } = payload;
@@ -272,6 +280,7 @@ export const useMessages = ({
     addMessage,
     revokeMessage,
     editMessageInState,
+    deleteMessageForMe,
     resetMessages,
     handleSendMessage,
     handlePollVote,
