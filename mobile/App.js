@@ -108,6 +108,7 @@ const { AuthProvider } = require('./src/context/AuthContext');
 const { PresenceProvider } = require('./src/context/PresenceContext');
 const { ThemeProvider } = require('./src/context/ThemeContext');
 const { CallProvider } = require('./src/features/call/CallContext');
+const { GroupCallProvider } = require('./src/features/call/GroupCallContext');
 const { VoiceRoomProvider } = require('./src/features/voice/VoiceRoomContext');
 
 // 1. THÊM IMPORT NotificationProvider Ở ĐÂY
@@ -119,6 +120,10 @@ const OutgoingCallScreen =
   require('./src/features/call/screens/OutgoingCallScreen').default;
 const ActiveCallScreen =
   require('./src/features/call/screens/ActiveCallScreen').default;
+const GroupCallScreen =
+  require('./src/features/call/screens/GroupCallScreen').default;
+const IncomingGroupCallScreen =
+  require('./src/features/call/screens/IncomingGroupCallScreen').default;
 const AppNavigator = require('./src/navigation/AppNavigator').default;
 
 LogBox.ignoreLogs(['Text strings must be rendered']);
@@ -135,12 +140,16 @@ function App() {
             <ThemeProvider>
               <PresenceProvider>
                 <CallProvider>
-                  <VoiceRoomProvider>
-                    <AppNavigator />
-                    <IncomingCallScreen />
-                    <OutgoingCallScreen />
-                    <ActiveCallScreen />
-                  </VoiceRoomProvider>
+                  <GroupCallProvider>
+                    <VoiceRoomProvider>
+                      <AppNavigator />
+                      <IncomingCallScreen />
+                      <OutgoingCallScreen />
+                      <ActiveCallScreen />
+                      <GroupCallScreen />
+                      <IncomingGroupCallScreen />
+                    </VoiceRoomProvider>
+                  </GroupCallProvider>
                 </CallProvider>
               </PresenceProvider>
             </ThemeProvider>
