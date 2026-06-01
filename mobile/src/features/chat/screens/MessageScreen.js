@@ -8,6 +8,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 import { useCall } from '../../call/CallContext';
+import { useGroupCall, GROUP_CALL_STATE } from '../../call/GroupCallContext';
 
 // ── Components ─────────────────────────────────────────────────────────────
 import Avatar from '../components/Avatar';
@@ -55,6 +56,7 @@ export default function MessageScreen({ route, navigation }) {
   const { theme: THEME } = useTheme();
   const { isUserOnline, getLastSeen } = usePresence();
   const { initiateCall } = useCall();
+  const { initiateGroupCall, callState: gcState } = useGroupCall();
   const { isInRoom, fetchStatusBatch } = useVoiceRoomContext();
   const styles = useStyles(THEME);
   const currentUserId = user?._id?.toString() || null;
@@ -740,24 +742,41 @@ export default function MessageScreen({ route, navigation }) {
 
         {/* Các nút action trên header */}
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={() => {
-              if (conversation.type !== 'dm' || !conversation.otherUserId) return;
-              initiateCall({ _id: conversation.otherUserId, displayName: conversation.name, avatar: conversation.avatar || null }, 'audio');
-            }}
-          >
-            <Feather name="phone" size={20} color={THEME.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={() => {
-              if (conversation.type !== 'dm' || !conversation.otherUserId) return;
-              initiateCall({ _id: conversation.otherUserId, displayName: conversation.name, avatar: conversation.avatar || null }, 'video');
-            }}
-          >
-            <Feather name="video" size={20} color={THEME.textMuted} />
-          </TouchableOpacity>
+          {conversation.type === 'dm' ? (
+            <>
+              {/* DM: gọi 1-1 như cũ */}
+              <TouchableOpacity
+                style={styles.headerBtn}
+                onPress={() => initiateCall({ _id: conversation.otherUserId, displayName: conversation.name, avatar: conversation.avatar || null }, 'audio')}
+              >
+                <Feather name="phone" size={20} color={THEME.textMuted} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerBtn}
+                onPress={() => initiateCall({ _id: conversation.otherUserId, displayName: conversation.name, avatar: conversation.avatar || null }, 'video')}
+              >
+                <Feather name="video" size={20} color={THEME.textMuted} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {/* Group: gọi nhóm qua LiveKit */}
+              <TouchableOpacity
+                style={styles.headerBtn}
+                disabled={gcState !== GROUP_CALL_STATE.IDLE}
+                onPress={() => initiateGroupCall(conversation.id || conversation._id, 'audio')}
+              >
+                <Feather name="phone" size={20} color={gcState !== GROUP_CALL_STATE.IDLE ? THEME.textMuted + '55' : THEME.textMuted} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerBtn}
+                disabled={gcState !== GROUP_CALL_STATE.IDLE}
+                onPress={() => initiateGroupCall(conversation.id || conversation._id, 'video')}
+              >
+                <Feather name="video" size={20} color={gcState !== GROUP_CALL_STATE.IDLE ? THEME.textMuted + '55' : THEME.textMuted} />
+              </TouchableOpacity>
+            </>
+          )}
           <TouchableOpacity
             style={styles.headerBtn}
             onPress={() => { setInfoTab('overview'); setShowInfoPanel(true); }}
