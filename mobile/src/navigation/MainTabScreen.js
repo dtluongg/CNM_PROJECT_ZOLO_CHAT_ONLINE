@@ -555,6 +555,7 @@ export default function MainTabScreen({ navigation, route }) {
     if (!token) return;
     const socket = io(SOCKET_URL, {
       auth: { token },
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 2000,

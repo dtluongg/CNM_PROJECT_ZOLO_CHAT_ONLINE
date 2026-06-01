@@ -388,6 +388,7 @@ export const CallProvider = ({ children }) => {
 
     const socket = io(SOCKET_URL, {
       auth: { token },
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
