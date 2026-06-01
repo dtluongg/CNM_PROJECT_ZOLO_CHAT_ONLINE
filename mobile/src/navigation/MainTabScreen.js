@@ -18,7 +18,14 @@ import StoriesScreen from '../features/stories/screens/StoriesScreen';
 import conversationApi from '../features/chat/api/conversationApi';
 import friendApi from '../features/friends/api/friendApi';
 import { SOCKET_URL } from '../config/env';
-
+import NotificationModal from '../features/chat/components/NotificationModal'; // Điều chỉnh đường dẫn cho đúng
+import { useNotifications } from '../context/NotificationContext';
+// Thêm import useFocusEffect từ thư viện điều hướng
+import { useFocusEffect } from '@react-navigation/native';
+// Thêm thư viện hỗ trợ vuốt
+import { Swipeable } from 'react-native-gesture-handler';
+// Thêm Component Modal tắt thông báo của chúng ta
+import MuteConversationModal from '../features/chat/components/MuteConversationModal';
 const GROUP_TYPES = [
   { key: 'general', label: 'group_types.general' },
   { key: 'study',   label: 'group_types.study' },
@@ -54,9 +61,11 @@ const mapConv = (item, t, language) => {
     type: item.type,
     online: false,
     memberCount: item.totalMembers || 0,
+    // THÊM DÒNG NÀY (Đọc dữ liệu isMuted từ Backend)
+    isMuted: item.isMuted || item.myMembership?.isMuted || false,
     // ── Cần cho AI Summary feature ──────────────────────────────────
     myMembership: item.myMembership || null,   // có lastReadMessageId, unreadCount
-    aiSummary:    item.myMembership?.aiSummary || null,  // summary đã lưu trong DB
+    aiSummary: item.myMembership?.aiSummary || null,  // summary đã lưu trong DB
     pinnedMessages: item.pinnedMessages || [],
   };
 };
@@ -95,12 +104,12 @@ const Avatar = ({ name, avatar, size = 44, status = null, online = null, THEME, 
 const TinIconMobile = ({ size = 24, color = '#fff' }) => (
   <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Rect 
-        x="3" y="5" width="9" height="14" rx="2" 
+      <Rect
+        x="3" y="5" width="9" height="14" rx="2"
         fill={color}
       />
-      <Rect 
-        x="14" y="8" width="7" height="8" rx="2" 
+      <Rect
+        x="14" y="8" width="7" height="8" rx="2"
         fill={color}
       />
     </Svg>
@@ -111,15 +120,15 @@ const TinIconMobile = ({ size = 24, color = '#fff' }) => (
 // CREATE GROUP MODAL
 // ─────────────────────────────────────────────
 function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
-  const [step, setStep]               = useState(1); // 1=info, 2=members
-  const [groupName, setGroupName]     = useState('');
-  const [groupType, setGroupType]     = useState('general');
+  const [step, setStep] = useState(1); // 1=info, 2=members
+  const [groupName, setGroupName] = useState('');
+  const [groupType, setGroupType] = useState('general');
   const [description, setDescription] = useState('');
-  const [avatar, setAvatar]           = useState(null);
-  const [friends, setFriends]         = useState([]);
-  const [selected, setSelected]       = useState([]);
+  const [avatar, setAvatar] = useState(null);
+  const [friends, setFriends] = useState([]);
+  const [selected, setSelected] = useState([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
-  const [creating, setCreating]       = useState(false);
+  const [creating, setCreating] = useState(false);
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -134,7 +143,7 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
   const pickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1,1], quality: 0.5, base64: true });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true });
     if (!result.canceled && result.assets[0].base64) setAvatar(`data:image/jpeg;base64,${result.assets[0].base64}`);
   };
 
@@ -157,7 +166,7 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={[styles.modalBox, { maxHeight: '90%' }]} onPress={() => {}}>
+        <Pressable style={[styles.modalBox, { maxHeight: '90%' }]} onPress={() => { }}>
           <View style={styles.modalHandle} />
           <Text style={styles.modalTitle}>{t('chat.create_group')}</Text>
 
@@ -168,8 +177,8 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
                 {avatar
                   ? <Image source={{ uri: avatar }} style={{ width: 80, height: 80, borderRadius: 40 }} />
                   : <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: THEME.bgHover, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 28 }}>📷</Text>
-                    </View>
+                    <Text style={{ fontSize: 28 }}>📷</Text>
+                  </View>
                 }
                 <Text style={{ color: THEME.accent, fontSize: 13, marginTop: 6, fontWeight: '600' }}>{t('create_group.avatar_title')}</Text>
               </TouchableOpacity>
@@ -250,14 +259,38 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh,
   const [search, setSearch] = useState('');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const { t } = useLanguage();
+  //  State mở bảng thông báo
+  const [showNotifications, setShowNotifications] = useState(false);
+  //  Kéo thêm updateConversationSetting từ Context
+  const { unreadCount: notifUnread, updateConversationSetting } = useNotifications();
 
+  //  Thêm State lưu ID của hội thoại đang cần tắt thông báo
+  const [muteConvId, setMuteConvId] = useState(null);
+  // 3. Hàm xử lý logic Tắt/Bật thông minh
+  const handleToggleMute = async (item) => {
+    if (item.isMuted) {
+      // Đang tắt -> Bật lại trực tiếp
+      try {
+        if (updateConversationSetting) {
+          await updateConversationSetting(item.id, { isMuted: false, muteUntil: null });
+          onRefresh(); // Cập nhật lại danh sách ngay lập tức
+        }
+      } catch (error) {
+        console.error("Lỗi khi bật thông báo từ danh sách:", error);
+      }
+    } else {
+      // Đang bật -> Mở Modal chọn thời gian tắt
+      setMuteConvId(item.id);
+    }
+  };
   const filtered = conversations.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );
   const dms = filtered.filter(c => c.type === 'dm');
   const groups = filtered.filter(c => c.type === 'group');
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0);
-
+  // 3. TẠO BIẾN TỔNG HỢP CHO CÁI CHUÔNG
+  const grandTotalUnread = notifUnread + totalUnread;
   const openConversation = (conv) => {
     onUpdateConversations(prev =>
       prev.map(c => c.id === conv.id ? { ...c, unread: 0 } : c)
@@ -277,40 +310,69 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh,
     const liveOnline = item.type === 'dm' && item.otherUserId
       ? isUserOnline(item.otherUserId)
       : false;
+    // HÀM RENDER GIAO DIỆN NÚT KHI VUỐT SANG TRÁI
+    const renderRightActions = () => {
+      return (
+        <TouchableOpacity
+          style={{
+            backgroundColor: item.isMuted ? THEME.bgHover : THEME.bgSecondary,
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: 80,
+            borderLeftWidth: 1,
+            borderLeftColor: THEME.border,
+          }}
+          onPress={() => handleToggleMute(item)}
+        >
+          <Text style={{ fontSize: 20, marginBottom: 4 }}>
+            {item.isMuted ? '🔔' : '🔕'}
+          </Text>
+          <Text style={{ color: THEME.textPrimary, fontSize: 11, fontWeight: '600' }}>
+            {item.isMuted ? 'Bật TB' : 'Tắt TB'}
+          </Text>
+        </TouchableOpacity>
+      );
+    };
     return (
-      <TouchableOpacity
-        onPress={() => openConversation(item)}
-        onPressIn={() => setPressed(true)}
-        onPressOut={() => setPressed(false)}
-        activeOpacity={1}
-        style={[styles.convItem, pressed && { backgroundColor: THEME.bgHover }]}
-      >
-        <Avatar
-          name={item.name}
-          avatar={item.avatar}
-          size={48}
-          status={liveOnline ? 'online' : null}
-          online={item.type === 'dm' ? liveOnline : null}
-          THEME={THEME}
-          styles={styles}
-        />
-        <View style={styles.convInfo}>
-          <View style={styles.convTop}>
-            <Text style={[styles.convName, { color: item.usernameColor || THEME.textPrimary }]} numberOfLines={1}>
-              {item.type === 'group' ? `# ${item.name}` : item.name}
-            </Text>
-            <Text style={styles.convTime}>{item.time}</Text>
+      <Swipeable renderRightActions={renderRightActions} friction={2}>
+        <TouchableOpacity
+          onPress={() => openConversation(item)}
+          onPressIn={() => setPressed(true)}
+          onPressOut={() => setPressed(false)}
+          activeOpacity={1}
+          style={[styles.convItem, pressed && { backgroundColor: THEME.bgHover }]}
+        >
+          <Avatar
+            name={item.name}
+            avatar={item.avatar}
+            size={48}
+            status={liveOnline ? 'online' : null}
+            online={item.type === 'dm' ? liveOnline : null}
+            THEME={THEME}
+            styles={styles}
+          />
+          <View style={styles.convInfo}>
+            <View style={styles.convTop}>
+              <Text style={[styles.convName, { color: item.usernameColor || THEME.textPrimary }]} numberOfLines={1}>
+                {item.type === 'group' ? `# ${item.name}` : item.name}
+              </Text>
+              {/* HIỂN THỊ CHUÔNG NẾU BỊ TẮT THÔNG BÁO */}
+              {item.isMuted && (
+                <Text style={{ fontSize: 12, marginLeft: 6 }}>🔕</Text>
+              )}
+              <Text style={styles.convTime}>{item.time}</Text>
+            </View>
+            <View style={styles.convBottom}>
+              <Text style={styles.convLast} numberOfLines={1}>{item.lastMessage}</Text>
+              {item.unread > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{item.unread > 99 ? '99+' : item.unread}</Text>
+                </View>
+              )}
+            </View>
           </View>
-          <View style={styles.convBottom}>
-            <Text style={styles.convLast} numberOfLines={1}>{item.lastMessage}</Text>
-            {item.unread > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{item.unread > 99 ? '99+' : item.unread}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </Swipeable >
     );
   };
 
@@ -321,18 +383,42 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh,
       {/* Header */}
       <View style={styles.chatHeader}>
         <Text style={styles.headerTitle}>💬 ZoloChat</Text>
-        {totalUnread > 0 && (
+        {/* {totalUnread > 0 && (
           <View style={styles.headerBadge}>
             <Text style={styles.headerBadgeText}>{totalUnread}</Text>
           </View>
-        )}
+        )} */}
         <View style={{ flex: 1 }} />
+        {/* NÚT CHUÔNG THÔNG BÁO TỔNG HỢP */}
+        <TouchableOpacity
+          onPress={() => setShowNotifications(true)}
+          style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 8, position: 'relative' }}
+        >
+          <Text style={{ fontSize: 20 }}>🔔</Text>
+
+          {/* Thay notifUnread bằng grandTotalUnread */}
+          {grandTotalUnread > 0 && (
+            <View style={[styles.headerBadge, { position: 'absolute', top: -2, right: -4, paddingHorizontal: 5, paddingVertical: 1, minWidth: 18, borderColor: THEME.bgSecondary, borderWidth: 1.5 }]}>
+              <Text style={[styles.headerBadgeText, { fontSize: 9 }]}>
+                {grandTotalUnread > 99 ? '99+' : grandTotalUnread}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
         <TouchableOpacity onPress={() => setShowCreateGroup(true)}
           style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: THEME.accent + '22', alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ fontSize: 22, color: THEME.accent, lineHeight: 24 }}>＋</Text>
         </TouchableOpacity>
       </View>
-
+      {/* 5. KHAI BÁO COMPONENT TỪ FILE MỚI */}
+      <NotificationModal
+        visible={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        THEME={THEME}
+        styles={styles}
+        navigation={navigation}
+      />
       <CreateGroupModal
         visible={showCreateGroup}
         onClose={() => setShowCreateGroup(false)}
@@ -340,7 +426,16 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh,
         THEME={THEME}
         styles={styles}
       />
-
+      {/* THÊM MODAL ĐỂ CHỌN THỜI GIAN KHI VUỐT */}
+      <MuteConversationModal
+        visible={!!muteConvId}
+        onClose={() => setMuteConvId(null)}
+        conversationId={muteConvId}
+        THEME={THEME}
+        onSuccess={() => {
+          onRefresh(); // Cập nhật lại danh sách ngay khi tắt thành công
+        }}
+      />
       {/* Search */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBox}>
@@ -453,10 +548,15 @@ export default function MainTabScreen({ navigation, route }) {
     }
   }, [t, language]);
 
-  useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
-
+  // useEffect(() => {
+  //   fetchConversations();
+  // }, [fetchConversations]);
+  useFocusEffect(
+    useCallback(() => {
+      // Mỗi khi người dùng quay lại màn hình này, nó sẽ tự động lấy dữ liệu mới nhất
+      fetchConversations();
+    }, [fetchConversations])
+  );
   // Socket: live preview + unread count in conversation list
   useEffect(() => {
     if (!token) return;

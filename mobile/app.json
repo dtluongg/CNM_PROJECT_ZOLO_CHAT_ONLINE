@@ -20,6 +20,7 @@
     },
     "android": {
       "package": "com.chatapp.mobile",
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
@@ -27,7 +28,9 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.INTERNET",
+        "android.permission.FOREGROUND_SERVICE"
       ]
     },
     "scheme": "chatapp",
@@ -52,7 +55,8 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "2.0.21"
+            "kotlinVersion": "2.0.21",
+            "usesCleartextTraffic": true
           },
           "ios": {
             "deploymentTarget": "15.1"

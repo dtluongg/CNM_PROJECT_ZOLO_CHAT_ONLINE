@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import notificationApi from '../../../features/notifications/api/notificationApi';
 import { calculateMuteUntil } from '../../notifications/utils/notificationHelper';
 import { useLanguage } from '../../../context/LanguageContext';
-
+import { useNotifications } from "../../../context/NotificationContext";
 const MuteConversationModal = ({ isOpen, onClose, conversationId, onSuccess }) => {
     const { t } = useLanguage();
     const [muteDuration, setMuteDuration] = useState('15m');
     const [isSubmitting, setIsSubmitting] = useState(false);
-
+    const { updateConversationSetting } = useNotifications();
     // Nếu Modal không mở thì không render gì cả
     if (!isOpen) return null;
 
@@ -16,7 +16,7 @@ const MuteConversationModal = ({ isOpen, onClose, conversationId, onSuccess }) =
         try {
             const muteUntil = calculateMuteUntil(muteDuration);
 
-            await notificationApi.updateSetting(conversationId, {
+            await updateConversationSetting(conversationId, {
                 isMuted: true,
                 muteUntil: muteUntil
             });

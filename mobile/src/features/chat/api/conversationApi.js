@@ -7,8 +7,8 @@ const conversationApi = {
   createDm: (targetUserId, initialMessage = 'Xin chào!') =>
     apiClient.post('/conversations/dm', { targetUserId, initialMessage }),
 
-  createGroupConversation: (name, avatar, memberIds, groupType = 'general', description = '') =>
-    apiClient.post('/conversations/group', { name, avatar, memberIds, groupType, description }),
+  createGroupConversation: ({ name, avatar = '', memberIds = [], groupType = 'general', description = '', inviteMode } = {}) =>
+    apiClient.post('/conversations/group', { name, avatar, memberIds, groupType, description, inviteMode }),
 
   leaveConversation: (conversationId) =>
     apiClient.post(`/conversations/${conversationId}/leave`),
@@ -19,8 +19,8 @@ const conversationApi = {
   getConversationMembers: (conversationId, includeLeft = false) =>
     apiClient.get(`/conversations/${conversationId}/members?includeLeft=${includeLeft}`),
 
-  addConversationMembers: (conversationId, memberUserIds) =>
-    apiClient.post(`/conversations/${conversationId}/members`, { memberUserIds }),
+  addConversationMembers: (conversationId, memberUserIds = [], message = '') =>
+    apiClient.post(`/conversations/${conversationId}/members`, { memberUserIds, message }),
 
   updateConversationMember: (conversationId, userId, payload) =>
     apiClient.patch(`/conversations/${conversationId}/members/${userId}/role`, payload),

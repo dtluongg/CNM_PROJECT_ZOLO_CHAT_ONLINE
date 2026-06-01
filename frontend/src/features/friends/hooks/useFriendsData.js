@@ -140,16 +140,35 @@ export const useFriendsData = () => {
   }, [fetchData]);
 
   // ── DM / navigation ───────────────────────────────────────────────────────
-  const handleCreateDmFromFriend = useCallback((friend) => {
-    navigate('/chat', {
-      state: {
-        pendingPeer: {
-          id:     friend.friendId,
-          name:   friend.displayName || friend.originalName || 'Đoạn chat trực tiếp',
-          avatar: friend.avatar || '',
+  const handleCreateDmFromFriend = useCallback(async (friend) => {
+    try {
+      const res = await conversationApi.createDm(friend.friendId);
+      const conversationId = res?.data?.data?._id || res?.data?._id;
+      if (conversationId) {
+        navigate('/chat', { state: { openConversationId: conversationId } });
+      } else {
+        // Fallback: let Chat handle it via pendingPeer
+        navigate('/chat', {
+          state: {
+            pendingPeer: {
+              id:     friend.friendId,
+              name:   friend.displayName || friend.originalName || 'Đoạn chat trực tiếp',
+              avatar: friend.avatar || '',
+            },
+          },
+        });
+      }
+    } catch {
+      navigate('/chat', {
+        state: {
+          pendingPeer: {
+            id:     friend.friendId,
+            name:   friend.displayName || friend.originalName || 'Đoạn chat trực tiếp',
+            avatar: friend.avatar || '',
+          },
         },
-      },
-    });
+      });
+    }
   }, [navigate]);
 
   // ── Group modal helpers ───────────────────────────────────────────────────

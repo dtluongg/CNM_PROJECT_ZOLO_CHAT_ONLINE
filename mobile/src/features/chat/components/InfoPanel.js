@@ -12,6 +12,8 @@ import RolesTab from './RolesTab';
 import MembersTab from './MembersTab';
 import JoinRequestsTab from './JoinRequestsTab';
 import AddMembersModal from './AddMembersModal';
+import MuteConversationModal from './MuteConversationModal'; // THÊM DÒNG NÀY
+import { useNotifications } from '../../../context/NotificationContext';
 import conversationApi from '../api/conversationApi';
 import { useAuth } from '../../../context/AuthContext';
 import { useLanguage } from '../../../context/LanguageContext';
@@ -35,18 +37,38 @@ const InfoPanel = ({
   const myUserId = currentUser?._id || currentUser?.id;
 
   const isGroup = conversation?.type === 'group';
-  const convId  = conversation?._id || conversation?.id;
+  const convId = conversation?._id || conversation?.id;
 
   // ── State ────────────────────────────────────────────────────────────────
-  const [members,        setMembers]        = useState([]);
-  const [loadingMem,     setLoadingMem]     = useState(false);
-  const [roles,          setRoles]          = useState([]);
-  const [showAddMembers, setShowAddMembers]  = useState(false);
-
+  const [members, setMembers] = useState([]);
+  const [loadingMem, setLoadingMem] = useState(false);
+  const [roles, setRoles] = useState([]);
+  const [showAddMembers, setShowAddMembers] = useState(false);
+  const [showMuteModal, setShowMuteModal] = useState(false); // THÊM DÒNG NÀY
+  const { updateConversationSetting, getConversationSetting } = useNotifications() || {};
   // Inner sub-tab states
   const [contentSub, setContentSub] = useState('photos'); // 'photos' | 'files'
-  const [memberSub,  setMemberSub]  = useState('list');   // 'list' | 'roles' | 'requests'
-
+  const [memberSub, setMemberSub] = useState('list');   // 'list' | 'roles' | 'requests'
+  // 1. THÊM STATE CỤC BỘ ĐỂ GIAO DIỆN PHẢN HỒI NGAY LẬP TỨC
+  const [localIsMuted, setLocalIsMuted] = useState(false);
+  // 2. ĐỒNG BỘ STATE NẾU DỮ LIỆU TỪ BÊN NGOÀI THAY ĐỔI
+  useEffect(() => {
+    setLocalIsMuted(conversation?.isMuted || conversation?.myMembership?.isMuted || false);
+  }, [conversation?.isMuted, conversation?.myMembership?.isMuted]);
+  useEffect(() => {
+    if (visible) {
+      const fetchRealSetting = async () => {
+        const convId = conversation?._id || conversation?.id;
+        if (convId && getConversationSetting) {
+          const setting = await getConversationSetting(convId);
+          if (setting) {
+            setLocalIsMuted(setting.isMuted); // Cập nhật đúng trạng thái thật
+          }
+        }
+      };
+      fetchRealSetting();
+    }
+  }, [visible, conversation]);
   const loadMembers = useCallback(async () => {
     if (!convId) return;
     setLoadingMem(true);
@@ -63,7 +85,7 @@ const InfoPanel = ({
     try {
       const res = await conversationApi.listRoles(convId);
       setRoles(res.data?.data || res.data?.roles || []);
-    } catch {}
+    } catch { }
   }, [convId, isGroup]);
 
   useEffect(() => {
@@ -76,10 +98,28 @@ const InfoPanel = ({
 
   // ── Derived permission flags ─────────────────────────────────────────────
   const myMember = members.find(m => (m.user?._id || m.user) === myUserId);
-  const myRole   = myMember?.role || 'member';
-  const isOwner  = myRole === 'owner';
-  const isAdmin  = myRole === 'admin' || isOwner;
+  const myRole = myMember?.role || 'member';
+  const isOwner = myRole === 'owner';
+  const isAdmin = myRole === 'admin' || isOwner;
+  // 2. Kiểm tra trạng thái hiện tại (Đảm bảo backend trả về isMuted qua myMembership hoặc trực tiếp)
+  const isMuted = conversation?.isMuted || conversation?.myMembership?.isMuted || false;
+  const handleUnmute = async () => {
+    try {
+      // Đổi UI ngay lập tức thành "Tắt thông báo" (Chuông reo)
+      setLocalIsMuted(false);
+      if (updateConversationSetting) {
+        // Gửi lệnh tắt isMuted về false
+        await updateConversationSetting(conversation._id || conversation.id, { isMuted: false, muteUntil: null });
 
+        // Gọi hàm cập nhật Real-time ra ngoài màn hình chính
+        if (onConversationUpdate) {
+          onConversationUpdate({ ...conversation, isMuted: false, myMembership: { ...conversation.myMembership, isMuted: false } });
+        }
+      }
+    } catch (error) {
+      console.error("Lỗi khi bật thông báo:", error);
+    }
+  };
   // ── Main tab definitions ─────────────────────────────────────────────────
   // Group into 4 main sections max
   const tabs = [
@@ -194,7 +234,23 @@ const InfoPanel = ({
                       </TouchableOpacity>
                     )}
                   </InfoCard>
-
+                  {/* THÊM NÚT TẮT THÔNG BÁO TẠI ĐÂY */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (localIsMuted) {
+                        handleUnmute(); // Đang tắt thì gọi hàm bật
+                      } else {
+                        setShowMuteModal(true); // Đang bật thì mở Modal
+                      }
+                    }}
+                    style={{ backgroundColor: THEME.bgHover, borderRadius: 12, padding: 14, flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: THEME.border, marginTop: 4, marginBottom: 8 }}
+                  >
+                    <Text style={{ fontSize: 18 }}>{localIsMuted ? '🔔' : '🔕'}</Text>
+                    <Text style={{ color: THEME.textPrimary, fontWeight: '700', fontSize: 15 }}>
+                      {localIsMuted ? 'Bật lại thông báo' : 'Tắt thông báo'}
+                    </Text>
+                  </TouchableOpacity>
+                  {/* KẾT THÚC THÊM */}
                   {/* DM: block section */}
                   {conversation.type === 'dm' && conversation.otherUserId && (
                     <BlockSection
@@ -429,7 +485,7 @@ const InfoPanel = ({
                 <ChannelsTab
                   conversation={conversation}
                   topics={topics || []}
-                  setTopics={setTopics || (() => {})}
+                  setTopics={setTopics || (() => { })}
                   isAdmin={isAdmin}
                   THEME={THEME}
                   roles={roles}
@@ -439,6 +495,19 @@ const InfoPanel = ({
             </View>
           </View>
         </Pressable>
+        <MuteConversationModal
+          visible={showMuteModal}
+          onClose={() => setShowMuteModal(false)}
+          conversationId={conversation?._id || conversation?.id}
+          THEME={THEME}
+          onSuccess={() => {
+            setLocalIsMuted(true);
+            // Khi Modal xử lý thành công, gọi cập nhật Real-time ra ngoài
+            if (onConversationUpdate) {
+              onConversationUpdate({ ...conversation, isMuted: true, myMembership: { ...conversation.myMembership, isMuted: true } });
+            }
+          }}
+        />
       </Modal>
 
       <AddMembersModal

@@ -6,6 +6,7 @@
  *
  * Âm thanh: native WebRTC layer tự phát qua loa (InCallManager quản lý routing).
  * Video:    lấy URL từ MediaStream.toURL() rồi dùng RTCView.
+ * Screen:   tương tự Video, dùng RTCView với screenURL.
  */
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Platform } from 'react-native';
@@ -37,13 +38,16 @@ function safeParse(raw) {
 export function useVoiceRoom() {
   const roomRef = useRef(null);
 
-  const [connected,       setConnected]       = useState(false);
-  const [isMuted,         setIsMuted]         = useState(false);
-  const [isCameraOff,     setIsCameraOff]     = useState(true);
-  const [speaking,        setSpeaking]        = useState(new Set());
-  const [liveParts,       setLiveParts]       = useState([]);
-  const [localVideoURL,   setLocalVideoURL]   = useState(null);
-  const [remoteVideoURLs, setRemoteVideoURLs] = useState({});
+  const [connected,            setConnected]            = useState(false);
+  const [isMuted,              setIsMuted]              = useState(false);
+  const [isCameraOff,          setIsCameraOff]          = useState(true);
+  const [isScreenSharing,      setIsScreenSharing]      = useState(false); // local đang share
+  const [isRemoteScreenSharing,setIsRemoteScreenSharing]= useState(false); // remote đang share
+  const [speaking,             setSpeaking]             = useState(new Set());
+  const [liveParts,            setLiveParts]            = useState([]);
+  const [localVideoURL,        setLocalVideoURL]        = useState(null);
+  const [remoteVideoURLs,      setRemoteVideoURLs]      = useState({});
+  const [screenURL,            setScreenURL]            = useState(null); // URL để RTCView hiển thị
 
   const refreshParticipants = useCallback((room) => {
     const snap = [
@@ -73,26 +77,21 @@ export function useVoiceRoom() {
     if (roomRef.current) return;
 
     // ── Bước 1: Khởi động audio session TRƯỚC khi kết nối ──────────────────
-    // Quan trọng trên iOS (AVAudioSession) và Android để audio routing đúng
     if (InCallManager) {
       try {
         InCallManager.start({ media: 'audio' });
-        // Voice chat dùng loa ngoài (không phải earpiece)
         InCallManager.setForceSpeakerphoneOn(true);
       } catch (e) {
         console.warn('[VoiceRoom] InCallManager.start failed:', e?.message);
       }
     }
 
-    // ── Bước 2: Tạo Room với config tối ưu cho React Native ────────────────
+    // ── Bước 2: Tạo Room ────────────────────────────────────────────────────
     const room = new Room({
       adaptiveStream: true,
       dynacast: true,
-      // QUAN TRỌNG: React Native không có Web Audio API
-      // Nếu để true, livekit-client cố tạo AudioContext → crash
-      webAudioMix: false,
+      webAudioMix: false, // React Native không có Web Audio API
       publishDefaults: {
-        // Tắt simulcast để tiết kiệm bandwidth trên mobile
         simulcast: false,
         videoSimulcastLayers: [],
       },
@@ -104,20 +103,32 @@ export function useVoiceRoom() {
     });
     roomRef.current = room;
 
-    // ── Bước 3: Đăng ký event handlers ─────────────────────────────────────
+    // ── Bước 3: Event handlers ──────────────────────────────────────────────
 
-    // Remote video track được subscribe
     room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
-      if (track.source === Track.Source.Camera) {
+      if (track.source === Track.Source.ScreenShare) {
+        // ✅ Remote đang share màn hình — lấy URL để RTCView hiển thị
+        const url = toStreamURL(track);
+        setScreenURL(url);
+        setIsRemoteScreenSharing(true);
+
+      } else if (track.source === Track.Source.Camera) {
+        // Remote camera
         const url = toStreamURL(track);
         setRemoteVideoURLs(prev => ({ ...prev, [participant.identity]: url }));
+
       }
-      // Audio tự phát qua native WebRTC layer — không cần xử lý thêm
+      // Audio tự phát qua native WebRTC layer — không cần xử lý
       refreshParticipants(room);
     });
 
     room.on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
-      if (track.source === Track.Source.Camera) {
+      if (track.source === Track.Source.ScreenShare) {
+        // ✅ Remote dừng share màn hình
+        setScreenURL(null);
+        setIsRemoteScreenSharing(false);
+
+      } else if (track.source === Track.Source.Camera) {
         setRemoteVideoURLs(prev => {
           const next = { ...prev };
           delete next[participant.identity];
@@ -127,7 +138,7 @@ export function useVoiceRoom() {
       refreshParticipants(room);
     });
 
-    // Local track được publish (khi bật mic/camera)
+    // Local track publish (khi bật mic/camera/screen)
     room.on(RoomEvent.LocalTrackPublished, (pub) => {
       if (pub.source === Track.Source.Camera) {
         const cam = room.localParticipant.getTrackPublication(Track.Source.Camera);
@@ -135,13 +146,21 @@ export function useVoiceRoom() {
         setLocalVideoURL(localTrack ? toStreamURL(localTrack) : null);
         setIsCameraOff(!room.localParticipant.isCameraEnabled);
       }
+      if (pub.source === Track.Source.ScreenShare) {
+        // ✅ Local bắt đầu share màn hình
+        setIsScreenSharing(true);
+      }
       refreshParticipants(room);
     });
 
     room.on(RoomEvent.LocalTrackUnpublished, (pub) => {
       if (pub.source === Track.Source.Camera) {
         setLocalVideoURL(null);
-        setIsCameraOff(!room.localParticipant.isCameraEnabled);
+        setIsCameraOff(true);
+      }
+      if (pub.source === Track.Source.ScreenShare) {
+        // ✅ Local dừng share màn hình
+        setIsScreenSharing(false);
       }
       refreshParticipants(room);
     });
@@ -164,18 +183,20 @@ export function useVoiceRoom() {
       setConnected(false);
       setIsMuted(false);
       setIsCameraOff(true);
+      setIsScreenSharing(false);
+      setIsRemoteScreenSharing(false);
       setSpeaking(new Set());
       setLiveParts([]);
       setLocalVideoURL(null);
       setRemoteVideoURLs({});
+      setScreenURL(null); // ✅ reset screen URL
     });
 
     // ── Bước 4: Kết nối ────────────────────────────────────────────────────
     await room.connect(livekitUrl, token, {
-      autoSubscribe: true, // Tự subscribe tất cả remote tracks
+      autoSubscribe: true,
     });
 
-    // Bật mic ngay sau khi kết nối
     await room.localParticipant.setMicrophoneEnabled(true);
     setConnected(true);
     setIsMuted(false);
@@ -184,12 +205,9 @@ export function useVoiceRoom() {
 
   const disconnect = useCallback(async () => {
     if (!roomRef.current) return;
-    try {
-      await roomRef.current.disconnect();
-    } catch {}
+    try { await roomRef.current.disconnect(); } catch {}
     roomRef.current = null;
 
-    // Dừng audio session SAU khi ngắt kết nối
     if (InCallManager) {
       try {
         InCallManager.setForceSpeakerphoneOn(false);
@@ -203,7 +221,7 @@ export function useVoiceRoom() {
     if (!room) return;
     const enabled = room.localParticipant.isMicrophoneEnabled;
     await room.localParticipant.setMicrophoneEnabled(!enabled);
-    setIsMuted(enabled); // isMuted = true khi mic bị tắt
+    setIsMuted(enabled);
   }, []);
 
   const toggleCamera = useCallback(async () => {
@@ -222,11 +240,24 @@ export function useVoiceRoom() {
     }
   }, [refreshParticipants]);
 
+  const toggleScreenShare = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room) return;
+    try {
+      const enabled = room.localParticipant.isScreenShareEnabled;
+      await room.localParticipant.setScreenShareEnabled(!enabled);
+      setIsScreenSharing(!enabled);
+      refreshParticipants(room);
+    } catch (e) {
+      console.warn('[VoiceRoom] Screen share failed:', e?.message);
+    }
+  }, [refreshParticipants]);
+
   const getRemoteVideoURL = useCallback((identity) => {
     return remoteVideoURLs[identity] || null;
   }, [remoteVideoURLs]);
 
-  // Cleanup khi component unmount (thoát app)
+  // Cleanup khi unmount
   useEffect(() => {
     return () => {
       if (roomRef.current) {
@@ -240,9 +271,12 @@ export function useVoiceRoom() {
   }, []);
 
   return {
-    connect, disconnect, toggleMute, toggleCamera,
+    connect, disconnect,
+    toggleMute, toggleCamera, toggleScreenShare,
     getRemoteVideoURL,
     connected, isMuted, isCameraOff,
-    speaking, liveParts, localVideoURL,
+    isScreenSharing, isRemoteScreenSharing,
+    speaking, liveParts,
+    localVideoURL, screenURL,
   };
 }

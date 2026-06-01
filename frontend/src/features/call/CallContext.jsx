@@ -15,14 +15,16 @@ import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import { getAccessToken } from '../../utils/authStorage';
 import { useWebRTC } from './hooks/useWebRTC';
+import { isSecureContext } from '../../utils/mediaUtils';
+import { getIceServers } from '../../utils/turnUtils';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
 
 export const CALL_STATE = {
-  IDLE: 'idle',
-  CALLING: 'calling',
+  IDLE:     'idle',
+  CALLING:  'calling',
   INCOMING: 'incoming',
-  ACTIVE: 'active',
+  ACTIVE:   'active',
 };
 
 const CallContext = createContext(null);
@@ -32,30 +34,31 @@ export const CallProvider = ({ children }) => {
 
   const socketRef = useRef(null);
 
-  const pendingCandidates = useRef([]);
+  const pendingCandidates      = useRef([]);
   const pendingLocalCandidates = useRef([]);
 
-  const isFlushing = useRef(false);
-  const callTimerRef = useRef(null);
+  const isFlushing    = useRef(false);
+  const callTimerRef  = useRef(null);
   const notifTimerRef = useRef(null);
 
   const callStateRef = useRef(CALL_STATE.IDLE);
-  const callIdRef = useRef(null);
-  const incomingRef = useRef(null);
+  const callIdRef    = useRef(null);
+  const incomingRef  = useRef(null);
 
-  const [callState, _setCallState] = useState(CALL_STATE.IDLE);
-  const [callType, setCallType] = useState(null);
-  const [callId, _setCallId] = useState(null);
-  const [remoteUser, setRemoteUser] = useState(null);
-  const [localStream, setLocalStream] = useState(null);
-  const [remoteStream, setRemoteStream] = useState(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isCameraOff, setIsCameraOff] = useState(false);
-  const [callDuration, setCallDuration] = useState(0);
-  const [incomingData, _setIncoming] = useState(null);
-  const [callError, setCallError] = useState(null);
-  const [notification, setNotification] = useState(null);
+  const [callState,    _setCallState] = useState(CALL_STATE.IDLE);
+  const [callType,      setCallType]  = useState(null);
+  const [callId,       _setCallId]    = useState(null);
+  const [remoteUser,    setRemoteUser] = useState(null);
+  const [localStream,   setLocalStream]  = useState(null);
+  const [remoteStream,  setRemoteStream] = useState(null);
+  const [isMuted,       setIsMuted]      = useState(false);
+  const [isCameraOff,   setIsCameraOff]  = useState(false);
+  const [callDuration,  setCallDuration] = useState(0);
+  const [incomingData, _setIncoming]     = useState(null);
+  const [callError,     setCallError]    = useState(null);
+  const [notification,  setNotification] = useState(null);
 
+  // ── Ref-synced setters ────────────────────────────────────────────────────
   const setCallState = useCallback((value) => {
     callStateRef.current = value;
     _setCallState(value);
@@ -71,6 +74,7 @@ export const CallProvider = ({ children }) => {
     _setIncoming(value);
   }, []);
 
+  // ── WebRTC hook ───────────────────────────────────────────────────────────
   const {
     pcRef,
     createPeer,
@@ -86,39 +90,34 @@ export const CallProvider = ({ children }) => {
   } = useWebRTC({
     onIceCandidate: useCallback((candidate) => {
       const cid = callIdRef.current;
-
       if (cid && socketRef.current?.connected) {
-        socketRef.current.emit('call:ice-candidate', {
-          callId: cid,
-          candidate,
-        });
+        socketRef.current.emit('call:ice-candidate', { callId: cid, candidate });
       } else {
         pendingLocalCandidates.current.push(candidate);
-        console.log('[ICE web] queued local candidate:', pendingLocalCandidates.current.length);
+        console.log('[ICE] queued local candidate:', pendingLocalCandidates.current.length);
       }
     }, []),
 
     onRemoteStream: useCallback((stream) => {
       console.log(
-        '[Web] onRemoteStream tracks:',
-        stream.getTracks().map((track) => ({
-          kind: track.kind,
-          enabled: track.enabled,
-          muted: track.muted,
-          readyState: track.readyState,
+        '[WebRTC] onRemoteStream tracks:',
+        stream.getTracks().map((t) => ({
+          kind:       t.kind,
+          enabled:    t.enabled,
+          muted:      t.muted,
+          readyState: t.readyState,
         })),
       );
-
       setRemoteStream(stream);
     }, []),
   });
 
+  // ── Timer ─────────────────────────────────────────────────────────────────
   const startTimer = useCallback(() => {
     clearInterval(callTimerRef.current);
     setCallDuration(0);
-
     callTimerRef.current = setInterval(() => {
-      setCallDuration((previous) => previous + 1);
+      setCallDuration((prev) => prev + 1);
     }, 1000);
   }, []);
 
@@ -128,18 +127,16 @@ export const CallProvider = ({ children }) => {
     setCallDuration(0);
   }, []);
 
+  // ── ICE flush ────────────────────────────────────────────────────────────
   const flushRemoteCandidates = useCallback(async () => {
     const pc = pcRef.current;
-
     if (!pc?.remoteDescription) return;
 
     isFlushing.current = true;
-
     while (pendingCandidates.current.length > 0) {
       const candidate = pendingCandidates.current.shift();
       await addIceCandidate(candidate);
     }
-
     isFlushing.current = false;
   }, [addIceCandidate, pcRef]);
 
@@ -149,30 +146,23 @@ export const CallProvider = ({ children }) => {
     const pending = [...pendingLocalCandidates.current];
     pendingLocalCandidates.current = [];
 
-    console.log('[ICE web] flushing local candidates:', pending.length);
-
+    console.log('[ICE] flushing local candidates:', pending.length);
     pending.forEach((candidate) => {
-      socketRef.current.emit('call:ice-candidate', {
-        callId: cid,
-        candidate,
-      });
+      socketRef.current.emit('call:ice-candidate', { callId: cid, candidate });
     });
   }, []);
 
+  // ── Notification ──────────────────────────────────────────────────────────
   const showNotification = useCallback((message, type = 'error') => {
     clearTimeout(notifTimerRef.current);
-
     setNotification({ message, type });
-
-    notifTimerRef.current = setTimeout(() => {
-      setNotification(null);
-    }, 4000);
+    notifTimerRef.current = setTimeout(() => setNotification(null), 4000);
   }, []);
 
+  // ── Reset toàn bộ state ───────────────────────────────────────────────────
   const resetAll = useCallback(() => {
     webrtcCleanup();
     stopTimer();
-
     clearTimeout(notifTimerRef.current);
 
     isFlushing.current = false;
@@ -188,10 +178,13 @@ export const CallProvider = ({ children }) => {
     setIncoming(null);
     setCallError(null);
 
-    pendingCandidates.current = [];
+    pendingCandidates.current      = [];
     pendingLocalCandidates.current = [];
   }, [webrtcCleanup, stopTimer, setCallState, setCallId, setIncoming]);
 
+  // ═════════════════════════════════════════════════════════════════════════
+  //  initiateCall  –  Caller bắt đầu gọi
+  // ═════════════════════════════════════════════════════════════════════════
   const initiateCall = useCallback(async (targetUser, type) => {
     if (callStateRef.current !== CALL_STATE.IDLE) return;
 
@@ -200,46 +193,57 @@ export const CallProvider = ({ children }) => {
       return;
     }
 
+    if (!isSecureContext()) {
+      setCallError(
+        'Trình duyệt chặn microphone/camera trên HTTP. ' +
+        'Hãy truy cập qua HTTPS để thực hiện cuộc gọi.',
+      );
+      return;
+    }
+
     setCallError(null);
 
     try {
-      createPeer();
+      // ✅ Fetch TURN credentials trước khi tạo peer
+      const iceServers  = await getIceServers();
+
+      createPeer(iceServers);
 
       const stream = await getLocalStream(type);
-
       setLocalStream(stream);
       addLocalStream(stream);
 
       const offer = await createOffer();
 
-      socketRef.current.emit('call:initiate', { calleeId: targetUser._id, type, offer }, (res) => {
-        if (res?.error) {
-          const isOffline = res.error.toLowerCase().includes('offline');
+      socketRef.current.emit(
+        'call:initiate',
+        { calleeId: targetUser._id, type, offer },
+        (res) => {
+          if (res?.error) {
+            showNotification(
+              res.error.toLowerCase().includes('offline')
+                ? `${targetUser.displayName || 'Người dùng'} đang không online`
+                : res.error,
+              'warning',
+            );
+            resetAll();
+            return;
+          }
 
-          showNotification(
-            isOffline
-              ? `${targetUser.displayName || 'Người dùng'} đang không online`
-              : res.error,
-            'warning',
-          );
-
-          resetAll();
-          return;
-        }
-
-        setCallId(res.callId);
-        setCallState(CALL_STATE.CALLING);
-        setCallType(type);
-        setRemoteUser(targetUser);
-
-        flushLocalCandidates(res.callId);
-      });
+          setCallId(res.callId);
+          setCallState(CALL_STATE.CALLING);
+          setCallType(type);
+          setRemoteUser(targetUser);
+          flushLocalCandidates(res.callId);
+        },
+      );
     } catch (err) {
       console.error('initiateCall error:', err);
       setCallError(err.message || 'Không thể khởi tạo cuộc gọi');
       resetAll();
     }
   }, [
+    token,
     createPeer,
     getLocalStream,
     addLocalStream,
@@ -251,47 +255,54 @@ export const CallProvider = ({ children }) => {
     flushLocalCandidates,
   ]);
 
+  // ═════════════════════════════════════════════════════════════════════════
+  //  answerCall  –  Callee chấp nhận cuộc gọi
+  // ═════════════════════════════════════════════════════════════════════════
   const answerCall = useCallback(async () => {
     const data = incomingRef.current;
     if (!data) return;
 
     const { callId: cid, offer, type, callerInfo } = data;
-
     setCallError(null);
 
     try {
-      createPeer();
+      // ✅ Fetch TURN credentials trước khi tạo peer
+      const iceServers  = await getIceServers();
+
+      createPeer(iceServers);
 
       const stream = await getLocalStream(type);
-
       setLocalStream(stream);
       addLocalStream(stream);
-
       setCallId(cid);
 
       const answer = await createAnswer(offer);
 
-      socketRef.current.emit('call:answer', { callId: cid, answer }, async (res) => {
-        if (res?.error) {
-          setCallError(res.error);
-          resetAll();
-          return;
-        }
+      socketRef.current.emit(
+        'call:answer',
+        { callId: cid, answer },
+        async (res) => {
+          if (res?.error) {
+            setCallError(res.error);
+            resetAll();
+            return;
+          }
 
-        setCallState(CALL_STATE.ACTIVE);
-        setCallType(type);
-        setRemoteUser(callerInfo);
-        startTimer();
-
-        flushLocalCandidates(cid);
-        await flushRemoteCandidates();
-      });
+          setCallState(CALL_STATE.ACTIVE);
+          setCallType(type);
+          setRemoteUser(callerInfo);
+          startTimer();
+          flushLocalCandidates(cid);
+          await flushRemoteCandidates();
+        },
+      );
     } catch (err) {
       console.error('answerCall error:', err);
       setCallError(err.message || 'Không thể trả lời cuộc gọi');
       resetAll();
     }
   }, [
+    token,
     createPeer,
     getLocalStream,
     addLocalStream,
@@ -304,97 +315,86 @@ export const CallProvider = ({ children }) => {
     flushRemoteCandidates,
   ]);
 
+  // ═════════════════════════════════════════════════════════════════════════
+  //  rejectCall / endCall / toggles
+  // ═════════════════════════════════════════════════════════════════════════
   const rejectCall = useCallback(() => {
     const data = incomingRef.current;
-
     if (data?.callId && socketRef.current?.connected) {
-      socketRef.current.emit('call:reject', {
-        callId: data.callId,
-      });
+      socketRef.current.emit('call:reject', { callId: data.callId });
     }
-
     resetAll();
   }, [resetAll]);
 
   const endCall = useCallback(() => {
     const cid = callIdRef.current;
-
     if (cid && socketRef.current?.connected) {
-      socketRef.current.emit('call:end', {
-        callId: cid,
-      });
+      socketRef.current.emit('call:end', { callId: cid });
     }
-
     resetAll();
   }, [resetAll]);
 
   const toggleMute = useCallback(() => {
-    setIsMuted((previous) => {
-      const next = !previous;
-
+    setIsMuted((prev) => {
+      const next = !prev;
       setMuted(next);
-
       return next;
     });
   }, [setMuted]);
 
   const toggleCamera = useCallback(() => {
-    setIsCameraOff((previous) => {
-      const next = !previous;
-
+    setIsCameraOff((prev) => {
+      const next = !prev;
       setCameraEnabled(!next);
-
       return next;
     });
   }, [setCameraEnabled]);
 
   const formatDuration = useCallback((secs) => {
-    const minutes = Math.floor(secs / 60).toString().padStart(2, '0');
-    const seconds = (secs % 60).toString().padStart(2, '0');
-
-    return `${minutes}:${seconds}`;
+    const mm = Math.floor(secs / 60).toString().padStart(2, '0');
+    const ss = (secs % 60).toString().padStart(2, '0');
+    return `${mm}:${ss}`;
   }, []);
 
+  // ═════════════════════════════════════════════════════════════════════════
+  //  Socket event listeners
+  // ═════════════════════════════════════════════════════════════════════════
   useEffect(() => {
     const accessToken = token || getAccessToken();
-
     if (!accessToken) return;
 
     const socket = io(SOCKET_URL, {
-      auth: { token: accessToken },
-      reconnection: true,
+      auth:                 { token: accessToken },
+      reconnection:         true,
       reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
+      reconnectionDelay:    2000,
     });
 
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('[Socket web] connected:', SOCKET_URL, socket.id);
+      console.log('[Socket] connected:', SOCKET_URL, socket.id);
     });
 
+    // Có cuộc gọi đến
     socket.on('call:incoming', (data) => {
       if (callStateRef.current !== CALL_STATE.IDLE) {
-        socket.emit('call:reject', {
-          callId: data.callId,
-        });
-
+        // Đang bận → từ chối tự động
+        socket.emit('call:reject', { callId: data.callId });
         return;
       }
-
       setIncoming(data);
       setCallType(data.type);
       setCallState(CALL_STATE.INCOMING);
     });
 
+    // Callee đã nhấc máy → caller nhận answer
     socket.on('call:answered', async ({ callId: cid, answer }) => {
       try {
         await setRemoteAnswer(answer);
-
         setCallId(cid);
         setCallState(CALL_STATE.ACTIVE);
         startTimer();
-
         flushLocalCandidates(cid);
         await flushRemoteCandidates();
       } catch (err) {
@@ -403,21 +403,13 @@ export const CallProvider = ({ children }) => {
       }
     });
 
-    socket.on('call:rejected', () => {
-      resetAll();
-    });
+    socket.on('call:rejected', () => resetAll());
+    socket.on('call:ended',    () => resetAll());
+    socket.on('call:timeout',  () => resetAll());
 
-    socket.on('call:ended', () => {
-      resetAll();
-    });
-
-    socket.on('call:timeout', () => {
-      resetAll();
-    });
-
+    // Nhận ICE candidate từ peer
     socket.on('call:ice-candidate', async ({ candidate }) => {
       const pc = pcRef.current;
-
       if (!pc || !candidate) return;
 
       if (pc.remoteDescription && !isFlushing.current) {
@@ -425,7 +417,7 @@ export const CallProvider = ({ children }) => {
         await flushRemoteCandidates();
       } else {
         pendingCandidates.current.push(candidate);
-        console.log('[ICE web] queued remote candidate:', pendingCandidates.current.length);
+        console.log('[ICE] queued remote candidate:', pendingCandidates.current.length);
       }
     });
 
@@ -447,6 +439,7 @@ export const CallProvider = ({ children }) => {
     pcRef,
   ]);
 
+  // Cleanup khi unmount
   useEffect(() => {
     return () => {
       stopTimer();
@@ -455,6 +448,9 @@ export const CallProvider = ({ children }) => {
     };
   }, [stopTimer, webrtcCleanup]);
 
+  // ═════════════════════════════════════════════════════════════════════════
+  //  Provider
+  // ═════════════════════════════════════════════════════════════════════════
   return (
     <CallContext.Provider
       value={{
@@ -486,10 +482,6 @@ export const CallProvider = ({ children }) => {
 
 export const useCall = () => {
   const ctx = useContext(CallContext);
-
-  if (!ctx) {
-    throw new Error('useCall phải được dùng bên trong CallProvider');
-  }
-
+  if (!ctx) throw new Error('useCall phải được dùng bên trong CallProvider');
   return ctx;
 };

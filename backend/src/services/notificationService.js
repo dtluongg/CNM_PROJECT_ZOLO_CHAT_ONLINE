@@ -34,6 +34,10 @@ const canReceiveMessageNotification = ({ setting, messageContent, recipientUser 
 
     const now = new Date();
     if (setting.isMuted) {
+        if (setting.muteUntil && new Date(setting.muteUntil) <= now) {
+            // Đã hết thời gian mute -> Coi như đã bật lại thông báo
+            return true;
+        }
         if (!setting.muteUntil) return false;
         if (new Date(setting.muteUntil) > now) return false;
     }

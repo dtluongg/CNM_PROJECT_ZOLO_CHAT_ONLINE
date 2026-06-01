@@ -194,14 +194,17 @@ export const CallProvider = ({ children }) => {
   ]);
 
   const prepareAudioSession = useCallback((type) => {
-    setTimeout(() => {
-      if (InCallManager) {
-        InCallManager.start({ media: 'audio' });
-        InCallManager.setMicrophoneMute(false);
-        InCallManager.setForceSpeakerphoneOn(type === 'video');
-        InCallManager.setSpeakerphoneOn(type === 'video');
+    try {
+      InCallManager.start({ media: type === 'video' ? 'video' : 'audio' });
+      InCallManager.setMicrophoneMute(false);
+      // Luôn bật speakerphone — người dùng có thể tắt sau; tắt forceSpeaker có thể block audio Android
+      InCallManager.setSpeakerphoneOn(true);
+      if (type === 'video') {
+        InCallManager.setForceSpeakerphoneOn(true);
       }
-    }, 800);
+    } catch (e) {
+      console.warn('[InCallManager] prepareAudioSession error:', e?.message);
+    }
   }, []);
 
   const initiateCall = useCallback(async (targetUser, type) => {
@@ -221,7 +224,7 @@ export const CallProvider = ({ children }) => {
     }
 
     try {
-      createPeer();
+      await createPeer();
 
       const stream = await getLocalStream(type);
 
@@ -283,7 +286,7 @@ export const CallProvider = ({ children }) => {
     const { callId: cid, offer, type, callerInfo } = data;
 
     try {
-      createPeer();
+      await createPeer();
 
       if (InCallManager) {
         InCallManager.stopRingtone();

@@ -16,6 +16,7 @@ import { usePresence, formatLastSeen } from '../../../context/PresenceContext';
 import { useCall } from '../../call/CallContext';
 import { useLanguage } from '../../../context/LanguageContext';
 import { getLocalizedTopicName } from '../../../utils/localizationUtils';
+import { useGroupCall, GROUP_CALL_STATE } from '../../call/GroupCallContext';
 
 // ── Components ─────────────────────────────────────────────────────────────
 import Avatar from '../components/Avatar';
@@ -89,6 +90,7 @@ export default function MessageScreen({ route, navigation }) {
   const { t, language } = useLanguage();
   const { isUserOnline, getLastSeen } = usePresence();
   const { initiateCall } = useCall();
+  const { initiateGroupCall, callState: gcState, socketReady } = useGroupCall();
   const { isInRoom, fetchStatusBatch } = useVoiceRoomContext();
   const styles = useStyles(THEME);
   const currentUserId = user?._id?.toString() || null;
@@ -102,11 +104,24 @@ export default function MessageScreen({ route, navigation }) {
   const [replyingMessage, setReplyingMessage] = useState(null);
   const [reactionTypes, setReactionTypes] = useState([]);
   const [pinnedMessages, setPinnedMessages] = useState(conversation.pinnedMessages || []);
-
+  // THÊM 3 STATE QUẢN LÝ TAG TÊN VÀO ĐÂY:
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [mentionKeyword, setMentionKeyword] = useState(null);
+  const [mentionedUserIds, setMentionedUserIds] = useState([]);
   useEffect(() => {
     setPinnedMessages(conversation.pinnedMessages || []);
   }, [conversation.id]);
-
+  // THÊM EFFECT NÀY ĐỂ TẢI THÀNH VIÊN KHI VÀO NHÓM:
+  useEffect(() => {
+    if (conversation.type === 'group') {
+      conversationApi.getConversationMembers(conversation.id)
+        .then(res => {
+          const raw = res.data?.data || res.data?.members || res.data || [];
+          setGroupMembers(Array.isArray(raw) ? raw : []);
+        })
+        .catch(err => console.log('Lỗi tải thành viên:', err));
+    }
+  }, [conversation.id, conversation.type]);
   // State các modal
   const [actionMsg, setActionMsg] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
@@ -398,7 +413,61 @@ export default function MessageScreen({ route, navigation }) {
       socketRef.current?.emit('chat:stop-typing', { conversationId: conversation.id });
     }, 2000);
   }, [conversation.id]);
+  // ── Logic Tag tên (Mention) ─────────────────────────────────────────────
+  const handleTextChange = (val) => {
+    setText(val);
+    if (val.trim()) emitTyping();
 
+    if (conversation.type !== 'group') return; // Trực tiếp thì không cần tag
+
+    const lastAt = val.lastIndexOf('@');
+    if (lastAt !== -1) {
+      const textAfterAt = val.slice(lastAt + 1);
+      // Nếu sau @ KHÔNG có khoảng trắng -> đang gõ tên
+      if (!textAfterAt.includes(' ')) {
+        setMentionKeyword(textAfterAt.toLowerCase());
+        return;
+      }
+    }
+    // Ngược lại thì đóng danh sách
+    setMentionKeyword(null);
+  };
+
+  const handleSelectMention = (member) => {
+    const userObj = member.user || member;
+    const name = member.isAll ? 'all' : (userObj.displayName || userObj.username || 'Thành viên');
+    const userId = userObj._id || userObj.id;
+
+    const lastAt = text.lastIndexOf('@');
+    // Cắt bỏ phần đang gõ dở, thay bằng @Tên hoàn chỉnh và thêm dấu cách
+    const newText = text.substring(0, lastAt) + `@${name} `;
+
+    setText(newText);
+    setMentionKeyword(null);
+
+    // Lưu ID người bị tag lại
+    if (userId && !mentionedUserIds.includes(userId)) {
+      setMentionedUserIds([...mentionedUserIds, userId]);
+    }
+    inputRef.current?.focus();
+  };
+
+  // Mảng chứa các thành viên khớp với ký tự đang gõ
+  const filteredMentions = mentionKeyword !== null
+    ? [
+      // 1. Thêm tùy chọn @all lên đầu tiên nếu từ khóa trống hoặc chứa chữ 'a', 'all', 't'
+      ...((mentionKeyword === '' || 'all'.includes(mentionKeyword) || 'tất cả'.includes(mentionKeyword))
+        ? [{ user: { _id: 'all', displayName: 'Tất cả mọi người', avatar: null }, isAll: true }]
+        : []),
+
+      // 2. Lọc các thành viên bình thường trong nhóm
+      ...groupMembers.filter(m => {
+        const u = m.user || m;
+        const name = (u.displayName || u.username || '').toLowerCase();
+        return u._id !== currentUserId && name.includes(mentionKeyword);
+      })
+    ]
+    : [];
   // ── Gửi / chỉnh sửa tin nhắn văn bản ───────────────────────────────────
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -441,7 +510,7 @@ export default function MessageScreen({ route, navigation }) {
     setText('');
     setShowEmoji(false);
     setReplyingMessage(null);
-
+    setMentionedUserIds([]); // <-- THÊM DÒNG NÀY ĐỂ XÓA MẢNG SAU KHI GỬI
     // Dừng typing indicator
     if (socketRef.current) {
       clearTimeout(typingTimerRef.current);
@@ -791,24 +860,41 @@ export default function MessageScreen({ route, navigation }) {
 
         {/* Các nút action trên header */}
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={() => {
-              if (conversation.type !== 'dm' || !conversation.otherUserId) return;
-              initiateCall({ _id: conversation.otherUserId, displayName: conversation.name, avatar: conversation.avatar || null }, 'audio');
-            }}
-          >
-            <Feather name="phone" size={20} color={THEME.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={() => {
-              if (conversation.type !== 'dm' || !conversation.otherUserId) return;
-              initiateCall({ _id: conversation.otherUserId, displayName: conversation.name, avatar: conversation.avatar || null }, 'video');
-            }}
-          >
-            <Feather name="video" size={20} color={THEME.textMuted} />
-          </TouchableOpacity>
+          {conversation.type === 'dm' ? (
+            <>
+              {/* DM: gọi 1-1 như cũ */}
+              <TouchableOpacity
+                style={styles.headerBtn}
+                onPress={() => initiateCall({ _id: conversation.otherUserId, displayName: conversation.name, avatar: conversation.avatar || null }, 'audio')}
+              >
+                <Feather name="phone" size={20} color={THEME.textMuted} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerBtn}
+                onPress={() => initiateCall({ _id: conversation.otherUserId, displayName: conversation.name, avatar: conversation.avatar || null }, 'video')}
+              >
+                <Feather name="video" size={20} color={THEME.textMuted} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {/* Group: gọi nhóm qua LiveKit */}
+              <TouchableOpacity
+                style={styles.headerBtn}
+                disabled={gcState !== GROUP_CALL_STATE.IDLE || !socketReady}
+                onPress={() => initiateGroupCall(conversation.id || conversation._id, 'audio')}
+              >
+                <Feather name="phone" size={20} color={(gcState !== GROUP_CALL_STATE.IDLE || !socketReady) ? THEME.textMuted + '55' : THEME.textMuted} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerBtn}
+                disabled={gcState !== GROUP_CALL_STATE.IDLE || !socketReady}
+                onPress={() => initiateGroupCall(conversation.id || conversation._id, 'video')}
+              >
+                <Feather name="video" size={20} color={(gcState !== GROUP_CALL_STATE.IDLE || !socketReady) ? THEME.textMuted + '55' : THEME.textMuted} />
+              </TouchableOpacity>
+            </>
+          )}
           <TouchableOpacity
             style={styles.headerBtn}
             onPress={() => { setInfoTab('overview'); setShowInfoPanel(true); }}
@@ -854,14 +940,14 @@ export default function MessageScreen({ route, navigation }) {
       {/* ── Body: danh sách tin nhắn + thanh input ────────────────────────── */}
       <View style={{ flex: 1 }}>
         <PinLimitModal
-        isOpen={showPinLimitModal}
-        onClose={() => { setShowPinLimitModal(false); setPendingPinMsgId(null); }}
-        pinnedMessages={pinnedMessages}
-        onConfirm={handleConfirmReplacePin}
-        THEME={THEME}
-      />
+          isOpen={showPinLimitModal}
+          onClose={() => { setShowPinLimitModal(false); setPendingPinMsgId(null); }}
+          pinnedMessages={pinnedMessages}
+          onConfirm={handleConfirmReplacePin}
+          THEME={THEME}
+        />
 
-      <FlatList
+        <FlatList
           ref={flatRef}
           data={displayItems}
           keyExtractor={(item) => item.key}
@@ -981,6 +1067,7 @@ export default function MessageScreen({ route, navigation }) {
                   delete next[mId];
                   return next;
                 })}
+                groupMembers={groupMembers}
               />
             );
           }}
@@ -1042,7 +1129,29 @@ export default function MessageScreen({ route, navigation }) {
 
           {/* Bộ chọn emoji */}
           {showEmoji && <EmojiPicker onSelect={insertEmoji} styles={styles} />}
-
+          {/* 1. THÊM DANH SÁCH GỢI Ý TAG TÊN TRƯỢT LÊN */}
+          {mentionKeyword !== null && filteredMentions.length > 0 && (
+            <View style={{ maxHeight: 180, backgroundColor: THEME.bgSecondary, borderTopWidth: 1, borderTopColor: THEME.border, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1 }}>
+              <FlatList
+                data={filteredMentions}
+                keyExtractor={item => (item.user?._id || item.user?.id || Math.random()).toString()}
+                keyboardShouldPersistTaps="always" // Rất quan trọng để bấm không bị tụt bàn phím
+                renderItem={({ item }) => {
+                  const u = item.user || item;
+                  const name = u.displayName || u.username || 'Thành viên';
+                  return (
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: THEME.border }}
+                      onPress={() => handleSelectMention(item)}
+                    >
+                      <Avatar name={name} avatar={u.avatar} size={36} THEME={THEME} styles={styles} />
+                      <Text style={{ marginLeft: 12, fontSize: 15, fontWeight: '600', color: THEME.textPrimary }}>{name}</Text>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </View>
+          )}
           {/* Thanh ghi âm hoặc thanh nhập liệu */}
           {!(conversation.type === 'dm' && blockStatus?.iBlocked) && (
             isRecording ? (
@@ -1056,10 +1165,12 @@ export default function MessageScreen({ route, navigation }) {
             ) : (
               <InputBar
                 text={text}
-                onChangeText={(v) => {
-                  setText(v);
-                  if (v.trim()) emitTyping();
-                }}
+                // onChangeText={(v) => {
+                //   setText(v);
+                //   if (v.trim()) emitTyping();
+                // }}
+                // THAY THẾ ĐOẠN ONDCHANGETEXT CŨ BẰNG HÀM MỚI NÀY
+                onChangeText={handleTextChange}
                 onSend={handleSend}
                 onPickFile={() => pickAndSendFile(replyingMessage?._id || replyingMessage?.id)}
                 onPickImage={() => pickAndSendImage(replyingMessage?._id || replyingMessage?.id)}

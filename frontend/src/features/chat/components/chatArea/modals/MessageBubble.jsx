@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ThumbsUp, CornerUpRight, MoreHorizontal,
-  Paperclip, Reply, Copy, Pin, Trash2, Quote, Globe, Languages, XCircle, Loader2
+  Paperclip, Reply, Copy, Pin, Trash2, Quote, Globe, Languages, XCircle, Loader2,
+  X, ZoomIn, ZoomOut, Download,
+  FileText, FileSpreadsheet, FileArchive, Music, File
 } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 import PollMessage from '../ui/PollMessage';
@@ -10,6 +12,154 @@ import messageApi from '../../../api/messageApi';
 import { useLanguage } from '../../../../../context/LanguageContext';
 import LanguageSelectorModal from './LanguageSelectorModal';
 
+// ── File type helpers ────────────────────────────────────────────────────────
+const FILE_TYPES = {
+  pdf:  { icon: FileText,       color: '#e74c3c', bg: '#fdecea', label: 'PDF' },
+  doc:  { icon: FileText,       color: '#2980b9', bg: '#eaf4fb', label: 'Word' },
+  docx: { icon: FileText,       color: '#2980b9', bg: '#eaf4fb', label: 'Word' },
+  xls:  { icon: FileSpreadsheet,color: '#27ae60', bg: '#eafaf1', label: 'Excel' },
+  xlsx: { icon: FileSpreadsheet,color: '#27ae60', bg: '#eafaf1', label: 'Excel' },
+  ppt:  { icon: FileText,       color: '#e67e22', bg: '#fef9e7', label: 'PPT' },
+  pptx: { icon: FileText,       color: '#e67e22', bg: '#fef9e7', label: 'PPT' },
+  zip:  { icon: FileArchive,    color: '#f39c12', bg: '#fef9e7', label: 'ZIP' },
+  rar:  { icon: FileArchive,    color: '#f39c12', bg: '#fef9e7', label: 'RAR' },
+  '7z': { icon: FileArchive,    color: '#f39c12', bg: '#fef9e7', label: '7Z'  },
+  mp3:  { icon: Music,          color: '#8e44ad', bg: '#f5eef8', label: 'MP3' },
+  wav:  { icon: Music,          color: '#8e44ad', bg: '#f5eef8', label: 'WAV' },
+  m4a:  { icon: Music,          color: '#8e44ad', bg: '#f5eef8', label: 'M4A' },
+  ogg:  { icon: Music,          color: '#8e44ad', bg: '#f5eef8', label: 'OGG' },
+};
+const VIDEO_EXTS = /\.(mp4|mov|avi|mkv|webm|m4v)$/i;
+
+function getFileType(fileName = '') {
+  const ext = (fileName.split('.').pop() || '').toLowerCase();
+  return FILE_TYPES[ext] || { icon: File, color: '#636e72', bg: '#f0f0f0', label: ext.toUpperCase() || 'FILE' };
+}
+
+// ── MediaViewer lightbox ─────────────────────────────────────────────────────
+function MediaViewer({ url, type, name, onClose }) {
+  const [scale, setScale] = useState(1);
+  const [pos, setPos]     = useState({ x: 0, y: 0 });
+  const dragging = useRef(false);
+  const last     = useRef({ x: 0, y: 0 });
+
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Wheel zoom (image only)
+  const onWheel = (e) => {
+    if (type !== 'image') return;
+    e.preventDefault();
+    setScale(s => Math.min(5, Math.max(0.3, s - e.deltaY * 0.001)));
+  };
+
+  const onMouseDown = (e) => {
+    if (type !== 'image') return;
+    dragging.current = true;
+    last.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+  };
+  const onMouseMove = (e) => {
+    if (!dragging.current) return;
+    setPos({ x: e.clientX - last.current.x, y: e.clientY - last.current.y });
+  };
+  const onMouseUp = () => { dragging.current = false; };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 99999,
+        background: 'rgba(0,0,0,0.92)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        backdropFilter: 'blur(6px)',
+      }}
+    >
+      {/* Controls */}
+      <div
+        style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8, zIndex: 1 }}
+        onClick={e => e.stopPropagation()}
+      >
+        {type === 'image' && (
+          <>
+            <IconBtn title="Phóng to" onClick={() => setScale(s => Math.min(5, s + 0.4))}><ZoomIn size={18} /></IconBtn>
+            <IconBtn title="Thu nhỏ" onClick={() => setScale(s => Math.max(0.3, s - 0.4))}><ZoomOut size={18} /></IconBtn>
+            <IconBtn title="Reset" onClick={() => { setScale(1); setPos({ x: 0, y: 0 }); }}>1:1</IconBtn>
+          </>
+        )}
+        <a href={url} download={name} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+          <IconBtn title="Tải xuống"><Download size={18} /></IconBtn>
+        </a>
+        <IconBtn title="Đóng" onClick={onClose}><X size={18} /></IconBtn>
+      </div>
+
+      {/* Media */}
+      <div
+        onClick={e => e.stopPropagation()}
+        onWheel={onWheel}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        style={{ userSelect: 'none' }}
+      >
+        {type === 'image' ? (
+          <img
+            src={url}
+            alt={name}
+            draggable={false}
+            style={{
+              maxWidth: '90vw', maxHeight: '90vh',
+              objectFit: 'contain', borderRadius: 8,
+              transform: `translate(${pos.x}px,${pos.y}px) scale(${scale})`,
+              transition: dragging.current ? 'none' : 'transform 0.15s ease',
+              cursor: scale > 1 ? 'grab' : 'zoom-in',
+              display: 'block',
+            }}
+          />
+        ) : (
+          <video
+            src={url}
+            controls
+            autoPlay
+            style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 8, display: 'block', outline: 'none' }}
+          />
+        )}
+      </div>
+
+      {/* Filename */}
+      {name && (
+        <div style={{
+          position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)',
+          color: 'rgba(255,255,255,0.7)', fontSize: 13, maxWidth: '80vw',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{name}</div>
+      )}
+    </div>
+  );
+}
+
+function IconBtn({ children, onClick, title }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        width: 36, height: 36, borderRadius: 8,
+        background: 'rgba(255,255,255,0.15)',
+        border: 'none', color: '#fff', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 12, fontWeight: 600,
+        transition: 'background 0.15s',
+      }}
+      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.28)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+    >{children}</button>
+  );
+}
 
 const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245'];
 
@@ -39,6 +189,7 @@ const MessageBubble = ({
   onUnpin,
   isPinned,
   onVote,
+  groupMembers = [],
 }) => {
   const { t } = useLanguage();
   const observerRef = useRef(null);
@@ -53,6 +204,7 @@ const MessageBubble = ({
   const [isTranslating, setIsTranslating] = useState(false);
   const [showLangModal, setShowLangModal] = useState(false);
   const [targetLang, setTargetLang] = useState('English');
+  const [mediaViewer, setMediaViewer] = useState(null); // { url, type, name }
   const longPressRef = useRef(null);
 
   const handleTranslate = async (lang = 'Auto') => {
@@ -211,21 +363,114 @@ const MessageBubble = ({
       </div>
     );
   };
+  // ── Hàm render văn bản có kèm Tag (Đã sửa lỗi Click và Màu sắc tàng hình) ──
+  // ── Hàm render văn bản có kèm Tag (Đã sửa lỗi Click và Màu sắc tàng hình) ──
+  const renderContentWithMentions = (content, members, isMineMsg) => {
+    if (!content) return null;
 
+    // 1. Chuẩn hóa danh sách: Xử lý triệt để việc thiếu _id hoặc displayName
+    const searchableUsers = [{ id: 'all', displayName: 'all' }, ...members].map(m => ({
+      ...m,
+      id: m._id || m.id, // Bắt chính xác ID dù API trả về dạng nào
+      displayName: m.displayName || m.username || m.name || 'Người dùng'
+    }));
+
+    const usersInContent = searchableUsers.filter(user => {
+      const tag = user.id === 'all' ? '@all' : `@${user.displayName}`;
+      return content.includes(tag);
+    });
+
+    if (usersInContent.length === 0) {
+      return <span>{content}</span>;
+    }
+
+    usersInContent.sort((a, b) => b.displayName.length - a.displayName.length);
+
+    let parts = [{ text: content, isMention: false }];
+
+    usersInContent.forEach(user => {
+      const tag = user.id === 'all' ? '@all' : `@${user.displayName}`;
+      const newParts = [];
+
+      parts.forEach(part => {
+        if (part.isMention) {
+          newParts.push(part);
+          return;
+        }
+
+        const splitText = part.text.split(tag);
+        splitText.forEach((textChunk, index) => {
+          newParts.push({ text: textChunk, isMention: false });
+          if (index < splitText.length - 1) {
+            newParts.push({ text: tag, isMention: true, user: user });
+          }
+        });
+      });
+      parts = newParts;
+    });
+
+    // 2. Xử lý UI: Tránh lỗi "Chữ Xanh trên nền Xanh"
+    const tagColor = isMineMsg ? '#ffffff' : '#0084ff';
+    const tagBg = isMineMsg ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 132, 255, 0.12)';
+
+    return (
+      <>
+        {parts.map((part, i) =>
+          part.isMention ? (
+            <span
+              key={i}
+              onClick={(e) => {
+                e.stopPropagation();
+                // Sử dụng part.user.id đã được chuẩn hóa ở bước 1
+                if (part.user.id !== 'all' && onAvatarClick) {
+                  onAvatarClick(part.user.id);
+                }
+              }}
+              style={{
+                color: tagColor,
+                fontWeight: '700',
+                cursor: part.user.id === 'all' ? 'default' : 'pointer',
+                background: tagBg,
+                padding: '2px 5px',
+                borderRadius: '6px',
+                margin: '0 2px',
+                textDecoration: isMineMsg ? 'underline' : 'none', // Thêm gạch chân cho dễ nhìn nếu là tin nhắn của mình
+              }}
+            >
+              {part.text}
+            </span>
+          ) : (
+            <span key={i}>{part.text}</span>
+          )
+        )}
+      </>
+    );
+  };
   // ── Render nội dung tin nhắn ───────────────────────────────
   const renderContent = () => {
     if (msg.revoked || msg.recalled) {
       return <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('bubble.revoked')}</span>;
     }
+
+    // ── Ảnh ──────────────────────────────────────────────────
     if (msg.type === 'image') {
+      const url = msg.payload?.url || msg.content;
+      const name = msg.payload?.fileName || 'image';
       return (
         <img
-          src={msg.payload?.url || msg.content}
+          src={url}
           alt="attachment"
-          style={{ maxWidth: isMobile ? 220 : 260, maxHeight: 260, borderRadius: 8, display: 'block' }}
+          onClick={() => setMediaViewer({ url, type: 'image', name })}
+          style={{
+            maxWidth: isMobile ? 220 : 260, maxHeight: 260,
+            borderRadius: 10, display: 'block',
+            cursor: 'zoom-in', objectFit: 'cover',
+          }}
         />
       );
     }
+
+    // ── Voice ─────────────────────────────────────────────────
     if (msg.type === 'voice') {
       return (
         <audio
@@ -235,36 +480,113 @@ const MessageBubble = ({
         />
       );
     }
+
+    // ── Video ─────────────────────────────────────────────────
     if (msg.type === 'video') {
+      const url = msg.payload?.url || msg.content;
+      const name = msg.payload?.fileName || 'video';
       return (
-        <video
-          src={msg.payload?.url || msg.content}
-          controls
-          style={{ maxWidth: isMobile ? 220 : 260, maxHeight: 200, borderRadius: 8, display: 'block', backgroundColor: '#000' }}
-        />
+        <div
+          style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
+          onClick={() => setMediaViewer({ url, type: 'video', name })}
+        >
+          <video
+            src={url}
+            style={{ maxWidth: isMobile ? 220 : 260, maxHeight: 200, borderRadius: 10, display: 'block', backgroundColor: '#000', pointerEvents: 'none' }}
+          />
+          <div style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.28)', borderRadius: 10,
+          }}>
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 0, height: 0, borderTop: '10px solid transparent', borderBottom: '10px solid transparent', borderLeft: '16px solid #222', marginLeft: 4 }} />
+            </div>
+          </div>
+        </div>
       );
     }
+
+    // ── File ──────────────────────────────────────────────────
     if (msg.type === 'file') {
       const fileName = msg.payload?.fileName || msg.content || '';
-      const fileUrl = msg.payload?.url || msg.content;
-      const isVideo = /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(fileName);
-      if (isVideo) {
+      const fileUrl  = msg.payload?.url || msg.content;
+
+      // Video file → preview player
+      if (VIDEO_EXTS.test(fileName)) {
         return (
-          <video
-            src={fileUrl}
-            controls
-            style={{ maxWidth: isMobile ? 220 : 260, maxHeight: 200, borderRadius: 8, display: 'block', backgroundColor: '#000' }}
-          />
+          <div
+            style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
+            onClick={() => setMediaViewer({ url: fileUrl, type: 'video', name: fileName })}
+          >
+            <video
+              src={fileUrl}
+              style={{ maxWidth: isMobile ? 220 : 260, maxHeight: 200, borderRadius: 10, display: 'block', backgroundColor: '#000', pointerEvents: 'none' }}
+            />
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(0,0,0,0.28)', borderRadius: 10,
+            }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 0, height: 0, borderTop: '10px solid transparent', borderBottom: '10px solid transparent', borderLeft: '16px solid #222', marginLeft: 4 }} />
+              </div>
+            </div>
+          </div>
         );
       }
+
+      // Các loại file khác → card phân loại
+      const ft = getFileType(fileName);
+      const FIcon = ft.icon;
+      const ext = (fileName.split('.').pop() || '').toUpperCase();
+      const baseName = fileName.replace(/\.[^/.]+$/, '');
       return (
-        <a href={fileUrl} target="_blank" rel="noreferrer"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}>
-          <Paperclip size={18} />
-          <span style={{ fontSize: 13, textDecoration: 'underline' }}>{fileName}</span>
+        <a
+          href={fileUrl}
+          download={fileName}
+          target="_blank"
+          rel="noreferrer"
+          style={{ textDecoration: 'none', display: 'block' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            background: isMine ? 'rgba(255,255,255,0.12)' : ft.bg,
+            border: `1px solid ${isMine ? 'rgba(255,255,255,0.18)' : ft.color + '33'}`,
+            borderRadius: 12, padding: '10px 14px',
+            minWidth: 200, maxWidth: isMobile ? 220 : 260,
+            cursor: 'pointer', transition: 'opacity 0.15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            {/* Icon box */}
+            <div style={{
+              width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+              background: isMine ? 'rgba(255,255,255,0.18)' : ft.color + '22',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <FIcon size={22} color={isMine ? '#fff' : ft.color} strokeWidth={1.7} />
+            </div>
+            {/* Info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 13, fontWeight: 600,
+                color: isMine ? '#fff' : 'var(--text-primary)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{baseName || fileName}</div>
+              <div style={{
+                fontSize: 11, marginTop: 2,
+                color: isMine ? 'rgba(255,255,255,0.65)' : ft.color,
+                fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
+              }}>{ext}</div>
+            </div>
+            {/* Download arrow */}
+            <Download size={16} color={isMine ? 'rgba(255,255,255,0.7)' : ft.color} style={{ flexShrink: 0 }} />
+          </div>
         </a>
       );
     }
+
     if (msg.type === 'poll') {
       return (
         <PollMessage
@@ -296,7 +618,7 @@ const MessageBubble = ({
     return (
       <>
         <div style={{ position: 'relative' }}>
-          {msg.content}
+          {renderContentWithMentions(msg.content, groupMembers, isMine)}
           {isTranslating && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, opacity: 0.7, fontSize: 12 }}>
               <Loader2 size={14} className="animate-spin" />
@@ -332,7 +654,6 @@ const MessageBubble = ({
             </div>
           </div>
         )}
-
         {msg.edited && (
           <span style={{ fontSize: 10, opacity: 0.5, marginLeft: 6, fontStyle: 'italic', fontWeight: 400 }}>
             {t('bubble.edited')}
@@ -407,14 +728,19 @@ const MessageBubble = ({
           position: 'relative'
         }}>
           {/* Bubble */}
+          {(() => {
+            const isMedia = msg.type === 'image' || msg.type === 'video'
+              || (msg.type === 'file' && VIDEO_EXTS.test(msg.payload?.fileName || msg.content || ''));
+            const isTransparent = msg.type === 'poll' || msg.type === 'reminder' || msg.type === 'file' || isMedia;
+            return (
           <div style={{
-            background: (msg.type === 'poll' || msg.type === 'reminder') ? 'transparent' : (isMine ? 'var(--bubble-self)' : 'var(--bubble-other)'),
+            background: isTransparent ? 'transparent' : (isMine ? 'var(--bubble-self)' : 'var(--bubble-other)'),
             color: isMine ? '#fff' : 'var(--text-primary)',
-            padding: (msg.type === 'poll' || msg.type === 'reminder') ? 0 : (isMobile ? '9px 14px' : '8px 14px'),
-            borderRadius: (msg.type === 'poll' || msg.type === 'reminder') ? 0 : 20,
+            padding: isTransparent ? 0 : (isMobile ? '9px 14px' : '8px 14px'),
+            borderRadius: isMedia ? 10 : (isTransparent ? 0 : 20),
             fontSize: isMobile ? 15 : 14, lineHeight: 1.5,
             wordBreak: 'break-word',
-            boxShadow: (msg.type === 'poll' || msg.type === 'reminder') ? 'none' : (isBeingRepliedTo ? '0 0 0 2px var(--accent), 0 4px 12px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.12)'),
+            boxShadow: isTransparent ? 'none' : (isBeingRepliedTo ? '0 0 0 2px var(--accent), 0 4px 12px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.12)'),
             maxWidth: '100%',
             transform: isBeingRepliedTo ? 'scale(1.02)' : 'scale(1)',
             transition: 'all 0.2s ease-out',
@@ -423,6 +749,7 @@ const MessageBubble = ({
             marginRight: (msg.payload?.type === 'story_reply' && isMine) ? 8 : 0,
             marginTop: msg.payload?.type === 'story_reply' ? -25 : 0,
             zIndex: msg.payload?.type === 'story_reply' ? 10 : 1,
+            overflow: isMedia ? 'hidden' : 'visible',
           }}>
             {isPinned && msg.type !== 'poll' && msg.type !== 'reminder' && (
               <div style={{
@@ -534,6 +861,8 @@ const MessageBubble = ({
               </div>
             )}
           </div>
+          );
+          })()}
 
           {/* Desktop hover actions (Zalo Style) */}
           {hover && !isMobile && !showEmojiBar && (
@@ -758,6 +1087,16 @@ const MessageBubble = ({
         onClose={() => setShowLangModal(false)}
         onSelect={(lang) => handleTranslate(lang)}
       />
+
+      {/* Media lightbox */}
+      {mediaViewer && (
+        <MediaViewer
+          url={mediaViewer.url}
+          type={mediaViewer.type}
+          name={mediaViewer.name}
+          onClose={() => setMediaViewer(null)}
+        />
+      )}
 
       <style>{`
         @keyframes fadeIn {

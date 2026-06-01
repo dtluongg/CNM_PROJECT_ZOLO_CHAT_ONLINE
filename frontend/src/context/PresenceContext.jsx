@@ -3,7 +3,11 @@ import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { getAccessToken } from '../utils/authStorage';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
+// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
+// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:2026');
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL
+
+
 
 // ─── Utility: "X phút trước" ────────────────────────────────────────────────
 export const formatLastSeen = (dateOrIso) => {
@@ -53,6 +57,7 @@ export const PresenceProvider = ({ children }) => {
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
+      transports: ['polling'],
     });
     socketRef.current = socket;
 

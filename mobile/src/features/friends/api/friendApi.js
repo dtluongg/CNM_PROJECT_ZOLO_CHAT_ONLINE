@@ -20,7 +20,8 @@ const friendApi = {
     cancelRequest: (requestId) => apiClient.delete(`/friends/requests/${requestId}`),
 
     // 7. Lấy danh bạ bạn bè (GET /friends/list)
-    getFriendList: () => apiClient.get('/friends/list'),
+    getFriendList: (includeBlocked = false) =>
+        apiClient.get(`/friends/list?includeBlocked=${includeBlocked ? 'true' : 'false'}`),
 
     // 8. Hủy kết bạn (DELETE /friends/:userId)
     unfriend: (userId) => apiClient.delete(`/friends/${userId}`),

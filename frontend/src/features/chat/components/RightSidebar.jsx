@@ -391,8 +391,25 @@ export default function RightSidebar({
         const nextMuted = !(notifSetting?.isMuted === true);
         try {
             setNotifBusy(true);
-            const updated = await updateConversationSetting(conversation.id, { isMuted: nextMuted, muteUntil: null });
+            // Gọi API cập nhật
+            const updated = await updateConversationSetting(conversation.id, {
+                isMuted: nextMuted,
+                muteUntil: null,
+            });
+
+            // 1. Cập nhật giao diện nút bấm ở thanh bên phải (Code cũ của bạn)
             setNotifSetting(updated || { ...notifSetting, isMuted: nextMuted });
+
+            // 2. Ép dữ liệu gốc (để xóa cái chuông đi)
+            if (conversation && conversation.raw) {
+                conversation.raw.isMuted = nextMuted;
+            }
+
+            // 3. Gọi hàm load lại danh sách ngầm
+            if (onGroupUpdated) {
+                onGroupUpdated();
+            }
+
         } catch (error) {
             window.alert(error?.response?.data?.message || t('common.error'));
         } finally {
@@ -908,7 +925,25 @@ export default function RightSidebar({
                 isOpen={showMuteModal}
                 onClose={() => setShowMuteModal(false)}
                 conversationId={conversation?.id}
-                onSuccess={() => setNotifSetting(prev => ({ ...prev, isMuted: true }))}
+                onSuccess={() => {
+                    console.log("Modal đã tắt thành công, đang cập nhật UI..."); // Thêm log để bắt bệnh
+
+                    // 1. Cập nhật state nội bộ của Sidebar
+                    setNotifSetting(prev => ({ ...prev, isMuted: true }));
+
+                    // 2. Ép cập nhật dữ liệu raw để truyền ra ngoài
+                    if (conversation && conversation.raw) {
+                        conversation.raw.isMuted = true;
+                    }
+
+                    // 3. Đóng Modal
+                    setShowMuteModal(false);
+
+                    // 4. BÁO RA MÀN HÌNH NGOÀI LOAD LẠI DANH SÁCH (Cái này tạo ra cái chuông!)
+                    if (onGroupUpdated) {
+                        onGroupUpdated();
+                    }
+                }}
             />
 
             {/* Modal quản lý thành viên */}

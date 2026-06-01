@@ -20,7 +20,18 @@ const onlineUsers = new Map();
 const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
-            origin:      '*', // Cho phép tất cả các nguồn (bao gồm mobile IP) trong môi trường dev
+            origin: (origin, cb) => {
+                // Mobile app không gửi Origin header → cho phép
+                if (!origin) return cb(null, true);
+                const allowed = [
+                    'http://localhost:5173', 'http://localhost:5174', 'http://localhost:8081',
+                    'http://nhom3zolochat.dotienluong.id.vn',
+                    'https://nhom3zolochat.dotienluong.id.vn',
+                    process.env.FRONTEND_URL,
+                ].filter(Boolean);
+                if (allowed.some(o => origin.startsWith(o))) return cb(null, true);
+                cb(null, true); // allow all for now – tighten in production
+            },
             credentials: true,
         },
         // Tăng buffer cho video signaling (SDP có thể dài)
@@ -145,6 +156,7 @@ const initSocket = (httpServer) => {
         require('./callSocket')(io, socket, onlineUsers);
         require('./chatSocket')(io, socket, onlineUsers);
         require('./voiceRoomSocket')(io, socket, onlineUsers);
+        require('./groupCallSocket')(io, socket, onlineUsers);
 
         // Khi socket ngắt kết nối
         socket.on('disconnect', () => {

@@ -7,11 +7,14 @@ import { PresenceProvider } from './context/PresenceContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { CallProvider } from './features/call/CallContext';
 import { VoiceRoomProvider } from './features/voice/VoiceRoomContext';
+import { GroupCallProvider } from './features/call/GroupCallContext';
 
 import IncomingCallModal from './features/call/components/IncomingCallModal';
 import OutgoingCallScreen from './features/call/components/OutgoingCallScreen';
 import ActiveCallScreen from './features/call/components/ActiveCallScreen';
 import CallNotification from './features/call/components/CallNotification';
+import IncomingGroupCallModal from './features/call/components/IncomingGroupCallModal';
+import GroupCallScreen from './features/call/components/GroupCallScreen';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 import Signup from './features/auth/Signup';
@@ -83,18 +86,21 @@ const App = () => {
             <PresenceProvider>
               <NotificationProvider>
                 <CallProvider>
-                <VoiceRoomProvider>
-                <CallNotification />
-                <NotificationToast />
-                <IncomingCallModal />
-                <OutgoingCallScreen />
-                <ActiveCallScreen />
-                <Layout>
-                  <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/signup" element={<Signup />} />
-                  <Route path="/signin" element={<Signin />} />
-                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <VoiceRoomProvider>
+                    <GroupCallProvider>
+                      <CallNotification />
+                      <NotificationToast />
+                      <IncomingCallModal />
+                      <OutgoingCallScreen />
+                      <ActiveCallScreen />
+                      <IncomingGroupCallModal />
+                      <GroupCallScreen />
+                      <Layout>
+                        <Routes>
+                          <Route path="/" element={<Home />} />
+                          <Route path="/signup" element={<Signup />} />
+                          <Route path="/signin" element={<Signin />} />
+                          <Route path="/forgot-password" element={<ForgotPassword />} />
 
                   {/* Giữ route cũ /dashboard nhưng chuyển hướng về /chat */}
                   <Route path="/dashboard" element={<Navigate to="/chat" replace />} />
@@ -146,12 +152,13 @@ const App = () => {
                   />
 
 
-                  <Route path="/auth/callback" element={<AuthCallback />} />
-                  <Route path="/complete-profile" element={<CompleteProfile />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Layout>
-                </VoiceRoomProvider>
+                          <Route path="/auth/callback" element={<AuthCallback />} />
+                          <Route path="/complete-profile" element={<CompleteProfile />} />
+                          <Route path="*" element={<Navigate to="/" replace />} />
+                        </Routes>
+                      </Layout>
+                    </GroupCallProvider>
+                  </VoiceRoomProvider>
                 </CallProvider>
               </NotificationProvider>
             </PresenceProvider>

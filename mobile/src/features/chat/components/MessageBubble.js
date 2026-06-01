@@ -56,6 +56,7 @@ const MessageBubble = ({
   translation,
   isTranslating,
   onClearTranslation,
+  groupMembers = [],
 }) => {
   const { t } = useLanguage();
   const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName, THEME);
@@ -92,7 +93,7 @@ const MessageBubble = ({
     }
 
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         activeOpacity={0.7}
         onPress={() => onJumpToMessage && onJumpToMessage(msg.replyToMessageId._id || msg.replyToMessageId.id)}
         style={[styles.repliedContainer, { borderLeftColor: isMine ? '#fff' : THEME.accent }]}
@@ -106,7 +107,6 @@ const MessageBubble = ({
       </TouchableOpacity>
     );
   };
-
   const renderStoryReply = (payload) => {
     if (!payload || payload.type !== 'story_reply') return null;
 
@@ -127,6 +127,86 @@ const MessageBubble = ({
     );
   };
 
+  // ── HÀM QUÉT VÀ TÔ MÀU TAG TÊN (NÂNG CẤP XỬ LÝ KHOẢNG TRẮNG) ──────────────
+  const renderContentWithMentions = (content) => {
+    if (!content) return null;
+
+    // 1. Chuẩn hóa danh sách thành viên (thêm @all vào)
+    const searchableUsers = [{ id: 'all', displayName: 'all' }, ...groupMembers].map(m => {
+      const u = m.user || m;
+      return {
+        id: u._id || u.id,
+        displayName: m.isAll ? 'all' : (u.displayName || u.username || u.name || 'Người dùng')
+      };
+    });
+
+    // 2. Lọc ra những người thực sự được Tag trong câu này
+    const usersInContent = searchableUsers.filter(user => {
+      const tag = user.id === 'all' ? '@all' : `@${user.displayName}`;
+      return content.includes(tag);
+    });
+
+    // Nếu không có ai được tag, in ra chữ bình thường
+    if (usersInContent.length === 0) {
+      return <Text style={[styles.bubbleText, { color: bubbleText }]}>{content}</Text>;
+    }
+
+    // 3. Sắp xếp tên dài lên trước để không bị lỗi khi tên giống nhau (VD: @Trí và @Trí Trần)
+    usersInContent.sort((a, b) => b.displayName.length - a.displayName.length);
+
+    let parts = [{ text: content, isMention: false }];
+
+    // 4. Chia nhỏ câu dựa trên chính xác họ tên của người được tag
+    usersInContent.forEach(user => {
+      const tag = user.id === 'all' ? '@all' : `@${user.displayName}`;
+      const newParts = [];
+
+      parts.forEach(part => {
+        if (part.isMention) {
+          newParts.push(part);
+          return;
+        }
+
+        const splitText = part.text.split(tag);
+        splitText.forEach((textChunk, index) => {
+          newParts.push({ text: textChunk, isMention: false });
+          if (index < splitText.length - 1) {
+            newParts.push({ text: tag, isMention: true, user: user });
+          }
+        });
+      });
+      parts = newParts;
+    });
+
+    // 5. In ra màn hình với màu sắc
+    return (
+      <Text style={[styles.bubbleText, { color: bubbleText, lineHeight: 22 }]}>
+        {parts.map((part, i) =>
+          part.isMention ? (
+            <Text
+              key={i}
+              style={{
+                color: isMine ? '#fff' : THEME.accent,
+                fontWeight: 'bold',
+                textDecorationLine: 'underline',
+              }}
+              onPress={() => {
+                console.log("Bạn vừa click vào:", part.text);
+                // Nếu bấm vào người thật (không phải @all), chuyển sang trang cá nhân
+                if (part.user.id !== 'all' && onAvatarPress) {
+                  onAvatarPress(part.user.id);
+                }
+              }}
+            >
+              {part.text}
+            </Text>
+          ) : (
+            <Text key={i}>{part.text}</Text>
+          )
+        )}
+      </Text>
+    );
+  };
   // Render nội dung bên trong bong bóng tuỳ theo type
   const renderContent = () => {
     // Tin nhắn đã bị thu hồi
@@ -212,44 +292,44 @@ const MessageBubble = ({
       // File thông thường
       return (
         <TouchableOpacity
-            onPress={() => onFilePress && onFilePress(fileUrl, fileName)}
-            style={[
-              styles.fileRow,
-              {
-                flexDirection: 'row',
-                alignItems: 'center',
-                minWidth: 200,
-                maxWidth: 260,
-                gap: 8,
-              },
-            ]}
-            activeOpacity={0.75}
-          >
-            <Feather name="file-text" size={22} color={isMine ? 'rgba(255,255,255,0.85)' : THEME.textMuted} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                style={[styles.bubbleText, { color: bubbleText, fontWeight: '600' }]}
-                numberOfLines={2}
-              >
-                {fileName}
-              </Text>
-              <Text style={{ fontSize: 11, color: isMine ? 'rgba(255,255,255,0.65)' : THEME.textMuted, marginTop: 2 }}>
-                {t('chat.tap_to_open')}
-              </Text>
-            </View>
-            <Feather name="download" size={18} color={isMine ? 'rgba(255,255,255,0.7)' : THEME.accent} />
-          </TouchableOpacity>
+          onPress={() => onFilePress && onFilePress(fileUrl, fileName)}
+          style={[
+            styles.fileRow,
+            {
+              flexDirection: 'row',
+              alignItems: 'center',
+              minWidth: 200,
+              maxWidth: 260,
+              gap: 8,
+            },
+          ]}
+          activeOpacity={0.75}
+        >
+          <Feather name="file-text" size={22} color={isMine ? 'rgba(255,255,255,0.85)' : THEME.textMuted} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              style={[styles.bubbleText, { color: bubbleText, fontWeight: '600' }]}
+              numberOfLines={2}
+            >
+              {fileName}
+            </Text>
+            <Text style={{ fontSize: 11, color: isMine ? 'rgba(255,255,255,0.65)' : THEME.textMuted, marginTop: 2 }}>
+              {t('chat.tap_to_open')}
+            </Text>
+          </View>
+          <Feather name="download" size={18} color={isMine ? 'rgba(255,255,255,0.7)' : THEME.accent} />
+        </TouchableOpacity>
       );
     }
 
     // Tin nhắn văn bản (mặc định)
     if (msg.type === 'poll') {
       return (
-        <PollMessage 
-          message={msg} 
-          currentUserId={currentUserId} 
-          onVote={onVote} 
-          THEME={THEME} 
+        <PollMessage
+          message={msg}
+          currentUserId={currentUserId}
+          onVote={onVote}
+          THEME={THEME}
           isPinned={isPinned}
         />
       );
@@ -289,12 +369,15 @@ const MessageBubble = ({
         )}
         {payload.type !== 'story_reply' && (
           <View>
-            <Text style={[styles.bubbleText, { color: bubbleText }]}>
-              {msg.content}
-              {msg.edited && (
-                <Text style={{ fontSize: 11, fontStyle: 'italic', opacity: 0.6 }}> {t('chat.edited')}</Text>
-              )}
-            </Text>
+            {/* GỌI HÀM VẼ TAG TÊN Ở ĐÂY */}
+            {renderContentWithMentions(msg.content)}
+            
+            {msg.edited && (
+              <Text style={{ fontSize: 11, fontStyle: 'italic', opacity: 0.6, color: bubbleText, marginTop: 4 }}>
+                {' '}
+                {t('chat.edited')}
+              </Text>
+            )}
             
             {isTranslating && (
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, opacity: 0.7 }}>
@@ -404,7 +487,7 @@ const MessageBubble = ({
 
       {/* Nội dung tin nhắn */}
       <View style={[
-        styles.msgContent, 
+        styles.msgContent,
         { alignItems: isMine ? 'flex-end' : 'flex-start' },
         msg.type === 'poll' && { maxWidth: '100%', width: '100%' }
       ]}>
@@ -444,15 +527,15 @@ const MessageBubble = ({
             ]}
           >
             {isPinned && msg.type !== 'poll' && (
-              <View style={{ 
-                flexDirection: 'row', alignItems: 'center', 
-                marginBottom: 4, paddingBottom: 4, 
-                borderBottomWidth: 1, 
+              <View style={{
+                flexDirection: 'row', alignItems: 'center',
+                marginBottom: 4, paddingBottom: 4,
+                borderBottomWidth: 1,
                 borderBottomColor: (msg.type === 'poll' || !isMine) ? THEME.border : 'rgba(255,255,255,0.2)',
                 opacity: 0.9
               }}>
                 <Text style={{ fontSize: 10, marginRight: 4 }}>📌</Text>
-                <Text style={{ 
+                <Text style={{
                   fontSize: 10, fontWeight: '700', textTransform: 'uppercase',
                   color: (msg.type === 'poll' || msg.type === 'image' || msg.type === 'video' || !isMine) ? THEME.accent : '#fff'
                 }}>{t('chat.pin_message')}</Text>
