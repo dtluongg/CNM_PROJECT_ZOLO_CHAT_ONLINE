@@ -10,33 +10,6 @@ export default function MediaPermissionModal({ onConfirm, onCancel }) {
   const [errorMsg, setErrorMsg]     = useState('');
   const streamRef = useRef(null);
 
-  // Probe existing permission state without triggering browser prompt
-  useEffect(() => {
-    if (!navigator.permissions) return;
-    navigator.permissions.query({ name: 'microphone' }).then(r => {
-      if (r.state === 'granted') setMicStatus(STATUS.granted);
-      if (r.state === 'denied')  setMicStatus(STATUS.denied);
-    }).catch(() => {});
-    navigator.permissions.query({ name: 'camera' }).then(r => {
-      if (r.state === 'granted') setCamStatus(STATUS.granted);
-      if (r.state === 'denied')  setCamStatus(STATUS.denied);
-    }).catch(() => {});
-  }, []);
-
-  // Auto-request when both are still idle
-  useEffect(() => {
-    if (micStatus === STATUS.idle && camStatus === STATUS.idle) {
-      requestPermissions();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Cleanup stream tracks on unmount
-  useEffect(() => {
-    return () => {
-      streamRef.current?.getTracks().forEach(t => t.stop());
-    };
-  }, []);
-
   const requestPermissions = async () => {
     setChecking(true);
     setErrorMsg('');
@@ -72,6 +45,37 @@ export default function MediaPermissionModal({ onConfirm, onCancel }) {
     }
     setChecking(false);
   };
+
+  // Probe existing permission state without triggering browser prompt
+  useEffect(() => {
+    if (!navigator.permissions) return;
+    navigator.permissions.query({ name: 'microphone' }).then(r => {
+      if (r.state === 'granted') setMicStatus(STATUS.granted);
+      if (r.state === 'denied')  setMicStatus(STATUS.denied);
+    }).catch(() => {});
+    navigator.permissions.query({ name: 'camera' }).then(r => {
+      if (r.state === 'granted') setCamStatus(STATUS.granted);
+      if (r.state === 'denied')  setCamStatus(STATUS.denied);
+    }).catch(() => {});
+  }, []);
+
+  // Auto-request when both are still idle
+  useEffect(() => {
+    if (micStatus === STATUS.idle && camStatus === STATUS.idle) {
+      const timer = setTimeout(() => {
+        requestPermissions();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cleanup stream tracks on unmount
+  useEffect(() => {
+    const currentStream = streamRef.current;
+    return () => {
+      currentStream?.getTracks().forEach(t => t.stop());
+    };
+  }, []);
 
   const canJoin = micStatus === STATUS.granted;
 
@@ -155,7 +159,7 @@ function PermRow({ icon, label, description, status, required }) {
     [STATUS.denied]:   '#ed4245',
   }[status];
 
-  const StatusIcon = () => {
+  const renderStatusIcon = () => {
     if (status === STATUS.checking) return <Loader size={16} color="#faa61a" style={styles.spin} />;
     if (status === STATUS.granted)  return <CheckCircle size={16} color="#57f287" />;
     if (status === STATUS.denied)   return <XCircle size={16} color="#ed4245" />;
@@ -172,7 +176,7 @@ function PermRow({ icon, label, description, status, required }) {
         </div>
         <div style={styles.permDesc}>{description}</div>
       </div>
-      <div style={styles.statusIcon}><StatusIcon /></div>
+      <div style={styles.statusIcon}>{renderStatusIcon()}</div>
     </div>
   );
 }

@@ -298,8 +298,10 @@ const getFriendList = async (req, res, next) => {
             .sort({ updatedAt: -1 });
 
         // Bóc tách dữ liệu để trả về đúng cấu trúc danh sách người
-        let friendList = friendships.map(f => {
-            const isUser1 = f.userId1._id.toString() === userId;
+        let friendList = friendships
+            .filter(f => f.userId1 && f.userId2)
+            .map(f => {
+                const isUser1 = f.userId1._id.toString() === userId;
             const friend = isUser1 ? f.userId2 : f.userId1;
             const nickname = isUser1 ? f.nickname2 : f.nickname1;
             const iBlockedThem = f.isBlockedBy?.toString() === userId;
@@ -553,8 +555,10 @@ const getBlockedList = async (req, res, next) => {
             .sort({ updatedAt: -1 });
 
         // Bóc tách dữ liệu để trả về danh sách những người tôi chặn
-        const blockedList = friendships.map(f => {
-            const isUser1 = f.userId1._id.toString() === userId;
+        const blockedList = friendships
+            .filter(f => f.userId1 && f.userId2)
+            .map(f => {
+                const isUser1 = f.userId1._id.toString() === userId;
             const blockedUser = isUser1 ? f.userId2 : f.userId1;
 
             return {

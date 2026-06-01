@@ -732,18 +732,18 @@
         "ongoing": "Ongoing",
         "calling": "Calling...",
         "busy": "Busy"
-      },
-      "mute_modal": {
-        "title": "Mute Notifications",
-        "desc": "You will not receive message notifications from this conversation.",
-        "options": {
-          "15m": "For 15 minutes",
-          "1h": "For 1 hour",
-          "8h": "For 8 hours",
-          "forever": "Until I turn it back on"
-        },
-        "submit": "Mute Notifications"
       }
+    },
+    "mute_modal": {
+      "title": "Mute Notifications",
+      "desc": "You will not receive message notifications from this conversation.",
+      "options": {
+        "15m": "For 15 minutes",
+        "1h": "For 1 hour",
+        "8h": "For 8 hours",
+        "forever": "Until I turn it back on"
+      },
+      "submit": "Mute Notifications"
     },
     "wait_admin": "Waiting for admin/owner approval.",
     "intro_others": "Introduce others",

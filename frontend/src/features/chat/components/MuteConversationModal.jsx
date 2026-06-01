@@ -29,7 +29,7 @@ const MuteConversationModal = ({ isOpen, onClose, conversationId, onSuccess }) =
         } catch (error) {
             console.error('Lỗi khi tắt thông báo:', error);
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     };
 

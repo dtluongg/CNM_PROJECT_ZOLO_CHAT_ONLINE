@@ -18,7 +18,12 @@ const initials = (name) => {
 function ParticipantCard({ participant, size, currentUserId, localVideoTrack, getRemoteCameraTrack }) {
   const videoRef = useRef(null);
   const [imgErr, setImgErr] = useState(false);
-  useEffect(() => { setImgErr(false); }, [participant.avatar]);
+  const [prevAvatar, setPrevAvatar] = useState(participant.avatar);
+
+  if (participant.avatar !== prevAvatar) {
+    setPrevAvatar(participant.avatar);
+    setImgErr(false);
+  }
 
   useEffect(() => {
     const el = videoRef.current;
@@ -28,7 +33,7 @@ function ParticipantCard({ participant, size, currentUserId, localVideoTrack, ge
       : getRemoteCameraTrack(participant.identity);
     if (track) {
       track.attach(el);
-      return () => { try { track.detach(el); } catch {} };
+      return () => { try { track.detach(el); } catch (err) { console.debug(err); } };
     } else {
       el.srcObject = null;
     }
@@ -104,7 +109,12 @@ function CtrlBtn({ onClick, active, danger, title, disabled, icon, label, small 
 
 function SmallAvatar({ name, avatar, size }) {
   const [err, setErr] = useState(false);
-  useEffect(() => { setErr(false); }, [avatar]);
+  const [prevAvatar, setPrevAvatar] = useState(avatar);
+
+  if (avatar !== prevAvatar) {
+    setPrevAvatar(avatar);
+    setErr(false);
+  }
   if (avatar && !err) return (
     <img src={avatar} alt={name} onError={() => setErr(true)}
       style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />
@@ -155,19 +165,19 @@ export default function VoiceChannelView({ topic, conversation, currentUserId, o
       else createRoom(conversation.id, topicId);
     };
     doJoin();
-  }, [permGranted, conversation?.id, topicId]); // intentionally minimal deps
+  }, [permGranted, conversation?.id, topicId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const el = screenRef.current;
     if (!el || !screenTrack) return;
     screenTrack.attach(el);
-    return () => { try { screenTrack.detach(el); } catch {} };
+    return () => { try { screenTrack.detach(el); } catch (err) { console.debug(err); } };
   }, [screenTrack]);
 
   const handleLeave = useCallback(() => {
     leaveRoom(conversation.id, topicId);
     onExitChannel?.();
-  }, [conversation?.id, topicId, leaveRoom, onExitChannel]);
+  }, [conversation.id, topicId, leaveRoom, onExitChannel]);
 
   // Responsive card sizing — no sidebar offset on mobile
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;

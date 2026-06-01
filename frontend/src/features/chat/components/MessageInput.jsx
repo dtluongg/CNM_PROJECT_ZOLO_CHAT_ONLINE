@@ -403,8 +403,8 @@ export default function MessageInput({
   // ── TÌM KIẾM DANH SÁCH TAG THEO QUERY ──
   const filteredMentions = [
     { id: 'all', displayName: 'all' },
-    ...groupMembers
-  ].filter(m => m.displayName.toLowerCase().includes(mentionQuery));
+    ...groupMembers.filter(Boolean)
+  ].filter(m => (m?.displayName || '').toLowerCase().includes(mentionQuery));
 
   return (
     <div style={{
@@ -417,19 +417,6 @@ export default function MessageInput({
           <button title="Gửi ảnh" onClick={() => imageInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '6px', borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Image size={20} /></button>
           <button title="Đính kèm file" onClick={() => fileInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '6px', borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Paperclip size={20} /></button>
           {isGroup && <button title="Tạo bình chọn" onClick={() => setShowPollModal(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '6px', borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'rgba(0,132,255,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><BarChart2 size={20} /></button>}
-        </div>
-      )}
-
-      {(editingMessage || replyingMessage) && (
-        <div style={{ position: 'absolute', bottom: '100%', left: isMobile ? 0 : 16, right: isMobile ? 0 : 16, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: isMobile ? 0 : '12px 12px 0 0', padding: '8px 12px', zIndex: 10, animation: 'fadeInUp 0.15s ease' }}>
-          {editingMessage && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 12 }}>Đang chỉnh sửa</span><button onClick={onCancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={14} /></button></div>
-          )}
-          {replyingMessage && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 12 }}>Đang trả lời {replyingMessage.senderName}</span><button onClick={onCancelReply} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={14} /></button></div>
-          )}
-
-          {/* Reminder button */}
           <button
             title="Nhắc hẹn"
             onClick={() => setShowReminderModal(true)}
@@ -443,6 +430,17 @@ export default function MessageInput({
           >
             <AlarmClock size={20} />
           </button>
+        </div>
+      )}
+
+      {(editingMessage || replyingMessage) && (
+        <div style={{ position: 'absolute', bottom: '100%', left: isMobile ? 0 : 16, right: isMobile ? 0 : 16, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: isMobile ? 0 : '12px 12px 0 0', padding: '8px 12px', zIndex: 10, animation: 'fadeInUp 0.15s ease' }}>
+          {editingMessage && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 12 }}>Đang chỉnh sửa</span><button onClick={onCancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={14} /></button></div>
+          )}
+          {replyingMessage && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 12 }}>Đang trả lời {replyingMessage.senderName}</span><button onClick={onCancelReply} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={14} /></button></div>
+          )}
         </div>
       )}
 

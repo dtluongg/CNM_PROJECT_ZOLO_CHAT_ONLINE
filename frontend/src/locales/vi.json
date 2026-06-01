@@ -732,18 +732,18 @@
         "ongoing": "Đang diễn ra",
         "calling": "Đang gọi...",
         "busy": "Máy bận"
-      },
-      "mute_modal": {
-        "title": "Tắt thông báo",
-        "desc": "Bạn sẽ không nhận được thông báo tin nhắn từ cuộc trò chuyện này.",
-        "options": {
-          "15m": "Trong 15 phút",
-          "1h": "Trong 1 giờ",
-          "8h": "Trong 8 giờ",
-          "forever": "Đến khi tôi bật lại"
-        },
-        "submit": "Tắt thông báo"
       }
+    },
+    "mute_modal": {
+      "title": "Tắt thông báo",
+      "desc": "Bạn sẽ không nhận được thông báo tin nhắn từ cuộc trò chuyện này.",
+      "options": {
+        "15m": "Trong 15 phút",
+        "1h": "Trong 1 giờ",
+        "8h": "Trong 8 giờ",
+        "forever": "Đến khi tôi bật lại"
+      },
+      "submit": "Tắt thông báo"
     },
     "wait_admin": "Đang chờ chủ nhóm/admin phê duyệt.",
     "intro_others": "Giới thiệu người khác",

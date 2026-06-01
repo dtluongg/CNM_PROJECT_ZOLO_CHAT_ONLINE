@@ -330,9 +330,11 @@ export default function ChatArea({
   }
 
   // ── Filter messages by active topic (groups only) ─────────
-      const mTopicId = m.topicId?.toString?.() || m.topicId || null;
-      return !mTopicId && m.type !== 'system';
-    })
+  const visibleMessages = conversation?.type === 'group' && !activeTopic
+    ? messages.filter(m => {
+        const mTopicId = m.topicId?.toString?.() || m.topicId || null;
+        return !mTopicId && m.type !== 'system';
+      })
     : messages; // đã được filter đúng từ Chat.jsx rồi
 
   // ── Build display items ────────────────────────────────────
@@ -770,6 +772,7 @@ export default function ChatArea({
             isMobile={isMobile}
             isGroup={conversation.type === 'group'}
             conversationId={conversation.id}
+            groupMembers={groupMembers}
             socket={socket}
             editingMessage={editingMessage}
             replyingMessage={replyingMessage}
@@ -791,42 +794,9 @@ export default function ChatArea({
                 ? t('chat.group_locked')
                 : t('chat.no_permission', { topic: activeTopic ? ` #${activeTopic.name}` : '' })}
             </span>
-                setReplyingMessage(null);
-              }}
-              placeholder={
-                conversation.type === 'group'
-                  ? `Nhắn tin tới #${activeTopic ? activeTopic.name : 'chung'}...`
-                  : `Nhắn tin tới ${conversation.name}...`
-              }
-              isMobile={isMobile}
-              isGroup={conversation.type === 'group'}
-              conversationId={conversation.id}
-              // groupMembers={conversation.members ? conversation.members.map(m => m.userId || m.user || m) : []}
-              groupMembers={groupMembers}
-              socket={socket}
-              editingMessage={editingMessage}
-              replyingMessage={replyingMessage}
-              onCancelEdit={() => setEditingMessage(null)}
-              onCancelReply={() => setReplyingMessage(null)}
-            />
-          ) : (
-            // Không có quyền gửi tin trong kênh này
-            <div style={{
-              padding: '12px 16px',
-              background: 'var(--bg-secondary)',
-              borderTop: '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', gap: 10,
-              flexShrink: 0,
-            }}>
-              <span style={{ fontSize: 18 }}>🔒</span>
-              <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                {isGroupLockedReadOnly
-                  ? 'Nhóm đang khóa. Chỉ owner/admin mới được gửi tin nhắn.'
-                  : `Bạn không có quyền gửi tin nhắn trong kênh${activeTopic ? ` #${activeTopic.name}` : ' này'}.`}
-              </span>
-            </div>
-          )
-        )}
+          </div>
+        )
+      )}
       </>}{/* end voice conditional */}
 
       <ReactionListModal
