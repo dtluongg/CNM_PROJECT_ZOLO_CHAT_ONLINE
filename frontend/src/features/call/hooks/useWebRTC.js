@@ -1,46 +1,20 @@
 import { useCallback, useRef } from 'react';
 import { getCallStream } from '../../../utils/mediaUtils';
 
-const ICE_SERVERS = {
-  iceServers: [
-        {
-          urls: "stun:stun.relay.metered.ca:80",
-        },
-        {
-          urls: "turn:global.relay.metered.ca:80",
-          username: "a9bdd19646fd4ff93af81747",
-          credential: "rkhaDcGCqTQBkooi",
-        },
-        {
-          urls: "turn:global.relay.metered.ca:80?transport=tcp",
-          username: "a9bdd19646fd4ff93af81747",
-          credential: "rkhaDcGCqTQBkooi",
-        },
-        {
-          urls: "turn:global.relay.metered.ca:443",
-          username: "a9bdd19646fd4ff93af81747",
-          credential: "rkhaDcGCqTQBkooi",
-        },
-        {
-          urls: "turns:global.relay.metered.ca:443?transport=tcp",
-          username: "a9bdd19646fd4ff93af81747",
-          credential: "rkhaDcGCqTQBkooi",
-        },
-    ],
-};
-
 export function useWebRTC({ onIceCandidate, onRemoteStream }) {
   const pcRef              = useRef(null);
   const localStreamRef     = useRef(null);
   // ✅ SỬA LỖI 1: chuyển vào trong hook
   const pendingCandidatesRef = useRef([]);
 
-  const createPeer = useCallback(() => {
+  const createPeer = useCallback((iceServers = [{ urls: 'stun:stun.l.google.com:19302' }]) => {
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
     }
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+
+    const pc = new RTCPeerConnection({ iceServers }); // ✅ dùng tham số
+
     pc.onicecandidate = (e) => { if (e.candidate) onIceCandidate(e.candidate); };
     pc.ontrack = (e) => {
       if (e.streams?.[0]) onRemoteStream(e.streams[0]);
@@ -49,6 +23,7 @@ export function useWebRTC({ onIceCandidate, onRemoteStream }) {
     pc.oniceconnectionstatechange = () => console.log('[ICE]', pc.iceConnectionState);
     pc.onicegatheringstatechange  = () => console.log('[Gather]', pc.iceGatheringState);
     pc.onconnectionstatechange    = () => console.log('[Conn]', pc.connectionState);
+
     pcRef.current = pc;
     return pc;
   }, [onIceCandidate, onRemoteStream]);
