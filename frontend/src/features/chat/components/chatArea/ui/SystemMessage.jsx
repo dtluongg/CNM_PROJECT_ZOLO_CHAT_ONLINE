@@ -244,7 +244,7 @@ const SystemMessage = ({ msg }) => {
         }}>
           {/* Avatar Người đặt nhắc hẹn */}
           <MiniAvatar name={actorName} avatar={actorAvatar} />
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Bell size={13} color="#f97316" fill="#f97316" />
@@ -257,6 +257,51 @@ const SystemMessage = ({ msg }) => {
 
           {/* Avatar Đối phương (DM) hoặc Avatar Nhóm (Group) */}
           <MiniAvatar name={targetName} avatar={targetAvatar} />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Cuộc gọi NHÓM kết thúc ───────────────────────────────────────────────
+  if (event === 'group_call_ended') {
+    const isVideo    = msg.payload?.callType === 'video';
+    const isMissed   = msg.payload?.status === 'missed';
+    const dur        = msg.payload?.duration || 0;
+    const parts      = msg.payload?.participants || [];
+    const shown      = parts.slice(0, 4);
+    const extra      = parts.length - shown.length;
+    const m = Math.floor(dur / 60), s = dur % 60;
+    const label = isMissed
+      ? `Cuộc gọi ${isVideo ? 'video' : 'thoại'} nhóm nhỡ`
+      : `Cuộc gọi ${isVideo ? 'video' : 'thoại'} nhóm · ${m > 0 ? `${m} phút ${s} giây` : `${s} giây`}`;
+    const color  = isMissed ? '#ed4245' : 'var(--text-secondary)';
+    const bg     = isMissed ? '#ed424510' : 'rgba(88,101,242,0.07)';
+    const border = isMissed ? '1px solid #ed424530' : '1px solid rgba(88,101,242,0.2)';
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: bg, border, borderRadius: 30, padding: '8px 16px', userSelect: 'none' }}>
+          {isVideo ? <Video size={14} color={color} /> : <Phone size={14} color={color} />}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color }}>{label}</span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.7 }}>{msg.time}</span>
+          </div>
+          {shown.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {shown.map((p, i) => (
+                <div key={p._id} style={{ marginLeft: i === 0 ? 0 : -8, zIndex: shown.length - i }}>
+                  <MiniAvatar name={p.displayName} avatar={p.avatar} size={24} />
+                </div>
+              ))}
+              {extra > 0 && (
+                <div style={{
+                  marginLeft: -8, width: 24, height: 24, borderRadius: '50%',
+                  background: 'var(--bg-tertiary)', border: '2px solid var(--bg-secondary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9, fontWeight: 700, color: 'var(--text-muted)',
+                }}>+{extra}</div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );

@@ -140,9 +140,9 @@ const SystemMessageBubble = ({ msg }) => {
           <Feather name="shield" size={12} color={isAdminRole ? '#f0b132' : '#888'} />
           <View style={{ flexDirection: 'column' }}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: isAdminRole ? '#f0b132' : '#666' }}>
-              {t('system.role_updated', { 
-                name: targetName, 
-                role: isAdminRole ? t('system.role_admin') : t('system.role_member') 
+              {t('system.role_updated', {
+                name: targetName,
+                role: isAdminRole ? t('system.role_admin') : t('system.role_member')
               })}
             </Text>
             <Text style={{ fontSize: 10, color: '#888' }}>{t('system.role_updated_by', { name: actorName })}</Text>
@@ -282,7 +282,7 @@ const SystemMessageBubble = ({ msg }) => {
         }}>
           {/* Avatar Người đặt nhắc hẹn */}
           <MiniAvatar name={actorName} avatar={actorAvatar} />
-          
+
           <View style={{ flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Feather name="bell" size={13} color="#f97316" />
@@ -295,6 +295,55 @@ const SystemMessageBubble = ({ msg }) => {
 
           {/* Avatar Đối phương (DM) hoặc Avatar Nhóm (Group) */}
           <MiniAvatar name={targetName} avatar={targetAvatar} />
+        </View>
+      </View>
+    );
+  }
+
+  // ── Cuộc gọi NHÓM kết thúc ───────────────────────────────────────────────
+  if (event === 'group_call_ended') {
+    const isVideo  = msg.payload?.callType === 'video';
+    const isMissed = msg.payload?.status === 'missed';
+    const dur      = msg.payload?.duration || 0;
+    const parts    = msg.payload?.participants || [];
+    const shown    = parts.slice(0, 4);
+    const extra    = parts.length - shown.length;
+    const m = Math.floor(dur / 60), s = dur % 60;
+    const label = isMissed
+      ? `Cuộc gọi ${isVideo ? 'video' : 'thoại'} nhóm nhỡ`
+      : `Cuộc gọi ${isVideo ? 'video' : 'thoại'} nhóm · ${m > 0 ? `${m} phút ${s} giây` : `${s} giây`}`;
+    const color  = isMissed ? '#ed4245' : '#5865f2';
+    const bg     = isMissed ? '#ed424510' : 'rgba(88,101,242,0.08)';
+    const border = isMissed ? '#ed424530' : 'rgba(88,101,242,0.2)';
+    return (
+      <View style={{ alignItems: 'center', marginVertical: 6, marginHorizontal: 16 }}>
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: 10,
+          backgroundColor: bg, borderWidth: 1, borderColor: border,
+          borderRadius: 30, paddingVertical: 8, paddingHorizontal: 14,
+        }}>
+          <Feather name={isVideo ? 'video' : 'phone'} size={14} color={color} />
+          <View style={{ flexDirection: 'column', gap: 2 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color }}>{label}</Text>
+            <Text style={{ fontSize: 10, color: '#888', opacity: 0.7 }}>{msg.time}</Text>
+          </View>
+          {shown.length > 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {shown.map((p, i) => (
+                <View key={p._id} style={{ marginLeft: i === 0 ? 0 : -8, zIndex: shown.length - i }}>
+                  <MiniAvatar name={p.displayName} avatar={p.avatar} size={24} />
+                </View>
+              ))}
+              {extra > 0 && (
+                <View style={{
+                  marginLeft: -8, width: 24, height: 24, borderRadius: 12,
+                  backgroundColor: '#ccc', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#555' }}>+{extra}</Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
       </View>
     );
