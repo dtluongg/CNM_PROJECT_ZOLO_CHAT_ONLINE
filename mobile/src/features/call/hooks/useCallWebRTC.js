@@ -8,28 +8,20 @@ import { Platform } from 'react-native';
 
 let RN_RTC_AVAILABLE = false;
 let RTCPeerConnection_ = null;
-let RTCSessionDescription_ = null;
-let RTCIceCandidate_ = null;
 let mediaDevices_ = null;
 let RTCView_ = null;
 let MediaStream_ = null;
 
 if (Platform.OS === 'web') {
-  RTCPeerConnection_    = global.RTCPeerConnection;
-  RTCSessionDescription_ = global.RTCSessionDescription;
-  RTCIceCandidate_      = global.RTCIceCandidate;
-  mediaDevices_         = navigator.mediaDevices;
-  MediaStream_          = global.MediaStream;
-  RN_RTC_AVAILABLE      = true;
+  RTCPeerConnection_ = global.RTCPeerConnection;
+  mediaDevices_      = navigator.mediaDevices;
+  MediaStream_       = global.MediaStream;
+  RN_RTC_AVAILABLE   = true;
 } else {
-  // App.js đã gọi registerGlobals() từ @livekit/react-native
-  // → RTCPeerConnection, RTCSessionDescription, etc. có sẵn trong global
   try {
-    RTCPeerConnection_    = global.RTCPeerConnection;
-    RTCSessionDescription_ = global.RTCSessionDescription;
-    RTCIceCandidate_      = global.RTCIceCandidate;
-    mediaDevices_         = global.navigator?.mediaDevices;
-    MediaStream_          = global.MediaStream;
+    RTCPeerConnection_ = global.RTCPeerConnection;
+    mediaDevices_      = global.navigator?.mediaDevices;
+    MediaStream_       = global.MediaStream;
 
     // RTCView từ @livekit/react-native-webrtc (API giống react-native-webrtc)
     try {
@@ -145,8 +137,11 @@ export function useCallWebRTC({ onIceCandidate, onRemoteStream }) {
     const pc = pcRef.current;
     if (!pc) throw new Error('No RTCPeerConnection');
     await pc.setRemoteDescription(offer);
-    await flushPendingCandidates();
-    const answer = await pc.createAnswer();
+    // flush candidates và createAnswer song song — cả hai chỉ cần remoteDescription đã set
+    const [answer] = await Promise.all([
+      pc.createAnswer(),
+      flushPendingCandidates(),
+    ]);
     await pc.setLocalDescription(answer);
     return answer;
   }, [flushPendingCandidates]);
