@@ -431,16 +431,16 @@ export const CallProvider = ({ children }) => {
     socket.on('call:timeout',  () => resetAll());
 
     // Nhận ICE candidate từ peer
-    socket.on('call:ice-candidate', async ({ candidate }) => {
+    socket.on('call:ice-candidate', ({ candidate }) => {
       const pc = pcRef.current;
       if (!pc || !candidate) return;
 
-      if (pc.remoteDescription && !isFlushing.current) {
-        await addIceCandidate(candidate);
-        await flushRemoteCandidates();
+      if (pc.remoteDescription) {
+        // buffer vào mảng chung rồi flush — tránh race condition khi nhiều event đến cùng lúc
+        pendingCandidates.current.push(candidate);
+        if (!isFlushing.current) flushRemoteCandidates();
       } else {
         pendingCandidates.current.push(candidate);
-        console.log('[ICE] queued remote candidate:', pendingCandidates.current.length);
       }
     });
 
