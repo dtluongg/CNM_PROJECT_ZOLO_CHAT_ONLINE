@@ -5,7 +5,6 @@
 
 import { useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
-import { getIceServers } from '../../../utils/turnUtils';
 
 let RN_RTC_AVAILABLE = false;
 let RTCPeerConnection_ = null;
@@ -53,7 +52,7 @@ export function useCallWebRTC({ onIceCandidate, onRemoteStream }) {
   const remoteStreamRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
 
-  const createPeer = useCallback(async () => {
+  const createPeer = useCallback((iceServers = []) => {
     if (!RN_RTC_AVAILABLE) throw new Error('WebRTC_UNAVAILABLE');
 
     pcRef.current?.close();
@@ -61,7 +60,6 @@ export function useCallWebRTC({ onIceCandidate, onRemoteStream }) {
     remoteStreamRef.current = null;
     pendingCandidatesRef.current = [];
 
-    const iceServers = await getIceServers();
     const pc = new RTCPeerConnection_({ iceServers });
 
     pc.onicecandidate = (e) => {
@@ -130,34 +128,33 @@ export function useCallWebRTC({ onIceCandidate, onRemoteStream }) {
   const flushPendingCandidates = useCallback(async () => {
     const pc = pcRef.current;
     if (!pc) return;
-    for (const c of pendingCandidatesRef.current) {
-      try { await pc.addIceCandidate(new RTCIceCandidate_(c)); } catch {}
-    }
+    const candidates = [...pendingCandidatesRef.current];
     pendingCandidatesRef.current = [];
+    await Promise.all(candidates.map((c) => pc.addIceCandidate(c).catch(() => {})));
   }, []);
 
   const createOffer = useCallback(async () => {
     const pc = pcRef.current;
     if (!pc) throw new Error('No RTCPeerConnection');
     const offer = await pc.createOffer();
-    await pc.setLocalDescription(new RTCSessionDescription_(offer));
+    await pc.setLocalDescription(offer);
     return offer;
   }, []);
 
   const createAnswer = useCallback(async (offer) => {
     const pc = pcRef.current;
     if (!pc) throw new Error('No RTCPeerConnection');
-    await pc.setRemoteDescription(new RTCSessionDescription_(offer));
+    await pc.setRemoteDescription(offer);
     await flushPendingCandidates();
     const answer = await pc.createAnswer();
-    await pc.setLocalDescription(new RTCSessionDescription_(answer));
+    await pc.setLocalDescription(answer);
     return answer;
   }, [flushPendingCandidates]);
 
   const setRemoteAnswer = useCallback(async (answer) => {
     const pc = pcRef.current;
     if (!pc) return;
-    await pc.setRemoteDescription(new RTCSessionDescription_(answer));
+    await pc.setRemoteDescription(answer);
     await flushPendingCandidates();
   }, [flushPendingCandidates]);
 
@@ -169,7 +166,7 @@ export function useCallWebRTC({ onIceCandidate, onRemoteStream }) {
       return;
     }
     try {
-      await pc.addIceCandidate(new RTCIceCandidate_(candidate));
+      await pc.addIceCandidate(candidate);
     } catch (err) {
       console.warn('[addIceCandidate]', err.message);
     }
