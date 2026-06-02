@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, Image,
   ScrollView, ActivityIndicator, StatusBar, Alert,
 } from 'react-native';
-import { THEME, formatLastSeen } from '../../../theme';
+import { formatLastSeen } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
+import { useTheme } from '../../../context/ThemeContext';
 import { usePresence } from '../../../context/PresenceContext';
 import { useLanguage } from '../../../context/LanguageContext';
 
@@ -14,11 +15,13 @@ import Avatar from '../components/Avatar';
 import ActionButton from '../components/ActionButton';
 import InfoRow from '../components/InfoRow';
 import StatusBubble from '../components/StatusBubble';
-import { styles as s } from '../styles/userProfileStyles';
+import { makeStyles } from '../styles/userProfileStyles';
 
 export default function UserProfileScreen({ route, navigation }) {
   const { user: authUser } = useAuth();
   const { t, language } = useLanguage();
+  const { theme: THEME } = useTheme();
+  const s = useMemo(() => makeStyles(THEME), [THEME]);
   const { isUserOnline, getPresenceStatus, getLastSeen, getStatusText } = usePresence();
 
   const {
@@ -85,7 +88,7 @@ export default function UserProfileScreen({ route, navigation }) {
             <Avatar name={profile.displayName} avatar={profile.avatar} size={80} />
           </View>
           <View style={{ alignItems: 'flex-start' }}>
-            <StatusBubble color={si.color} label={t(`chat.status.${si.statusKey}`)} />
+            <StatusBubble color={si.color} label={t(`chat.status.${si.statusKey}`)} styles={s} />
             {si.statusKey === 'offline' && !isOwn && ls ? (
               <Text style={{ fontSize: 11, color: THEME.textMuted, marginTop: 3 }}>
                 {t('chat.status.active_time', { time: formatLastSeen(ls) })}
@@ -114,16 +117,18 @@ export default function UserProfileScreen({ route, navigation }) {
               label={messaging ? t('common.opening') : t('friends.send_message')}
               onPress={handleMessage}
               primary
+              styles={s}
             />
 
             {friendStatus === null && (
-              <ActionButton icon="⏳" label={t('common.loading')} onPress={() => {}} />
+              <ActionButton icon="⏳" label={t('common.loading')} onPress={() => {}} styles={s} />
             )}
             {friendStatus === 'none' && (
               <ActionButton
                 icon={friendBusy ? '⏳' : '🤝'}
                 label={friendBusy ? t('common.sending') : t('friends.add_friend')}
                 onPress={handleSendRequest}
+                styles={s}
               />
             )}
             {friendStatus === 'sent' && (
@@ -131,6 +136,7 @@ export default function UserProfileScreen({ route, navigation }) {
                 icon={friendBusy ? '⏳' : '✉️'}
                 label={friendBusy ? t('common.cancelling') : t('friends.request_sent_label')}
                 onPress={handleCancelRequest}
+                styles={s}
               />
             )}
             {friendStatus === 'friends' && (
@@ -138,10 +144,11 @@ export default function UserProfileScreen({ route, navigation }) {
                 icon={friendBusy ? '⏳' : '👥'}
                 label={friendBusy ? t('common.cancelling') : t('friends.unfriend')}
                 onPress={handleUnfriend}
+                styles={s}
               />
             )}
 
-            <ActionButton icon="📞" label={t('chat.voice_call')} onPress={() => Alert.alert(t('chat.voice_call'), t('common.feature_coming_soon'))} />
+            <ActionButton icon="📞" label={t('chat.voice_call')} onPress={() => Alert.alert(t('chat.voice_call'), t('common.feature_coming_soon'))} styles={s} />
           </View>
         ) : (
           <View style={s.ownActionRow}>
@@ -196,23 +203,25 @@ export default function UserProfileScreen({ route, navigation }) {
         <View style={s.section}>
           <Text style={s.sectionLabel}>{t('user.member_info_title')}</Text>
           <View style={s.infoCard}>
-            {profile.email && <InfoRow icon="📧" label="Email" value={profile.email} />}
-            {profile.username && <InfoRow icon="🏷️" label={t('user.username')} value={`@${profile.username}`} sep />}
+            {profile.email && <InfoRow icon="📧" label="Email" value={profile.email} styles={s} />}
+            {profile.username && <InfoRow icon="🏷️" label={t('user.username')} value={`@${profile.username}`} sep styles={s} />}
             {profile.createdAt && (
               <InfoRow
                 icon="📅"
                 label={t('user.joined_date')}
                 value={new Date(profile.createdAt).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { year: 'numeric', month: 'long' })}
                 sep
+                styles={s}
               />
             )}
-            {profile.phone && <InfoRow icon="📱" label={t('user.phone')} value={profile.phone} sep />}
+            {profile.phone && <InfoRow icon="📱" label={t('user.phone')} value={profile.phone} sep styles={s} />}
             {profile.authProvider && (
               <InfoRow
                 icon="🔐"
                 label={t('user.account_type')}
                 value={profile.authProvider === 'local' ? t('user.local_account') : `OAuth (${profile.authProvider})`}
                 sep
+                styles={s}
               />
             )}
             {(typeof profile.isEmailVerified === 'boolean' || typeof profile.isPhoneVerified === 'boolean') && (

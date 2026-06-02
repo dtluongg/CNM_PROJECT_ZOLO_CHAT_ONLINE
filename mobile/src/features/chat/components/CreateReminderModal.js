@@ -5,8 +5,19 @@ import {
   KeyboardAvoidingView, Platform
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLanguage } from '../../../context/LanguageContext';
+
+// Tải DateTimePicker an toàn: nếu native module 'RNCDatePicker' chưa được
+// build vào binary (vd: dev client cũ / Expo Go thiếu module) thì require sẽ
+// ném lỗi ngay khi import. Bọc try/catch để KHÔNG làm sập cả app lúc khởi
+// động — tính năng nhắc hẹn sẽ tự fallback thay vì crash.
+let DateTimePicker = null;
+try {
+  DateTimePicker = require('@react-native-community/datetimepicker').default;
+} catch (e) {
+  console.warn('[CreateReminderModal] DateTimePicker native module unavailable:', e?.message);
+  DateTimePicker = null;
+}
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -215,16 +226,49 @@ const CreateReminderModal = ({ visible, onClose, onCreate, THEME, isGroup }) => 
                   </TouchableOpacity>
                 </View>
                 <View style={styles.pickerWrapper}>
-                  <DateTimePicker
-                    value={date}
-                    mode={showPickerMode}
-                    is24Hour={true}
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={onPickerChange}
-                    minimumDate={new Date()}
-                    textColor={colors.textPrimary}
-                    themeVariant={colors.bgPrimary === '#ffffff' ? 'light' : 'dark'}
-                  />
+                  {DateTimePicker ? (
+                    <DateTimePicker
+                      value={date}
+                      mode={showPickerMode}
+                      is24Hour={true}
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={onPickerChange}
+                      minimumDate={new Date()}
+                      textColor={colors.textPrimary}
+                      themeVariant={colors.bgPrimary === '#ffffff' ? 'light' : 'dark'}
+                    />
+                  ) : (
+                    // Fallback khi thiếu native module: nút chọn nhanh để vẫn
+                    // dùng được tính năng mà không cần build lại ngay.
+                    <View style={{ paddingVertical: 12, gap: 10 }}>
+                      <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center', marginBottom: 4 }}>
+                        {showPickerMode === 'date'
+                          ? '+ ngày kể từ hôm nay'
+                          : '+ giờ kể từ bây giờ'}
+                      </Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                        {(showPickerMode === 'date' ? [1, 2, 3, 7] : [1, 3, 6, 12]).map((n) => (
+                          <TouchableOpacity
+                            key={n}
+                            onPress={() => {
+                              const next = new Date(date);
+                              if (showPickerMode === 'date') next.setDate(next.getDate() + n);
+                              else next.setHours(next.getHours() + n);
+                              setDate(next);
+                            }}
+                            style={{
+                              paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
+                              backgroundColor: colors.accent + '22', borderWidth: 1, borderColor: colors.accent + '55',
+                            }}
+                          >
+                            <Text style={{ color: colors.accent, fontWeight: '700' }}>
+                              +{n} {showPickerMode === 'date' ? 'ngày' : 'giờ'}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  )}
                 </View>
               </Animated.View>
             )}

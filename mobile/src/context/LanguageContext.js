@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import vi from '../locales/vi.json';
 import en from '../locales/en.json';
@@ -39,12 +39,12 @@ export const LanguageProvider = ({ children }) => {
     syncLanguage();
   }, [user?.language]);
 
-  const changeLanguage = async (newLang) => {
+  const changeLanguage = useCallback(async (newLang) => {
     if (translations[newLang]) {
       setLanguage(newLang);
       try {
         await AsyncStorage.setItem('user_language', newLang);
-        
+
         // Sync to backend if logged in
         if (user) {
           const res = await apiClient.patch('/users/update-profile', { language: newLang });
@@ -56,7 +56,7 @@ export const LanguageProvider = ({ children }) => {
         console.error('Failed to sync language:', error);
       }
     }
-  };
+  }, [user, updateUser]);
 
   /**
    * Translate function
@@ -64,10 +64,13 @@ export const LanguageProvider = ({ children }) => {
    * @param {object} params - Key-value pairs for interpolation
    * @returns {string} - Translated text
    */
-  const t = (key, params = {}) => {
+  // Memo hóa theo `language` để hàm `t` giữ nguyên tham chiếu giữa các lần
+  // render — tránh khiến các effect/useCallback phụ thuộc `t` chạy lại liên
+  // tục (gây fetch lặp & lag).
+  const t = useCallback((key, params = {}) => {
     const keys = key.split('.');
     let result = translations[language];
-    
+
     for (const k of keys) {
       if (result && result[k]) {
         result = result[k];
@@ -84,14 +87,14 @@ export const LanguageProvider = ({ children }) => {
     }
 
     return result;
-  };
+  }, [language]);
 
-  const value = {
+  const value = useMemo(() => ({
     language,
     changeLanguage,
     t,
-    loading
-  };
+    loading,
+  }), [language, changeLanguage, t, loading]);
 
   return (
     <LanguageContext.Provider value={value}>
