@@ -764,51 +764,6 @@ export default function ChatArea({
         </div>
       )}
 
-        {!(conversation.type === 'dm' && blockStatus?.iBlocked) && activeTopic?.channelType !== 'voice' && activeTopic?.channelType !== 'system' && (
-          canSendInActiveTopic ? (
-            <MessageInput
-              onSend={async (payload) => {
-                const enriched = (conversation.type === 'group' && activeTopic)
-                  ? { ...payload, topicId: activeTopic._id }
-                  : payload;
-                await onSendMessage(enriched);
-                if (payload.isEdit) setEditingMessage(null);
-                setReplyingMessage(null);
-              }}
-              placeholder={
-                conversation.type === 'group'
-                  ? `Nhắn tin tới #${activeTopic ? activeTopic.name : 'chung'}...`
-                  : `Nhắn tin tới ${conversation.name}...`
-              }
-              isMobile={isMobile}
-              isGroup={conversation.type === 'group'}
-              conversationId={conversation.id}
-              // groupMembers={conversation.members ? conversation.members.map(m => m.userId || m.user || m) : []}
-              groupMembers={groupMembers}
-              socket={socket}
-              editingMessage={editingMessage}
-              replyingMessage={replyingMessage}
-              onCancelEdit={() => setEditingMessage(null)}
-              onCancelReply={() => setReplyingMessage(null)}
-            />
-          ) : (
-            // Không có quyền gửi tin trong kênh này
-            <div style={{
-              padding: '12px 16px',
-              background: 'var(--bg-secondary)',
-              borderTop: '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', gap: 10,
-              flexShrink: 0,
-            }}>
-              <span style={{ fontSize: 18 }}>🔒</span>
-              <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                {isGroupLockedReadOnly
-                  ? 'Nhóm đang khóa. Chỉ owner/admin mới được gửi tin nhắn.'
-                  : `Bạn không có quyền gửi tin nhắn trong kênh${activeTopic ? ` #${activeTopic.name}` : ' này'}.`}
-              </span>
-            </div>
-          )
-        )}
       {!(conversation.type === 'dm' && blockStatus?.iBlocked) && activeTopic?.channelType !== 'voice' && (
         canSendInActiveTopic ? (
           <MessageInput
