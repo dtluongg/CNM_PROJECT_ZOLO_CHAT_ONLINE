@@ -4,7 +4,7 @@
  */
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Platform } from 'react-native';
-import { Room, RoomEvent, Track } from '@livekit/react-native';
+import { Room, RoomEvent, Track } from 'livekit-client';
 
 let InCallManager = null;
 if (Platform.OS !== 'web') {
@@ -53,7 +53,7 @@ export function useVoiceRoom() {
     setLiveParts(snap);
   }, []);
 
-  const connect = useCallback(async ({ livekitUrl, token }) => {
+  const connect = useCallback(async ({ livekitUrl, token, callType }) => {
     if (roomRef.current) return;
 
     if (InCallManager) {
@@ -156,8 +156,12 @@ export function useVoiceRoom() {
 
     await room.connect(livekitUrl, token, { autoSubscribe: true });
     await room.localParticipant.setMicrophoneEnabled(true);
+    if (callType === 'video') {
+      await room.localParticipant.setCameraEnabled(true);
+    }
     setConnected(true);
     setIsMuted(false);
+    setIsCameraOff(callType !== 'video');
     refreshParticipants(room);
   }, [refreshParticipants]);
 

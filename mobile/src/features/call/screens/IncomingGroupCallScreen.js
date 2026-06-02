@@ -60,10 +60,11 @@ export default function IncomingGroupCallScreen() {
 
   if (!isVisible) return null;
 
-  const initiator = incomingData?.initiator || {};
-  const name      = initiator.displayName || 'Ai đó';
-  const isVideo   = callType === 'video';
-  const label     = isVideo ? 'Gọi video nhóm' : 'Gọi thoại nhóm';
+  const initiator  = incomingData?.initiator || {};
+  const group      = incomingData?.group || {};
+  const groupName  = group.name || 'Nhóm';
+  const isVideo    = callType === 'video';
+  const label      = isVideo ? 'Gọi video nhóm' : 'Gọi thoại nhóm';
 
   return (
     <View style={styles.container}>
@@ -79,14 +80,20 @@ export default function IncomingGroupCallScreen() {
 
       {/* Group badge */}
       <View style={styles.groupBadge}>
-        <Feather name="users" size={18} color="#fff" />
+        <Feather name="users" size={14} color="#fff" />
+        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{groupName}</Text>
       </View>
 
+      {/* Group avatar (lớn) + initiator avatar (nhỏ góc dưới) */}
       <View style={styles.avatarWrap}>
-        <Avatar name={name} avatar={initiator.avatar} size={100} />
+        <Avatar name={groupName} avatar={group.avatar} size={100} />
+        <View style={styles.initiatorBadge}>
+          <Avatar name={initiator.displayName || '?'} avatar={initiator.avatar} size={34} />
+        </View>
       </View>
 
-      <Text style={styles.name}>{name}</Text>
+      <Text style={styles.name}>{groupName}</Text>
+      <Text style={styles.subName}>{initiator.displayName || 'Ai đó'} đang gọi</Text>
 
       <View style={styles.labelRow}>
         <Feather name={isVideo ? 'video' : 'phone'} size={15} color={THEME.textMuted} />
@@ -139,8 +146,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  avatarWrap: { marginBottom: 24, elevation: 8 },
-  name:  { color: '#f2f3f5', fontSize: 26, fontWeight: '700', marginBottom: 8 },
+  avatarWrap:      { marginBottom: 24, elevation: 8, position: 'relative' },
+  initiatorBadge:  {
+    position: 'absolute', bottom: -4, right: -4,
+    borderRadius: 20, borderWidth: 2, borderColor: '#0d0f1a',
+  },
+  name:    { color: '#f2f3f5', fontSize: 26, fontWeight: '700', marginBottom: 4 },
+  subName: { color: THEME.textMuted, fontSize: 14, marginBottom: 12 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 56 },
   label: { color: THEME.textMuted, fontSize: 15 },
   btnRow: { flexDirection: 'row', gap: 60, alignItems: 'center' },
