@@ -13,12 +13,10 @@ import React, {
 } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
-import { getAccessToken } from '../../utils/authStorage';
-import { useWebRTC } from './hooks/useWebRTC';
-import { isSecureContext } from '../../utils/mediaUtils';
+import { useCallWebRTC as useWebRTC } from './hooks/useCallWebRTC';
 import { getIceServers } from '../../utils/turnUtils';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:2026';
+const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL || 'http://localhost:2026';
 
 export const CALL_STATE = {
   IDLE:     'idle',
@@ -133,10 +131,9 @@ export const CallProvider = ({ children }) => {
     if (!pc?.remoteDescription) return;
 
     isFlushing.current = true;
-    while (pendingCandidates.current.length > 0) {
-      const candidate = pendingCandidates.current.shift();
-      await addIceCandidate(candidate);
-    }
+    const candidates = [...pendingCandidates.current];
+    pendingCandidates.current = [];
+    await Promise.all(candidates.map((c) => addIceCandidate(c)));
     isFlushing.current = false;
   }, [addIceCandidate, pcRef]);
 
@@ -193,14 +190,6 @@ export const CallProvider = ({ children }) => {
       return;
     }
 
-    if (!isSecureContext()) {
-      setCallError(
-        'Trình duyệt chặn microphone/camera trên HTTP. ' +
-        'Hãy truy cập qua HTTPS để thực hiện cuộc gọi.',
-      );
-      return;
-    }
-
     setCallError(null);
 
     // Phase 1: Ring ngay lập tức
@@ -221,11 +210,13 @@ export const CallProvider = ({ children }) => {
       setCallType(type);
       setRemoteUser(targetUser);
 
-      // Phase 2: Media + offer song song (callee đã đổ chuông)
+      // Phase 2: lấy ICE servers và media song song
       try {
-        const iceServers = await getIceServers();
+        const [iceServers, stream] = await Promise.all([
+          getIceServers(),
+          getLocalStream(type),
+        ]);
         createPeer(iceServers);
-        const stream = await getLocalStream(type);
         setLocalStream(stream);
         addLocalStream(stream);
         const offer = await createOffer();
@@ -262,9 +253,11 @@ export const CallProvider = ({ children }) => {
     setCallError(null);
 
     try {
-      const iceServers = await getIceServers();
+      const [iceServers, stream] = await Promise.all([
+        getIceServers(),
+        getLocalStream(type),
+      ]);
       createPeer(iceServers);
-      const stream = await getLocalStream(type);
       setLocalStream(stream);
       addLocalStream(stream);
       setCallId(cid);
@@ -325,9 +318,10 @@ export const CallProvider = ({ children }) => {
   const endCall = useCallback(() => {
     const cid = callIdRef.current;
     if (cid && socketRef.current?.connected) {
-      socketRef.current.emit('call:end', { callId: cid });
+      socketRef.current.emit('call:end', { callId: cid }, () => resetAll());
+    } else {
+      resetAll();
     }
-    resetAll();
   }, [resetAll]);
 
   const toggleMute = useCallback(() => {
@@ -356,8 +350,8 @@ export const CallProvider = ({ children }) => {
   //  Socket event listeners
   // ═════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    const accessToken = token || getAccessToken();
-    if (!accessToken) return;
+    if (!token) return;
+    const accessToken = token;
 
     const socket = io(SOCKET_URL, {
       auth:                 { token: accessToken },
@@ -427,16 +421,16 @@ export const CallProvider = ({ children }) => {
     socket.on('call:timeout',  () => resetAll());
 
     // Nhận ICE candidate từ peer
-    socket.on('call:ice-candidate', async ({ candidate }) => {
+    socket.on('call:ice-candidate', ({ candidate }) => {
       const pc = pcRef.current;
       if (!pc || !candidate) return;
 
-      if (pc.remoteDescription && !isFlushing.current) {
-        await addIceCandidate(candidate);
-        await flushRemoteCandidates();
+      if (pc.remoteDescription) {
+        // buffer vào mảng chung rồi flush — tránh race condition khi nhiều event đến cùng lúc
+        pendingCandidates.current.push(candidate);
+        if (!isFlushing.current) flushRemoteCandidates();
       } else {
         pendingCandidates.current.push(candidate);
-        console.log('[ICE] queued remote candidate:', pendingCandidates.current.length);
       }
     });
 

@@ -59,7 +59,7 @@ export function useWebRTC({ onIceCandidate, onRemoteStream }) {
     const pc = pcRef.current;
     if (!pc) return;
     for (const c of pendingCandidatesRef.current) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+      try { await pc.addIceCandidate(c); } catch {}
     }
     pendingCandidatesRef.current = [];
   }, []);
@@ -76,7 +76,7 @@ export function useWebRTC({ onIceCandidate, onRemoteStream }) {
   const createAnswer = useCallback(async (offer) => {
     const pc = pcRef.current;
     if (!pc) throw new Error('No RTCPeerConnection');
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    await pc.setRemoteDescription(offer);
     await flushPendingCandidates();
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -86,7 +86,7 @@ export function useWebRTC({ onIceCandidate, onRemoteStream }) {
   const setRemoteAnswer = useCallback(async (answer) => {
     const pc = pcRef.current;
     if (!pc) throw new Error('No RTCPeerConnection');
-    await pc.setRemoteDescription(new RTCSessionDescription(answer));
+    await pc.setRemoteDescription(answer);
     await flushPendingCandidates();
   }, [flushPendingCandidates]);
 
@@ -98,7 +98,7 @@ export function useWebRTC({ onIceCandidate, onRemoteStream }) {
       return;
     }
     try {
-      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      await pc.addIceCandidate(candidate);
     } catch (err) {
       console.warn('addIceCandidate error:', err.message);
     }

@@ -15,7 +15,9 @@
 
 const GroupCall          = require('../models/groupCallModel');
 const ConversationMember = require('../models/conversationMemberModel');
+const Conversation       = require('../models/conversationModel');
 const User               = require('../models/userModel');
+const Message            = require('../models/messageModel');
 const { createVoiceRoomToken } = require('../services/livekitService');
 
 const RING_TIMEOUT_MS = 60_000;
@@ -33,9 +35,12 @@ module.exports = function groupCallSocket(io, socket, onlineUsers) {
       const existing = await GroupCall.findOne({ conversationId, status: { $in: ['ringing', 'ongoing'] } });
       if (existing) return ack?.({ error: 'Nhóm đang có cuộc gọi khác đang diễn ra' });
 
-      const roomName = `group-call-${conversationId}-${Date.now()}`;
-      const user     = await User.findById(userId).select('displayName avatar').lean();
-      const token    = await createVoiceRoomToken(roomName, userId, user.displayName, user.avatar);
+      const roomName     = `group-call-${conversationId}-${Date.now()}`;
+      const [user, conv] = await Promise.all([
+        User.findById(userId).select('displayName avatar').lean(),
+        Conversation.findById(conversationId).select('name avatar').lean(),
+      ]);
+      const token = await createVoiceRoomToken(roomName, userId, user.displayName, user.avatar);
 
       const groupCall = await GroupCall.create({
         conversationId,
@@ -52,6 +57,7 @@ module.exports = function groupCallSocket(io, socket, onlineUsers) {
         groupCallId:    callId,
         conversationId: conversationId.toString(),
         initiator:      { _id: userId, displayName: user.displayName, avatar: user.avatar },
+        group:          { name: conv?.name || 'Nhóm', avatar: conv?.avatar || null },
         type,
         roomName,
         livekitUrl: process.env.LIVEKIT_URL,
@@ -226,9 +232,51 @@ async function _endCall(io, groupCall, reason, duration = null) {
   await groupCall.save();
 
   const payload = { groupCallId: callId, reason, duration: dur };
-  // Gửi đến cả phòng call và tất cả thành viên nhóm (để ẩn incoming modal)
   io.to(`group-call:${callId}`).emit('group-call:ended', payload);
   await _notifyAllMembers(io, callId, convId, payload, 'group-call:ended');
+
+  // Tạo system message lịch sử cuộc gọi trong chat
+  try {
+    const participantIds = groupCall.participants
+      .filter(p => p.joinedAt && !p.declined)
+      .map(p => p.userId);
+
+    const participants = await User.find({ _id: { $in: participantIds } })
+      .select('displayName avatar').lean();
+
+    const systemMsg = await Message.create({
+      conversationId: groupCall.conversationId,
+      type: 'system',
+      content: reason === 'missed' ? 'Cuộc gọi nhóm nhỡ' : 'Cuộc gọi nhóm đã kết thúc',
+      payload: {
+        event: 'group_call_ended',
+        callType: groupCall.type,
+        status: reason === 'missed' ? 'missed' : 'ended',
+        duration: dur,
+        participants: participants.map(u => ({
+          _id: u._id.toString(),
+          displayName: u.displayName,
+          avatar: u.avatar || null,
+        })),
+      },
+    });
+
+    // Broadcast tin nhắn hệ thống đến tất cả thành viên nhóm
+    const members = await ConversationMember.find({ conversationId: convId }).select('userId').lean();
+    const msgToSend = {
+      ...systemMsg.toObject(),
+      _id: systemMsg._id.toString(),
+      time: new Date(systemMsg.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+    };
+    for (const m of members) {
+      io.to(`user:${m.userId.toString()}`).emit('chat:new-message', {
+        conversationId: convId,
+        message: msgToSend,
+      });
+    }
+  } catch (err) {
+    console.error('[GroupCall] create system message error:', err);
+  }
 }
 
 async function _notifyAllMembers(io, _callId, conversationId, payload, event) {

@@ -52,6 +52,7 @@
         }
       ],
       "expo-web-browser",
+      "./plugins/withExcludeJitsiWebrtc",
       [
         "expo-build-properties",
         {
