@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import messageApi from '../api/messageApi';
 
@@ -42,14 +42,17 @@ const useMessages = (conversationId, currentUserId, topicId = null) => {
   }, [conversationId, topicId]);
 
   // Load lần đầu khi mount
+  const mountedRef = useRef(false);
   useEffect(() => {
-    loadMessages();
+    mountedRef.current = false;
+    loadMessages().then(() => { mountedRef.current = true; });
   }, [loadMessages]);
 
-  // Reload khi màn hình focus lại (ví dụ: back từ profile)
+  // Reload khi focus lại — chỉ sau lần mount đầu (tránh double-load)
+  // Cần thiết để cập nhật tin nhắn hệ thống (vd: lịch sử cuộc gọi) khi quay lại từ call screen
   useFocusEffect(
     useCallback(() => {
-      loadMessages();
+      if (mountedRef.current) loadMessages();
     }, [loadMessages])
   );
 
