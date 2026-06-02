@@ -1,8 +1,6 @@
 # Zolo Chat Online
 
-<p align="center">
-  <img src="![logo.png](image_doc/logo.png)" alt="Zolo Chat Banner" width="1000" />
-</p>
+![logo.png](image_doc/logo.png)
 <p align="center">
     https://nhom3zolochat.dotienluong.id.vn/
 </p>
@@ -25,24 +23,18 @@ Dự án được phát triển cho cả web và mobile, sử dụng một backe
 
 ## Use Case Diagram
 
-<p align="center">
-  <img src="![img_1.png](image_doc/img_1.png)" alt="Use Case Diagram" width="900" />
-</p>
+![img_1.png](image_doc/img_1.png)
+## Class Diagram
+![img_2.png](image_doc/img_2.png)
 ## Atriture Diagram
-<p align="center">
-  <img src="![img.png](image_doc/img.png)" alt="Use Case Diagram" width="900" />
-</p>
+![img.png](image_doc/img.png)
+
 ## Một vài giao diện
 
 ### Trang đăng nhập
-<p align="center">
-  <img src="![img.png](img.png)docs/images/login.png" alt="Login Screen" width="900" />
-</p>
-
+![img_3.png](image_doc/img_3.png)
 ### Trang nhắn tin
-<p align="center">
-  <img src="![img_4.png](image_doc/img_4.png)" alt="Chat Screen" width="900" />
-</p>
+![img_4.png](image_doc/img_4.png)
 ![img_1.png](img_1.png)
 
 ## Công nghệ sử dụng
