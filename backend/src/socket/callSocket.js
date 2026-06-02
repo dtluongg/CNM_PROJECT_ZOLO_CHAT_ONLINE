@@ -33,6 +33,8 @@ const RING_TIMEOUT_MS = 30_000; // 30 giây chờ nhấc máy
 // ─── Module-level state (dùng chung mọi socket instance) ────────────────────
 const callTimers          = new Map(); // callId → NodeJS.Timeout
 const iceCandidateBuffers = new Map(); // callId → RTCIceCandidate[]
+const offerBuffers        = new Map(); // callId → RTCSessionDescription (offer chờ callee accept)
+const acceptBuffers       = new Set(); // callId đã accept nhưng chưa có offer
 
 // ─── Helper: URL avatar ──────────────────────────────────────────────────────
 const getFullAvatarUrl = (avatar) => {
@@ -48,6 +50,8 @@ function cleanupCall(callId) {
         callTimers.delete(callId);
     }
     iceCandidateBuffers.delete(callId);
+    offerBuffers.delete(callId);
+    acceptBuffers.delete(callId);
 }
 
 // ─── Helper: Tạo system message sau khi cuộc gọi kết thúc ───────────────────
@@ -137,6 +141,146 @@ async function createCallSystemMessage(io, call, duration, finalStatus) {
 // ─────────────────────────────────────────────────────────────────────────────
 module.exports = (io, socket, onlineUsers) => {
     const userId = socket.user._id.toString();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  call:ring  –  Phase 1: Ring callee ngay, KHÔNG cần offer
+    //
+    //  Client gửi : { calleeId, type: 'audio'|'video' }
+    //  Ack thành  : { success: true, callId }
+    //  Ack lỗi    : { error: string }
+    //  Emit callee: 'call:incoming' → { callId, callerId, callerInfo, type, offer: null }
+    // ═══════════════════════════════════════════════════════════════════════
+    socket.on('call:ring', async (data, ack) => {
+        try {
+            const { calleeId, type } = data || {};
+            if (!calleeId || !['audio', 'video'].includes(type)) {
+                return ack?.({ error: 'Cần calleeId và type (audio|video)' });
+            }
+            if (calleeId === userId) return ack?.({ error: 'Không thể gọi cho chính mình' });
+
+            const callee = await userModel.findById(calleeId).select('displayName avatar');
+            if (!callee) return ack?.({ error: 'Người dùng không tồn tại' });
+
+            if (!onlineUsers.has(calleeId)) {
+                return ack?.({ error: 'Người dùng đang offline' });
+            }
+
+            const callerConvs = await ConversationMember.find({ userId, leftAt: null }).distinct('conversationId');
+            const sharedMember = await ConversationMember.findOne({
+                conversationId: { $in: callerConvs }, userId: calleeId, leftAt: null,
+            }).lean();
+
+            const call = await Call.create({ callerId: userId, calleeId, type, conversationId: sharedMember?.conversationId || null });
+            const callId = call._id.toString();
+
+            socket.join(`call:${callId}`);
+            socket.currentCallId = callId;
+
+            // Ring callee ngay lập tức (offer = null, sẽ gửi sau qua call:offer)
+            io.to(`user:${calleeId}`).emit('call:incoming', {
+                callId, callerId: userId,
+                callerInfo: { _id: socket.user._id, displayName: socket.user.displayName, avatar: socket.user.avatar || null },
+                type, offer: null,
+            });
+
+            try {
+                await createAndEmitNotification({
+                    userId: calleeId, actorId: userId, type: 'call_incoming',
+                    title: `Cuộc gọi ${type === 'video' ? 'video' : 'thoại'} đến`,
+                    body: `${socket.user.displayName || 'Ai đó'} đang gọi cho bạn`,
+                    callId: call._id, conversationId: call.conversationId, data: { callType: type },
+                });
+            } catch {}
+
+            const timer = setTimeout(async () => {
+                try {
+                    const current = await Call.findById(callId);
+                    if (current?.status === 'calling') {
+                        await Call.findByIdAndUpdate(callId, { status: 'missed', endedAt: new Date() });
+                        io.to(`call:${callId}`).emit('call:timeout', { callId });
+                        io.to(`user:${calleeId}`).emit('call:timeout', { callId });
+                    }
+                } catch {}
+                finally { cleanupCall(callId); }
+            }, RING_TIMEOUT_MS);
+
+            callTimers.set(callId, timer);
+            ack?.({ success: true, callId });
+        } catch (err) {
+            console.error('call:ring error:', err);
+            ack?.({ error: 'Lỗi server' });
+        }
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  call:offer  –  Phase 2: Caller gửi offer sau khi có media
+    //
+    //  Client gửi : { callId, offer: RTCSessionDescription }
+    //  Emit callee: 'call:offer' → { callId, offer }
+    //  Nếu callee đã accept rồi → relay ngay; chưa → buffer
+    // ═══════════════════════════════════════════════════════════════════════
+    socket.on('call:offer', async (data, ack) => {
+        try {
+            const { callId, offer } = data || {};
+            if (!callId || !offer) return ack?.({ error: 'Cần callId và offer' });
+
+            if (acceptBuffers.has(callId)) {
+                // Callee đã accept trước khi offer đến → relay ngay
+                socket.to(`call:${callId}`).emit('call:offer', { callId, offer });
+                acceptBuffers.delete(callId);
+            } else {
+                // Buffer offer, relay khi callee accept
+                offerBuffers.set(callId, offer);
+            }
+            ack?.({ success: true });
+        } catch (err) {
+            console.error('call:offer error:', err);
+            ack?.({ error: 'Lỗi server' });
+        }
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  call:accept  –  Callee chấp nhận (trước khi có offer)
+    //
+    //  Client gửi : { callId }
+    //  Emit caller: 'call:accepted' (thông báo caller biết callee đã nhấc)
+    //  Nếu offer đã có → relay offer cho callee ngay
+    //  Nếu chưa → đánh dấu acceptBuffer, chờ call:offer
+    // ═══════════════════════════════════════════════════════════════════════
+    socket.on('call:accept', async (data, ack) => {
+        try {
+            const { callId } = data || {};
+            if (!callId) return ack?.({ error: 'Cần callId' });
+
+            const call = await Call.findById(callId);
+            if (!call) return ack?.({ error: 'Cuộc gọi không tồn tại' });
+            if (call.calleeId.toString() !== userId) return ack?.({ error: 'Không có quyền' });
+            if (call.status !== 'calling') return ack?.({ error: 'Cuộc gọi không còn ở trạng thái chờ' });
+
+            if (callTimers.has(callId)) { clearTimeout(callTimers.get(callId)); callTimers.delete(callId); }
+
+            socket.join(`call:${callId}`);
+            socket.currentCallId = callId;
+
+            // Báo caller biết callee đã chấp nhận
+            socket.to(`call:${callId}`).emit('call:accepted', { callId });
+
+            if (offerBuffers.has(callId)) {
+                // Offer đã đến trước → relay ngay cho callee
+                const bufferedOffer = offerBuffers.get(callId);
+                socket.emit('call:offer', { callId, offer: bufferedOffer });
+                offerBuffers.delete(callId);
+            } else {
+                // Offer chưa đến → đánh dấu để relay khi offer đến
+                acceptBuffers.add(callId);
+            }
+
+            ack?.({ success: true });
+        } catch (err) {
+            console.error('call:accept error:', err);
+            ack?.({ error: 'Lỗi server' });
+        }
+    });
 
     // ═══════════════════════════════════════════════════════════════════════
     //  call:initiate  –  Caller bắt đầu gọi
@@ -285,39 +429,36 @@ module.exports = (io, socket, onlineUsers) => {
             const call = await Call.findById(callId);
             if (!call)                               return ack?.({ error: 'Cuộc gọi không tồn tại' });
             if (call.calleeId.toString() !== userId) return ack?.({ error: 'Không có quyền trả lời cuộc gọi này' });
-            if (call.status !== 'calling')           return ack?.({ error: 'Cuộc gọi không còn ở trạng thái chờ' });
+            if (!['calling', 'ongoing'].includes(call.status)) return ack?.({ error: 'Cuộc gọi không hợp lệ' });
 
-            // Hủy ring timeout
+            // Hủy ring timeout nếu chưa hủy (trường hợp call:answer không qua call:accept)
             if (callTimers.has(callId)) {
                 clearTimeout(callTimers.get(callId));
                 callTimers.delete(callId);
             }
 
-            await Call.findByIdAndUpdate(callId, {
-                status:    'ongoing',
-                startedAt: new Date(),
-            });
+            if (call.status === 'calling') {
+                await Call.findByIdAndUpdate(callId, { status: 'ongoing', startedAt: new Date() });
+            }
 
-            // Bước 1: Callee join call room
-            socket.join(`call:${callId}`);
-            socket.currentCallId = callId;
+            // Join call room nếu chưa (two-phase: call:accept đã join rồi)
+            if (!socket.rooms.has(`call:${callId}`)) {
+                socket.join(`call:${callId}`);
+                socket.currentCallId = callId;
+            }
 
-            // Bước 2: Báo caller TRƯỚC để caller gọi setRemoteDescription ngay
+            // Relay answer tới caller
             socket.to(`call:${callId}`).emit('call:answered', { callId, answer });
 
-            // Bước 3: Flush ICE candidates của caller đã buffer khi callee chưa trong room
-            //         Delay nhỏ để callee kịp setRemoteDescription trước khi addIceCandidate
+            // Flush buffered ICE candidates
             const buffered = iceCandidateBuffers.get(callId) || [];
             if (buffered.length > 0) {
-              setTimeout(() => {
-                for (const candidate of buffered) {
-                  socket.emit('call:ice-candidate', { callId, candidate });
-                }
-              }, 300); // ← tăng lên 300ms
+                setTimeout(() => {
+                    for (const candidate of buffered) {
+                        socket.emit('call:ice-candidate', { callId, candidate });
+                    }
+                }, 100);
             }
-            iceCandidateBuffers.delete(callId);
-
-            // Bước 4: Xóa buffer tránh memory leak
             iceCandidateBuffers.delete(callId);
 
             ack?.({ success: true });

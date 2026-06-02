@@ -58,6 +58,7 @@ export default function ChatArea({
   onBack,
   isMobile,
   setMessages,
+  onDeleteForMe,
   onViewProfile,
   sendBlockError,
   blockStatus,
@@ -191,8 +192,10 @@ export default function ChatArea({
 
   const handleDeleteForMe = async (msg) => {
     try {
-      setMessages(prev => prev.filter(m => (m.id || m._id) !== (msg.id || msg._id)));
-      await messageApi.deleteForMe(msg._id || msg.id);
+      const msgId = (msg._id || msg.id)?.toString();
+      setMessages(prev => prev.filter(m => (m.id || m._id)?.toString() !== msgId));
+      onDeleteForMe?.(msgId);
+      await messageApi.deleteForMe(msgId);
     } catch (err) { console.error('Delete error:', err); }
   };
 

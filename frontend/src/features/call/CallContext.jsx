@@ -203,45 +203,41 @@ export const CallProvider = ({ children }) => {
 
     setCallError(null);
 
-    try {
-      // ✅ Fetch TURN credentials trước khi tạo peer
-      const iceServers  = await getIceServers();
+    // Phase 1: Ring ngay lập tức
+    socketRef.current.emit('call:ring', { calleeId: targetUser._id, type }, async (res) => {
+      if (res?.error) {
+        showNotification(
+          res.error.toLowerCase().includes('offline')
+            ? `${targetUser.displayName || 'Người dùng'} đang không online`
+            : res.error,
+          'warning',
+        );
+        return;
+      }
 
-      createPeer(iceServers);
+      const cid = res.callId;
+      setCallId(cid);
+      setCallState(CALL_STATE.CALLING);
+      setCallType(type);
+      setRemoteUser(targetUser);
 
-      const stream = await getLocalStream(type);
-      setLocalStream(stream);
-      addLocalStream(stream);
-
-      const offer = await createOffer();
-
-      socketRef.current.emit(
-        'call:initiate',
-        { calleeId: targetUser._id, type, offer },
-        (res) => {
-          if (res?.error) {
-            showNotification(
-              res.error.toLowerCase().includes('offline')
-                ? `${targetUser.displayName || 'Người dùng'} đang không online`
-                : res.error,
-              'warning',
-            );
-            resetAll();
-            return;
-          }
-
-          setCallId(res.callId);
-          setCallState(CALL_STATE.CALLING);
-          setCallType(type);
-          setRemoteUser(targetUser);
-          flushLocalCandidates(res.callId);
-        },
-      );
-    } catch (err) {
-      console.error('initiateCall error:', err);
-      setCallError(err.message || 'Không thể khởi tạo cuộc gọi');
-      resetAll();
-    }
+      // Phase 2: Media + offer song song (callee đã đổ chuông)
+      try {
+        const iceServers = await getIceServers();
+        createPeer(iceServers);
+        const stream = await getLocalStream(type);
+        setLocalStream(stream);
+        addLocalStream(stream);
+        const offer = await createOffer();
+        socketRef.current.emit('call:offer', { callId: cid, offer });
+        flushLocalCandidates(cid);
+      } catch (err) {
+        console.error('initiateCall phase2 error:', err);
+        setCallError(err.message || 'Không thể khởi tạo cuộc gọi');
+        socketRef.current?.emit('call:end', { callId: cid });
+        resetAll();
+      }
+    });
   }, [
     token,
     createPeer,
@@ -262,40 +258,40 @@ export const CallProvider = ({ children }) => {
     const data = incomingRef.current;
     if (!data) return;
 
-    const { callId: cid, offer, type, callerInfo } = data;
+    const { callId: cid, offer: immediateOffer, type, callerInfo } = data;
     setCallError(null);
 
     try {
-      // ✅ Fetch TURN credentials trước khi tạo peer
-      const iceServers  = await getIceServers();
-
+      const iceServers = await getIceServers();
       createPeer(iceServers);
-
       const stream = await getLocalStream(type);
       setLocalStream(stream);
       addLocalStream(stream);
       setCallId(cid);
 
-      const answer = await createAnswer(offer);
-
-      socketRef.current.emit(
-        'call:answer',
-        { callId: cid, answer },
-        async (res) => {
-          if (res?.error) {
-            setCallError(res.error);
-            resetAll();
-            return;
-          }
-
+      if (immediateOffer) {
+        // Flow cũ (call:initiate): offer có sẵn
+        const answer = await createAnswer(immediateOffer);
+        socketRef.current.emit('call:answer', { callId: cid, answer }, async (res) => {
+          if (res?.error) { setCallError(res.error); resetAll(); return; }
           setCallState(CALL_STATE.ACTIVE);
           setCallType(type);
           setRemoteUser(callerInfo);
           startTimer();
           flushLocalCandidates(cid);
           await flushRemoteCandidates();
-        },
-      );
+        });
+      } else {
+        // Flow mới (call:ring): báo accept, chờ offer qua call:offer event
+        socketRef.current.emit('call:accept', { callId: cid }, async (res) => {
+          if (res?.error) { setCallError(res.error); resetAll(); return; }
+          setCallState(CALL_STATE.ACTIVE);
+          setCallType(type);
+          setRemoteUser(callerInfo);
+          startTimer();
+          // Offer sẽ đến qua socket event 'call:offer'
+        });
+      }
     } catch (err) {
       console.error('answerCall error:', err);
       setCallError(err.message || 'Không thể trả lời cuộc gọi');
@@ -388,13 +384,36 @@ export const CallProvider = ({ children }) => {
       setCallState(CALL_STATE.INCOMING);
     });
 
-    // Callee đã nhấc máy → caller nhận answer
+    // Flow mới: caller nhận khi callee accept (UI transition, WebRTC not ready yet)
+    socket.on('call:accepted', ({ callId: cid }) => {
+      setCallId(cid);
+      setCallState(CALL_STATE.ACTIVE);
+      startTimer();
+      // Note: call:answered will arrive later with answer to complete WebRTC
+    });
+
+    // Flow mới: callee nhận offer sau khi accept
+    socket.on('call:offer', async ({ callId: cid, offer }) => {
+      try {
+        const answer = await createAnswer(offer);
+        socket.emit('call:answer', { callId: cid, answer }, async (res) => {
+          if (res?.error) { console.error('call:answer err', res.error); resetAll(); return; }
+          flushLocalCandidates(cid);
+          await flushRemoteCandidates();
+        });
+      } catch (err) {
+        console.error('call:offer handler error:', err);
+        resetAll();
+      }
+    });
+
+    // Caller nhận answer → hoàn tất WebRTC
     socket.on('call:answered', async ({ callId: cid, answer }) => {
       try {
         await setRemoteAnswer(answer);
+        // Nếu chưa active (flow cũ không có call:accepted), set active
         setCallId(cid);
         setCallState(CALL_STATE.ACTIVE);
-        startTimer();
         flushLocalCandidates(cid);
         await flushRemoteCandidates();
       } catch (err) {
@@ -435,6 +454,7 @@ export const CallProvider = ({ children }) => {
     flushLocalCandidates,
     flushRemoteCandidates,
     addIceCandidate,
+    createAnswer,
     resetAll,
     pcRef,
   ]);

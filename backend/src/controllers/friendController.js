@@ -585,19 +585,31 @@ const getFriendStatus = async (req, res, next) => {
         ensureValidObjectId(userId, 'userId');
 
         const { u1, u2 } = normalizeFriendPair(currentUserId, userId);
-        const friendship = await Friendship.findOne({ userId1: u1, userId2: u2 }).lean();
 
-        if (!friendship) {
-            return res.json({ success: true, data: { isFriend: false, iBlocked: false, theyBlockedMe: false } });
+        const [friendship, sentReq, receivedReq] = await Promise.all([
+            Friendship.findOne({ userId1: u1, userId2: u2 }).lean(),
+            FriendRequest.findOne({ fromUserId: currentUserId, toUserId: userId, status: 'pending' }).lean(),
+            FriendRequest.findOne({ fromUserId: userId, toUserId: currentUserId, status: 'pending' }).lean(),
+        ]);
+
+        if (friendship) {
+            const iBlockedThem = friendship.isBlockedBy?.toString() === currentUserId;
+            const theyBlockedMe = !!(friendship.isBlockedBy && friendship.isBlockedBy.toString() !== currentUserId);
+            return res.json({
+                success: true,
+                data: { status: 'friends', isFriend: true, iBlocked: iBlockedThem, theyBlockedMe },
+            });
         }
 
-        const iBlockedThem = friendship.isBlockedBy?.toString() === currentUserId;
-        const theyBlockedMe = !!(friendship.isBlockedBy && friendship.isBlockedBy.toString() !== currentUserId);
+        if (sentReq) {
+            return res.json({ success: true, data: { status: 'sent', requestId: sentReq._id, isFriend: false } });
+        }
 
-        res.json({
-            success: true,
-            data: { isFriend: true, iBlocked: iBlockedThem, theyBlockedMe },
-        });
+        if (receivedReq) {
+            return res.json({ success: true, data: { status: 'received', requestId: receivedReq._id, isFriend: false } });
+        }
+
+        res.json({ success: true, data: { status: 'none', isFriend: false, iBlocked: false, theyBlockedMe: false } });
     } catch (err) {
         next(err);
     }

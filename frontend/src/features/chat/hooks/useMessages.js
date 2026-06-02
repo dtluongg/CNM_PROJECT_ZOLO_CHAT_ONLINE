@@ -17,9 +17,8 @@ export const useMessages = ({
   const [messages, setMessages] = useState({});
 
   const loadMessages = useCallback(async (convId, topicId = null, force = false) => {
-    // Key riêng cho từng topic
     const stateKey = topicId ? `${convId}__${topicId}` : convId;
-    if (messages[stateKey] && !force) return;
+    if (!force && stateKey in messages) return;
     try {
       const res  = await messageApi.getMessages(convId, { topicId: topicId || undefined });
       const msgs = (res.data.messages || []).map(normalizeMsg);
@@ -60,6 +59,14 @@ export const useMessages = ({
   const editMessageInState = useCallback((convId, msg) => {
     updateMessage(convId, msg._id?.toString(), (m) => ({ ...m, ...msg }));
   }, [updateMessage]);
+
+  const deleteMessageForMe = useCallback((convId, messageId) => {
+    setMessages((prev) => {
+      const key = prev[convId] ? convId : Object.keys(prev).find(k => k.startsWith(convId));
+      if (!key) return prev;
+      return { ...prev, [key]: prev[key].filter(m => (m._id || m.id)?.toString() !== messageId?.toString()) };
+    });
+  }, []);
 
   const resetMessages = useCallback((convId) => {
     setMessages((prev) => {
@@ -209,7 +216,7 @@ export const useMessages = ({
         setActiveConversation((prev) =>
           prev?.id === convId ? { ...prev, lastMessage: msg.content, time: msg.time } : prev
         );
-      
+
       // ── POLL ─────────────────────────────────────────────────────────────
       } else if (payload.type === 'poll') {
         const { topic, options, multipleChoice } = payload;
@@ -272,6 +279,7 @@ export const useMessages = ({
     addMessage,
     revokeMessage,
     editMessageInState,
+    deleteMessageForMe,
     resetMessages,
     handleSendMessage,
     handlePollVote,

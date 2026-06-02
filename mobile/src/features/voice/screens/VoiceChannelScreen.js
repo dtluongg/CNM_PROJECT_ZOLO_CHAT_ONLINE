@@ -10,9 +10,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
 import { getInitials } from '../../../theme';
 
-// RTCView: try-catch so web / Expo Go doesn't crash
-let RTCView = null;
-try { RTCView = require('react-native-webrtc').RTCView; } catch {}
+import { VideoView } from '@livekit/react-native';
 
 const COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245','#9b59b6','#e67e22'];
 const avatarBg = (name) => COLORS[(name || '?').charCodeAt(0) % COLORS.length];
@@ -169,9 +167,9 @@ function PermRow({ icon, label, desc, status, required }) {
 }
 
 // ── Participant card ───────────────────────────────────────────────────────────
-function ParticipantCard({ participant, size, localVideoURL, getRemoteVideoURL }) {
-  const videoURL  = participant.isLocal ? localVideoURL : getRemoteVideoURL(participant.identity);
-  const showVideo = !!videoURL && participant.hasCamera;
+function ParticipantCard({ participant, size, localVideoTrack, getRemoteVideoTrack }) {
+  const track     = participant.isLocal ? localVideoTrack : getRemoteVideoTrack(participant.identity);
+  const showVideo = !!track && participant.hasCamera;
   const name      = participant.displayName || participant.name || 'Người dùng';
   const [imgErr, setImgErr] = useState(false);
 
@@ -183,9 +181,9 @@ function ParticipantCard({ participant, size, localVideoURL, getRemoteVideoURL }
       backgroundColor: showVideo ? '#000' : avatarBg(name),
       justifyContent: 'center', alignItems: 'center',
     }}>
-      {showVideo && RTCView ? (
-        <RTCView
-          streamURL={videoURL}
+      {showVideo ? (
+        <VideoView
+          track={track}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           objectFit="cover"
           mirror={participant.isLocal}
@@ -233,7 +231,7 @@ function CtrlBtn({ onPress, active, danger, icon, label, disabled }) {
 }
 
 // ── Screen share viewer ────────────────────────────────────────────────────────
-function ScreenShareViewer({ screenURL, isRemoteScreenSharing, isScreenSharing }) {
+function ScreenShareViewer({ screenTrack, isRemoteScreenSharing, isScreenSharing }) {
   const [fullscreen, setFullscreen] = useState(false);
 
   // Không có gì để hiển thị
@@ -246,9 +244,9 @@ function ScreenShareViewer({ screenURL, isRemoteScreenSharing, isScreenSharing }
         zIndex: 999, backgroundColor: '#000',
         justifyContent: 'center', alignItems: 'center',
       }}>
-        {screenURL && RTCView ? (
-          <RTCView
-            streamURL={screenURL}
+        {screenTrack ? (
+          <VideoView
+            track={screenTrack}
             style={{ width: '100%', height: '100%' }}
             objectFit="contain"
           />
@@ -292,9 +290,9 @@ function ScreenShareViewer({ screenURL, isRemoteScreenSharing, isScreenSharing }
         alignItems: 'center',
       }}
     >
-      {screenURL && RTCView ? (
-        <RTCView
-          streamURL={screenURL}
+      {screenTrack ? (
+        <VideoView
+          track={screenTrack}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           objectFit="contain"
         />
@@ -341,8 +339,8 @@ export default function VoiceChannelScreen({ route, navigation }) {
     loading, error,
     connected, isMuted, isCameraOff,
     isScreenSharing, isRemoteScreenSharing,
-    localVideoURL, screenURL,
-    getRemoteVideoURL,
+    localVideoURL: localVideoTrack, screenURL: screenTrack,
+    getRemoteVideoURL: getRemoteVideoTrack,
     createRoom, joinRoom, leaveRoom,
     toggleMute, toggleCamera, toggleScreenShare,
     fetchStatus,
@@ -421,7 +419,7 @@ export default function VoiceChannelScreen({ route, navigation }) {
 
       {/* ✅ Screen share viewer — hiển thị khi có ai đó đang share */}
       <ScreenShareViewer
-        screenURL={screenURL}
+        screenTrack={screenTrack}
         isRemoteScreenSharing={isRemoteScreenSharing}
         isScreenSharing={isScreenSharing}
       />
@@ -448,8 +446,8 @@ export default function VoiceChannelScreen({ route, navigation }) {
                 key={p.userId || p.identity}
                 participant={p}
                 size={cardSize}
-                localVideoURL={localVideoURL}
-                getRemoteVideoURL={getRemoteVideoURL}
+                localVideoTrack={localVideoTrack}
+                getRemoteVideoTrack={getRemoteVideoTrack}
               />
             ))
           ) : (

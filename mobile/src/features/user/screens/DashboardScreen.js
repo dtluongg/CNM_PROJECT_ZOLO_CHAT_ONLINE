@@ -12,10 +12,11 @@ import { supabase } from '../../../config/supabase';
 
 export default function DashboardScreen() {
   const { user, token, logout, updateUser } = useAuth();
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Dùng user từ context ngay lập tức để không phải chờ API
+  const [profile, setProfile] = useState(user || null);
+  const [loading, setLoading] = useState(!user);
   const [editModal, setEditModal] = useState(false);
-  const [displayName, setDisplayName] = useState('');
+  const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
@@ -29,7 +30,6 @@ export default function DashboardScreen() {
       setDisplayName(res.data.user.displayName || '');
     } catch (err) {
       console.error('fetchProfile error:', err);
-      // Use cached user data
       if (user) {
         setProfile(user);
         setDisplayName(user.displayName || '');

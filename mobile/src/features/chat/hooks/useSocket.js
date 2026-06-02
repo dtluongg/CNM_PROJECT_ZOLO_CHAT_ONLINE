@@ -1,11 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-
-// URL socket server lấy từ biến môi trường
-const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL ||
-  (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.88.135:2026/backend/api')
-    .replace('/backend/api', '');
+import { SOCKET_URL } from '../../../config/env';
 
 /**
  * Hook quản lý kết nối Socket.io cho màn hình chat.
@@ -41,9 +36,10 @@ const useSocket = (token, conversationId, currentUserId, handlers) => {
     // Khởi tạo kết nối socket với access token
     const socket = io(SOCKET_URL, {
       auth: { token },
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
+      reconnectionDelay: 1000,
     });
     socketRef.current = socket;
 
