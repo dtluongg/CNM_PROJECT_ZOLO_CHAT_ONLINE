@@ -91,7 +91,7 @@ project/
 - Tiên Lương
 - Nguyễn Thị Tường Vi
 - Vũ Ngọc Huệ
-- Trần Phương Trà
+- Trần Phương Trí
 
 ## Hướng phát triển
 
