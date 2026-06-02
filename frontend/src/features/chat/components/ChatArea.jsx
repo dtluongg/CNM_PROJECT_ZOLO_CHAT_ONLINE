@@ -326,12 +326,20 @@ export default function ChatArea({
   }
 
   // ── Filter messages by active topic (groups only) ─────────
-  const visibleMessages = conversation?.type === 'group' && !activeTopic
-    ? messages.filter(m => {
-      const mTopicId = m.topicId?.toString?.() || m.topicId || null;
-      return !mTopicId && m.type !== 'system';
-    })
-    : messages; // đã được filter đúng từ Chat.jsx rồi
+  const visibleMessages = (() => {
+    if (conversation?.type === 'group' && !activeTopic) {
+      // Kênh chat chung: chỉ hiện tin không thuộc topic nào (mọi loại)
+      return messages.filter(m => {
+        const mTopicId = m.topicId?.toString?.() || m.topicId || null;
+        return !mTopicId;
+      });
+    }
+    if (activeTopic?.channelType === 'system') {
+      // Kênh nhật ký: chỉ hiện tin nhắn hệ thống (activities), ẩn text
+      return messages.filter(m => m.type === 'system');
+    }
+    return messages; // đã được filter đúng từ Chat.jsx rồi
+  })();
 
   // ── Build display items ────────────────────────────────────
   const displayItems = [];
@@ -749,7 +757,7 @@ export default function ChatArea({
           </div>
         )}
 
-        {!(conversation.type === 'dm' && blockStatus?.iBlocked) && activeTopic?.channelType !== 'voice' && (
+        {!(conversation.type === 'dm' && blockStatus?.iBlocked) && activeTopic?.channelType !== 'voice' && activeTopic?.channelType !== 'system' && (
           canSendInActiveTopic ? (
             <MessageInput
               onSend={async (payload) => {
