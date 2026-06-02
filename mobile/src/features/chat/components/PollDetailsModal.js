@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -9,6 +10,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
  * Hiển thị danh sách đầy đủ người bình chọn cho từng phương án.
  */
 const PollDetailsModal = ({ visible, onClose, topic, options, THEME }) => {
+  const { t } = useLanguage();
   return (
     <Modal
       visible={visible}
@@ -43,7 +45,7 @@ const PollDetailsModal = ({ visible, onClose, topic, options, THEME }) => {
             alignItems: 'center',
           }}>
             <Text style={{ flex: 1, color: THEME.textPrimary, fontSize: 18, fontWeight: '600' }}>
-              Chi tiết bình chọn
+              {t('poll.details_title')}
             </Text>
 
             <TouchableOpacity onPress={onClose}>
@@ -69,7 +71,7 @@ const PollDetailsModal = ({ visible, onClose, topic, options, THEME }) => {
                   <View style={{ flexDirection: 'column', gap: 14 }}>
                     {voters.map((voter, idx) => {
                       const isObject = typeof voter === 'object' && voter !== null;
-                      const displayName = isObject ? (voter.displayName || 'Người dùng Zolo') : 'Người dùng';
+                      const displayName = isObject ? (voter.displayName || t('user.unknown')) : t('user.unknown');
                       const avatar = isObject ? voter.avatar : null;
 
                       return (

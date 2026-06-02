@@ -6,20 +6,23 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { getAvatarColor, getInitials } from '../../../theme';
 import conversationApi from '../api/conversationApi';
-
-const ROLE_INFO = {
-  owner:  { label: '👑 Chủ nhóm',      color: '#f59e0b' },
-  admin:  { label: '⭐ Quản trị viên',  color: '#3b82f6' },
-  member: { label: '👤 Thành viên',     color: '#6b7280' },
-};
-const SECTION_ORDER  = ['owner', 'admin', 'member'];
-const SECTION_LABELS = { owner: '👑 Chủ nhóm', admin: '🛡️ Quản trị viên', member: '👤 Thành viên' };
-const SECTION_ICONS = { owner: 'award', admin: 'shield', member: 'users' };
+import { useLanguage } from '../../../context/LanguageContext';
 
 export default function MembersTab({
   conversation, members, setMembers, loadMembers,
   roles, isAdmin, isOwner, myUserId, THEME, onShowAddMembers,
 }) {
+  const { t } = useLanguage();
+
+  const ROLE_INFO = {
+    owner:  { label: t('info_panel.members.owner'),      color: '#f59e0b' },
+    admin:  { label: t('info_panel.members.admin'),  color: '#3b82f6' },
+    member: { label: t('info_panel.members.member'),     color: '#6b7280' },
+  };
+  const SECTION_ORDER  = ['owner', 'admin', 'member'];
+  const SECTION_LABELS = { owner: t('info_panel.members.owner'), admin: t('info_panel.members.admin'), member: t('info_panel.members.member') };
+  const SECTION_ICONS = { owner: 'award', admin: 'shield', member: 'users' };
+
   const convId = conversation?._id || conversation?.id;
 
   const [search,         setSearch]         = useState('');
@@ -68,18 +71,18 @@ export default function MembersTab({
       setPendingEdit(prev => { const n = { ...prev }; delete n[uid]; return n; });
       await loadMembers();
     } catch (e) {
-      Alert.alert('Lỗi', e.response?.data?.message || 'Không thể lưu thay đổi.');
+      Alert.alert(t('common.error'), e.response?.data?.message || t('info_panel.members.error_save'));
     } finally { setMemberBusy(null); }
   };
 
   const handleKick = (member) => {
     const uid  = member.user?._id || member._id;
-    const name = member.user?.displayName || member.user?.username || 'thành viên';
+    const name = member.user?.displayName || member.user?.username || t('common.someone');
     const reason = kickReason.trim();
-    Alert.alert('Xóa thành viên', `Xóa ${name} khỏi nhóm?${reason ? `\nLý do: ${reason}` : ''}`, [
-      { text: 'Huỷ', style: 'cancel' },
+    Alert.alert(t('info_panel.members.kick_confirm_title'), t('info_panel.members.kick_confirm_desc', { name }) + (reason ? `\n${t('system.kick_reason')}: ${reason}` : ''), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Xóa', style: 'destructive',
+        text: t('common.delete'), style: 'destructive',
         onPress: async () => {
           setMemberBusy(`kick-${uid}`);
           try {
@@ -88,7 +91,7 @@ export default function MembersTab({
             setExpandedId(null);
             setKickReason('');
           } catch {
-            Alert.alert('Lỗi', 'Không thể xóa thành viên.');
+            Alert.alert(t('common.error'), t('poll.error_create'));
           } finally { setMemberBusy(null); }
         },
       },
@@ -97,11 +100,11 @@ export default function MembersTab({
 
   const handleTransferOwner = (member) => {
     const uid  = member.user?._id || member._id;
-    const name = member.user?.displayName || member.user?.username || 'thành viên';
-    Alert.alert('Chuyển quyền chủ nhóm', `Chuyển quyền chủ nhóm cho ${name}? Bạn sẽ trở thành quản trị viên.`, [
-      { text: 'Huỷ', style: 'cancel' },
+    const name = member.user?.displayName || member.user?.username || t('common.someone');
+    Alert.alert(t('info_panel.members.transfer_confirm_title'), t('info_panel.members.transfer_confirm_desc', { name }), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Chuyển', style: 'destructive',
+        text: t('chat.options.forward'), style: 'destructive',
         onPress: async () => {
           setMemberBusy(`transfer-${uid}`);
           try {
@@ -114,7 +117,7 @@ export default function MembersTab({
             }));
             setExpandedId(null);
           } catch {
-            Alert.alert('Lỗi', 'Không thể chuyển quyền chủ nhóm.');
+            Alert.alert(t('common.error'), t('poll.error_create'));
           } finally { setMemberBusy(null); }
         },
       },
@@ -130,7 +133,7 @@ export default function MembersTab({
 
   const renderMember = (member) => {
     const uid    = member.user?._id || member._id;
-    const uname  = member.user?.displayName || member.user?.username || 'Người dùng';
+    const uname  = member.user?.displayName || member.user?.username || t('common.unknown_user');
     const uavt   = member.user?.avatar;
     const role   = member.role || 'member';
     const ri     = ROLE_INFO[role] || ROLE_INFO.member;
@@ -171,7 +174,7 @@ export default function MembersTab({
           <View style={{ flex: 1, minWidth: 0 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: THEME.textPrimary }}>{uname}</Text>
-              {isMe && <Text style={{ fontSize: 10, color: THEME.textMuted }}>(bạn)</Text>}
+              {isMe && <Text style={{ fontSize: 10, color: THEME.textMuted }}>({t('chat.me').toLowerCase()})</Text>}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }}>
               <Text style={{ fontSize: 11, color: ri.color }}>{ri.label}</Text>
@@ -205,7 +208,7 @@ export default function MembersTab({
             {/* System role — owner only */}
             {isOwner && (
               <View style={{ marginBottom: 14 }}>
-                <Text style={sLabel(THEME)}>Vai trò hệ thống</Text>
+                <Text style={sLabel(THEME)}>{t('info_panel.members.system_role')}</Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {['admin', 'member'].map(r => {
                     const active = ed.role === r;
@@ -221,7 +224,7 @@ export default function MembersTab({
                         }}
                       >
                         <Text style={{ fontSize: 12, fontWeight: '700', color: active ? (r === 'admin' ? '#3b82f6' : THEME.textPrimary) : THEME.textMuted }}>
-                          {r === 'admin' ? '🛡️ Quản trị viên' : '👤 Thành viên'}
+                          {r === 'admin' ? t('info_panel.members.admin') : t('info_panel.members.member')}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -237,13 +240,13 @@ export default function MembersTab({
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14, padding: 10, backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)' }}
               >
                 <Feather name="award" size={14} color="#f59e0b" />
-                <Text style={{ color: '#f59e0b', fontSize: 13, fontWeight: '600' }}>Chuyển quyền chủ nhóm</Text>
+                <Text style={{ color: '#f59e0b', fontSize: 13, fontWeight: '600' }}>{t('info_panel.members.transfer_owner')}</Text>
               </TouchableOpacity>
             )}
 
             {/* Custom role picker */}
             <View style={{ marginBottom: 14 }}>
-              <Text style={sLabel(THEME)}>Vai trò tuỳ chỉnh</Text>
+              <Text style={sLabel(THEME)}>{t('info_panel.members.custom_role')}</Text>
               <TouchableOpacity
                 onPress={() => setShowRolePicker(uid)}
                 style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, backgroundColor: THEME.bgHover || '#35373c', borderRadius: 10, borderWidth: 1, borderColor: THEME.border }}
@@ -254,7 +257,7 @@ export default function MembersTab({
                     <Text style={{ color: THEME.textPrimary, fontSize: 13, fontWeight: '600' }}>{customRole.name}</Text>
                   </View>
                 ) : (
-                  <Text style={{ color: THEME.textMuted, fontSize: 13 }}>— Không có (mặc định) —</Text>
+                  <Text style={{ color: THEME.textMuted, fontSize: 13 }}>{t('info_panel.members.no_custom_role')}</Text>
                 )}
                 <Feather name="chevron-down" size={13} color={THEME.textMuted} />
               </TouchableOpacity>
@@ -262,11 +265,11 @@ export default function MembersTab({
 
             {/* Kick reason */}
             <View style={{ marginBottom: 12 }}>
-              <Text style={sLabel(THEME)}>Lý do xóa (tuỳ chọn)</Text>
+              <Text style={sLabel(THEME)}>{t('info_panel.members.kick_reason_label')}</Text>
               <TextInput
                 value={kickReason}
                 onChangeText={setKickReason}
-                placeholder="Nhập lý do xóa thành viên..."
+                placeholder={t('info_panel.members.kick_reason_placeholder')}
                 placeholderTextColor={THEME.textMuted}
                 style={{ padding: 10, backgroundColor: THEME.bgHover || '#35373c', borderRadius: 10, borderWidth: 1, borderColor: THEME.border, color: THEME.textPrimary, fontSize: 13 }}
               />
@@ -285,7 +288,7 @@ export default function MembersTab({
                   ) : (
                     <>
                       <Feather name="save" size={14} color="#57f287" />
-                      <Text style={{ color: '#57f287', fontSize: 13, fontWeight: '700' }}>Lưu thay đổi</Text>
+                      <Text style={{ color: '#57f287', fontSize: 13, fontWeight: '700' }}>{t('info_panel.members.save_changes')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -300,7 +303,7 @@ export default function MembersTab({
                 ) : (
                   <>
                     <Feather name="user-x" size={14} color="#ed4245" />
-                    <Text style={{ color: '#ed4245', fontSize: 13, fontWeight: '600' }}>Xóa khỏi nhóm</Text>
+                    <Text style={{ color: '#ed4245', fontSize: 13, fontWeight: '600' }}>{t('info_panel.members.kick_member')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -315,11 +318,11 @@ export default function MembersTab({
     <View style={{ flex: 1 }}>
       <View style={{ marginHorizontal: 12, marginTop: 10, marginBottom: 10, flexDirection: 'row', gap: 8 }}>
         <View style={{ flex: 1, backgroundColor: THEME.bgPrimary, borderWidth: 1, borderColor: THEME.border, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10 }}>
-          <Text style={{ color: THEME.textMuted, fontSize: 10, fontWeight: '700' }}>Tổng</Text>
+          <Text style={{ color: THEME.textMuted, fontSize: 10, fontWeight: '700' }}>{t('info_panel.labels.total')}</Text>
           <Text style={{ color: THEME.textPrimary, fontSize: 16, fontWeight: '800', marginTop: 2 }}>{memberCount}</Text>
         </View>
         <View style={{ flex: 1, backgroundColor: THEME.bgPrimary, borderWidth: 1, borderColor: THEME.border, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10 }}>
-          <Text style={{ color: THEME.textMuted, fontSize: 10, fontWeight: '700' }}>Quản trị</Text>
+          <Text style={{ color: THEME.textMuted, fontSize: 10, fontWeight: '700' }}>{t('info_panel.labels.admin')}</Text>
           <Text style={{ color: '#3b82f6', fontSize: 16, fontWeight: '800', marginTop: 2 }}>{ownerCount + adminCount}</Text>
         </View>
       </View>
@@ -331,7 +334,7 @@ export default function MembersTab({
           style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 12, marginBottom: 8, padding: 12, backgroundColor: THEME.accent + '15', borderRadius: 12, borderWidth: 1, borderColor: THEME.accent + '40' }}
         >
           <Feather name="user-plus" size={16} color={THEME.accent} />
-          <Text style={{ color: THEME.accent, fontWeight: '700', fontSize: 14 }}>Thêm thành viên</Text>
+          <Text style={{ color: THEME.accent, fontWeight: '700', fontSize: 14 }}>{t('info_panel.members.add_member')}</Text>
         </TouchableOpacity>
       )}
 
@@ -342,7 +345,7 @@ export default function MembersTab({
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Tìm thành viên..."
+            placeholder={t('info_panel.members.search_placeholder')}
             placeholderTextColor={THEME.textMuted}
             style={{ flex: 1, paddingVertical: 9, paddingHorizontal: 8, color: THEME.textPrimary, fontSize: 13 }}
           />
@@ -385,7 +388,7 @@ export default function MembersTab({
 
         {filtered.length === 0 && members.length > 0 && (
           <Text style={{ color: THEME.textMuted, textAlign: 'center', marginVertical: 24, fontSize: 13 }}>
-            Không tìm thấy thành viên nào
+            {t('info_panel.members.no_results')}
           </Text>
         )}
       </ScrollView>
@@ -398,7 +401,7 @@ export default function MembersTab({
             style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: THEME.bgSecondary || '#2b2d31', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 }}
           >
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: THEME.bgHover || '#35373c', alignSelf: 'center', marginBottom: 16 }} />
-            <Text style={{ color: THEME.textPrimary, fontSize: 16, fontWeight: '800', marginBottom: 14 }}>Chọn vai trò tuỳ chỉnh</Text>
+            <Text style={{ color: THEME.textPrimary, fontSize: 16, fontWeight: '800', marginBottom: 14 }}>{t('info_panel.members.select_custom_role')}</Text>
 
             {/* No role */}
             <TouchableOpacity
@@ -406,7 +409,7 @@ export default function MembersTab({
               style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: THEME.bgPrimary, borderRadius: 10, marginBottom: 8 }}
             >
               <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 1.5, borderColor: THEME.border }} />
-              <Text style={{ flex: 1, color: THEME.textMuted, fontSize: 14 }}>— Không có (mặc định) —</Text>
+              <Text style={{ flex: 1, color: THEME.textMuted, fontSize: 14 }}>{t('info_panel.members.no_custom_role')}</Text>
               {!getEdit(showRolePicker, members.find(m => (m.user?._id || m._id) === showRolePicker) || {}).customRoleId && (
                 <Feather name="check" size={16} color={THEME.accent} />
               )}

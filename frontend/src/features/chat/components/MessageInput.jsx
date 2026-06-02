@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Paperclip, Smile, Mic, Send, Image, X, BarChart2 } from 'lucide-react';
+import { Paperclip, Smile, Mic, Send, Image, X, BarChart2, AlarmClock } from 'lucide-react';
 import CreatePollModal from './chatArea/modals/CreatePollModal';
+import CreateReminderModal from './chatArea/modals/CreateReminderModal';
 import { getAudioStream, getMediaErrorMessage } from '../../../utils/mediaUtils';
 
 const EMOJIS = [
@@ -45,6 +46,7 @@ export default function MessageInput({
   const [recordingSec, setRecordingSec] = useState(0);
   const [attachments, setAttachments] = useState([]);
   const [showPollModal, setShowPollModal] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
 
   // ── STATE CHO TÍNH NĂNG MENTION (@) ──
   const [showMentions, setShowMentions] = useState(false);
@@ -401,8 +403,8 @@ export default function MessageInput({
   // ── TÌM KIẾM DANH SÁCH TAG THEO QUERY ──
   const filteredMentions = [
     { id: 'all', displayName: 'all' },
-    ...groupMembers
-  ].filter(m => m.displayName.toLowerCase().includes(mentionQuery));
+    ...groupMembers.filter(Boolean)
+  ].filter(m => (m?.displayName || '').toLowerCase().includes(mentionQuery));
 
   return (
     <div style={{
@@ -415,6 +417,19 @@ export default function MessageInput({
           <button title="Gửi ảnh" onClick={() => imageInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '6px', borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Image size={20} /></button>
           <button title="Đính kèm file" onClick={() => fileInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '6px', borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Paperclip size={20} /></button>
           {isGroup && <button title="Tạo bình chọn" onClick={() => setShowPollModal(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '6px', borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'rgba(0,132,255,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><BarChart2 size={20} /></button>}
+          <button
+            title="Nhắc hẹn"
+            onClick={() => setShowReminderModal(true)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', padding: '6px', borderRadius: 6,
+              display: 'flex', alignItems: 'center', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'rgba(0,132,255,0.08)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}
+          >
+            <AlarmClock size={20} />
+          </button>
         </div>
       )}
 
@@ -510,7 +525,16 @@ export default function MessageInput({
           {canSend && <button onClick={handleSend} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '6px', borderRadius: 8, marginLeft: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Send size={22} style={{ transform: 'rotate(-45deg)', marginTop: -2 }} /></button>}
         </div>
       </div>
-      <CreatePollModal isOpen={showPollModal} onClose={() => setShowPollModal(false)} onCreate={(data) => onSend({ type: 'poll', ...data })} />
+      <CreatePollModal 
+        isOpen={showPollModal} 
+        onClose={() => setShowPollModal(false)}
+        onCreate={(data) => onSend({ type: 'poll', ...data })}
+      />
+      <CreateReminderModal 
+        isOpen={showReminderModal} 
+        onClose={() => setShowReminderModal(false)}
+        onCreate={(data) => onSend({ type: 'reminder', ...data })}
+      />
     </div>
   );
 }

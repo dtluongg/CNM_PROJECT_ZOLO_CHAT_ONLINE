@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ThumbsUp, CornerUpRight, MoreHorizontal,
-  Paperclip, Reply, Copy, Pin, Trash2, Quote,
+  Paperclip, Reply, Copy, Pin, Trash2, Quote, Globe, Languages, XCircle, Loader2,
   X, ZoomIn, ZoomOut, Download,
-  FileText, FileSpreadsheet, FileArchive, Music, File,
+  FileText, FileSpreadsheet, FileArchive, Music, File
 } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 import PollMessage from '../ui/PollMessage';
 import ReminderMessage from '../ui/ReminderMessage';
+import messageApi from '../../../api/messageApi';
+import { useLanguage } from '../../../../../context/LanguageContext';
+import LanguageSelectorModal from './LanguageSelectorModal';
 
 // ── File type helpers ────────────────────────────────────────────────────────
 const FILE_TYPES = {
@@ -188,6 +191,7 @@ const MessageBubble = ({
   onVote,
   groupMembers = [],
 }) => {
+  const { t } = useLanguage();
   const observerRef = useRef(null);
   const menuRef = useRef(null);
   const actionButtonRef = useRef(null);
@@ -196,8 +200,27 @@ const MessageBubble = ({
   const [showActions, setShowActions] = useState(false);
   const [showEmojiBar, setShowEmojiBar] = useState(false);
   const [menuPlacement, setMenuPlacement] = useState('down');
+  const [translatedText, setTranslatedText] = useState(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [showLangModal, setShowLangModal] = useState(false);
+  const [targetLang, setTargetLang] = useState('English');
   const [mediaViewer, setMediaViewer] = useState(null); // { url, type, name }
   const longPressRef = useRef(null);
+
+  const handleTranslate = async (lang = 'Auto') => {
+    if (msg.revoked || msg.recalled || msg.type !== 'text') return;
+    try {
+      setIsTranslating(true);
+      setTargetLang(lang);
+      const res = await messageApi.translateMessage(msg.content, lang);
+      setTranslatedText(res.data.translatedText);
+      setOpenMenuId(null);
+    } catch (err) {
+      console.error('Translation error:', err);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   const showMenu = openMenuId === (msg.id || msg._id);
   const maxWidth = isMobile ? '82%' : '68%';
@@ -244,18 +267,18 @@ const MessageBubble = ({
   // ── Render context tin nhắn đang trả lời ─────────────────────────
   const renderRepliedContext = () => {
     if (!msg.replyToMessageId || msg.revoked || msg.recalled) return null;
-    const repliedBy = msg.replyToMessageId.senderId?.displayName || 'Người dùng Zolo';
+    const repliedBy = msg.replyToMessageId.senderId?.displayName || t('chat.default_user');
     let repliedContent = '';
     if (msg.replyToMessageId.revoked) {
-      repliedContent = 'Tin nhắn đã được thu hồi';
+      repliedContent = t('chat.message_revoked');
     } else if (msg.replyToMessageId.type === 'text') {
       repliedContent = msg.replyToMessageId.content;
     } else if (msg.replyToMessageId.type === 'poll') {
-      const pollTopic = msg.replyToMessageId.payload?.topic || msg.replyToMessageId.content || 'Bình chọn';
-      repliedContent = `Bình chọn: ${pollTopic}`;
+      const pollTopic = msg.replyToMessageId.payload?.topic || msg.replyToMessageId.content || t('chat.poll', { defaultValue: 'Poll' });
+      repliedContent = `${t('bubble.poll', { topic: pollTopic })}`;
     } else if (msg.replyToMessageId.type === 'reminder') {
-      const reminderTopic = msg.replyToMessageId.payload?.content || msg.replyToMessageId.content || 'Nhắc hẹn';
-      repliedContent = `Nhắc hẹn: ${reminderTopic}`;
+      const reminderTopic = msg.replyToMessageId.payload?.content || msg.replyToMessageId.content || t('chat.reminder', { defaultValue: 'Reminder' });
+      repliedContent = `${t('bubble.reminder', { topic: reminderTopic })}`;
     } else {
       repliedContent = `[${msg.replyToMessageId.type}]`;
     }
@@ -298,7 +321,7 @@ const MessageBubble = ({
   const renderStoryContext = () => {
     if (msg.payload?.type !== 'story_reply' || msg.revoked || msg.recalled) return null;
     const isVideo = msg.payload.mediaType === 'video';
-    const storyHeader = isMine ? 'Bạn đã trả lời tin' : `${msg.senderName} đã trả lời tin của bạn`;
+    const storyHeader = isMine ? t('bubble.you_replied') : t('bubble.replied_to', { name: msg.senderName });
 
     return (
       <div style={{
@@ -426,7 +449,7 @@ const MessageBubble = ({
   // ── Render nội dung tin nhắn ───────────────────────────────
   const renderContent = () => {
     if (msg.revoked || msg.recalled) {
-      return <span style={{ fontStyle: 'italic', opacity: 0.6 }}>Tin nhắn đã được thu hồi</span>;
+      return <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('bubble.revoked')}</span>;
     }
 
     // ── Ảnh ──────────────────────────────────────────────────
@@ -594,10 +617,46 @@ const MessageBubble = ({
 
     return (
       <>
-        {renderContentWithMentions(msg.content, groupMembers, isMine)}
+        <div style={{ position: 'relative' }}>
+          {renderContentWithMentions(msg.content, groupMembers, isMine)}
+          {isTranslating && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, opacity: 0.7, fontSize: 12 }}>
+              <Loader2 size={14} className="animate-spin" />
+              <span>{t('bubble.translating')}</span>
+            </div>
+          )}
+        </div>
+
+        {translatedText && (
+          <div style={{
+            marginTop: 8,
+            padding: '8px 12px',
+            background: isMine ? 'rgba(255,255,255,0.15)' : 'rgba(var(--accent-rgb), 0.08)',
+            borderRadius: 12,
+            fontSize: isMobile ? 14 : 13,
+            borderLeft: `3px solid ${isMine ? '#fff' : 'var(--accent)'}`,
+            position: 'relative',
+            animation: 'fadeIn 0.3s ease'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, opacity: 0.8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>
+                <Languages size={12} />
+                <span>{t('bubble.translation_title', { lang: targetLang })}</span>
+              </div>
+              <XCircle
+                size={14}
+                style={{ cursor: 'pointer', opacity: 0.6 }}
+                onClick={() => setTranslatedText(null)}
+              />
+            </div>
+            <div style={{ color: isMine ? '#fff' : 'var(--text-primary)', fontStyle: 'italic' }}>
+              {translatedText}
+            </div>
+          </div>
+        )}
         {msg.edited && (
           <span style={{ fontSize: 10, opacity: 0.5, marginLeft: 6, fontStyle: 'italic', fontWeight: 400 }}>
-            (đã chỉnh sửa)
+            {t('bubble.edited')}
           </span>
         )}
       </>
@@ -688,6 +747,8 @@ const MessageBubble = ({
             position: 'relative',
             marginLeft: (msg.payload?.type === 'story_reply' && !isMine) ? 8 : 0,
             marginRight: (msg.payload?.type === 'story_reply' && isMine) ? 8 : 0,
+            marginTop: msg.payload?.type === 'story_reply' ? -25 : 0,
+            zIndex: msg.payload?.type === 'story_reply' ? 10 : 1,
             overflow: isMedia ? 'hidden' : 'visible',
           }}>
             {isPinned && msg.type !== 'poll' && msg.type !== 'reminder' && (
@@ -699,7 +760,7 @@ const MessageBubble = ({
                 color: (msg.type === 'poll' || msg.type === 'image' || msg.type === 'video' || !isMine) ? 'var(--accent)' : '#fff'
               }}>
                 <span>📌</span>
-                <span>Ghim tin nhắn</span>
+                <span>{t('bubble.pin_title')}</span>
               </div>
             )}
             {renderRepliedContext()}
@@ -814,11 +875,11 @@ const MessageBubble = ({
             }}>
               {[
                 ...(!(msg.revoked || msg.recalled) ? [
-                  { content: <Quote size={13} />, title: 'Trả lời', onClick: () => onReply(msg) },
-                  ...(msg.type !== 'poll' && msg.type !== 'reminder' ? [{ content: <CornerUpRight size={13} />, title: 'Chuyển tiếp', onClick: () => onForward(msg) }] : []),
+                  { content: <Quote size={13} />, title: t('bubble.reply'), onClick: () => onReply(msg) },
+                  ...(msg.type !== 'poll' && msg.type !== 'reminder' ? [{ content: <CornerUpRight size={13} />, title: t('bubble.forward'), onClick: () => onForward(msg) }] : []),
                 ] : []),
                 {
-                  content: <MoreHorizontal size={14} />, title: 'Thêm',
+                  content: <MoreHorizontal size={14} />, title: t('bubble.more'),
                   ref: actionButtonRef,
                   onClick: (e) => {
                     e.stopPropagation();
@@ -860,20 +921,20 @@ const MessageBubble = ({
               {isMine && msg.type !== 'poll' && msg.type !== 'reminder' && (
                 <div onClick={() => { onRecall(msg); setOpenMenuId(null); }}
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#ed4245', fontWeight: 600 }}>
-                  ↩️ Thu hồi
+                  ↩️ {t('bubble.recall')}
                 </div>
               )}
 
               {msg.type !== 'poll' && msg.type !== 'reminder' && (
                 <div onClick={() => { onDelete(msg); setOpenMenuId(null); }}
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#ed4245' }}>
-                  🗑️ Xóa
+                  🗑️ {t('bubble.delete')}
                 </div>
               )}
               {isMine && msg.type !== 'poll' && msg.type !== 'reminder' && (
                 <div onClick={() => { onEdit(msg); setOpenMenuId(null); }}
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#000' }}>
-                  ✏️ Chỉnh sửa tin nhắn
+                  ✏️ {t('bubble.edit')}
                 </div>
               )}
               {!(msg.revoked || msg.recalled) && (
@@ -884,9 +945,25 @@ const MessageBubble = ({
                     display: 'flex', alignItems: 'center', gap: 10
                   }}
                 >
-                  <span style={{ width: 18, textAlign: 'center' }}>📌</span>
-                  <span>{isPinned ? 'Bỏ ghim' : 'Ghim tin nhắn'}</span>
+                   <span style={{ width: 18, textAlign: 'center' }}>📌</span>
+                  <span>{isPinned ? t('bubble.unpin') : t('bubble.pin')}</span>
                 </div>
+              )}
+
+              {msg.type === 'text' && !(msg.revoked || msg.recalled) && (
+                <>
+                  <div style={{ height: 1, background: '#eee', margin: '4px 0' }} />
+                  <div onClick={() => handleTranslate('Auto')}
+                    style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: '#000', display: 'flex', alignItems: 'center', gap: 10 }}>
+                   <Globe size={16} style={{ color: 'var(--accent)' }} />
+                    <span>{t('bubble.translate')}</span>
+                  </div>
+                  <div onClick={() => setShowLangModal(true)}
+                    style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 14, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Languages size={16} />
+                    <span style={{ fontSize: 12 }}>{t('bubble.translate_more')}</span>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -897,11 +974,11 @@ const MessageBubble = ({
         {isMine && (
           <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
             {msg.blocked ? (
-              <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 600 }}>Bị chặn bởi người dùng này</span>
+             <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 600 }}>{t('bubble.blocked_by')}</span>
             ) : conversationType === 'dm' ? (
               msg.readBy && msg.readBy.length > 0
-                ? <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>Đã xem</span>
-                : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Đã gửi</span>
+                ? <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>{t('bubble.read')}</span>
+                : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('bubble.sent')}</span>
             ) : (
               msg.readBy && msg.readBy.length > 0 ? (
                 <div
@@ -920,7 +997,7 @@ const MessageBubble = ({
                   )}
                 </div>
               ) : (
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Đã gửi</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('bubble.sent')}</span>
               )
             )}
           </div>
@@ -962,16 +1039,28 @@ const MessageBubble = ({
               </div>
             )}
             {[
-              { icon: <Reply size={20} />, label: 'Trả lời', onClick: () => { onReply(msg); setShowActions(false); }, show: true },
-              { icon: <CornerUpRight size={20} />, label: 'Chuyển tiếp', onClick: () => { onForward(msg); setShowActions(false); }, show: msg.type !== 'poll' },
-              { icon: <Copy size={20} />, label: 'Sao chép', show: msg.type === 'text' },
+              { icon: <Reply size={20} />, label: t('bubble.reply'), onClick: () => { onReply(msg); setShowActions(false); }, show: true },
+              { icon: <CornerUpRight size={20} />, label: t('bubble.forward'), onClick: () => { onForward(msg); setShowActions(false); }, show: msg.type !== 'poll' },
+              { icon: <Copy size={20} />, label: t('common.copy'), show: msg.type === 'text' },
               {
                 icon: <Pin size={20} />,
-                label: isPinned ? 'Bỏ ghim' : 'Ghim tin nhắn',
+                label: isPinned ? t('bubble.unpin') : t('bubble.pin'),
                 onClick: () => { isPinned ? onUnpin(msg._id || msg.id) : onPin(msg._id || msg.id); setShowActions(false); },
                 show: true
               },
-              { icon: <Trash2 size={20} />, label: 'Xóa tin nhắn', danger: true, onClick: () => { onDelete(msg); setShowActions(false); }, show: msg.type !== 'poll' },
+              {
+                icon: <Globe size={20} />,
+                label: t('bubble.translate'),
+                onClick: () => { handleTranslate('Auto'); setShowActions(false); },
+                show: msg.type === 'text' && !(msg.revoked || msg.recalled)
+              },
+              {
+                icon: <Languages size={20} />,
+                label: t('bubble.translate_more'),
+                onClick: () => { setShowLangModal(true); setShowActions(false); },
+                show: msg.type === 'text' && !(msg.revoked || msg.recalled)
+              },
+              { icon: <Trash2 size={20} />, label: t('bubble.delete'), danger: true, onClick: () => { onDelete(msg); setShowActions(false); }, show: msg.type !== 'poll' },
             ].filter(a => a.show).map(action => (
               <button
                 key={action.label}
@@ -993,6 +1082,11 @@ const MessageBubble = ({
           </div>
         </div>
       )}
+      <LanguageSelectorModal
+        isOpen={showLangModal}
+        onClose={() => setShowLangModal(false)}
+        onSelect={(lang) => handleTranslate(lang)}
+      />
 
       {/* Media lightbox */}
       {mediaViewer && (
@@ -1003,6 +1097,20 @@ const MessageBubble = ({
           onClose={() => setMediaViewer(null)}
         />
       )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };

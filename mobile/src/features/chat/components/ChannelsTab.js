@@ -5,20 +5,10 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import conversationApi from '../api/conversationApi';
+import { useLanguage } from '../../../context/LanguageContext';
+import { getLocalizedTopicName } from '../../../utils/localizationUtils';
 
 const EMOJIS   = ['💬', '📢', '🎮', '📚', '🎵', '🔧', '❓', '🔊'];
-const CH_TYPES = [
-  { value: 'text',  label: 'Văn bản', icon: 'hash' },
-  { value: 'voice', label: 'Thoại',   icon: 'volume-2' },
-];
-
-// Role access level: 'all' = no restriction, 'view' = view only, 'send' = can send, 'none' = no access
-const ACCESS_OPTS = [
-  { key: 'all',  label: 'Mặc định', color: '#888' },
-  { key: 'send', label: '✓ Gửi',   color: '#57f287' },
-  { key: 'view', label: '👁 Xem',   color: '#5865f2' },
-  { key: 'none', label: '✕ Chặn',  color: '#ed4245' },
-];
 
 function defaultForm() {
   return {
@@ -51,7 +41,21 @@ function buildRolePermsFromRoles(roles, topicId) {
 }
 
 export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, THEME, roles = [] }) {
+  const { t } = useLanguage();
   const convId = conversation._id || conversation.id;
+
+  const CH_TYPES = [
+    { value: 'text',  label: t('info_panel.channels.text_type'), icon: 'hash' },
+    { value: 'voice', label: t('info_panel.channels.voice_type'),   icon: 'volume-2' },
+  ];
+
+  // Role access level: 'all' = no restriction, 'view' = view only, 'send' = can send, 'none' = no access
+  const ACCESS_OPTS = [
+    { key: 'all',  label: t('info_panel.labels.all'), color: '#888' },
+    { key: 'send', label: `✓ ${t('info_panel.labels.send')}`,   color: '#57f287' },
+    { key: 'view', label: `👁 ${t('info_panel.labels.view')}`,   color: '#5865f2' },
+    { key: 'none', label: `✕ ${t('info_panel.labels.none')}`,  color: '#ed4245' },
+  ];
 
   const [showForm,   setShowForm]   = useState(false);
   const [editTarget, setEditTarget] = useState(null);
@@ -67,17 +71,17 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
     setShowForm(true);
   };
 
-  const openEdit = (t) => {
-    setEditTarget(t);
+  const openEdit = (tp) => {
+    setEditTarget(tp);
     setForm({
-      name:         t.name || '',
-      emoji:        t.emoji || '💬',
-      channelType:  t.channelType || 'text',
-      categoryName: t.categoryName || '',
-      description:  t.description || '',
-      isLocked:     t.isLocked || false,
+      name:         tp.name || '',
+      emoji:        tp.emoji || '💬',
+      channelType:  tp.channelType || 'text',
+      categoryName: tp.categoryName || '',
+      description:  tp.description || '',
+      isLocked:     tp.isLocked || false,
     });
-    setRolePerms(buildRolePermsFromRoles(roles, t._id));
+    setRolePerms(buildRolePermsFromRoles(roles, tp._id));
     setShowForm(true);
   };
 
@@ -115,9 +119,9 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
   }, [convId, rolePerms, roles]);
 
   const handleSave = async () => {
-    if (!form.name.trim()) return Alert.alert('Lỗi', 'Tên kênh không được để trống.');
+    if (!form.name.trim()) return Alert.alert(t('common.error'), t('info_panel.channels.error_name_empty'));
     const cleanName = form.name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    if (!cleanName) return Alert.alert('Lỗi', 'Tên kênh phải chứa ký tự hợp lệ (a-z, 0-9, -).');
+    if (!cleanName) return Alert.alert(t('common.error'), t('info_panel.channels.error_name_invalid'));
     setSaving(true);
     try {
       const payload = { ...form, name: cleanName };
@@ -125,7 +129,7 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
         const res = await conversationApi.updateTopic(convId, editTarget._id, payload);
         const updated = res.data?.data || { ...editTarget, ...payload };
         await applyRolePerms(editTarget._id);
-        setTopics(prev => prev.map(t => t._id === editTarget._id ? updated : t));
+        setTopics(prev => prev.map(ch => ch._id === editTarget._id ? updated : ch));
       } else {
         const res = await conversationApi.createTopic(convId, payload);
         const created = res.data?.data || { _id: `tmp_${Date.now()}`, ...payload };
@@ -136,7 +140,7 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
       }
       setShowForm(false);
     } catch (e) {
-      Alert.alert('Lỗi', e.response?.data?.message || 'Không thể lưu kênh.');
+      Alert.alert(t('common.error'), e.response?.data?.message || t('info_panel.channels.error_save'));
     } finally {
       setSaving(false);
     }
@@ -144,19 +148,19 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
 
   const handleDelete = (topic) => {
     Alert.alert(
-      'Xóa kênh',
-      `Xóa kênh "${topic.emoji || ''} ${topic.name}"? Tất cả tin nhắn sẽ bị mất.`,
+      t('info_panel.channels.delete_channel'),
+      t('info_panel.channels.delete_confirm', { name: topic.name }),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Xóa', style: 'destructive',
+          text: t('common.delete'), style: 'destructive',
           onPress: async () => {
             setDeleting(topic._id);
             try {
               await conversationApi.deleteTopic(convId, topic._id);
-              setTopics(prev => prev.filter(t => t._id !== topic._id));
+              setTopics(prev => prev.filter(ch => ch._id !== topic._id));
             } catch {
-              Alert.alert('Lỗi', 'Không thể xóa kênh. Thử lại sau.');
+              Alert.alert(t('common.error'), t('info_panel.channels.error_delete'));
             } finally {
               setDeleting(null);
             }
@@ -170,14 +174,14 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
     try {
       const newLocked = !topic.isLocked;
       await conversationApi.updateTopic(convId, topic._id, { isLocked: newLocked });
-      setTopics(prev => prev.map(t => t._id === topic._id ? { ...t, isLocked: newLocked } : t));
+      setTopics(prev => prev.map(ch => ch._id === topic._id ? { ...ch, isLocked: newLocked } : ch));
     } catch {
-      Alert.alert('Lỗi', 'Không thể thay đổi trạng thái kênh.');
+      Alert.alert(t('common.error'), t('info_panel.channels.error_lock'));
     }
   };
 
-  const textTopics  = topics.filter(t => !t.channelType || t.channelType === 'text');
-  const voiceTopics = topics.filter(t => t.channelType === 'voice');
+  const textTopics  = topics.filter(ch => !ch.channelType || ch.channelType === 'text');
+  const voiceTopics = topics.filter(ch => ch.channelType === 'voice');
 
   const renderChannel = (topic) => (
     <View
@@ -187,10 +191,10 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
       <Text style={{ fontSize: 16, marginRight: 8 }}>{topic.emoji || (topic.channelType === 'voice' ? '🔊' : '💬')}</Text>
       <View style={{ flex: 1 }}>
         <Text style={{ color: THEME.textPrimary, fontSize: 14, fontWeight: '600' }}>
-          {topic.name}{topic.isLocked ? '  🔒' : ''}
+          {getLocalizedTopicName(topic.name, t)}{topic.isLocked ? '  🔒' : ''}
         </Text>
         {!!topic.categoryName && (
-          <Text style={{ color: THEME.textMuted, fontSize: 11, marginTop: 1 }}>{topic.categoryName}</Text>
+          <Text style={{ color: THEME.textMuted, fontSize: 11, marginTop: 1 }}>{getLocalizedTopicName(topic.categoryName, t)}</Text>
         )}
       </View>
       {isAdmin && (
@@ -218,12 +222,12 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-        <SectionTitle title="Kênh văn bản" icon="hash" THEME={THEME} />
-        {textTopics.length === 0 && <Empty text="Chưa có kênh văn bản" THEME={THEME} />}
+        <SectionTitle title={t('info_panel.channels.text_channels')} icon="hash" THEME={THEME} />
+        {textTopics.length === 0 && <Empty text={t('info_panel.channels.no_text')} THEME={THEME} />}
         {textTopics.map(renderChannel)}
 
-        <SectionTitle title="Kênh thoại" icon="volume-2" THEME={THEME} style={{ marginTop: 10 }} />
-        {voiceTopics.length === 0 && <Empty text="Chưa có kênh thoại" THEME={THEME} />}
+        <SectionTitle title={t('info_panel.channels.voice_channels')} icon="volume-2" THEME={THEME} style={{ marginTop: 10 }} />
+        {voiceTopics.length === 0 && <Empty text={t('info_panel.channels.no_voice')} THEME={THEME} />}
         {voiceTopics.map(renderChannel)}
 
         {isAdmin && (
@@ -237,7 +241,7 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
             }}
           >
             <Feather name="plus" size={16} color={THEME.accent} />
-            <Text style={{ color: THEME.accent, fontWeight: '700', fontSize: 14 }}>Tạo kênh mới</Text>
+            <Text style={{ color: THEME.accent, fontWeight: '700', fontSize: 14 }}>{t('info_panel.channels.create_new')}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -257,11 +261,11 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
             <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
               <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: THEME.bgHover, alignSelf: 'center', marginBottom: 16 }} />
               <Text style={{ color: THEME.textPrimary, fontSize: 17, fontWeight: '800', marginBottom: 16 }}>
-                {editTarget ? 'Chỉnh sửa kênh' : 'Tạo kênh mới'}
+                {editTarget ? t('info_panel.channels.edit') : t('info_panel.channels.create_new')}
               </Text>
 
               {/* Channel type */}
-              <FLabel text="Loại kênh" THEME={THEME} />
+              <FLabel text={t('info_panel.channels.channel_type')} THEME={THEME} />
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
                 {CH_TYPES.map(ct => {
                   const sel = form.channelType === ct.value;
@@ -279,7 +283,7 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
               </View>
 
               {/* Emoji */}
-              <FLabel text="Emoji" THEME={THEME} />
+              <FLabel text={t('info_panel.channels.emoji')} THEME={THEME} />
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
                 {EMOJIS.map(e => {
                   const sel = form.emoji === e;
@@ -296,7 +300,7 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
               </ScrollView>
 
               {/* Name */}
-              <FLabel text="Tên kênh" THEME={THEME} />
+              <FLabel text={t('info_panel.channels.name')} THEME={THEME} />
               <TextInput
                 value={form.name}
                 onChangeText={v => setForm(s => ({ ...s, name: v }))}
@@ -308,7 +312,7 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
               />
 
               {/* Category */}
-              <FLabel text="Danh mục (tuỳ chọn)" THEME={THEME} />
+              <FLabel text={t('info_panel.channels.category')} THEME={THEME} />
               <TextInput
                 value={form.categoryName}
                 onChangeText={v => setForm(s => ({ ...s, categoryName: v }))}
@@ -325,16 +329,16 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
               >
                 <Toggle active={form.isLocked} activeColor={THEME.accent} bgOff={THEME.bgHover} />
                 <Feather name="lock" size={14} color={THEME.textMuted} />
-                <Text style={{ color: THEME.textPrimary, fontSize: 14 }}>Khoá kênh</Text>
+                <Text style={{ color: THEME.textPrimary, fontSize: 14 }}>{t('info_panel.channels.lock')}</Text>
               </TouchableOpacity>
 
               {/* ── Role permissions section ── */}
               {roles.length > 0 && (
                 <>
                   <View style={{ height: 1, backgroundColor: THEME.border, marginBottom: 16 }} />
-                  <FLabel text="Quyền truy cập theo vai trò" THEME={THEME} />
+                  <FLabel text={t('info_panel.channels.access_by_role')} THEME={THEME} />
                   <Text style={{ color: THEME.textMuted, fontSize: 11, marginBottom: 12, lineHeight: 16 }}>
-                    Mặc định = không hạn chế. Đặt Chặn để ẩn kênh với vai trò đó.
+                    {t('info_panel.channels.access_hint')}
                   </Text>
                   {roles.map(role => {
                     const current = rolePerms[role._id] || 'all';
@@ -379,7 +383,7 @@ export default function ChannelsTab({ conversation, topics, setTopics, isAdmin, 
               >
                 {saving
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{editTarget ? 'Lưu thay đổi' : 'Tạo kênh'}</Text>
+                  : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{editTarget ? t('info_panel.channels.save') : t('info_panel.channels.create_new')}</Text>
                 }
               </TouchableOpacity>
             </ScrollView>

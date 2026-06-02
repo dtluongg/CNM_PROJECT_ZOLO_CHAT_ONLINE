@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { ChevronRight, BarChart2, Check } from 'lucide-react';
 import PollDetailsModal from './PollDetailsModal';
 import VotePollModal from '../modals/VotePollModal';
+import { useLanguage } from '../../../../../context/LanguageContext';
 
 export default function PollMessage({ message, onVote, currentUserId, isPinned }) {
+  const { t } = useLanguage();
   const [showDetails, setShowDetails] = useState(false);
   const [showVoteModal, setShowVoteModal] = useState(false);
   
@@ -48,7 +50,7 @@ export default function PollMessage({ message, onVote, currentUserId, isPinned }
           color: 'var(--accent)'
         }}>
           <span>📌</span>
-          <span>Ghim tin nhắn</span>
+          <span>{t('chat.reminder_card.pinned')}</span>
         </div>
       )}
 
@@ -57,7 +59,7 @@ export default function PollMessage({ message, onVote, currentUserId, isPinned }
         {topic}
       </h3>
       <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px', fontWeight: 600 }}>
-        {multipleChoice ? 'Chọn nhiều phương án' : 'Chọn 1 phương án'}
+        {multipleChoice ? t('chat.poll_card.multiple_choice') : t('chat.poll_card.single_choice')}
       </div>
 
       {/* Summary - Only show if voted or closed */}
@@ -70,7 +72,7 @@ export default function PollMessage({ message, onVote, currentUserId, isPinned }
         }}
       >
         <BarChart2 size={16} />
-        <span>{totalVoters} người bình chọn</span>
+        <span>{t('chat.poll_card.voters_count', { count: totalVoters })}</span>
         <ChevronRight size={16} />
       </div>
 
@@ -141,7 +143,7 @@ export default function PollMessage({ message, onVote, currentUserId, isPinned }
           display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}
       >
-        {userVoted ? 'Đổi lựa chọn' : 'Bình chọn'}
+        {userVoted ? t('chat.poll_card.change_vote_btn') : t('chat.poll_card.vote_btn')}
       </button>
 
       <PollDetailsModal 

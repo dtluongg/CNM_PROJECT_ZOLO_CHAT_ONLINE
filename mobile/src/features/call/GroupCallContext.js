@@ -115,7 +115,7 @@ export function GroupCallProvider({ children }) {
         return;
       }
       try {
-        await voiceRoom.connect({ livekitUrl: res.livekitUrl, token: res.token, callType: type });
+        await voiceRoom.connect({ livekitUrl: res.livekitUrl, token: res.token });
         setGCId(res.groupCallId);
         setCallType(type);
         setConvId(conversationId);
@@ -145,7 +145,7 @@ export function GroupCallProvider({ children }) {
         resetAll(); return;
       }
       try {
-        await voiceRoom.connect({ livekitUrl: res.livekitUrl, token: res.token, callType: data.type });
+        await voiceRoom.connect({ livekitUrl: res.livekitUrl, token: res.token });
         setGCId(res.groupCallId);
         setCallType(data.type);
         setConvId(data.conversationId);
@@ -194,7 +194,7 @@ export function GroupCallProvider({ children }) {
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
     });
     socketRef.current = socket;
 

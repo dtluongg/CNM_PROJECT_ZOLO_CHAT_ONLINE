@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { useLanguage } from '../../../context/LanguageContext';
 
 /**
  * Bottom sheet hiện ra khi người dùng giữ một tin nhắn.
@@ -32,9 +33,12 @@ const ActionSheet = ({
   onPin,
   onUnpin,
   isPinned,
+  onTranslate,
+  onTranslateManual,
   THEME,
   styles,
 }) => {
+  const { t } = useLanguage();
   if (!msg) return null;
 
   const isMe = msg.senderId === currentUserId;
@@ -44,13 +48,13 @@ const ActionSheet = ({
   const actions = [
     {
       icon: <Ionicons name="arrow-undo" size={20} color={THEME.textPrimary} />,
-      label: 'Trả lời',
+      label: t('chat.options.reply'),
       action: 'reply',
       show: true,
     },
     {
       icon: <Feather name="corner-up-right" size={20} color={THEME.textPrimary} />,
-      label: 'Chuyển tiếp',
+      label: t('chat.options.forward'),
       action: 'forward',
       show: msg.type !== 'poll',
     },
@@ -63,13 +67,13 @@ const ActionSheet = ({
     // },
     {
       icon: <Feather name="bookmark" size={20} color={isPinned ? '#faa61a' : THEME.textPrimary} />,
-      label: isPinned ? 'Bỏ ghim' : 'Ghim tin nhắn',
+      label: isPinned ? t('chat.options.unpin') : t('chat.options.pin'),
       action: isPinned ? 'unpin' : 'pin',
       show: !isRevoked,
     },
     {
       icon: <MaterialCommunityIcons name="cancel" size={20} color="#ed4245" />,
-      label: 'Thu hồi',
+      label: t('chat.options.revoke'),
       action: 'revoke',
       danger: true,
       // Chỉ hiện với tin của mình chưa thu hồi và không phải bình chọn
@@ -77,17 +81,29 @@ const ActionSheet = ({
     },
     {
       icon: <Feather name="edit-2" size={20} color={THEME.textPrimary} />,
-      label: 'Chỉnh sửa',
+      label: t('chat.options.edit'),
       action: 'edit',
       // Chỉ hiện với tin văn bản của mình chưa thu hồi
       show: isMe && !isRevoked && msg.type === 'text',
     },
     {
       icon: <Feather name="trash-2" size={20} color="#ed4245" />,
-      label: 'Xóa tin nhắn',
+      label: t('chat.options.delete'),
       action: 'delete',
       danger: true,
       show: msg.type !== 'poll',
+    },
+    {
+      icon: <Feather name="globe" size={20} color={THEME.accent} />,
+      label: t('chat.options.translate'),
+      action: 'translate',
+      show: msg.type === 'text' && !isRevoked,
+    },
+    {
+      icon: <MaterialCommunityIcons name="translate" size={20} color={THEME.accent} />,
+      label: t('chat.options.translate_manual'),
+      action: 'translate_manual',
+      show: msg.type === 'text' && !isRevoked,
     },
   ];
 
@@ -136,6 +152,8 @@ const ActionSheet = ({
                   if (a.action === 'forward') onForward(msg);
                   if (a.action === 'pin') onPin(msg);
                   if (a.action === 'unpin') onUnpin(msg._id || msg.id);
+                  if (a.action === 'translate') onTranslate(msg, 'Auto');
+                  if (a.action === 'translate_manual') onTranslateManual(msg);
                   onClose();
                 }}
                 style={styles.sheetAction}

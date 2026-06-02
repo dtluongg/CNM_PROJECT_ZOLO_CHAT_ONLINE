@@ -1,10 +1,12 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, Pressable, Platform } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Avatar from './Avatar';
 import VoicePlayer from './VoicePlayer';
 import VideoPlayer from './VideoPlayer';
 import PollMessage from './PollMessage';
+import ReminderMessage from './ReminderMessage';
+import { useLanguage } from '../../../context/LanguageContext';
 
 // Màu tên người gửi trong nhóm chat, luân phiên theo tên
 const SENDER_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245'];
@@ -51,8 +53,12 @@ const MessageBubble = ({
   onJumpToMessage,
   isPinned,
   onVote,
+  translation,
+  isTranslating,
+  onClearTranslation,
   groupMembers = [],
 }) => {
+  const { t } = useLanguage();
   const senderColor = isMine ? THEME.accent : getSenderColor(msg.senderName, THEME);
   const bubbleBg = isMine ? THEME.bubbleSelf : THEME.bubbleOther;
   const bubbleText = isMine ? '#ffffff' : THEME.textPrimary;
@@ -70,16 +76,18 @@ const MessageBubble = ({
   // Render context tin nhắn đang trả lời
   const renderRepliedContext = () => {
     if (!msg.replyToMessageId || msg.revoked || msg.recalled) return null;
-    const repliedBy = msg.replyToMessageId.senderId?.displayName || 'Người dùng Zolo';
+    const repliedBy = msg.replyToMessageId.senderId?.displayName || t('common.unknown_user');
     let repliedContent = '';
     if (msg.replyToMessageId.revoked) {
-      repliedContent = 'Tin nhắn đã được thu hồi';
+      repliedContent = t('chat.revoked_preview');
     } else if (msg.replyToMessageId.type === 'text') {
       repliedContent = msg.replyToMessageId.content;
     } else if (msg.replyToMessageId.type === 'poll') {
       const payload = parsePayload(msg.replyToMessageId.payload);
-      const pollTopic = payload.topic || msg.replyToMessageId.content || 'Bình chọn';
-      repliedContent = `Bình chọn: ${pollTopic}`;
+      const pollTopic = payload.topic || msg.replyToMessageId.content || t('poll.create_title');
+      repliedContent = `${t('poll.prefix')} ${pollTopic}`;
+    } else if (msg.replyToMessageId.type === 'reminder') {
+      repliedContent = t('reminder.prefix');
     } else {
       repliedContent = `[${msg.replyToMessageId.type}]`;
     }
@@ -99,6 +107,26 @@ const MessageBubble = ({
       </TouchableOpacity>
     );
   };
+  const renderStoryReply = (payload) => {
+    if (!payload || payload.type !== 'story_reply') return null;
+
+    return (
+      <View style={styles.storyReplyContainer}>
+        <View style={styles.storyReplyHeader}>
+          <Feather name="corner-up-right" size={14} color={THEME.textMuted} />
+          <Text style={[styles.storyReplyTitle, { color: THEME.textMuted }]}>
+            {t('chat.reply_prefix')}
+          </Text>
+        </View>
+        <Image 
+          source={{ uri: payload.mediaUrl }} 
+          style={styles.storyReplyMedia}
+          resizeMode="cover"
+        />
+      </View>
+    );
+  };
+
   // ── HÀM QUÉT VÀ TÔ MÀU TAG TÊN (NÂNG CẤP XỬ LÝ KHOẢNG TRẮNG) ──────────────
   const renderContentWithMentions = (content) => {
     if (!content) return null;
@@ -185,7 +213,7 @@ const MessageBubble = ({
     if (msg.revoked || msg.recalled) {
       return (
         <Text style={[styles.bubbleText, { color: bubbleText, fontStyle: 'italic', opacity: 0.7 }]}>
-          Tin nhắn đã được thu hồi
+          {t('chat.revoked_preview')}
         </Text>
       );
     }
@@ -286,7 +314,7 @@ const MessageBubble = ({
               {fileName}
             </Text>
             <Text style={{ fontSize: 11, color: isMine ? 'rgba(255,255,255,0.65)' : THEME.textMuted, marginTop: 2 }}>
-              Nhấn để mở
+              {t('chat.tap_to_open')}
             </Text>
           </View>
           <Feather name="download" size={18} color={isMine ? 'rgba(255,255,255,0.7)' : THEME.accent} />
@@ -307,13 +335,87 @@ const MessageBubble = ({
       );
     }
 
+    // Nhắc hẹn
+    if (msg.type === 'reminder') {
+      return (
+        <ReminderMessage 
+          message={msg} 
+          isMine={isMine} 
+          THEME={THEME} 
+          isPinned={isPinned}
+        />
+      );
+    }
+
+    const payload = parsePayload(msg.payload);
+
     return (
       <View>
-        {/* GỌI HÀM VẼ TAG TÊN Ở ĐÂY */}
-        {renderContentWithMentions(msg.content)}
+        {payload.type === 'story_reply' && (
+          <View>
+            {renderStoryReply(payload)}
+            <View style={[
+              styles.storyReplyBubble, 
+              { backgroundColor: isMine ? THEME.accent : THEME.bubbleOther },
+              { alignSelf: isMine ? 'flex-end' : 'flex-start' },
+              !isMine && { marginLeft: 12 },
+              isMine && { marginRight: 12 }
+            ]}>
+              <Text style={[styles.bubbleText, { color: isMine ? '#fff' : THEME.textPrimary }]}>
+                {msg.content}
+              </Text>
+            </View>
+          </View>
+        )}
+        {payload.type !== 'story_reply' && (
+          <View>
+            {/* GỌI HÀM VẼ TAG TÊN Ở ĐÂY */}
+            {renderContentWithMentions(msg.content)}
+            
+            {msg.edited && (
+              <Text style={{ fontSize: 11, fontStyle: 'italic', opacity: 0.6, color: bubbleText, marginTop: 4 }}>
+                {' '}
+                {t('chat.edited')}
+              </Text>
+            )}
+            
+            {isTranslating && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, opacity: 0.7 }}>
+                <Text style={{ fontSize: 11, color: bubbleText }}>⏳ {t('chat.translating')}</Text>
+              </View>
+            )}
 
-        {msg.edited && (
-          <Text style={{ fontSize: 11, fontStyle: 'italic', opacity: 0.6, marginTop: 4 }}> (đã chỉnh sửa)</Text>
+            {translation && (
+              <View style={{
+                marginTop: 10,
+                padding: 10,
+                backgroundColor: isMine ? 'rgba(255,255,255,0.18)' : (THEME.accent + '12'),
+                borderRadius: 12,
+                borderLeftWidth: 4,
+                borderLeftColor: isMine ? '#fff' : THEME.accent,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 1,
+                elevation: 1,
+              }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <MaterialCommunityIcons name="robot" size={14} color={isMine ? '#fff' : THEME.accent} />
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : THEME.accent, opacity: 0.9, letterSpacing: 0.5 }}>
+                      {t('chat.translation_header')} {translation.lang.toUpperCase()}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => onClearTranslation(msg._id || msg.id)}>
+                    <Feather name="x" size={14} color={isMine ? '#fff' : THEME.textMuted} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={{ color: bubbleText, fontStyle: 'italic', fontSize: 13.5, lineHeight: 18 }}>
+                  {translation.text}
+                </Text>
+              </View>
+            )}
+          </View>
         )}
       </View>
     );
@@ -326,7 +428,7 @@ const MessageBubble = ({
     // Tin nhắn bị chặn
     if (msg.blocked) {
       return (
-        <Text style={[styles.seenText, { color: '#ef4444' }]}>Bị chặn bởi người dùng này</Text>
+        <Text style={[styles.seenText, { color: '#ef4444' }]}>{t('chat.blocked_by_user')}</Text>
       );
     }
 
@@ -335,7 +437,7 @@ const MessageBubble = ({
     if (conversation.type !== 'group') {
       // Chat đơn: chỉ hiện "Đã xem" hoặc "Đã gửi"
       return (
-        <Text style={styles.seenText}>{readBy.length > 0 ? 'Đã xem' : 'Đã gửi'}</Text>
+        <Text style={styles.seenText}>{readBy.length > 0 ? t('chat.seen') : t('chat.sent')}</Text>
       );
     }
 
@@ -407,10 +509,13 @@ const MessageBubble = ({
               { backgroundColor: bubbleBg },
               borderRadius,
               msg.type === 'poll' && { alignSelf: 'center', marginTop: 10 },
-              // Bỏ padding + nền khi là media (ảnh/video) hoặc bình chọn
+              msg.type === 'reminder' && { alignSelf: 'center' },
+              // Bỏ padding + nền khi là media (ảnh/video), bình chọn, nhắc hẹn hoặc phản hồi story
               (msg.type === 'video' ||
                 msg.type === 'image' ||
                 msg.type === 'poll' ||
+                msg.type === 'reminder' ||
+                parsePayload(msg.payload).type === 'story_reply' ||
                 /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(parsePayload(msg.payload).fileName || '')) && {
                 padding: 0,
                 overflow: 'hidden',
@@ -433,7 +538,7 @@ const MessageBubble = ({
                 <Text style={{
                   fontSize: 10, fontWeight: '700', textTransform: 'uppercase',
                   color: (msg.type === 'poll' || msg.type === 'image' || msg.type === 'video' || !isMine) ? THEME.accent : '#fff'
-                }}>Ghim tin nhắn</Text>
+                }}>{t('chat.pin_message')}</Text>
               </View>
             )}
             {renderRepliedContext()}

@@ -3,12 +3,14 @@ import { Plus } from 'lucide-react';
 import storiesApi from './storiesApi';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../chat/hooks/useSocket';
+import { useLanguage } from '../../context/LanguageContext';
 import StoryCard from './components/StoryCard';
 import StoryUploadModal from './components/StoryUploadModal';
 import StoryViewer from './components/StoryViewer';
 
 const StoriesPage = () => {
     const { user, token } = useAuth();
+    const { t } = useLanguage();
     const [feed, setFeed] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showUpload, setShowUpload] = useState(false);
@@ -55,7 +57,7 @@ const StoriesPage = () => {
     return (
         <div className="flex-1 overflow-y-auto bg-[var(--bg-primary)] p-6">
             <div className="max-w-6xl mx-auto">
-                <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-6">Bản tin</h1>
+                <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-6">{t('stories.title')}</h1>
 
                 {loading ? (
                     <div className="flex justify-center py-20">

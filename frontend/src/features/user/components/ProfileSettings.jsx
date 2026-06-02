@@ -1,34 +1,35 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, User, Palette, Activity, QrCode, Globe } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
+import { useLanguage } from '../../../context/LanguageContext';
 import userApi from '../api/userApi';
 import { supabase } from '../../../config/supabase';
 
 const STATUSES = [
-  { key: 'online', label: 'Online', color: '#3ba55c', emoji: '🟢' },
-  { key: 'idle', label: 'Idle', color: '#faa61a', emoji: '🌙' },
-  { key: 'dnd', label: 'Do Not Disturb', color: '#ed4245', emoji: '⛔' },
-  { key: 'invisible', label: 'Invisible', color: '#80848e', emoji: '👻' },
+  { key: 'online', label: 'settings.status.online', color: '#3ba55c', emoji: '🟢' },
+  { key: 'idle', label: 'settings.status.idle', color: '#faa61a', emoji: '🌙' },
+  { key: 'dnd', label: 'settings.status.dnd', color: '#ed4245', emoji: '⛔' },
+  { key: 'invisible', label: 'settings.status.invisible', color: '#80848e', emoji: '👻' },
 ];
 
 const THEME_LABELS = {
-  dark: { label: 'Dark', desc: 'Discord-like dark' },
-  light: { label: 'Light', desc: 'Clean & bright' },
-  midnight: { label: 'Midnight', desc: 'Deep black + pink' },
-  ocean: { label: 'Ocean', desc: 'Deep sea blue' },
+  dark: { label: 'settings.appearance.themes.dark', desc: 'settings.appearance.themes.dark_desc' },
+  light: { label: 'settings.appearance.themes.light', desc: 'settings.appearance.themes.light_desc' },
+  midnight: { label: 'settings.appearance.themes.midnight', desc: 'settings.appearance.themes.midnight_desc' },
+  ocean: { label: 'settings.appearance.themes.ocean', desc: 'settings.appearance.themes.ocean_desc' },
 };
 
 const COLOR_LABELS = {
-  '--accent': 'Màu chính (Accent)',
-  '--bubble-self': 'Bong bóng của tôi',
-  '--bubble-other': 'Bong bóng người khác',
-  '--bg-tertiary': 'Nền khu vực chat',
-  '--bg-secondary': 'Nền sidebar',
-  '--bg-primary': 'Nền ngoài cùng',
-  '--input-bg': 'Nền ô nhập liệu',
+  '--accent': 'settings.appearance.accent',
+  '--bubble-self': 'settings.appearance.bubble_self',
+  '--bubble-other': 'settings.appearance.bubble_other',
+  '--bg-tertiary': 'settings.appearance.bg_tertiary',
+  '--bg-secondary': 'settings.appearance.bg_secondary',
+  '--bg-primary': 'settings.appearance.bg_primary',
+  '--input-bg': 'settings.appearance.input_bg',
 };
 
 const FieldLabel = ({ children }) => (
@@ -72,6 +73,7 @@ const TextInput = ({ value, onChange, placeholder, ...rest }) => (
 export default function ProfileSettings({ onClose }) {
   const { user, updateUser } = useAuth();
   const { theme: themeName, presets, colors, setTheme, setCustomColor, resetTheme } = useTheme();
+  const { t, language, changeLanguage } = useLanguage();
   const navigate = useNavigate();
 
   const [tab, setTab] = useState('profile');
@@ -99,11 +101,11 @@ export default function ProfileSettings({ onClose }) {
 
   const validateFile = (file, isGifFile = false) => {
     if (!file.type.startsWith('image/')) {
-      return 'Chỉ chấp nhận file ảnh (JPG, PNG, GIF, WebP...)';
+      return t('settings.profile.avatar_hint_error') || 'Chỉ chấp nhận file ảnh (JPG, PNG, GIF, WebP...)';
     }
     const limit = isGifFile ? MAX_GIF_SIZE : MAX_FILE_SIZE;
     if (file.size > limit) {
-      return `Kích thước tối đa: ${isGifFile ? '8MB (GIF)' : '5MB'}`;
+      return isGifFile ? (t('settings.profile.gif_size_error') || 'Kích thước tối đa: 8MB (GIF)') : (t('settings.profile.avatar_size_error') || 'Kích thước tối đa: 5MB');
     }
     return null;
   };
@@ -141,7 +143,7 @@ export default function ProfileSettings({ onClose }) {
       setAvatarIsGif(isGifFile);
     } catch (err) {
       console.error('[Avatar Upload]', err);
-      setUploadError('Không thể upload ảnh đại diện. Kiểm tra cấu hình Supabase Storage.');
+      setUploadError(t('settings.profile.avatar_upload_error'));
       setTimeout(() => setUploadError(''), 5000);
     } finally {
       setAvatarUploading(false);
@@ -167,7 +169,7 @@ export default function ProfileSettings({ onClose }) {
       setBanner(url);
     } catch (err) {
       console.error('[Banner Upload]', err);
-      setUploadError('Không thể upload ảnh bìa. Kiểm tra cấu hình Supabase Storage.');
+      setUploadError(t('settings.profile.banner_upload_error'));
       setTimeout(() => setUploadError(''), 5000);
     } finally {
       setBannerUploading(false);
@@ -181,8 +183,13 @@ export default function ProfileSettings({ onClose }) {
       const res = await userApi.updateProfile({
         displayName, bio, status, statusText, avatar, banner, usernameColor,
         themeName, themeColors: colors,
+        language,
       });
-      updateUser(res.data.user || { displayName, bio, status, statusText, avatar, banner, usernameColor, themeName, themeColors: colors });
+      updateUser(res.data.user || {
+        displayName, bio, status, statusText, avatar, banner, usernameColor,
+        themeName, themeColors: colors,
+        language,
+      });
       setSaveMsg('saved');
       setTimeout(() => setSaveMsg(''), 2500);
     } catch (err) {
@@ -195,10 +202,11 @@ export default function ProfileSettings({ onClose }) {
   };
 
   const tabs = [
-    { key: 'profile', label: '👤', title: 'Hồ sơ' },
-    { key: 'appearance', label: '🎨', title: 'Giao diện' },
-    { key: 'status', label: '💬', title: 'Trạng thái' },
-    { key: 'myqr', label: '📱', title: 'QR của tôi' },
+    { key: 'profile', label: <User size={18} />, title: t('settings.tabs.profile') },
+    { key: 'appearance', label: <Palette size={18} />, title: t('settings.tabs.appearance') },
+    { key: 'status', label: <Activity size={18} />, title: t('settings.tabs.status') },
+    { key: 'myqr', label: <QrCode size={18} />, title: t('settings.tabs.qr') },
+    { key: 'language', label: <Globe size={18} />, title: t('settings.tabs.language') },
   ];
 
   const myId = user?._id || user?.id;
@@ -254,7 +262,7 @@ export default function ProfileSettings({ onClose }) {
             marginBottom: 16,
           }}>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>
-              Cài đặt người dùng
+              {t('settings.title')}
             </h2>
             <button
               onClick={onClose}
@@ -276,7 +284,17 @@ export default function ProfileSettings({ onClose }) {
             </button>
           </div>
           {/* Tabs */}
-          <div style={{ display: 'flex', gap: 2 }}>
+          <div style={{
+            display: 'flex',
+            gap: 2,
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            WebkitOverflowScrolling: 'touch',
+          }}>
+            <style>{`
+              div::-webkit-scrollbar { display: none; }
+            `}</style>
             {tabs.map((t) => (
               <button
                 key={t.key}
@@ -295,6 +313,8 @@ export default function ProfileSettings({ onClose }) {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
                 onMouseEnter={(e) => { if (tab !== t.key) e.currentTarget.style.color = 'var(--text-secondary)'; }}
                 onMouseLeave={(e) => { if (tab !== t.key) e.currentTarget.style.color = 'var(--text-muted)'; }}
@@ -340,7 +360,7 @@ export default function ProfileSettings({ onClose }) {
 
               {/* Banner / Cover */}
               <div>
-                <FieldLabel>Ảnh bìa (Banner)</FieldLabel>
+                <FieldLabel>{t('settings.profile.banner')}</FieldLabel>
                 <div style={{ position: 'relative' }}>
                   <div
                     onClick={() => !bannerUploading && bannerRef.current?.click()}
@@ -373,18 +393,18 @@ export default function ProfileSettings({ onClose }) {
                           animation: 'spin 0.8s linear infinite',
                         }} />
                         <span style={{ color: '#fff', fontSize: 12, fontWeight: 600, textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
-                          Đang upload...
+                          {t('settings.profile.uploading')}
                         </span>
                       </div>
                     ) : !banner ? (
                       <span style={{ color: '#fff', fontWeight: 700, fontSize: 14, textShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>
-                        + Thêm ảnh bìa
+                        {t('settings.profile.add_banner')}
                       </span>
                     ) : null}
                   </div>
                   {!banner && !bannerUploading && (
                     <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Màu bìa:</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('settings.profile.banner_color')}</span>
                       <input
                         type="color"
                         value={bannerColor}
@@ -409,7 +429,7 @@ export default function ProfileSettings({ onClose }) {
                         fontSize: 12,
                       }}
                     >
-                      Xóa
+                      {t('common.delete')}
                     </button>
                   )}
                 </div>
@@ -503,7 +523,7 @@ export default function ProfileSettings({ onClose }) {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 17, color: usernameColor, marginBottom: 2 }}>
-                    {displayName || 'Tên hiển thị'}
+                    {displayName || t('settings.profile.preview_name')}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
                     {user?.email || user?.username}
@@ -526,11 +546,11 @@ export default function ProfileSettings({ onClose }) {
                     onMouseEnter={(e) => { if (!avatarUploading) e.currentTarget.style.background = 'var(--accent-hover)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
                   >
-                    {avatarUploading ? 'Đang upload...' : 'Đổi ảnh đại diện'}
+                    {avatarUploading ? t('settings.profile.uploading') : t('settings.profile.change_avatar')}
                   </button>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                    JPG, PNG, WebP — tối đa 5MB<br />
-                    <span style={{ color: '#eb459e', fontWeight: 600 }}>GIF động</span> — tối đa 8MB
+                    {t('settings.profile.avatar_hint')}<br />
+                    <span style={{ color: '#eb459e', fontWeight: 600 }}>{t('settings.profile.gif_hint')}</span>
                   </div>
                 </div>
                 <input ref={avatarRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif" onChange={handleAvatarChange} style={{ display: 'none' }} />
@@ -538,7 +558,7 @@ export default function ProfileSettings({ onClose }) {
 
               {/* Display Name */}
               <div>
-                <FieldLabel>Tên hiển thị</FieldLabel>
+                <FieldLabel>{t('settings.profile.display_name')}</FieldLabel>
                 <TextInput
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
@@ -548,7 +568,7 @@ export default function ProfileSettings({ onClose }) {
 
               {/* Username color */}
               <div>
-                <FieldLabel>Màu tên người dùng</FieldLabel>
+                <FieldLabel>{t('settings.profile.username_color')}</FieldLabel>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <input
                     type="color"
@@ -557,19 +577,19 @@ export default function ProfileSettings({ onClose }) {
                     style={{ width: 36, height: 36, border: 'none', borderRadius: '50%', cursor: 'pointer', background: 'none', padding: 0 }}
                   />
                   <span style={{ color: usernameColor, fontWeight: 700, fontSize: 16 }}>
-                    {displayName || 'Preview Tên'}
+                    {displayName || t('settings.profile.preview_name')}
                   </span>
                 </div>
               </div>
 
               {/* Bio */}
               <div>
-                <FieldLabel>Giới thiệu bản thân</FieldLabel>
+                <FieldLabel>{t('settings.profile.bio')}</FieldLabel>
                 <textarea
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   rows={3}
-                  placeholder="Kể về bản thân bạn... (emoji, sở thích, ...)"
+                  placeholder={t('settings.profile.bio_placeholder')}
                   style={{
                     width: '100%',
                     boxSizing: 'border-box',
@@ -598,7 +618,7 @@ export default function ProfileSettings({ onClose }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               {/* Theme presets */}
               <div>
-                <FieldLabel>Chủ đề giao diện</FieldLabel>
+                <FieldLabel>{t('settings.appearance.theme_title')}</FieldLabel>
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(2, 1fr)',
@@ -650,11 +670,11 @@ export default function ProfileSettings({ onClose }) {
                           </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: cols['--text-primary'] }}>
-                            {THEME_LABELS[name]?.label}
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {t(THEME_LABELS[name]?.label)}
                           </span>
                           <span style={{ fontSize: 11, color: cols['--text-muted'] }}>
-                            {THEME_LABELS[name]?.desc}
+                            {t(THEME_LABELS[name]?.desc)}
                           </span>
                         </div>
                         {isActive && (
@@ -682,7 +702,7 @@ export default function ProfileSettings({ onClose }) {
 
               {/* Custom colors */}
               <div>
-                <FieldLabel>Tùy chỉnh màu sắc</FieldLabel>
+                <FieldLabel>{t('settings.appearance.custom_colors')}</FieldLabel>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {Object.entries(COLOR_LABELS).map(([key, label]) => (
                     <div
@@ -696,7 +716,7 @@ export default function ProfileSettings({ onClose }) {
                         padding: '10px 12px',
                       }}
                     >
-                      <span style={{ fontSize: 13, color: 'var(--text-secondary)', flex: 1 }}>{label}</span>
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)', flex: 1 }}>{t(label)}</span>
                       <input
                         type="color"
                         value={colors[key] || '#000000'}
@@ -741,7 +761,7 @@ export default function ProfileSettings({ onClose }) {
                   e.currentTarget.style.color = 'var(--text-secondary)';
                 }}
               >
-                ↺ Đặt lại về Dark (mặc định)
+                ↺ {t('settings.appearance.reset_dark')}
               </button>
             </div>
           )}
@@ -751,7 +771,7 @@ export default function ProfileSettings({ onClose }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               {/* Status selector */}
               <div>
-                <FieldLabel>Trạng thái hoạt động</FieldLabel>
+                <FieldLabel>{t('settings.status.active_status')}</FieldLabel>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                   {STATUSES.map((s) => (
                     <button
@@ -784,7 +804,7 @@ export default function ProfileSettings({ onClose }) {
                           fontWeight: 600,
                           color: status === s.key ? s.color : 'var(--text-secondary)',
                         }}>
-                          {s.label}
+                          {t(`settings.status.${s.key}`)}
                         </div>
                       </div>
                       {status === s.key && (
@@ -797,17 +817,17 @@ export default function ProfileSettings({ onClose }) {
 
               {/* Custom status text */}
               <div>
-                <FieldLabel>Trạng thái tùy chỉnh</FieldLabel>
+                <FieldLabel>{t('settings.status.custom_status')}</FieldLabel>
                 <TextInput
                   value={statusText}
                   onChange={(e) => setStatusText(e.target.value)}
-                  placeholder="ví dụ: 🎮 Đang chơi game · 📚 Đang học"
+                  placeholder={t('settings.status.status_placeholder')}
                 />
               </div>
 
               {/* Live preview */}
               <div>
-                <FieldLabel>Xem trước</FieldLabel>
+                <FieldLabel>{t('settings.status.preview')}</FieldLabel>
                 <div style={{
                   background: 'var(--bg-primary)',
                   borderRadius: 10,
@@ -853,10 +873,10 @@ export default function ProfileSettings({ onClose }) {
                   </div>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: usernameColor }}>
-                      {displayName || user?.displayName || 'Tên hiển thị'}
+                      {displayName || user?.displayName || t('settings.profile.preview_name')}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                      {statusText || currentStatusInfo.label}
+                      {statusText || t(`settings.status.${status}`)}
                     </div>
                   </div>
                 </div>
@@ -869,10 +889,10 @@ export default function ProfileSettings({ onClose }) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: '8px 0' }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-                  Mã QR của tôi
+                  {t('settings.qr.title')}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  Chia sẻ mã này để người khác tìm thấy hồ sơ của bạn
+                  {t('settings.qr.subtitle')}
                 </div>
               </div>
 
@@ -905,18 +925,18 @@ export default function ProfileSettings({ onClose }) {
                   />
                 ) : (
                   <div style={{ width: 220, height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
-                    Đang tải...
+                    {t('settings.myqr.loading')}
                   </div>
                 )}
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a2e', textAlign: 'center' }}>
-                  {user?.displayName || 'Tên của bạn'}
+                  {user?.displayName || t('settings.profile.preview_name')}
                 </div>
               </div>
 
               {/* Profile link row */}
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                  Link hồ sơ
+                  {t('settings.qr.link_label')}
                 </div>
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 8,
@@ -932,7 +952,7 @@ export default function ProfileSettings({ onClose }) {
                   </span>
                   <button
                     onClick={handleCopyLink}
-                    title="Sao chép link"
+                    title={t('settings.qr.copy')}
                     style={{
                       background: copiedLink ? 'rgba(59,165,92,0.15)' : 'var(--bg-hover)',
                       border: 'none', borderRadius: 7, cursor: 'pointer',
@@ -943,7 +963,7 @@ export default function ProfileSettings({ onClose }) {
                     }}
                   >
                     {copiedLink ? <Check size={13} /> : <Copy size={13} />}
-                    {copiedLink ? 'Đã sao chép' : 'Sao chép'}
+                    {copiedLink ? t('settings.qr.copied') : t('settings.qr.copy')}
                   </button>
                 </div>
               </div>
@@ -961,8 +981,62 @@ export default function ProfileSettings({ onClose }) {
                 onMouseEnter={e => { if (myId) e.currentTarget.style.background = 'var(--accent-hover)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent)'; }}
               >
-                Xem hồ sơ của tôi
+                {t('settings.qr.view_profile')}
               </button>
+            </div>
+          )}
+
+          {/* ── LANGUAGE TAB ── */}
+          {tab === 'language' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div>
+                <FieldLabel>{t('settings.language.title')}</FieldLabel>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <button
+                    onClick={() => changeLanguage('vi')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      background: language === 'vi' ? 'var(--bg-hover)' : 'var(--bg-primary)',
+                      border: language === 'vi' ? '2px solid var(--accent)' : '2px solid var(--border)',
+                      borderRadius: 10, padding: '14px 18px', cursor: 'pointer', transition: 'all 0.12s',
+                      textAlign: 'left', outline: 'none'
+                    }}
+                  >
+                    <img 
+                      src="https://flagcdn.com/w40/vn.png" 
+                      alt="VN" 
+                      style={{ width: 30, height: 22, borderRadius: 4, objectFit: 'cover', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }} 
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, color: language === 'vi' ? 'var(--accent)' : 'var(--text-primary)', fontSize: 15 }}>Tiếng Việt</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('settings.language.default')}</div>
+                    </div>
+                    {language === 'vi' && <span style={{ color: 'var(--accent)', fontWeight: 800 }}>✓</span>}
+                  </button>
+
+                  <button
+                    onClick={() => changeLanguage('en')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      background: language === 'en' ? 'var(--bg-hover)' : 'var(--bg-primary)',
+                      border: language === 'en' ? '2px solid var(--accent)' : '2px solid var(--border)',
+                      borderRadius: 10, padding: '14px 18px', cursor: 'pointer', transition: 'all 0.12s',
+                      textAlign: 'left', outline: 'none'
+                    }}
+                  >
+                    <img 
+                      src="https://flagcdn.com/w40/us.png" 
+                      alt="US" 
+                      style={{ width: 30, height: 22, borderRadius: 4, objectFit: 'cover', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }} 
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, color: language === 'en' ? 'var(--accent)' : 'var(--text-primary)', fontSize: 15 }}>English</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('settings.language.international')}</div>
+                    </div>
+                    {language === 'en' && <span style={{ color: 'var(--accent)', fontWeight: 800 }}>✓</span>}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -980,12 +1054,12 @@ export default function ProfileSettings({ onClose }) {
         }}>
           {saveMsg === 'saved' && (
             <span style={{ fontSize: 13, color: '#3ba55c', fontWeight: 600 }}>
-              ✓ Đã lưu thay đổi
+              ✓ {t('settings.profile.save_success')}
             </span>
           )}
           {saveMsg === 'error' && (
             <span style={{ fontSize: 13, color: '#ed4245', fontWeight: 600 }}>
-              ⚠️ Lưu thất bại
+              ⚠️ {t('settings.profile.save_error')}
             </span>
           )}
           <button
@@ -1004,7 +1078,7 @@ export default function ProfileSettings({ onClose }) {
             onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
           >
-            Hủy
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleSave}
@@ -1025,7 +1099,7 @@ export default function ProfileSettings({ onClose }) {
             onMouseEnter={(e) => { if (!saving) e.currentTarget.style.background = 'var(--accent-hover)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
           >
-            {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
+            {saving ? t('settings.profile.saving') : t('common.save')}
           </button>
         </div>
       </div>

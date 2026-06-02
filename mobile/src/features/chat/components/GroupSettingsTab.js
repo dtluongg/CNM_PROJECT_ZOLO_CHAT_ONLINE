@@ -6,16 +6,19 @@ import {
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import conversationApi from '../api/conversationApi';
-
-const GROUP_TYPES = [
-  { value: 'general', label: '🏠 Chung',    color: '#5865f2' },
-  { value: 'study',   label: '📚 Học tập',  color: '#57f287' },
-  { value: 'gaming',  label: '🎮 Gaming',   color: '#faa61a' },
-  { value: 'project', label: '💼 Dự án',    color: '#00b4d8' },
-  { value: 'other',   label: '✨ Khác',     color: '#eb459e' },
-];
+import { useLanguage } from '../../../context/LanguageContext';
 
 export default function GroupSettingsTab({ conversation, THEME, onUpdated, compact }) {
+  const { t } = useLanguage();
+  
+  const GROUP_TYPES = [
+    { value: 'general', label: `🏠 ${t('chat.group_types.general')}`,    color: '#5865f2' },
+    { value: 'study',   label: `📚 ${t('chat.group_types.study')}`,  color: '#57f287' },
+    { value: 'gaming',  label: `🎮 ${t('chat.group_types.gaming')}`,   color: '#faa61a' },
+    { value: 'project', label: `💼 ${t('chat.group_types.project')}`,    color: '#00b4d8' },
+    { value: 'other',   label: `✨ ${t('chat.group_types.other')}`,     color: '#eb459e' },
+  ];
+
   const [name,          setName]          = useState(conversation.name || '');
   const [description,   setDescription]   = useState(conversation.description || '');
   const [groupType,     setGroupType]     = useState(conversation.groupType || 'general');
@@ -26,7 +29,7 @@ export default function GroupSettingsTab({ conversation, THEME, onUpdated, compa
   const pickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      return Alert.alert('Cần quyền', 'Hãy cho phép truy cập thư viện ảnh trong cài đặt.');
+      return Alert.alert(t('common.error'), t('common.camera_permission_desc'));
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -43,16 +46,16 @@ export default function GroupSettingsTab({ conversation, THEME, onUpdated, compa
   };
 
   const handleSave = async () => {
-    if (!name.trim()) return Alert.alert('Lỗi', 'Tên nhóm không được để trống.');
+    if (!name.trim()) return Alert.alert(t('common.error'), t('auth.fill_all_fields'));
     setSaving(true);
     try {
       const payload = { name: name.trim(), description: description.trim(), groupType };
       if (avatarBase64) payload.avatar = avatarBase64;
       await conversationApi.updateConversation(conversation._id || conversation.id, payload);
       onUpdated?.({ name: name.trim(), description: description.trim(), groupType, avatar: avatarUri });
-      Alert.alert('Thành công', 'Đã cập nhật thông tin nhóm.');
+      Alert.alert(t('common.success'), t('info_panel.settings.update_success'));
     } catch (e) {
-      Alert.alert('Lỗi', e.response?.data?.message || 'Không thể cập nhật. Thử lại sau.');
+      Alert.alert(t('common.error'), e.response?.data?.message || t('info_panel.settings.update_error'));
     } finally {
       setSaving(false);
     }
@@ -75,26 +78,26 @@ export default function GroupSettingsTab({ conversation, THEME, onUpdated, compa
             <Feather name="camera" size={13} color="#fff" />
           </View>
         </TouchableOpacity>
-        <Text style={{ color: THEME.textMuted, fontSize: 11, marginTop: 8 }}>Nhấn để đổi ảnh</Text>
+        <Text style={{ color: THEME.textMuted, fontSize: 11, marginTop: 8 }}>{t('create_group.avatar_title')}</Text>
       </View>
 
       {/* Name */}
-      <FieldLabel text="Tên nhóm" THEME={THEME} />
+      <FieldLabel text={t('chat.group_name')} THEME={THEME} />
       <TextInput
         value={name}
         onChangeText={setName}
-        placeholder="Nhập tên nhóm..."
+        placeholder={t('chat.group_name_placeholder')}
         placeholderTextColor={THEME.textMuted}
         style={inputSt(THEME)}
         maxLength={60}
       />
 
       {/* Description */}
-      <FieldLabel text="Mô tả (tuỳ chọn)" THEME={THEME} />
+      <FieldLabel text={t('chat.description')} THEME={THEME} />
       <TextInput
         value={description}
         onChangeText={setDescription}
-        placeholder="Mô tả ngắn về nhóm..."
+        placeholder={t('chat.description_placeholder')}
         placeholderTextColor={THEME.textMuted}
         multiline
         numberOfLines={3}
@@ -103,23 +106,23 @@ export default function GroupSettingsTab({ conversation, THEME, onUpdated, compa
       />
 
       {/* Group type */}
-      <FieldLabel text="Loại nhóm" THEME={THEME} />
+      <FieldLabel text={t('chat.group_type')} THEME={THEME} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {GROUP_TYPES.map(t => {
-          const active = groupType === t.value;
+        {GROUP_TYPES.map(type => {
+          const active = groupType === type.value;
           return (
             <TouchableOpacity
-              key={t.value}
-              onPress={() => setGroupType(t.value)}
+              key={type.value}
+              onPress={() => setGroupType(type.value)}
               style={{
                 paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-                backgroundColor: active ? t.color + '28' : THEME.bgHover,
+                backgroundColor: active ? type.color + '28' : THEME.bgHover,
                 borderWidth: 1.5,
-                borderColor: active ? t.color : 'transparent',
+                borderColor: active ? type.color : 'transparent',
               }}
             >
-              <Text style={{ color: active ? t.color : THEME.textMuted, fontSize: 13, fontWeight: active ? '700' : '500' }}>
-                {t.label}
+              <Text style={{ color: active ? type.color : THEME.textMuted, fontSize: 13, fontWeight: active ? '700' : '500' }}>
+                {type.label}
               </Text>
             </TouchableOpacity>
           );
@@ -134,7 +137,7 @@ export default function GroupSettingsTab({ conversation, THEME, onUpdated, compa
       >
         {saving
           ? <ActivityIndicator color="#fff" />
-          : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Lưu thay đổi</Text>
+          : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{t('common.save')}</Text>
         }
       </TouchableOpacity>
     </ScrollView>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../config/supabase';
 import authApi from './api/authApi';
+import { useLanguage } from '../../context/LanguageContext';
 
 const CALLBACK_URL = `${window.location.origin}/auth/callback`;
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
@@ -28,42 +29,8 @@ const FacebookIcon = () => (
   </svg>
 );
 
-const OtpSection = ({ label, target, type, onSend, cooldown, otpSent, otpValue, onOtpChange, loading }) => (
-  <div className="rounded-lg border border-gray-200 p-4 space-y-3">
-    <p className="font-semibold text-gray-700 text-sm">{label}</p>
-    <div className="flex gap-2">
-      <input
-        type={type === 'email' ? 'email' : 'tel'}
-        value={target}
-        disabled
-        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-sm text-gray-500"
-      />
-      <button
-        type="button"
-        onClick={onSend}
-        disabled={loading || cooldown > 0 || !target}
-        className="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap"
-      >
-        {loading ? 'Đang gửi...' : cooldown > 0 ? `Gửi lại (${cooldown}s)` : 'Gửi OTP'}
-      </button>
-    </div>
-    {otpSent && (
-      <input
-        type="text"
-        value={otpValue}
-        onChange={(e) => onOtpChange(e.target.value)}
-        placeholder="Nhập mã OTP 6 chữ số"
-        maxLength={6}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-      />
-    )}
-    {otpSent && !otpValue && (
-      <p className="text-xs text-amber-600">Vui lòng nhập mã OTP đã gửi</p>
-    )}
-  </div>
-);
-
 const Signup = () => {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     username: '',
@@ -105,11 +72,11 @@ const Signup = () => {
         },
       });
       if (oauthError) {
-        setError(oauthError.message || `Đăng ký ${provider} thất bại`);
+        setError(oauthError.message || t('auth.oauth_failed', { provider }));
         setOauthLoading(null);
       }
     } catch {
-      setError(`Không thể kết nối ${provider}. Vui lòng thử lại.`);
+      setError(t('auth.conn_failed', { provider }));
       setOauthLoading(null);
     }
   };
@@ -131,15 +98,15 @@ const Signup = () => {
 
   const handleSendEmailOtp = async () => {
     setError('');
-    if (!formData.email) { setError('Vui lòng nhập email trước'); return; }
+    if (!formData.email) { setError(t('auth.enter_email_first')); return; }
     setEmailOtpLoading(true);
     try {
       const res = await authApi.sendEmailOtp({ email: formData.email });
       setEmailOtpSent(true);
-      setInfoMessage(res.data.message || 'OTP đã gửi về email');
+      setInfoMessage(res.data.message || t('auth.otp_sent_email'));
       startCooldown(setEmailCooldown);
     } catch (err) {
-      setError(err.response?.data?.message || 'Không thể gửi OTP email');
+      setError(err.response?.data?.message || t('auth.send_otp_email_failed'));
     } finally {
       setEmailOtpLoading(false);
     }
@@ -147,17 +114,16 @@ const Signup = () => {
 
   const handleSendPhoneOtp = async () => {
     setError('');
-    if (!formData.phone) { setError('Vui lòng nhập số điện thoại trước'); return; }
-    // Chỉ giữ chữ số và dấu + trước khi gửi lên backend
+    if (!formData.phone) { setError(t('auth.enter_phone_first')); return; }
     const cleanPhone = formData.phone.replace(/[^\d+]/g, '');
     setPhoneOtpLoading(true);
     try {
       const res = await authApi.sendPhoneOtp({ phone: cleanPhone });
       setPhoneOtpSent(true);
-      setInfoMessage(res.data.message || 'OTP đã gửi về điện thoại');
+      setInfoMessage(res.data.message || t('auth.otp_sent_phone'));
       startCooldown(setPhoneCooldown);
     } catch (err) {
-      setError(err.response?.data?.message || 'Không thể gửi OTP điện thoại');
+      setError(err.response?.data?.message || t('auth.send_otp_phone_failed'));
     } finally {
       setPhoneOtpLoading(false);
     }
@@ -168,17 +134,17 @@ const Signup = () => {
     setError('');
 
     if (!formData.password || !confirmPassword) {
-      setError('Vui lòng nhập mật khẩu và xác nhận mật khẩu.');
+      setError(t('auth.passwords_mismatch'));
       return;
     }
 
     if (!isPasswordValid) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự, bao gồm chữ thường và chữ in hoa.');
+      setError(t('auth.signup_policy_error'));
       return;
     }
 
     if (formData.password !== confirmPassword) {
-      setError('Mật khẩu và xác nhận mật khẩu không khớp.');
+      setError(t('auth.passwords_mismatch'));
       return;
     }
 
@@ -186,7 +152,7 @@ const Signup = () => {
     const hasPhoneOtp = phoneOtpSent && phoneOtp.trim().length > 0;
 
     if (!hasEmailOtp && !hasPhoneOtp) {
-      setError('Cần xác thực ít nhất một phương thức: gửi OTP qua email hoặc số điện thoại');
+      setError(t('auth.verify_at_least_one'));
       return;
     }
 
@@ -198,10 +164,10 @@ const Signup = () => {
 
       const response = await authApi.signup(payload);
       if (response.status === 201) {
-        navigate('/signin', { state: { message: 'Đăng ký thành công! Vui lòng đăng nhập.' } });
+        navigate('/signin', { state: { message: t('auth.signup_success') } });
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+      setError(err.response?.data?.message || t('auth.signup_failed_try_again'));
     } finally {
       setLoading(false);
     }
@@ -212,34 +178,32 @@ const Signup = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-start md:items-center justify-center px-4 py-8 md:py-10 overflow-y-auto">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6 sm:p-8">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">Đăng Ký</h1>
+        <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">{t('auth.signup_title')}</h1>
 
-        {/* OAuth buttons */}
         <div className="space-y-3 mb-5">
           <button type="button" onClick={() => handleOAuth('google')} disabled={!!oauthLoading}
             className="flex items-center justify-center gap-3 w-full border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-4 rounded-lg transition disabled:opacity-60">
             {oauthLoading === 'google'
               ? <span className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
               : <GoogleIcon />}
-            {oauthLoading === 'google' ? 'Đang chuyển hướng...' : 'Đăng ký với Google'}
+            {oauthLoading === 'google' ? t('auth.redirecting') : t('auth.google')}
           </button>
           <button type="button" onClick={() => handleOAuth('facebook')} disabled={!!oauthLoading}
             className="flex items-center justify-center gap-3 w-full border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-4 rounded-lg transition disabled:opacity-60">
             {oauthLoading === 'facebook'
               ? <span className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
               : <FacebookIcon />}
-            {oauthLoading === 'facebook' ? 'Đang chuyển hướng...' : 'Đăng ký với Facebook'}
+            {oauthLoading === 'facebook' ? t('auth.redirecting') : t('auth.facebook')}
           </button>
         </div>
 
-        {/* Divider */}
         <div className="flex items-center gap-3 mb-5">
           <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-xs text-gray-400">hoặc đăng ký bằng tài khoản</span>
+          <span className="text-xs text-gray-400">{t('auth.or_signup_with')}</span>
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
-        <p className="text-center text-sm text-gray-500 mb-4">Xác thực qua email hoặc số điện thoại (1 trong 2)</p>
+        <p className="text-center text-sm text-gray-500 mb-4">{t('auth.otp_verify_method')}</p>
 
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm">
@@ -253,87 +217,83 @@ const Signup = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Thông tin cơ bản */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-gray-700 font-semibold mb-1 text-sm">First name</label>
+              <label className="block text-gray-700 font-semibold mb-1 text-sm">{t('auth.first_name')}</label>
               <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="VD: John" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder={t('auth.first_name_placeholder')} />
             </div>
             <div>
-              <label className="block text-gray-700 font-semibold mb-1 text-sm">Last name</label>
+              <label className="block text-gray-700 font-semibold mb-1 text-sm">{t('auth.last_name')}</label>
               <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="VD: Doe" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder={t('auth.last_name_placeholder')} />
             </div>
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-1 text-sm">Username</label>
+            <label className="block text-gray-700 font-semibold mb-1 text-sm">{t('auth.username')}</label>
             <input type="text" name="username" value={formData.username} onChange={handleChange} required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Tên đăng nhập" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder={t('auth.username_placeholder')} />
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-1 text-sm">Mật khẩu</label>
+            <label className="block text-gray-700 font-semibold mb-1 text-sm">{t('auth.password')}</label>
             <input type="password" name="password" value={formData.password} onChange={handleChange} required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Tối thiểu 8 ký tự" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder={t('auth.password_placeholder')} />
             <p className={`mt-1 text-xs ${formData.password && !isPasswordValid ? 'text-red-500' : 'text-gray-500'}`}>
-              Mật khẩu tối thiểu 8 ký tự, gồm ít nhất 1 chữ thường, 1 chữ in hoa và 1 số.
+              {t('auth.password_hint')}
             </p>
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-1 text-sm">Xác nhận mật khẩu</label>
+            <label className="block text-gray-700 font-semibold mb-1 text-sm">{t('auth.confirm_password')}</label>
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              placeholder="Nhập lại mật khẩu"
+              placeholder={t('auth.confirm_password_placeholder')}
             />
           </div>
 
-          {/* OTP Section */}
           <div className="space-y-3">
-            <p className="text-sm font-semibold text-gray-700">Xác thực danh tính <span className="text-red-500">*</span></p>
-            <p className="text-xs text-gray-500">Cần xác thực ít nhất 1 trong 2 phương thức bên dưới</p>
+            <p className="text-sm font-semibold text-gray-700">{t('auth.identity_verify')} <span className="text-red-500">*</span></p>
+            <p className="text-xs text-gray-500">{t('auth.at_least_one_otp')}</p>
 
-            {/* Email OTP */}
             <div className="rounded-lg border border-gray-200 p-4 space-y-3">
-              <p className="font-semibold text-gray-700 text-sm">Xác thực qua Email</p>
+              <p className="font-semibold text-gray-700 text-sm">{t('auth.verify_email')}</p>
               <div className="flex gap-2">
                 <input type="email" name="email" value={formData.email} onChange={handleChange}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="your@email.com" />
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder={t('auth.email_placeholder')} />
                 <button type="button" onClick={handleSendEmailOtp}
                   disabled={emailOtpLoading || emailCooldown > 0 || !formData.email}
                   className="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap">
-                  {emailOtpLoading ? 'Đang gửi...' : emailCooldown > 0 ? `Gửi lại (${emailCooldown}s)` : 'Gửi OTP'}
+                  {emailOtpLoading ? t('auth.sending') : emailCooldown > 0 ? t('auth.resend_otp', { count: emailCooldown }) : t('auth.send_otp')}
                 </button>
               </div>
               {emailOtpSent && (
                 <input type="text" value={emailOtp} onChange={(e) => setEmailOtp(e.target.value)}
-                  placeholder="Nhập mã OTP 6 chữ số" maxLength={6}
+                  placeholder={t('auth.otp_placeholder')} maxLength={6}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
               )}
             </div>
 
-            {/* Phone OTP */}
             <div className="rounded-lg border border-gray-200 p-4 space-y-3">
-              <p className="font-semibold text-gray-700 text-sm">Xác thực qua Số điện thoại</p>
+              <p className="font-semibold text-gray-700 text-sm">{t('auth.verify_phone')}</p>
               <div className="flex gap-2">
                 <input type="tel" name="phone" value={formData.phone} onChange={handleChange}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  placeholder="0912345678 (10 chữ số)" />
+                  placeholder={t('auth.phone_placeholder')} />
                 <button type="button" onClick={handleSendPhoneOtp}
                   disabled={phoneOtpLoading || phoneCooldown > 0 || !formData.phone}
                   className="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap">
-                  {phoneOtpLoading ? 'Đang gửi...' : phoneCooldown > 0 ? `Gửi lại (${phoneCooldown}s)` : 'Gửi OTP'}
+                  {phoneOtpLoading ? t('auth.sending') : phoneCooldown > 0 ? t('auth.resend_otp', { count: phoneCooldown }) : t('auth.send_otp')}
                 </button>
               </div>
               {phoneOtpSent && (
                 <input type="text" value={phoneOtp} onChange={(e) => setPhoneOtp(e.target.value)}
-                  placeholder="Nhập mã OTP 6 chữ số" maxLength={6}
+                  placeholder={t('auth.otp_placeholder')} maxLength={6}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
               )}
             </div>
@@ -341,13 +301,13 @@ const Signup = () => {
 
           <button type="submit" disabled={loading || !atLeastOneOtpReady || !isPasswordValid}
             className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200 disabled:opacity-50">
-            {loading ? 'Đang tạo tài khoản...' : 'Đăng Ký'}
+            {loading ? t('auth.creating_account') : t('auth.signup_button')}
           </button>
         </form>
 
         <p className="text-center text-gray-600 mt-4 text-sm">
-          Đã có tài khoản?{' '}
-          <Link to="/signin" className="text-blue-500 hover:text-blue-600 font-semibold">Đăng nhập</Link>
+          {t('auth.already_have_account')}{' '}
+          <Link to="/signin" className="text-blue-500 hover:text-blue-600 font-semibold">{t('auth.signin_link')}</Link>
         </p>
       </div>
     </div>

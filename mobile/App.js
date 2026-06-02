@@ -115,9 +115,8 @@ const { ThemeProvider } = require('./src/context/ThemeContext');
 const { CallProvider } = require('./src/features/call/CallContext');
 const { GroupCallProvider } = require('./src/features/call/GroupCallContext');
 const { VoiceRoomProvider } = require('./src/features/voice/VoiceRoomContext');
-
-// 1. THÊM IMPORT NotificationProvider Ở ĐÂY
 const { NotificationProvider } = require('./src/context/NotificationContext');
+const { LanguageProvider } = require('./src/context/LanguageContext');
 
 const IncomingCallScreen =
   require('./src/features/call/screens/IncomingCallScreen').default;
@@ -140,25 +139,26 @@ function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          {/* 2. BỌC NotificationProvider BÊN TRONG AuthProvider */}
-          <NotificationProvider>
-            <ThemeProvider>
-              <PresenceProvider>
-                <CallProvider>
-                  <GroupCallProvider>
-                    <VoiceRoomProvider>
-                      <AppNavigator />
-                      <IncomingCallScreen />
-                      <OutgoingCallScreen />
-                      <ActiveCallScreen />
-                      <GroupCallScreen />
-                      <IncomingGroupCallScreen />
-                    </VoiceRoomProvider>
-                  </GroupCallProvider>
-                </CallProvider>
-              </PresenceProvider>
-            </ThemeProvider>
-          </NotificationProvider>
+          <LanguageProvider>
+            <NotificationProvider>
+              <ThemeProvider>
+                <PresenceProvider>
+                  <CallProvider>
+                    <GroupCallProvider>
+                      <VoiceRoomProvider>
+                        <AppNavigator />
+                        <IncomingCallScreen />
+                        <OutgoingCallScreen />
+                        <ActiveCallScreen />
+                        <GroupCallScreen />
+                        <IncomingGroupCallScreen />
+                      </VoiceRoomProvider>
+                    </GroupCallProvider>
+                  </CallProvider>
+                </PresenceProvider>
+              </ThemeProvider>
+            </NotificationProvider>
+          </LanguageProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

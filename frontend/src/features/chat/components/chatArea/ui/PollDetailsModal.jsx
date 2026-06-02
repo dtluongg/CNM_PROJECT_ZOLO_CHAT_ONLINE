@@ -1,8 +1,10 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { X, Settings } from 'lucide-react';
+import { useLanguage } from '../../../../../context/LanguageContext';
 
 export default function PollDetailsModal({ isOpen, onClose, topic, options }) {
+  const { t } = useLanguage();
   if (!isOpen) return null;
 
   const modalContent = (
@@ -30,7 +32,7 @@ export default function PollDetailsModal({ isOpen, onClose, topic, options }) {
           gap: '12px'
         }}>
           <h2 style={{ flex: 1, fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-            Chi tiết bình chọn
+            {t('chat.poll_card.details_title')}
           </h2>
 
           <button 
@@ -59,7 +61,7 @@ export default function PollDetailsModal({ isOpen, onClose, topic, options }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   {voters.map((voter, idx) => {
                     const isObject = typeof voter === 'object' && voter !== null;
-                    const displayName = isObject ? (voter.displayName || 'Người dùng Zolo') : 'Đang tải...';
+                    const displayName = isObject ? (voter.displayName || t('chat.poll_card.default_user')) : t('chat.poll_card.loading');
                     const avatar = isObject ? voter.avatar : null;
 
                     return (

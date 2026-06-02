@@ -17,11 +17,15 @@ const ALLOWED_ORIGINS = [
   'http://nhom3zolochat.dotienluong.id.vn',  // HTTP fallback trước khi có SSL
   'http://localhost:5173',
   'http://localhost:5174',
+  'http://localhost:5175',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
   'https://localhost:5173',
   'http://localhost:8081',
   'http://172.27.130.18:5173',
   'http://172.27.130.18:8081',
   'http://172.27.130.18:2026',
+  'http://172.20.10.3:5173',
 ];
 if (process.env.FRONTEND_URL) ALLOWED_ORIGINS.push(process.env.FRONTEND_URL);
 
@@ -72,7 +76,6 @@ app.use('/backend/api/reactions',     reactionRouter);
 app.use('/backend/api/notifications', notificationRouter);
 app.use('/backend/api/stories',       storyRouter);
 
-app.use('/backend/api/conversations/:id', groupRoleRouter);
 app.use('/backend/api/voice-rooms',   voiceRoomRouter);
 app.use('/backend/api/group-calls',   groupCallRouter);
 
@@ -82,9 +85,24 @@ initSocket(server);
 initReminderCron();
 
 
+// ── DEBUG ROUTES ──
+app.get('/backend/api/debug/ping', (req, res) => {
+    res.json({ status: 'ok', message: 'Backend is reachable', time: new Date() });
+});
+
 // ── ERROR HANDLER ──
 const errorHandler = require('./src/middlewares/errorHandler');
 app.use(errorHandler);
+
+// ── 404 CATCH-ALL (MUST BE LAST) ──
+app.use((req, res) => {
+    console.warn(`[404 DEBUG] ${req.method} ${req.originalUrl} - Not Found`);
+    res.status(404).json({ 
+        message: 'API Route not found', 
+        path: req.originalUrl,
+        method: req.method 
+    });
+});
 
 // ── ROUTE TEST ──
 app.get('/', (req, res) => {
@@ -94,6 +112,6 @@ app.get('/', (req, res) => {
 // ── START SERVER ──
 const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
 });

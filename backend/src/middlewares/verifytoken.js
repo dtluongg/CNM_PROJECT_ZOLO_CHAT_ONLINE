@@ -22,7 +22,7 @@ const verifyToken = async (req, res, next) => {
                 || await userModel.findOne({ email: supabaseUser.email });
 
             if (!dbUser) {
-                return res.status(404).json({
+                return res.status(401).json({
                     message: 'User chưa được đồng bộ',
                     code: 'USER_NOT_SYNCED',
                 });
@@ -36,13 +36,7 @@ const verifyToken = async (req, res, next) => {
 
         // Có error từ Supabase nhưng không throw (ví dụ token hết hạn)
         if (error) {
-            // Nếu lỗi là expired, trả về ngay
-            if (error.message?.includes('expired') || error.status === 401) {
-                return res.status(401).json({
-                    message: 'Token Supabase đã hết hạn',
-                    code: 'TOKEN_EXPIRED'
-                });
-            }
+            console.log('Supabase token error, falling back to local JWT:', error.message);
         }
     } catch (supabaseError) {
         // Supabase throw error, tiếp tục thử local JWT

@@ -79,7 +79,7 @@ export function useVoiceRoom() {
       refreshParticipants(room);
     });
 
-    room.on(RoomEvent.LocalTrackPublished, (_pub) => {
+    room.on(RoomEvent.LocalTrackPublished, () => {
       const cam = room.localParticipant.getTrackPublication(Track.Source.Camera);
       setLocalVideoTrack(cam?.videoTrack || cam?.track || null);
       setIsCameraOff(!room.localParticipant.isCameraEnabled);
@@ -87,7 +87,7 @@ export function useVoiceRoom() {
       refreshParticipants(room);
     });
 
-    room.on(RoomEvent.LocalTrackUnpublished, (_pub) => {
+    room.on(RoomEvent.LocalTrackUnpublished, () => {
       const cam = room.localParticipant.getTrackPublication(Track.Source.Camera);
       setLocalVideoTrack(cam?.videoTrack || cam?.track || null);
       setIsCameraOff(!room.localParticipant.isCameraEnabled);

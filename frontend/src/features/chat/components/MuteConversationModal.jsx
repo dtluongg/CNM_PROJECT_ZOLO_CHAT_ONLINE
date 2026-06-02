@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import notificationApi from '../../../features/notifications/api/notificationApi';
 import { calculateMuteUntil } from '../../notifications/utils/notificationHelper';
+import { useLanguage } from '../../../context/LanguageContext';
 import { useNotifications } from "../../../context/NotificationContext";
 const MuteConversationModal = ({ isOpen, onClose, conversationId, onSuccess }) => {
+    const { t } = useLanguage();
     const [muteDuration, setMuteDuration] = useState('15m');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { updateConversationSetting } = useNotifications();
@@ -36,20 +38,20 @@ const MuteConversationModal = ({ isOpen, onClose, conversationId, onSuccess }) =
             <div className="bg-white rounded-lg w-[400px] overflow-hidden shadow-2xl">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900">Tắt thông báo</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">{t('right_sidebar.mute_modal.title')}</h3>
                 </div>
 
                 {/* Body */}
                 <div className="p-6">
                     <p className="text-sm text-gray-600 mb-5">
-                        Bạn sẽ không nhận được thông báo tin nhắn từ hội thoại này.
+                        {t('right_sidebar.mute_modal.desc')}
                     </p>
                     <div className="flex flex-col space-y-4">
                         {[
-                            { value: '15m', label: 'Trong 15 phút' },
-                            { value: '1h', label: 'Trong 1 giờ' },
-                            { value: '8h', label: 'Trong 8 giờ' },
-                            { value: 'forever', label: 'Cho đến khi được mở lại' },
+                            { value: '15m', label: t('right_sidebar.mute_modal.options.15m') },
+                            { value: '1h', label: t('right_sidebar.mute_modal.options.1h') },
+                            { value: '8h', label: t('right_sidebar.mute_modal.options.8h') },
+                            { value: 'forever', label: t('right_sidebar.mute_modal.options.forever') },
                         ].map((option) => (
                             <label key={option.value} className="flex items-center gap-3 cursor-pointer group">
                                 <div className="relative flex items-center justify-center w-5 h-5">
@@ -78,14 +80,14 @@ const MuteConversationModal = ({ isOpen, onClose, conversationId, onSuccess }) =
                         disabled={isSubmitting}
                         className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50"
                     >
-                        Hủy
+                        {t('common.cancel')}
                     </button>
                     <button
                         onClick={handleConfirmMute}
                         disabled={isSubmitting}
                         className="px-5 py-2.5 text-sm font-medium text-white bg-red-500 rounded-md hover:bg-red-600 transition-colors disabled:opacity-50"
                     >
-                        {isSubmitting ? 'Đang xử lý...' : 'Tắt thông báo'}
+                        {isSubmitting ? t('right_sidebar.processing') : t('right_sidebar.mute_modal.submit')}
                     </button>
                 </div>
             </div>

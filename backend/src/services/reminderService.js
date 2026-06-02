@@ -26,7 +26,7 @@ const initReminderCron = () => {
         'payload.isTriggered': { $ne: true },
         'payload.reminderTime': { $lte: lookAhead },
         revoked: false
-      }).populate('senderId', 'displayName');
+      }).populate('senderId', 'displayName avatar');
  
       if (dueReminders.length > 0) {
         console.log(`[ReminderService] Found ${dueReminders.length} due reminders at ${now.toISOString()}`);
@@ -55,18 +55,42 @@ const triggerReminder = async (reminder) => {
       { $set: { 'payload.isTriggered': true } }
     );
 
-    // 2. Tạo tin nhắn hệ thống thông báo
+    // 2. Lấy thông tin conversation để biết loại (DM/Group) và avatar
+    const conversation = await Conversation.findById(conversationId);
+    
+    let payloadData = {
+      event: 'reminder_triggered',
+      originalReminderId: reminder._id,
+      reminderContent: content,
+      triggeredAt: new Date(),
+      convType: conversation?.type || 'dm',
+      convName: conversation?.name || '',
+      convAvatar: conversation?.avatar || null,
+      actorName: reminder.senderId?.displayName || 'Ai đó',
+      actorAvatar: reminder.senderId?.avatar || null
+    };
+
+    // Nếu là chat đơn, tìm người còn lại để lấy avatar đối phương
+    if (conversation?.type === 'dm') {
+      const senderIdStr = (reminder.senderId?._id || reminder.senderId).toString();
+      const otherMember = await ConversationMember.findOne({
+        conversationId,
+        userId: { $ne: senderIdStr }
+      }).populate('userId', 'displayName avatar');
+      
+      if (otherMember?.userId) {
+        payloadData.targetName = otherMember.userId.displayName;
+        payloadData.targetAvatar = otherMember.userId.avatar;
+      }
+    }
+
+    // 3. Tạo tin nhắn hệ thống thông báo
     const systemContent = `Nhắc hẹn: ${content}`;
     const systemMsg = await Message.create({
       conversationId,
       type: 'system',
       content: systemContent,
-      payload: {
-        event: 'reminder_triggered',
-        originalReminderId: reminder._id,
-        reminderContent: content,
-        triggeredAt: new Date()
-      }
+      payload: payloadData
     });
 
     // 3. Cập nhật conversation last message
@@ -115,11 +139,14 @@ const triggerReminder = async (reminder) => {
         senderName: senderName
       });
  
-      // Gửi tín hiệu cập nhật tin nhắn gốc (CỰC KỲ QUAN TRỌNG để Mobile đổi màu thẻ ngay lập tức)
+      // Gửi tín hiệu cập nhật tin nhắn gốc (CỰC KỲ QUAN TRỌNG để FE đổi màu thẻ ngay lập tức)
       io.to(`user:${userIdStr}`).emit('chat:message-edited', {
         conversationId: conversationId.toString(),
         message: {
           ...reminder.toObject(),
+          senderId: reminder.senderId?._id || reminder.senderId,
+          senderName: reminder.senderId?.displayName || 'Unknown',
+          avatar: reminder.senderId?.avatar || null,
           payload: { ...reminder.payload, isTriggered: true }
         }
       });

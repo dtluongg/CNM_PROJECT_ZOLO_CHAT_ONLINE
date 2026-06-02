@@ -9,8 +9,10 @@ import authApi from '../api/authApi';
 import userApi from '../../user/api/userApi';
 import apiClient from '../../../services/apiClient';
 import { THEME } from '../../../theme';
+import { useLanguage } from '../../../context/LanguageContext';
 
 export default function ChangePasswordScreen({ navigation }) {
+  const { t } = useLanguage();
   const { user, logout } = useAuth();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -26,17 +28,17 @@ export default function ChangePasswordScreen({ navigation }) {
     setSuccessMessage('');
 
     if (!isLocalAccount) {
-      setError('Tài khoản OAuth không hỗ trợ đổi mật khẩu trong ứng dụng.');
+      setError(t('password.oauth_error'));
       return;
     }
 
     if (!oldPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
-      setError('Vui lòng điền đầy đủ các trường.');
+      setError(t('auth.fill_all_fields'));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Mật khẩu mới và xác nhận không khớp.');
+      setError(t('auth.password_mismatch') || 'Passwords do not match');
       return;
     }
 
@@ -46,13 +48,13 @@ export default function ChangePasswordScreen({ navigation }) {
         oldPassword,
         newPassword,
       });
-      const msg = res.data?.message || 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.';
+      const msg = res.data?.message || t('password.success_msg');
       setSuccessMessage(msg);
       setOldPassword('');
       setNewPassword('');
       setConfirmPassword('');
 
-      Alert.alert('Thành công', msg, [
+      Alert.alert(t('common.success'), msg, [
         {
           text: 'OK',
           onPress: async () => {
@@ -61,7 +63,7 @@ export default function ChangePasswordScreen({ navigation }) {
         },
       ]);
     } catch (err) {
-      setError(err.response?.data?.message || 'Đổi mật khẩu thất bại. Vui lòng thử lại.');
+      setError(err.response?.data?.message || t('password.error_msg'));
     } finally {
       setLoading(false);
     }
@@ -77,17 +79,17 @@ export default function ChangePasswordScreen({ navigation }) {
         <View style={s.card}>
           <View style={s.headerBlock}>
             <View style={s.pill}>
-              <Text style={s.pillText}>Bảo mật tài khoản</Text>
+              <Text style={s.pillText}>{t('password.security_header')}</Text>
             </View>
-            <Text style={s.title}>Đổi mật khẩu</Text>
+            <Text style={s.title}>{t('password.change_title')}</Text>
             <Text style={s.subtitle}>
-              Cập nhật mật khẩu mới để bảo vệ tài khoản của bạn.
+              {t('password.update_desc')}
             </Text>
           </View>
 
           <View style={s.userBox}>
             <Text style={s.userName} numberOfLines={1}>
-              {user?.displayName || 'Người dùng'}
+              {user?.displayName || t('user.unknown')}
             </Text>
             <Text style={s.userMeta} numberOfLines={1}>
               {user?.email || user?.username || '—'}
@@ -108,38 +110,38 @@ export default function ChangePasswordScreen({ navigation }) {
 
           {!isLocalAccount && (
             <View style={[s.alertBox, s.warnBox]}>
-              <Text style={s.alertText}>Tài khoản đăng nhập bằng Google/Facebook không thể đổi mật khẩu tại đây.</Text>
+              <Text style={s.alertText}>{t('password.oauth_alert')}</Text>
             </View>
           )}
 
           <View style={s.form}>
-            <Text style={s.label}>Mật khẩu hiện tại</Text>
+            <Text style={s.label}>{t('password.current_label')}</Text>
             <TextInput
               value={oldPassword}
               onChangeText={setOldPassword}
-              placeholder="Nhập mật khẩu đang dùng"
+              placeholder={t('password.current_placeholder')}
               placeholderTextColor={THEME.textMuted}
               secureTextEntry
               editable={isLocalAccount && !loading}
               style={s.input}
             />
 
-            <Text style={s.label}>Mật khẩu mới</Text>
+            <Text style={s.label}>{t('password.new_label')}</Text>
             <TextInput
               value={newPassword}
               onChangeText={setNewPassword}
-              placeholder="Mật khẩu mới"
+              placeholder={t('password.new_placeholder')}
               placeholderTextColor={THEME.textMuted}
               secureTextEntry
               editable={isLocalAccount && !loading}
               style={s.input}
             />
 
-            <Text style={s.label}>Xác nhận mật khẩu mới</Text>
+            <Text style={s.label}>{t('password.confirm_label')}</Text>
             <TextInput
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              placeholder="Nhập lại mật khẩu mới"
+              placeholder={t('password.confirm_placeholder')}
               placeholderTextColor={THEME.textMuted}
               secureTextEntry
               editable={isLocalAccount && !loading}
@@ -147,7 +149,7 @@ export default function ChangePasswordScreen({ navigation }) {
             />
 
             <Text style={s.helperText}>
-              Mật khẩu mới nên có ít nhất 8 ký tự và khó đoán.
+              {t('password.min_length_hint')}
             </Text>
 
             <TouchableOpacity
@@ -159,7 +161,7 @@ export default function ChangePasswordScreen({ navigation }) {
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={s.primaryBtnText}>Xác nhận đổi mật khẩu</Text>
+                <Text style={s.primaryBtnText}>{t('password.confirm_label') === 'Confirm New Password' ? 'Update Password' : 'Xác nhận đổi mật khẩu'}</Text>
               )}
             </TouchableOpacity>
 
@@ -168,7 +170,7 @@ export default function ChangePasswordScreen({ navigation }) {
               onPress={() => navigation.goBack()}
               activeOpacity={0.75}
             >
-              <Text style={s.linkText}>Quay lại</Text>
+              <Text style={s.linkText}>{t('common.back')}</Text>
             </TouchableOpacity>
           </View>
         </View>

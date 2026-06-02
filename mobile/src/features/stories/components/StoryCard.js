@@ -1,17 +1,29 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const { width } = Dimensions.get('window');
 const cardWidth = (width - 32) / 2;
 
 export default function StoryCard({ user, stories, isMe, onPress, onAdd, THEME }) {
+    const { t } = useLanguage();
     const latestStory = stories && stories.length > 0 ? stories[stories.length - 1] : null;
+
+    const handlePress = () => {
+        if (isMe && !latestStory) {
+            console.log('[StoryCard] Empty me card pressed -> onAdd');
+            onAdd();
+        } else {
+            console.log('[StoryCard] Card pressed -> onPress');
+            onPress();
+        }
+    };
 
     return (
         <TouchableOpacity 
             style={[styles.card, { backgroundColor: THEME.bgSecondary }]}
-            onPress={isMe && !latestStory ? onAdd : onPress}
+            onPress={handlePress}
             activeOpacity={0.8}
         >
             {latestStory ? (
@@ -22,7 +34,7 @@ export default function StoryCard({ user, stories, isMe, onPress, onAdd, THEME }
                 />
             ) : (
                 <View style={[styles.emptyMedia, { backgroundColor: THEME.bgTertiary }]}>
-                    {isMe && <Feather name="plus" size={32} color={THEME.accent} />}
+                    {!isMe && <Feather name="user" size={32} color={THEME.textSecondary} />}
                 </View>
             )}
 
@@ -34,14 +46,21 @@ export default function StoryCard({ user, stories, isMe, onPress, onAdd, THEME }
                     />
                 </View>
                 <Text style={styles.name} numberOfLines={1}>
-                    {isMe ? 'Tin của bạn' : user.displayName}
+                    {isMe ? t('stories.my_story') : user.displayName}
                 </Text>
             </View>
 
-            {isMe && !latestStory && (
-                <View style={[styles.addButton, { backgroundColor: THEME.accent }]}>
+            {isMe && (
+                <TouchableOpacity 
+                    style={[styles.addButton, { backgroundColor: THEME.accent, zIndex: 999 }]}
+                    onPress={() => {
+                        console.log('[StoryCard] Plus icon pressed -> onAdd');
+                        onAdd();
+                    }}
+                    hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                >
                     <Feather name="plus" size={16} color="#fff" />
-                </View>
+                </TouchableOpacity>
             )}
         </TouchableOpacity>
     );

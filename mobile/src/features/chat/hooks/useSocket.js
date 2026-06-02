@@ -111,6 +111,12 @@ const useSocket = (token, conversationId, currentUserId, handlers) => {
       handlersRef.current.onUpdatePoll?.(updatedMsg);
     });
 
+    // ── Nhắc hẹn alert ────────────────────────────────────────────────
+    socket.on('chat:reminder-alert', (data) => {
+      if (data.conversationId !== conversationId) return;
+      handlersRef.current.onReminderAlert?.(data);
+    });
+
     // Rời phòng và ngắt kết nối khi unmount
     return () => {
       socket.emit('chat:leave', { conversationId });

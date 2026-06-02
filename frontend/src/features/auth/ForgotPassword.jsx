@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import authApi from './api/authApi';
+import { useLanguage } from '../../context/LanguageContext';
 
 const ForgotPassword = () => {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [step, setStep] = useState(1); // 1: nhập username, 2: nhập OTP + mật khẩu mới
   const [username, setUsername] = useState('');
@@ -19,18 +21,17 @@ const ForgotPassword = () => {
     setInfoMessage('');
 
     if (!username.trim()) {
-      setError('Vui lòng nhập username hoặc email');
+      setError(t('auth.enter_username_email'));
       return;
     }
 
     setLoading(true);
     try {
       const res = await authApi.forgotPassword({ username: username.trim() });
-      setInfoMessage(res.data?.message || 'Nếu tài khoản tồn tại, mã OTP đã được gửi tới email đăng ký');
+      setInfoMessage(res.data?.message || t('auth.otp_sent_info'));
       setStep(2);
     } catch (err) {
-      // Backend luôn trả message chung, chỉ hiển thị ra cho user
-      setError(err.response?.data?.message || 'Không thể gửi yêu cầu quên mật khẩu');
+      setError(err.response?.data?.message || t('auth.forgot_password_failed'));
     } finally {
       setLoading(false);
     }
@@ -42,17 +43,17 @@ const ForgotPassword = () => {
     setInfoMessage('');
 
     if (!otp.trim()) {
-      setError('Vui lòng nhập mã OTP');
+      setError(t('auth.enter_otp'));
       return;
     }
 
     if (!newPassword) {
-      setError('Vui lòng nhập mật khẩu mới');
+      setError(t('auth.enter_new_password'));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Xác nhận mật khẩu không khớp');
+      setError(t('auth.passwords_mismatch'));
       return;
     }
 
@@ -64,11 +65,10 @@ const ForgotPassword = () => {
         newPassword,
       };
       const res = await authApi.resetPassword(payload);
-      const message = res.data?.message || 'Đặt lại mật khẩu thành công';
-      // Chuyển về trang đăng nhập kèm thông báo
+      const message = res.data?.message || t('auth.reset_password_success');
       navigate('/signin', { state: { message } });
     } catch (err) {
-      setError(err.response?.data?.message || 'Không thể đặt lại mật khẩu');
+      setError(err.response?.data?.message || t('auth.reset_password_failed'));
     } finally {
       setLoading(false);
     }
@@ -77,9 +77,9 @@ const ForgotPassword = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-        <h1 className="text-2xl font-bold text-center text-gray-800 mb-2">Quên mật khẩu</h1>
+        <h1 className="text-2xl font-bold text-center text-gray-800 mb-2">{t('auth.forgot_password_title')}</h1>
         <p className="text-center text-sm text-gray-500 mb-4">
-          Nhập username hoặc email để nhận mã OTP đặt lại mật khẩu.
+          {t('auth.forgot_password_desc')}
         </p>
 
         {error && (
@@ -96,14 +96,14 @@ const ForgotPassword = () => {
         {step === 1 ? (
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div>
-              <label className="block text-gray-700 font-semibold mb-2 text-sm">Username hoặc Email</label>
+              <label className="block text-gray-700 font-semibold mb-2 text-sm">{t('auth.username_or_email')}</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                placeholder="Nhập username hoặc email đã đăng ký"
+                placeholder={t('auth.forgot_password_input_placeholder')}
               />
             </div>
             <button
@@ -111,13 +111,13 @@ const ForgotPassword = () => {
               disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition disabled:opacity-50"
             >
-              {loading ? 'Đang gửi yêu cầu...' : 'Gửi mã OTP'}
+              {loading ? t('auth.sending_request') : t('auth.send_otp_btn')}
             </button>
           </form>
         ) : (
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div>
-              <label className="block text-gray-700 font-semibold mb-2 text-sm">Username hoặc Email</label>
+              <label className="block text-gray-700 font-semibold mb-2 text-sm">{t('auth.username_or_email')}</label>
               <input
                 type="text"
                 value={username}
@@ -126,7 +126,7 @@ const ForgotPassword = () => {
               />
             </div>
             <div>
-              <label className="block text-gray-700 font-semibold mb-2 text-sm">Mã OTP</label>
+              <label className="block text-gray-700 font-semibold mb-2 text-sm">{t('auth.otp_label')}</label>
               <input
                 type="text"
                 value={otp}
@@ -134,29 +134,29 @@ const ForgotPassword = () => {
                 maxLength={6}
                 required
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                placeholder="Nhập mã OTP 6 chữ số"
+                placeholder={t('auth.otp_placeholder')}
               />
             </div>
             <div>
-              <label className="block text-gray-700 font-semibold mb-2 text-sm">Mật khẩu mới</label>
+              <label className="block text-gray-700 font-semibold mb-2 text-sm">{t('auth.new_password_label')}</label>
               <input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                placeholder="Mật khẩu mới"
+                placeholder={t('auth.new_password_placeholder')}
               />
             </div>
             <div>
-              <label className="block text-gray-700 font-semibold mb-2 text-sm">Xác nhận mật khẩu mới</label>
+              <label className="block text-gray-700 font-semibold mb-2 text-sm">{t('auth.confirm_new_password_label')}</label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                placeholder="Nhập lại mật khẩu mới"
+                placeholder={t('auth.confirm_new_password_placeholder')}
               />
             </div>
             <button
@@ -164,14 +164,14 @@ const ForgotPassword = () => {
               disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition disabled:opacity-50"
             >
-              {loading ? 'Đang đặt lại mật khẩu...' : 'Đặt lại mật khẩu'}
+              {loading ? t('auth.resetting_password') : t('auth.reset_password_btn')}
             </button>
           </form>
         )}
 
         <p className="text-center text-gray-600 mt-5 text-sm">
-          Nhớ lại mật khẩu?{' '}
-          <Link to="/signin" className="text-blue-600 hover:text-blue-700 font-semibold">Quay lại đăng nhập</Link>
+          {t('auth.remember_password')}{' '}
+          <Link to="/signin" className="text-blue-600 hover:text-blue-700 font-semibold">{t('auth.back_to_signin')}</Link>
         </p>
       </div>
     </div>

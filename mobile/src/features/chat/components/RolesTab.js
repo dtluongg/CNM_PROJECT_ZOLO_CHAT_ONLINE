@@ -5,17 +5,12 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import conversationApi from '../api/conversationApi';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const ROLE_COLORS = [
   '#5865f2', '#eb459e', '#00b4d8', '#57f287',
   '#faa61a', '#ed4245', '#9b59b6', '#e67e22',
   '#1abc9c', '#99aab5',
-];
-
-const PERMS = [
-  { key: 'canSendMessages',   label: 'Gửi tin nhắn trong nhóm', icon: 'message-square' },
-  { key: 'canInviteMembers',  label: 'Mời thành viên',          icon: 'user-plus' },
-  { key: 'canManageMembers',  label: 'Quản lý thành viên',      icon: 'shield' },
 ];
 
 function emptyForm() {
@@ -29,14 +24,21 @@ function emptyForm() {
 }
 
 function normTopicIds(arr) {
-  return (arr || []).map(t => (t._id || t).toString());
+  return (arr || []).map(tp => (tp._id || tp).toString());
 }
 
 export default function RolesTab({ conversation, members, setMembers, isAdmin, topics, THEME }) {
+  const { t } = useLanguage();
   const convId = conversation._id || conversation.id;
 
-  const textTopics  = (topics || []).filter(t => t.channelType === 'text');
-  const voiceTopics = (topics || []).filter(t => t.channelType === 'voice');
+  const PERMS = [
+    { key: 'canSendMessages',   label: t('info_panel.roles.perm_send'), icon: 'message-square' },
+    { key: 'canInviteMembers',  label: t('info_panel.roles.perm_invite'),          icon: 'user-plus' },
+    { key: 'canManageMembers',  label: t('info_panel.roles.perm_manage'),      icon: 'shield' },
+  ];
+
+  const textTopics  = (topics || []).filter(tp => tp.channelType === 'text');
+  const voiceTopics = (topics || []).filter(tp => tp.channelType === 'voice');
   const allTopics   = [...textTopics, ...voiceTopics];
 
   const [roles,      setRoles]      = useState([]);
@@ -97,7 +99,7 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) return Alert.alert('Lỗi', 'Tên vai trò không được để trống.');
+    if (!form.name.trim()) return Alert.alert(t('common.error'), t('info_panel.roles.error_name_empty'));
     setSaving(true);
     try {
       if (editTarget) {
@@ -111,24 +113,24 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
       }
       setShowForm(false);
     } catch (e) {
-      Alert.alert('Lỗi', e.response?.data?.message || 'Không thể lưu vai trò.');
+      Alert.alert(t('common.error'), e.response?.data?.message || t('info_panel.roles.error_save'));
     } finally { setSaving(false); }
   };
 
   const handleDelete = (role) => {
     Alert.alert(
-      'Xóa vai trò',
-      `Xóa vai trò "${role.name}"? Thành viên đang có vai trò này sẽ trở thành thành viên thường.`,
+      t('info_panel.roles.delete_role'),
+      t('info_panel.roles.delete_confirm', { name: role.name }),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Xóa', style: 'destructive',
+          text: t('common.delete'), style: 'destructive',
           onPress: async () => {
             setDeleting(role._id);
             try {
               await conversationApi.deleteRole(convId, role._id);
               setRoles(prev => prev.filter(r => r._id !== role._id));
-            } catch { Alert.alert('Lỗi', 'Không thể xóa vai trò.'); }
+            } catch { Alert.alert(t('common.error'), t('info_panel.roles.error_delete')); }
             finally { setDeleting(null); }
           },
         },
@@ -144,15 +146,15 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
         (m.user?._id || m._id) === memberId ? { ...m, customRoleId: roleId } : m
       ));
       setAssignFor(null);
-    } catch { Alert.alert('Lỗi', 'Không thể gán vai trò.'); }
+    } catch { Alert.alert(t('common.error'), t('info_panel.roles.error_assign')); }
   };
 
   const getRoleById  = id => roles.find(r => r._id === id) || null;
   const permSummary  = r => [
-    r.permissions?.canSendMessages  && 'Gửi tin',
-    r.permissions?.canInviteMembers && 'Mời TV',
-    r.permissions?.canManageMembers && 'Quản lý',
-  ].filter(Boolean).join(' · ') || 'Không có quyền';
+    r.permissions?.canSendMessages  && t('info_panel.labels.send'),
+    r.permissions?.canInviteMembers && t('info_panel.members.add_member'),
+    r.permissions?.canManageMembers && t('info_panel.labels.admin'),
+  ].filter(Boolean).join(' · ') || t('info_panel.roles.no_perms');
 
   const getMembersOfRole = rId =>
     members.filter(m => {
@@ -167,7 +169,7 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
         {/* ── Role counter ── */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <Text style={{ color: THEME.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Vai trò tuỳ chỉnh ({roles.length}/10)
+            {t('info_panel.roles.custom_roles', { current: roles.length, total: 10 })}
           </Text>
           {isAdmin && roles.length < 10 && (
             <TouchableOpacity
@@ -175,7 +177,7 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
               style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: THEME.accent, borderRadius: 8 }}
             >
               <Feather name="plus" size={13} color="#fff" />
-              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Tạo role</Text>
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{t('info_panel.roles.create_role')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -186,7 +188,7 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
           <>
             {roles.length === 0 && (
               <Text style={{ color: THEME.textMuted, fontSize: 13, marginBottom: 12, textAlign: 'center', paddingVertical: 20 }}>
-                Chưa có vai trò nào. Tạo vai trò để phân quyền thành viên.
+                {t('info_panel.roles.no_roles')}
               </Text>
             )}
 
@@ -220,7 +222,7 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
                       <Feather name="users" size={11} color={THEME.textMuted} />
                       <Text style={{ color: THEME.textMuted, fontSize: 11 }}>
                         {roleMembers.map(m => m.user?.displayName || m.user?.username).filter(Boolean).slice(0, 3).join(', ')}
-                        {roleMembers.length > 3 ? ` +${roleMembers.length - 3} khác` : ''}
+                        {roleMembers.length > 3 ? t('info_panel.roles.others_count', { count: roleMembers.length - 3 }) : ''}
                       </Text>
                     </View>
                   )}
@@ -251,11 +253,11 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
         {isAdmin && roles.length > 0 && (
           <>
             <Text style={{ color: THEME.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 16, marginBottom: 10 }}>
-              Gán vai trò cho thành viên
+              {t('info_panel.roles.assign_header')}
             </Text>
             {members.filter(m => m.role !== 'owner').map(member => {
               const uid      = member.user?._id || member._id;
-              const uname    = member.user?.displayName || member.user?.username || 'Người dùng';
+              const uname    = member.user?.displayName || member.user?.username || t('common.unknown_user');
               const assigned = getRoleById(member.customRoleId);
               return (
                 <View key={uid} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: THEME.bgPrimary, borderRadius: 10, marginBottom: 6 }}>
@@ -267,14 +269,14 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
                         <Text style={{ color: THEME.textMuted, fontSize: 11 }}>{assigned.name}</Text>
                       </View>
                     ) : (
-                      <Text style={{ color: THEME.textMuted, fontSize: 11, marginTop: 2 }}>Chưa có vai trò</Text>
+                      <Text style={{ color: THEME.textMuted, fontSize: 11, marginTop: 2 }}>{t('info_panel.roles.no_role_assigned')}</Text>
                     )}
                   </View>
                   <TouchableOpacity
                     onPress={() => setAssignFor(member)}
                     style={{ paddingHorizontal: 12, paddingVertical: 7, backgroundColor: THEME.bgHover || '#35373c', borderRadius: 8 }}
                   >
-                    <Text style={{ color: THEME.accent, fontSize: 13, fontWeight: '600' }}>Gán</Text>
+                    <Text style={{ color: THEME.accent, fontSize: 13, fontWeight: '600' }}>{t('info_panel.roles.assign')}</Text>
                   </TouchableOpacity>
                 </View>
               );
@@ -293,22 +295,22 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
             <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
               <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: THEME.bgHover || '#35373c', alignSelf: 'center', marginBottom: 16 }} />
               <Text style={{ color: THEME.textPrimary, fontSize: 17, fontWeight: '800', marginBottom: 16 }}>
-                {editTarget ? 'Chỉnh sửa vai trò' : 'Tạo vai trò mới'}
+                {editTarget ? t('info_panel.roles.edit_role') : t('info_panel.roles.create_new_role')}
               </Text>
 
               {/* Name */}
-              <FLabel text="Tên vai trò" THEME={THEME} />
+              <FLabel text={t('info_panel.roles.role_name')} THEME={THEME} />
               <TextInput
                 value={form.name}
                 onChangeText={v => setForm(s => ({ ...s, name: v }))}
-                placeholder="Ví dụ: Moderator"
+                placeholder={t('info_panel.roles.role_name_placeholder')}
                 placeholderTextColor={THEME.textMuted}
                 maxLength={30}
                 style={[fInput(THEME), { marginBottom: 14 }]}
               />
 
               {/* Color */}
-              <FLabel text="Màu sắc" THEME={THEME} />
+              <FLabel text={t('info_panel.roles.role_color')} THEME={THEME} />
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
                 {ROLE_COLORS.map(c => (
                   <TouchableOpacity
@@ -322,7 +324,7 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
               </ScrollView>
 
               {/* Permissions */}
-              <FLabel text="Quyền hạn" THEME={THEME} />
+              <FLabel text={t('info_panel.roles.permissions')} THEME={THEME} />
               {PERMS.map(({ key, label, icon }) => (
                 <TouchableOpacity
                   key={key}
@@ -338,15 +340,14 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
               {/* Topic permissions */}
               {allTopics.length > 0 && (
                 <>
-                  <FLabel text="Quyền truy cập kênh" THEME={THEME} />
+                  <FLabel text={t('info_panel.roles.topic_access')} THEME={THEME} />
                   <View style={{ padding: 10, backgroundColor: THEME.bgPrimary, borderRadius: 8, marginBottom: 10 }}>
                     <Text style={{ color: THEME.textMuted, fontSize: 11, lineHeight: 16 }}>
-                      💡 Xem: cho phép vào kênh · Gửi: cho phép gửi tin nhắn{'\n'}
-                      Để trống tất cả Xem = được xem mọi kênh mặc định
+                      {t('info_panel.roles.topic_hint')}
                     </Text>
                   </View>
-                  {allTopics.map(t => {
-                    const tid       = t._id.toString();
+                  {allTopics.map(tp => {
+                    const tid       = tp._id.toString();
                     const hasAccess = form.allowedTopicIds.includes(tid);
                     const hasSend   = form.sendableTopicIds.includes(tid);
                     return (
@@ -356,15 +357,15 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
                         borderLeftWidth: 3,
                         borderLeftColor: hasSend ? '#57f287' : hasAccess ? '#5865f2' : (THEME.border || '#35373c'),
                       }}>
-                        <Feather name={t.channelType === 'voice' ? 'volume-2' : 'hash'} size={12} color={THEME.textMuted} />
-                        <Text style={{ flex: 1, color: THEME.textPrimary, fontSize: 13 }}>{t.emoji ? `${t.emoji} ` : ''}{t.name}</Text>
+                        <Feather name={tp.channelType === 'voice' ? 'volume-2' : 'hash'} size={12} color={THEME.textMuted} />
+                        <Text style={{ flex: 1, color: THEME.textPrimary, fontSize: 13 }}>{tp.emoji ? `${tp.emoji} ` : ''}{tp.name}</Text>
                         <Text style={{
                           fontSize: 10, fontWeight: '700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
                           backgroundColor: hasSend ? 'rgba(87,242,135,0.15)' : hasAccess ? 'rgba(88,101,242,0.15)' : 'rgba(237,66,69,0.1)',
                           color: hasSend ? '#57f287' : hasAccess ? '#5865f2' : '#ed4245',
                           marginRight: 4,
                         }}>
-                          {hasSend ? '✓ Gửi' : hasAccess ? '👁 Xem' : '✕ Chặn'}
+                          {hasSend ? `✓ ${t('info_panel.labels.send')}` : hasAccess ? `👁 ${t('info_panel.labels.view')}` : `✕ ${t('info_panel.labels.none')}`}
                         </Text>
                         {/* View checkbox */}
                         <TouchableOpacity
@@ -379,7 +380,7 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
                           }}>
                             {hasAccess && <Feather name="check" size={10} color="#fff" />}
                           </View>
-                          <Text style={{ color: THEME.textMuted, fontSize: 11 }}>Xem</Text>
+                          <Text style={{ color: THEME.textMuted, fontSize: 11 }}>{t('info_panel.labels.view')}</Text>
                         </TouchableOpacity>
                         {/* Send checkbox */}
                         <TouchableOpacity
@@ -395,7 +396,7 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
                           }}>
                             {hasSend && <Feather name="check" size={10} color="#fff" />}
                           </View>
-                          <Text style={{ color: THEME.textMuted, fontSize: 11 }}>Gửi</Text>
+                          <Text style={{ color: THEME.textMuted, fontSize: 11 }}>{t('info_panel.labels.send')}</Text>
                         </TouchableOpacity>
                       </View>
                     );
@@ -410,7 +411,7 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
               >
                 {saving
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{editTarget ? 'Lưu thay đổi' : 'Tạo vai trò'}</Text>
+                  : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{editTarget ? t('info_panel.roles.save_changes') : t('info_panel.roles.create_role')}</Text>
                 }
               </TouchableOpacity>
             </ScrollView>
@@ -427,7 +428,7 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
           >
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: THEME.bgHover || '#35373c', alignSelf: 'center', marginBottom: 16 }} />
             <Text style={{ color: THEME.textPrimary, fontSize: 16, fontWeight: '800', marginBottom: 14 }}>
-              Gán vai trò cho {assignFor?.user?.displayName || 'thành viên'}
+              {t('info_panel.roles.assign_to', { name: assignFor?.user?.displayName || t('info_panel.members.member').toLowerCase() })}
             </Text>
 
             <TouchableOpacity
@@ -435,7 +436,7 @@ export default function RolesTab({ conversation, members, setMembers, isAdmin, t
               style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: THEME.bgPrimary, borderRadius: 10, marginBottom: 8 }}
             >
               <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 1.5, borderColor: THEME.border }} />
-              <Text style={{ flex: 1, color: THEME.textMuted, fontSize: 14 }}>Không có vai trò</Text>
+              <Text style={{ flex: 1, color: THEME.textMuted, fontSize: 14 }}>{t('info_panel.roles.no_role_assigned')}</Text>
               {!assignFor?.customRoleId && <Feather name="check" size={16} color={THEME.accent} />}
             </TouchableOpacity>
 

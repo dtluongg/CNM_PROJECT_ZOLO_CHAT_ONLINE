@@ -19,12 +19,14 @@ import { useBlockStatus } from './hooks/useBlockStatus';
 import { useGroupActions } from './hooks/useGroupActions';
 import { useNotifications } from '../../context/NotificationContext';
 import { VoiceRoomProvider } from '../voice/VoiceRoomContext';
-import VoiceRoomPanel from '../voice/components/VoiceRoomPanel';
+import VoiceRoomPanel        from '../voice/components/VoiceRoomPanel';
+import { useLanguage }       from '../../context/LanguageContext';
 
 const Chat = () => {
   const { user: currentUser, token } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { t }       = useLanguage();
+  const navigate    = useNavigate();
+  const location    = useLocation();
   const { initiateCall } = useCall();
   const { markConversationRead } = useNotifications();
 
@@ -112,7 +114,7 @@ const Chat = () => {
     onMessageRevoked: (conversationId, messageId) => {
       revokeMessage(conversationId, messageId);
       setConversations((prev) => prev.map((c) =>
-        c.id !== conversationId ? c : { ...c, lastMessage: '[Tin nhắn đã được thu hồi]' }
+        c.id !== conversationId ? c : { ...c, lastMessage: t('chat.message_revoked') }
       ));
     },
     onMessageEdited: (conversationId, msg) => {
@@ -437,7 +439,7 @@ const Chat = () => {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               padding: 20, color: 'var(--text-muted)', fontSize: 13, textAlign: 'center',
             }}>
-              Chọn một cuộc trò chuyện để xem thông tin chi tiết.
+              {t('chat.select_to_view')}
             </div>
           )}
         </div>

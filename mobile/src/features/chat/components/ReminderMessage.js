@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useLanguage } from '../../../context/LanguageContext';
 
 /**
  * ReminderMessage.js (Mobile)
@@ -9,6 +10,7 @@ import { Feather } from '@expo/vector-icons';
  * ─────────────────────────────────────────────────────────────────────────────
  */
 const ReminderMessage = ({ message, isMine, THEME = {}, isPinned }) => {
+  const { t } = useLanguage();
   const payload = message.payload || {};
   const reminderContent = payload.content || message.content;
   const reminderTime = payload.reminderTime ? new Date(payload.reminderTime) : null;
@@ -49,21 +51,21 @@ const ReminderMessage = ({ message, isMine, THEME = {}, isPinned }) => {
       {isPinned && (
         <View style={styles.pinnedHeader}>
           <Text style={{ fontSize: 10 }}>📌</Text>
-          <Text style={styles.pinnedText}>Ghim tin nhắn</Text>
+          <Text style={styles.pinnedText}>{t('chat.pinned_messages')}</Text>
         </View>
       )}
 
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <Feather name="bell" size={14} color={colors.accent} style={{ marginRight: 6 }} />
-          <Text style={[styles.title, { color: colors.accent }]}>NHẮC HẸN</Text>
+          <Text style={[styles.title, { color: colors.accent }]}>{t('reminder.header')}</Text>
         </View>
         <View style={[
           styles.badge, 
           { backgroundColor: isTriggered ? '#ed4245' : 'rgba(255,149,0,0.15)' }
         ]}>
           <Text style={[styles.badgeText, { color: isTriggered ? '#fff' : colors.accent }]}>
-            {isTriggered ? 'ĐÃ NHẮC' : 'SẮP TỚI'}
+            {isTriggered ? t('reminder.triggered') : t('reminder.upcoming')}
           </Text>
         </View>
       </View>

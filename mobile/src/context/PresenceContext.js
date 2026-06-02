@@ -37,7 +37,7 @@ export const PresenceProvider = ({ children }) => {
 
     const socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 2000,

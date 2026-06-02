@@ -30,7 +30,7 @@ function ParticipantTile({ participant, tileSize, localVideoTrack, getRemoteVide
       justifyContent: 'center', alignItems: 'center',
     }}>
       {showVideo ? (
-        <VideoView track={track} style={StyleSheet.absoluteFill} objectFit="cover" mirror={participant.isLocal} />
+        <VideoView videoTrack={track} style={StyleSheet.absoluteFill} objectFit="cover" mirror={participant.isLocal} />
       ) : (
         <View style={{ width: '52%', aspectRatio: 1, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
           {participant.avatar && !imgErr
@@ -142,7 +142,7 @@ export default function GroupCallScreen() {
         {/* Screen share overlay */}
         {screenTrack && (
           <View style={StyleSheet.absoluteFill}>
-            <VideoView track={screenTrack} style={{ flex: 1 }} objectFit="contain" />
+            <VideoView videoTrack={screenTrack} style={{ flex: 1 }} objectFit="contain" />
             <View style={styles.screenShareBadge}>
               <Feather name="monitor" size={14} color="#fff" />
               <Text style={{ color: '#fff', fontSize: 12, marginLeft: 6 }}>Đang chia sẻ màn hình</Text>

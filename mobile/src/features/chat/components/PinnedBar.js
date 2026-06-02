@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
 const PinnedBar = ({ pinnedMessages = [], onJump, onUnpin }) => {
+  const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
   
   // Tự động điều chỉnh currentIndex khi danh sách ghim thay đổi
@@ -32,10 +34,10 @@ const PinnedBar = ({ pinnedMessages = [], onJump, onUnpin }) => {
   };
 
   const getPreviewText = () => {
-    if (message.revoked) return 'Tin nhắn đã được thu hồi';
-    if (message.type === 'image') return '[Hình ảnh]';
-    if (message.type === 'file') return `[File] ${message.payload?.fileName || ''}`;
-    if (message.type === 'voice') return '[Tin nhắn thoại]';
+    if (message.revoked) return t('chat.revoked_preview');
+    if (message.type === 'image') return t('chat.image_preview');
+    if (message.type === 'file') return `${t('chat.file_preview')} ${message.payload?.fileName || ''}`;
+    if (message.type === 'voice') return t('chat.voice_preview');
     return message.content;
   };
 
@@ -53,11 +55,11 @@ const PinnedBar = ({ pinnedMessages = [], onJump, onUnpin }) => {
         <View style={styles.textContainer}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>
-              Tin nhắn đã ghim {pinnedMessages.length > 1 && `(${currentIndex + 1}/${pinnedMessages.length})`}
+              {t('chat.pinned_messages_title')} {pinnedMessages.length > 1 && `(${currentIndex + 1}/${pinnedMessages.length})`}
             </Text>
             <Text style={styles.dot}>•</Text>
             <Text style={styles.senderName} numberOfLines={1}>
-              {message.senderId?.displayName || 'Thành viên'}
+              {message.senderId?.displayName || t('chat.me')}
             </Text>
           </View>
           <Text style={styles.previewText} numberOfLines={1}>

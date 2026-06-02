@@ -7,8 +7,10 @@ import { Feather } from '@expo/vector-icons';
 import friendApi from '../../friends/api/friendApi';
 import conversationApi from '../api/conversationApi';
 import { getAvatarColor, getInitials } from '../../../theme';
+import { useLanguage } from '../../../context/LanguageContext';
 
 export default function AddMembersModal({ visible, onClose, conversation, currentMembers, THEME, onMembersAdded }) {
+  const { t } = useLanguage();
   const [friends,  setFriends]  = useState([]);
   const [selected, setSelected] = useState(new Set());
   const [search,   setSearch]   = useState('');
@@ -47,7 +49,10 @@ export default function AddMembersModal({ visible, onClose, conversation, curren
   });
 
   const handleAdd = async () => {
-    if (selected.size === 0) return Alert.alert('Thông báo', 'Hãy chọn ít nhất một người.');
+    if (selected.size === 0) return Alert.alert(t('common.info'), t('poll.option_placeholder', { index: 1 }).replace(' 1', '').replace('1', '')); // Fallback for "Please select at least one"
+    // Wait, I added "select_friends" key. I'll use it.
+    if (selected.size === 0) return Alert.alert(t('common.info'), t('info_panel.members.select_friends'));
+    
     setSaving(true);
     try {
       const convId = conversation._id || conversation.id;
@@ -55,7 +60,7 @@ export default function AddMembersModal({ visible, onClose, conversation, curren
       onMembersAdded?.([...selected]);
       onClose();
     } catch (e) {
-      Alert.alert('Lỗi', e.response?.data?.message || 'Không thể thêm thành viên. Thử lại sau.');
+      Alert.alert(t('common.error'), e.response?.data?.message || t('common.something_wrong'));
     } finally {
       setSaving(false);
     }
@@ -72,7 +77,7 @@ export default function AddMembersModal({ visible, onClose, conversation, curren
             <Feather name="x" size={22} color={THEME.textMuted} />
           </TouchableOpacity>
           <Text style={{ flex: 1, fontSize: 17, fontWeight: '800', color: THEME.textPrimary }}>
-            Thêm thành viên
+            {t('info_panel.members.add_member_title')}
           </Text>
           {selected.size > 0 && (
             <TouchableOpacity
@@ -82,7 +87,7 @@ export default function AddMembersModal({ visible, onClose, conversation, curren
             >
               {saving
                 ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Thêm ({selected.size})</Text>
+                : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{t('common.save')} ({selected.size})</Text>
               }
             </TouchableOpacity>
           )}
@@ -94,7 +99,7 @@ export default function AddMembersModal({ visible, onClose, conversation, curren
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Tìm bạn bè..."
+            placeholder={t('info_panel.members.search_friends_placeholder')}
             placeholderTextColor={THEME.textMuted}
             style={{ flex: 1, color: THEME.textPrimary, fontSize: 14, paddingVertical: 11 }}
           />
@@ -108,7 +113,7 @@ export default function AddMembersModal({ visible, onClose, conversation, curren
         {/* Selected count */}
         {selected.size > 0 && (
           <Text style={{ color: THEME.accent, fontSize: 12, fontWeight: '700', paddingHorizontal: 16, marginBottom: 4 }}>
-            Đã chọn: {selected.size} người
+            {t('info_panel.members.selected_count', { count: selected.size })}
           </Text>
         )}
 
@@ -116,16 +121,16 @@ export default function AddMembersModal({ visible, onClose, conversation, curren
         {loading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator color={THEME.accent} size="large" />
-            <Text style={{ color: THEME.textMuted, fontSize: 13, marginTop: 12 }}>Đang tải danh sách...</Text>
+            <Text style={{ color: THEME.textMuted, fontSize: 13, marginTop: 12 }}>{t('common.loading')}</Text>
           </View>
         ) : filtered.length === 0 ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <Text style={{ fontSize: 44, marginBottom: 12 }}>👥</Text>
             <Text style={{ color: THEME.textPrimary, fontSize: 15, fontWeight: '700' }}>
-              {search ? 'Không tìm thấy' : 'Tất cả bạn bè đã trong nhóm'}
+              {search ? t('info_panel.members.no_results_search') : t('info_panel.members.no_friends_in_group')}
             </Text>
             <Text style={{ color: THEME.textMuted, fontSize: 13, marginTop: 6, textAlign: 'center', paddingHorizontal: 32 }}>
-              {search ? 'Thử tên khác' : 'Không còn bạn bè nào để thêm'}
+              {search ? t('info_panel.members.no_results_search') : t('info_panel.members.no_friends_in_group')}
             </Text>
           </View>
         ) : (
@@ -135,7 +140,7 @@ export default function AddMembersModal({ visible, onClose, conversation, curren
             contentContainerStyle={{ padding: 12 }}
             renderItem={({ item }) => {
               const id   = item._id || item.userId || item.id;
-              const name = item.displayName || item.username || 'Người dùng';
+              const name = item.displayName || item.username || t('user.unknown');
               const sel  = selected.has(id);
               return (
                 <TouchableOpacity

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import messageApi from '../../../api/messageApi';
+import { useLanguage } from '../../../../../context/LanguageContext';
 
 // ── DividerLine khai báo NGOÀI component để tránh "Cannot create during render" ──
-function DividerLine({ onClick, clickable }) {
+function DividerLine({ onClick, clickable, t }) {
   return (
     <div
       onClick={clickable ? onClick : undefined}
@@ -27,7 +28,7 @@ function DividerLine({ onClick, clickable }) {
         transition: 'background 0.12s',
       }}>
         <Sparkles size={12} style={{ color: '#a78bfa' }} />
-        {clickable ? 'Tóm tắt bằng AI' : 'AI Tóm tắt'}
+        {clickable ? t('ai_summary.btn_summarize') : t('ai_summary.title')}
       </span>
       <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
     </div>
@@ -49,6 +50,7 @@ function DividerLine({ onClick, clickable }) {
  *   error   → thông báo lỗi + nút "Thử lại"
  */
 export default function AiSummaryCard({ conversationId, initialSummary, snapshotLastReadId }) {
+  const { t } = useLanguage();
   const startState   = initialSummary?.summary ? 'done' : 'idle';
   const startSummary = initialSummary?.summary || '';
 
@@ -65,13 +67,13 @@ export default function AiSummaryCard({ conversationId, initialSummary, snapshot
       const res  = await messageApi.getAiSummary(conversationId, snapshotLastReadId || null);
       const data = res.data;
       if (data.reason === 'no_unread') {
-        setSummary('Không có tin nhắn nào cần tóm tắt.');
+        setSummary(t('ai_summary.no_unread'));
       } else {
         setSummary(data.summary || '');
       }
       setStatus('done');
     } catch (err) {
-      const msg = err.response?.data?.message || 'Không thể tóm tắt, vui lòng thử lại.';
+      const msg = err.response?.data?.message || t('ai_summary.error_default');
       setErrMsg(msg);
       setStatus('error');
     }
@@ -79,14 +81,14 @@ export default function AiSummaryCard({ conversationId, initialSummary, snapshot
 
   // ── idle ──────────────────────────────────────────────────────────────
   if (status === 'idle') {
-    return <DividerLine onClick={handleSummarize} clickable />;
+    return <DividerLine onClick={handleSummarize} clickable t={t} />;
   }
 
   // ── loading ────────────────────────────────────────────────────────────
   if (status === 'loading') {
     return (
       <>
-        <DividerLine clickable={false} />
+        <DividerLine clickable={false} t={t} />
         <div style={{
           margin: '0 16px 12px', padding: '8px 12px', borderRadius: 8,
           background: 'rgba(167,139,250,0.07)',
@@ -101,7 +103,7 @@ export default function AiSummaryCard({ conversationId, initialSummary, snapshot
             flexShrink: 0,
           }} />
           <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-            AI đang phân tích tin nhắn...
+            {t('ai_summary.loading')}
           </span>
         </div>
       </>
@@ -112,7 +114,7 @@ export default function AiSummaryCard({ conversationId, initialSummary, snapshot
   if (status === 'error') {
     return (
       <>
-        <DividerLine clickable={false} />
+        <DividerLine clickable={false} t={t} />
         <div style={{
           margin: '0 16px 12px', padding: '8px 12px', borderRadius: 8,
           background: 'rgba(237,66,69,0.06)',
@@ -128,7 +130,7 @@ export default function AiSummaryCard({ conversationId, initialSummary, snapshot
               padding: '3px 8px', cursor: 'pointer', flexShrink: 0,
             }}
           >
-            Thử lại
+            {t('ai_summary.btn_retry')}
           </button>
         </div>
       </>
@@ -138,7 +140,7 @@ export default function AiSummaryCard({ conversationId, initialSummary, snapshot
   // ── done ────────────────────────────────────────────────────────────────
   return (
     <>
-      <DividerLine clickable={false} />
+      <DividerLine clickable={false} t={t} />
       <div style={{
         margin: '0 16px 12px', padding: '10px 14px', borderRadius: 8,
         background: 'linear-gradient(135deg, rgba(108,99,255,0.07), rgba(167,139,250,0.04))',
@@ -162,7 +164,7 @@ export default function AiSummaryCard({ conversationId, initialSummary, snapshot
               borderRadius: 5, padding: '2px 8px', cursor: 'pointer',
             }}
           >
-            Làm mới
+            {t('ai_summary.btn_refresh')}
           </button>
         </div>
       </div>

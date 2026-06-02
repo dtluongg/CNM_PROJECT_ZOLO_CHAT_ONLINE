@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,12 @@ import {
   Modal,
   StatusBar,
   RefreshControl,
+  Pressable,
 } from 'react-native';
 import { usePresence } from '../../../context/PresenceContext';
 import QRCode from 'react-native-qrcode-svg';
 import { useAuth } from '../../../context/AuthContext';
+import { useLanguage } from '../../../context/LanguageContext';
 import { supabase } from '../../../config/supabase';
 import apiClient from '../../../services/apiClient';
 import { THEME, STATUS_CONFIG } from '../../../theme';
@@ -29,6 +31,9 @@ import { styles as s } from '../styles/profileStyles';
 export default function ProfileScreen({ navigation }) {
   const { user, logout, updateUser } = useAuth();
   const { isUserOnline, getPresenceStatus } = usePresence();
+  const { t, language, changeLanguage } = useLanguage();
+
+  const [langModal, setLangModal] = useState(false);
 
   const {
     profile,
@@ -81,7 +86,7 @@ export default function ProfileScreen({ navigation }) {
       <View style={s.loadingScreen}>
         <StatusBar barStyle="light-content" backgroundColor={THEME.bgSecondary} />
         <ActivityIndicator color={THEME.accent} size="large" />
-        <Text style={s.loadingText}>Đang tải hồ sơ...</Text>
+        <Text style={s.loadingText}>{t('profile.loading')}</Text>
       </View>
     );
   }
@@ -91,9 +96,9 @@ export default function ProfileScreen({ navigation }) {
       <View style={s.loadingScreen}>
         <StatusBar barStyle="light-content" backgroundColor={THEME.bgSecondary} />
         <Text style={{ fontSize: 40, marginBottom: 12 }}>😕</Text>
-        <Text style={s.loadingText}>Không thể tải hồ sơ</Text>
+        <Text style={s.loadingText}>{t('profile.load_error')}</Text>
         <TouchableOpacity style={s.retryBtn} onPress={() => fetchProfile(false)}>
-          <Text style={s.retryBtnText}>Thử lại</Text>
+          <Text style={s.retryBtnText}>{t('common.retry')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -104,15 +109,15 @@ export default function ProfileScreen({ navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={s.header}>
-        <Text style={s.headerTitle}>Hồ sơ của tôi</Text>
+        <Text style={s.headerTitle}>{t('profile.title')}</Text>
         <TouchableOpacity style={s.editIconBtn} onPress={() => setEditModal(true)}>
           <Text style={s.editIconText}>✏️</Text>
         </TouchableOpacity>
       </View>
 
       <View style={s.tabRow}>
-        <TabButton tabKey="info" label="Thông tin" active={tab === 'info'} onPress={() => setTab('info')} />
-        <TabButton tabKey="qr" label="Mã QR" active={tab === 'qr'} onPress={() => setTab('qr')} />
+        <TabButton tabKey="info" label={t('profile.tabs.info')} active={tab === 'info'} onPress={() => setTab('info')} />
+        <TabButton tabKey="qr" label={t('profile.tabs.qr')} active={tab === 'qr'} onPress={() => setTab('qr')} />
       </View>
 
       {tab === 'info' ? (
@@ -139,7 +144,7 @@ export default function ProfileScreen({ navigation }) {
               {uploadingBanner ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={s.bannerEditText}>✏️  Đổi ảnh bìa</Text>
+                <Text style={s.bannerEditText}>✏️  {t('profile.change_banner')}</Text>
               )}
             </View>
           </TouchableOpacity>
@@ -180,7 +185,7 @@ export default function ProfileScreen({ navigation }) {
                 style={[s.displayName, { color: d.usernameColor || THEME.textPrimary }]}
                 numberOfLines={1}
               >
-                {d.displayName || 'Tên hiển thị'}
+                {d.displayName || t('profile.display_name_placeholder')}
               </Text>
               {d.username ? <Text style={s.handle}>@{d.username}</Text> : null}
               {d.statusText ? (
@@ -193,24 +198,24 @@ export default function ProfileScreen({ navigation }) {
               onPress={() => setStatusModal(true)}
             >
               <View style={[s.statusDot, { backgroundColor: statusInfo.color }]} />
-              <Text style={[s.statusChipText, { color: statusInfo.color }]}>{statusInfo.label}</Text>
+              <Text style={[s.statusChipText, { color: statusInfo.color }]}>{t(`chat.status.${statusInfo.key}`)}</Text>
               <Text style={[s.statusChipText, { color: statusInfo.color, fontSize: 10 }]}> ▾</Text>
             </TouchableOpacity>
           </View>
 
           {d.bio ? (
             <View style={s.bioCard}>
-              <Text style={s.bioCardLabel}>GIỚI THIỆU</Text>
+              <Text style={s.bioCardLabel}>{t('profile.bio_label')}</Text>
               <Text style={s.bioCardText}>{d.bio}</Text>
             </View>
           ) : (
             <TouchableOpacity style={s.bioEmptyCard} onPress={() => setEditModal(true)}>
-              <Text style={s.bioEmptyText}>+ Thêm giới thiệu bản thân</Text>
+              <Text style={s.bioEmptyText}>+ {t('profile.add_bio')}</Text>
             </TouchableOpacity>
           )}
 
           <View style={s.infoCard}>
-            <Text style={s.infoCardLabel}>THÔNG TIN THÀNH VIÊN</Text>
+            <Text style={s.settingsCardLabel}>{t('profile.member_info')}</Text>
             <View style={s.infoRow}>
               <Text style={s.infoRowIcon}>📧</Text>
               <View style={{ flex: 1 }}>
@@ -225,7 +230,7 @@ export default function ProfileScreen({ navigation }) {
                 <View style={s.infoRow}>
                   <Text style={s.infoRowIcon}>🏷️</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.infoRowLabel}>Tên người dùng</Text>
+                    <Text style={s.infoRowLabel}>{t('profile.username')}</Text>
                     <Text style={s.infoRowValue}>@{d.username}</Text>
                   </View>
                 </View>
@@ -238,9 +243,9 @@ export default function ProfileScreen({ navigation }) {
                 <View style={s.infoRow}>
                   <Text style={s.infoRowIcon}>📅</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.infoRowLabel}>Tham gia từ</Text>
+                    <Text style={s.infoRowLabel}>{t('profile.joined_at')}</Text>
                     <Text style={s.infoRowValue}>
-                      {new Date(d.createdAt).toLocaleDateString('vi-VN', {
+                      {new Date(d.createdAt).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric',
@@ -257,7 +262,7 @@ export default function ProfileScreen({ navigation }) {
                 <View style={s.infoRow}>
                   <Text style={s.infoRowIcon}>📱</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.infoRowLabel}>Số điện thoại</Text>
+                    <Text style={s.infoRowLabel}>{t('profile.phone')}</Text>
                     <Text style={s.infoRowValue}>{d.phone}</Text>
                   </View>
                 </View>
@@ -270,9 +275,9 @@ export default function ProfileScreen({ navigation }) {
                 <View style={s.infoRow}>
                   <Text style={s.infoRowIcon}>🔐</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.infoRowLabel}>Loại tài khoản</Text>
+                    <Text style={s.infoRowLabel}>{t('profile.account_type')}</Text>
                     <Text style={s.infoRowValue}>
-                      {d.authProvider === 'local' ? 'Tài khoản local' : `OAuth (${d.authProvider})`}
+                      {d.authProvider === 'local' ? t('profile.local_account') : `OAuth (${d.authProvider})`}
                     </Text>
                   </View>
                 </View>
@@ -285,12 +290,12 @@ export default function ProfileScreen({ navigation }) {
                 <View style={s.verifiedRow}>
                   {typeof d.isEmailVerified === 'boolean' && (
                     <Text style={s.verifiedText}>
-                      Email: {d.isEmailVerified ? 'Đã xác thực' : 'Chưa xác thực'}
+                      Email: {d.isEmailVerified ? t('profile.verified') : t('profile.unverified')}
                     </Text>
                   )}
                   {typeof d.isPhoneVerified === 'boolean' && (
                     <Text style={s.verifiedText}>
-                      SĐT: {d.isPhoneVerified ? 'Đã xác thực' : 'Chưa xác thực'}
+                      {t('profile.phone')}: {d.isPhoneVerified ? t('profile.verified') : t('profile.unverified')}
                     </Text>
                   )}
                 </View>
@@ -299,20 +304,27 @@ export default function ProfileScreen({ navigation }) {
           </View>
 
           <View style={s.settingsCard}>
-            <Text style={s.settingsCardLabel}>CÁ NHÂN HÓA</Text>
-            <SettingRow icon="✏️" label="Chỉnh sửa hồ sơ" sub="Tên, bio, trạng thái" onPress={() => setEditModal(true)} />
+            <Text style={s.settingsCardLabel}>{t('profile.personalization')}</Text>
+            <SettingRow icon="✏️" label={t('profile.edit_profile')} sub={t('profile.edit_profile_sub')} onPress={() => setEditModal(true)} />
             <View style={s.sep} />
-            <SettingRow icon="🖼️" label="Đổi ảnh đại diện" onPress={handlePickAvatar} />
+            <SettingRow icon="🖼️" label={t('profile.change_avatar')} onPress={handlePickAvatar} />
             <View style={s.sep} />
-            <SettingRow icon="🎨" label="Màu tên hiển thị" sub={d.usernameColor} accent={d.usernameColor} onPress={() => setColorModal(true)} />
+            <SettingRow icon="🎨" label={t('profile.username_color')} sub={d.usernameColor} accent={d.usernameColor} onPress={() => setColorModal(true)} />
             <View style={s.sep} />
-            <SettingRow icon="🔲" label="Mã QR của tôi" sub="Chia sẻ hồ sơ qua QR" onPress={() => setTab('qr')} />
+            <SettingRow 
+              icon="🌐" 
+              label={t('profile.language')} 
+              sub={language === 'vi' ? t('profile.vietnamese') : t('profile.english')} 
+              onPress={() => setLangModal(true)} 
+            />
             <View style={s.sep} />
-            <SettingRow icon="🔒" label="Đổi mật khẩu" sub="Cập nhật mật khẩu đăng nhập" onPress={() => navigation?.navigate('ChangePassword')} />
+            <SettingRow icon="🔲" label={t('profile.my_qr')} sub={t('profile.my_qr_sub')} onPress={() => setTab('qr')} />
+            <View style={s.sep} />
+            <SettingRow icon="🔒" label={t('profile.change_password')} sub={t('profile.change_password_sub')} onPress={() => navigation?.navigate('ChangePassword')} />
           </View>
 
           <TouchableOpacity style={s.logoutBtn} onPress={() => setLogoutModal(true)} activeOpacity={0.8}>
-            <Text style={s.logoutBtnText}>🚪  Đăng xuất</Text>
+            <Text style={s.logoutBtnText}>🚪  {t('profile.logout')}</Text>
           </TouchableOpacity>
           <View style={{ height: 32 }} />
         </ScrollView>
@@ -336,7 +348,7 @@ export default function ProfileScreen({ navigation }) {
                 </View>
               )}
 
-              <Text style={s.qrCaption}>Quét mã này để xem hồ sơ của {d.displayName}</Text>
+              <Text style={s.qrCaption}>{t('profile.qr_caption', { name: d.displayName })}</Text>
 
               <TouchableOpacity
                 style={[s.copyLinkBtn, copiedLink && { backgroundColor: THEME.statusOnline }]}
@@ -344,7 +356,7 @@ export default function ProfileScreen({ navigation }) {
                 activeOpacity={0.8}
               >
                 <Text style={s.copyLinkText}>
-                  {copiedLink ? '✓  Đã sao chép!' : '🔗  Sao chép link hồ sơ'}
+                  {copiedLink ? `✓  ${t('common.copied')}` : `🔗  ${t('profile.copy_link')}`}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -352,47 +364,52 @@ export default function ProfileScreen({ navigation }) {
         </ScrollView>
       )}
 
-      <Modal visible={editModal} animationType="slide" transparent>
-        <View style={s.overlay}>
-          <View style={s.sheet}>
+      <Modal visible={editModal} animationType="slide" transparent onRequestClose={() => setEditModal(false)}>
+        <Pressable style={s.overlay} onPress={() => setEditModal(false)}>
+          <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
             <View style={s.sheetHandle} />
-            <Text style={s.sheetTitle}>Chỉnh sửa hồ sơ</Text>
-
-            <Text style={s.fieldLabel}>TÊN HIỂN THỊ</Text>
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>{t('profile.edit_modal_title')}</Text>
+              <TouchableOpacity style={s.closeBtn} onPress={() => setEditModal(false)}>
+                <Text style={s.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {/* Content continues below... */}
+            <Text style={s.fieldLabel}>{t('profile.display_name_label')}</Text>
             <TextInput
               style={s.fieldInput}
               value={displayName}
               onChangeText={setDisplayName}
-              placeholder="Tên của bạn"
+              placeholder={t('profile.display_name_placeholder')}
               placeholderTextColor={THEME.textMuted}
               selectionColor={THEME.accent}
             />
 
-            <Text style={s.fieldLabel}>GIỚI THIỆU BẢN THÂN</Text>
+            <Text style={s.fieldLabel}>{t('profile.bio_label')}</Text>
             <TextInput
               style={[s.fieldInput, { height: 88, textAlignVertical: 'top' }]}
               value={bio}
               onChangeText={setBio}
-              placeholder="Nói gì đó về bạn..."
+              placeholder={t('profile.bio_placeholder')}
               placeholderTextColor={THEME.textMuted}
               multiline
               selectionColor={THEME.accent}
             />
 
-            <Text style={s.fieldLabel}>TRẠNG THÁI TÙY CHỈNH</Text>
+            <Text style={s.fieldLabel}>{t('profile.custom_status_label')}</Text>
             <TextInput
               style={s.fieldInput}
               value={statusText}
               onChangeText={setStatusText}
-              placeholder="Đang làm gì đó... (giống Discord)"
+              placeholder={t('profile.custom_status_placeholder')}
               placeholderTextColor={THEME.textMuted}
               maxLength={128}
               selectionColor={THEME.accent}
             />
 
             <View style={s.sheetBtns}>
-              <TouchableOpacity style={s.cancelBtn} onPress={() => setEditModal(false)}>
-                <Text style={s.cancelBtnText}>Hủy</Text>
+              <TouchableOpacity style={[s.cancelBtn, { backgroundColor: 'transparent' }]} onPress={() => setEditModal(false)}>
+                <Text style={s.cancelBtnText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.saveBtn, saving && { opacity: 0.65 }]}
@@ -402,19 +419,24 @@ export default function ProfileScreen({ navigation }) {
                 {saving ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={s.saveBtnText}>Lưu</Text>
+                  <Text style={s.saveBtnText}>{t('common.save')}</Text>
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
-      <Modal visible={statusModal} animationType="slide" transparent>
-        <View style={s.overlay}>
-          <View style={s.sheet}>
+      <Modal visible={statusModal} animationType="slide" transparent onRequestClose={() => setStatusModal(false)}>
+        <Pressable style={s.overlay} onPress={() => setStatusModal(false)}>
+          <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
             <View style={s.sheetHandle} />
-            <Text style={s.sheetTitle}>Chọn trạng thái</Text>
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>{t('profile.select_status')}</Text>
+              <TouchableOpacity style={s.closeBtn} onPress={() => setStatusModal(false)}>
+                <Text style={s.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
             {STATUS_OPTIONS.map((st) => {
               const info = STATUS_CONFIG[st];
@@ -440,25 +462,27 @@ export default function ProfileScreen({ navigation }) {
                       active && { color: info.color, fontWeight: '700' },
                     ]}
                   >
-                    {info.label}
+                    {t(`chat.status.${st}`)}
                   </Text>
                   {active && <Text style={{ color: info.color, flex: 1, textAlign: 'right' }}>✓</Text>}
                 </TouchableOpacity>
               );
             })}
-
-            <TouchableOpacity style={[s.cancelBtn, { marginTop: 8 }]} onPress={() => setStatusModal(false)}>
-              <Text style={s.cancelBtnText}>Đóng</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
-      <Modal visible={colorModal} animationType="slide" transparent>
-        <View style={s.overlay}>
-          <View style={s.sheet}>
+      <Modal visible={colorModal} animationType="slide" transparent onRequestClose={() => setColorModal(false)}>
+        <Pressable style={s.overlay} onPress={() => setColorModal(false)}>
+          <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
             <View style={s.sheetHandle} />
-            <Text style={s.sheetTitle}>Màu tên hiển thị</Text>
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>{t('profile.username_color')}</Text>
+              <TouchableOpacity style={s.closeBtn} onPress={() => setColorModal(false)}>
+                <Text style={s.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
             <Text
               style={{
                 color: d.usernameColor || THEME.accent,
@@ -488,19 +512,15 @@ export default function ProfileScreen({ navigation }) {
             </View>
 
             {saving && <ActivityIndicator color={THEME.accent} style={{ marginBottom: 8 }} />}
-
-            <TouchableOpacity style={s.cancelBtn} onPress={() => setColorModal(false)}>
-              <Text style={s.cancelBtnText}>Đóng</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <Modal visible={logoutModal} animationType="fade" transparent>
         <View style={s.overlay}>
           <View style={[s.sheet, { paddingBottom: 28 }]}>
             <Text style={{ fontSize: 44, textAlign: 'center', marginBottom: 8 }}>👋</Text>
-            <Text style={s.sheetTitle}>Đăng xuất?</Text>
+            <Text style={s.sheetTitle}>{t('profile.logout_confirm_title')}</Text>
             <Text
               style={{
                 color: THEME.textMuted,
@@ -509,22 +529,63 @@ export default function ProfileScreen({ navigation }) {
                 lineHeight: 20,
               }}
             >
-              Bạn sẽ cần đăng nhập lại để tiếp tục sử dụng ZoloChat.
-            </Text>
+              {t('profile.logout_confirm_desc')}            </Text>
 
             <View style={s.sheetBtns}>
               <TouchableOpacity style={s.cancelBtn} onPress={() => setLogoutModal(false)}>
-                <Text style={s.cancelBtnText}>Hủy</Text>
+                <Text style={s.cancelBtnText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.saveBtn, { backgroundColor: THEME.danger || '#ed4245' }]}
                 onPress={handleLogout}
               >
-                <Text style={s.saveBtnText}>Đăng xuất</Text>
+                <Text style={s.saveBtnText}>{t('profile.logout')}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
+      </Modal>
+
+      <Modal visible={langModal} animationType="slide" transparent onRequestClose={() => setLangModal(false)}>
+        <Pressable style={s.overlay} onPress={() => setLangModal(false)}>
+          <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
+            <View style={s.sheetHandle} />
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>{t('profile.select_language')}</Text>
+              <TouchableOpacity style={s.closeBtn} onPress={() => setLangModal(false)}>
+                <Text style={s.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[s.statusOption, language === 'vi' && { backgroundColor: THEME.accent + '18', borderColor: THEME.accent }]}
+              onPress={() => {
+                changeLanguage('vi');
+                setLangModal(false);
+              }}
+            >
+              <Text style={{ fontSize: 24, marginRight: 12 }}>🇻🇳</Text>
+              <Text style={[s.statusOptionText, language === 'vi' && { color: THEME.accent, fontWeight: '700' }]}>
+                {t('profile.vietnamese')}
+              </Text>
+              {language === 'vi' && <Text style={{ color: THEME.accent, flex: 1, textAlign: 'right' }}>✓</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[s.statusOption, language === 'en' && { backgroundColor: THEME.accent + '18', borderColor: THEME.accent }]}
+              onPress={() => {
+                changeLanguage('en');
+                setLangModal(false);
+              }}
+            >
+              <Text style={{ fontSize: 24, marginRight: 12 }}>🇺🇸</Text>
+              <Text style={[s.statusOptionText, language === 'en' && { color: THEME.accent, fontWeight: '700' }]}>
+                {t('profile.english')}
+              </Text>
+              {language === 'en' && <Text style={{ color: THEME.accent, flex: 1, textAlign: 'right' }}>✓</Text>}
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );

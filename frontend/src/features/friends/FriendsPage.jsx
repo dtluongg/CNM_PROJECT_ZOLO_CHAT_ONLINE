@@ -9,8 +9,10 @@ import CreateGroupModal from '../chat/components/CreateGroupModal';
 
 import { useFriendsData }    from './hooks/useFriendsData';
 import { filterFriends }     from './utils/friendHelpers';
+import { useLanguage }       from '../../context/LanguageContext';
 
 const FriendsPage = () => {
+  const { t } = useLanguage();
   const location = useLocation();
   const [activeTab, setActiveTab]           = useState('friends_list');
   const [friendFilterText, setFriendFilterText] = useState('');
@@ -47,7 +49,7 @@ const FriendsPage = () => {
   if (loading && friends.length === 0) {
     return (
       <div className="h-screen flex items-center justify-center font-semibold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
-        Đang tải kết nối...
+        {t('common.loading_friends', { defaultValue: 'Đang tải kết nối...' })}
       </div>
     );
   }

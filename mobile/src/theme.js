@@ -38,11 +38,11 @@ export const THEME = {
 };
 
 export const STATUS_CONFIG = {
-  online:    { color: THEME.statusOnline,    label: 'Đang hoạt động' },
-  idle:      { color: THEME.statusIdle,      label: 'Vắng mặt' },
-  dnd:       { color: THEME.statusDnd,       label: 'Không làm phiền' },
-  invisible: { color: THEME.statusInvisible, label: 'Ẩn' },
-  offline:   { color: THEME.statusOffline,   label: 'Ngoại tuyến' },
+  online:    { color: THEME.statusOnline,    key: 'online' },
+  idle:      { color: THEME.statusIdle,      key: 'idle' },
+  dnd:       { color: THEME.statusDnd,       key: 'dnd' },
+  invisible: { color: THEME.statusInvisible, key: 'invisible' },
+  offline:   { color: THEME.statusOffline,   key: 'offline' },
 };
 
 export const getAvatarColor = (name) => {

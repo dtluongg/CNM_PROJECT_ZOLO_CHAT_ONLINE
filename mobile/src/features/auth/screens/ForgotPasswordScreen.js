@@ -15,8 +15,10 @@ import authApi from '../api/authApi';
 import userApi from '../../user/api/userApi';
 import apiClient from '../../../services/apiClient';
 import { THEME } from '../../../theme';
+import { useLanguage } from '../../../context/LanguageContext';
 
 export default function ForgotPasswordScreen({ navigation }) {
+  const { t } = useLanguage();
   const [step, setStep] = useState(1); // 1: username/email, 2: otp + new password
   const [username, setUsername] = useState('');
   const [otp, setOtp] = useState('');
@@ -31,7 +33,7 @@ export default function ForgotPasswordScreen({ navigation }) {
     setInfoMessage('');
 
     if (!username.trim()) {
-      setError('Vui lòng nhập username hoặc email');
+      setError(t('auth.forgot_password_subtitle').split(' ')[1] === 'username' ? 'Please enter username or email' : 'Vui lòng nhập username hoặc email');
       return;
     }
 
@@ -41,13 +43,12 @@ export default function ForgotPasswordScreen({ navigation }) {
         username: username.trim(),
       });
       setInfoMessage(
-        res.data?.message ||
-          'Nếu tài khoản tồn tại, mã OTP đã được gửi tới email đăng ký'
+        res.data?.message || t('auth.otp_sent_info')
       );
       setStep(2);
     } catch (err) {
       setError(
-        err.response?.data?.message || 'Không thể gửi yêu cầu quên mật khẩu'
+        err.response?.data?.message || (t('common.error') + ': OTP')
       );
     } finally {
       setLoading(false);
@@ -59,17 +60,17 @@ export default function ForgotPasswordScreen({ navigation }) {
     setInfoMessage('');
 
     if (!otp.trim()) {
-      setError('Vui lòng nhập mã OTP');
+      setError(t('auth.otp_placeholder'));
       return;
     }
 
     if (!newPassword) {
-      setError('Vui lòng nhập mật khẩu mới');
+      setError(t('password.new_placeholder'));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Xác nhận mật khẩu không khớp');
+      setError(t('auth.password_mismatch'));
       return;
     }
 
@@ -81,10 +82,10 @@ export default function ForgotPasswordScreen({ navigation }) {
         newPassword,
       };
       const res = await authApi.resetPassword(payload);
-      const message = res.data?.message || 'Đặt lại mật khẩu thành công';
+      const message = res.data?.message || t('auth.reset_success');
       navigation.navigate('Signin', { message });
     } catch (err) {
-      setError(err.response?.data?.message || 'Không thể đặt lại mật khẩu');
+      setError(err.response?.data?.message || t('password.error_msg'));
     } finally {
       setLoading(false);
     }
@@ -103,11 +104,11 @@ export default function ForgotPasswordScreen({ navigation }) {
         <View style={styles.card}>
           <View style={styles.headerBlock}>
             <View style={styles.pill}>
-              <Text style={styles.pillText}>Khôi phục tài khoản</Text>
+              <Text style={styles.pillText}>{t('auth.recovery_header')}</Text>
             </View>
-            <Text style={styles.title}>Quên mật khẩu</Text>
+            <Text style={styles.title}>{t('auth.forgot_password_title')}</Text>
             <Text style={styles.subtitle}>
-              Nhập username hoặc email để nhận mã OTP đặt lại mật khẩu.
+              {t('auth.forgot_password_subtitle')}
             </Text>
           </View>
 
@@ -125,12 +126,12 @@ export default function ForgotPasswordScreen({ navigation }) {
 
           {step === 1 ? (
             <>
-              <Text style={styles.label}>Username hoặc Email</Text>
+              <Text style={styles.label}>{t('auth.username_email_label')}</Text>
               <TextInput
                 style={styles.input}
                 value={username}
                 onChangeText={setUsername}
-                placeholder="Nhập username hoặc email đã đăng ký"
+                placeholder={t('auth.enter_username_email')}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -144,44 +145,44 @@ export default function ForgotPasswordScreen({ navigation }) {
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.primaryBtnText}>Gửi mã OTP</Text>
+                  <Text style={styles.primaryBtnText}>{t('auth.send_otp')}</Text>
                 )}
               </TouchableOpacity>
             </>
           ) : (
             <>
-              <Text style={styles.label}>Username hoặc Email</Text>
+              <Text style={styles.label}>{t('auth.username_email_label')}</Text>
               <TextInput
                 style={[styles.input, styles.disabledInput]}
                 value={username}
                 editable={false}
               />
 
-              <Text style={styles.label}>Mã OTP</Text>
+              <Text style={styles.label}>{t('auth.otp_label')}</Text>
               <TextInput
                 style={styles.input}
                 value={otp}
                 onChangeText={setOtp}
-                placeholder="Nhập mã OTP 6 chữ số"
+                placeholder={t('auth.otp_placeholder')}
                 keyboardType="number-pad"
                 maxLength={6}
               />
 
-              <Text style={styles.label}>Mật khẩu mới</Text>
+              <Text style={styles.label}>{t('password.new_label')}</Text>
               <TextInput
                 style={styles.input}
                 value={newPassword}
                 onChangeText={setNewPassword}
-                placeholder="Mật khẩu mới"
+                placeholder={t('password.new_placeholder')}
                 secureTextEntry
               />
 
-              <Text style={styles.label}>Xác nhận mật khẩu mới</Text>
+              <Text style={styles.label}>{t('password.confirm_label')}</Text>
               <TextInput
                 style={styles.input}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                placeholder="Nhập lại mật khẩu mới"
+                placeholder={t('password.confirm_placeholder')}
                 secureTextEntry
               />
 
@@ -194,16 +195,16 @@ export default function ForgotPasswordScreen({ navigation }) {
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.primaryBtnText}>Đặt lại mật khẩu</Text>
+                  <Text style={styles.primaryBtnText}>{t('auth.reset_password_btn')}</Text>
                 )}
               </TouchableOpacity>
             </>
           )}
 
           <View style={styles.footerRow}>
-            <Text style={styles.footerText}>Nhớ lại mật khẩu? </Text>
+            <Text style={styles.footerText}>{t('auth.remember_password')}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Signin')}>
-              <Text style={styles.linkText}>Quay lại đăng nhập</Text>
+              <Text style={styles.linkText}>{t('auth.back_to_login')}</Text>
             </TouchableOpacity>
           </View>
         </View>

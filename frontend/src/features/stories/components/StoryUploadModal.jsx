@@ -1,9 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { X, Upload, Image as ImageIcon, Video, Loader2 } from 'lucide-react';
+import { X, Upload, ImageIcon, Video, Loader2 } from 'lucide-react';
+import { useLanguage } from '../../../context/LanguageContext';
 import { supabase } from '../../../config/supabase';
 import storiesApi from '../storiesApi';
 
 const StoryUploadModal = ({ onClose, onSuccess }) => {
+    const { t } = useLanguage();
     const [file, setFile] = useState(null);
     const [preview, setPreview] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -19,13 +21,13 @@ const StoryUploadModal = ({ onClose, onSuccess }) => {
         const isVideo = selected.type.startsWith('video/');
         
         if (!isImage && !isVideo) {
-            setError('Chỉ hỗ trợ ảnh và video');
+            setError(t('stories.upload.error_media'));
             return;
         }
 
         const limit = isVideo ? 15 * 1024 * 1024 : 5 * 1024 * 1024; // 15MB video, 5MB image
         if (selected.size > limit) {
-            setError(isVideo ? 'Video tối đa 15MB' : 'Ảnh tối đa 5MB');
+            setError(isVideo ? t('stories.upload.error_video_size') : t('stories.upload.error_image_size'));
             return;
         }
 
@@ -69,7 +71,7 @@ const StoryUploadModal = ({ onClose, onSuccess }) => {
             onSuccess();
         } catch (err) {
             console.error('Upload story error:', err);
-            setError(err.message || 'Có lỗi xảy ra khi đăng tin');
+            setError(err.message || t('stories.upload.error_default'));
         } finally {
             setLoading(false);
         }
@@ -79,7 +81,7 @@ const StoryUploadModal = ({ onClose, onSuccess }) => {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
             <div className="bg-[var(--bg-secondary)] rounded-2xl w-full max-w-md max-h-[95vh] flex flex-col overflow-hidden shadow-2xl">
                 <div className="p-4 border-b border-[var(--border)] flex justify-between items-center flex-shrink-0">
-                    <h2 className="text-lg font-bold text-[var(--text-primary)]">Tạo tin mới</h2>
+                    <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('stories.upload.title')}</h2>
                     <button onClick={onClose} className="p-1 hover:bg-[var(--bg-hover)] rounded-full transition-colors">
                         <X size={20} className="text-[var(--text-muted)]" />
                     </button>
@@ -100,8 +102,8 @@ const StoryUploadModal = ({ onClose, onSuccess }) => {
                             <div className="w-16 h-16 rounded-full bg-[var(--bg-hover)] flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                                 <Upload size={32} className="text-[var(--accent)]" />
                             </div>
-                            <p className="font-bold text-[var(--text-primary)]">Chọn ảnh hoặc video</p>
-                            <p className="text-xs text-[var(--text-muted)] mt-1">Hỗ trợ JPG, PNG, MP4</p>
+                            <p className="font-bold text-[var(--text-primary)]">{t('stories.upload.select_media')}</p>
+                            <p className="text-xs text-[var(--text-muted)] mt-1">{t('stories.upload.support_hint')}</p>
                         </div>
                     ) : (
                         <div className="relative aspect-[9/16] max-h-[60vh] mx-auto rounded-xl overflow-hidden bg-black">
@@ -134,7 +136,7 @@ const StoryUploadModal = ({ onClose, onSuccess }) => {
                         onClick={onClose}
                         className="flex-1 py-2.5 font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                     >
-                        Hủy
+                        {t('stories.upload.cancel')}
                     </button>
                     <button 
                         disabled={!file || loading}
@@ -142,7 +144,7 @@ const StoryUploadModal = ({ onClose, onSuccess }) => {
                         className="flex-1 bg-[var(--accent)] text-white py-2.5 rounded-xl font-bold hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg"
                     >
                         {loading && <Loader2 size={18} className="animate-spin" />}
-                        {loading ? 'Đang đăng...' : 'Chia sẻ tin'}
+                        {loading ? t('stories.upload.uploading') : t('stories.upload.share')}
                     </button>
                 </div>
             </div>

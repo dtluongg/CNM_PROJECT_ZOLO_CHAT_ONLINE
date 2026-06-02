@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, X, Check } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 import messageApi from '../../../api/messageApi';
 import conversationApi from '../../../api/conversationApi';
+import { useLanguage } from '../../../../../context/LanguageContext';
 
 const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
+  const { t } = useLanguage();
   const [conversations, setConversations] = useState([]);
   const [search, setSearch]               = useState('');
   const [selectedIds, setSelectedIds]     = useState([]);
@@ -44,7 +46,7 @@ const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
       onClose();
     } catch (err) {
       console.error('Forward error:', err);
-      alert('Có lỗi xảy ra khi chuyển tiếp tin nhắn');
+      alert(t('forward_modal.error'));
     } finally {
       setSending(false);
     }
@@ -68,7 +70,7 @@ const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
           padding: '16px 20px', borderBottom: '1px solid #eee',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <span style={{ fontWeight: 700, fontSize: 18 }}>Chuyển tiếp</span>
+          <span style={{ fontWeight: 700, fontSize: 18 }}>{t('forward_modal.title')}</span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666' }}>
             <X size={24} />
           </button>
@@ -84,7 +86,7 @@ const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Tìm kiếm người hoặc nhóm..."
+              placeholder={t('forward_modal.search_placeholder')}
               style={{ flex: 1, border: 'none', background: 'none', padding: '10px 8px', outline: 'none', fontSize: 14 }}
             />
           </div>
@@ -93,9 +95,9 @@ const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
         {/* List */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Đang tải...</div>
+            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>{t('forward_modal.loading')}</div>
           ) : filtered.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Không tìm thấy kết quả</div>
+            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>{t('forward_modal.no_results')}</div>
           ) : filtered.map(c => {
             const id   = c.id || c._id;
             const name = c.type === 'dm' ? c.otherUser?.displayName : c.name;
@@ -117,7 +119,7 @@ const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>{name}</div>
                   <div style={{ fontSize: 12, color: '#666' }}>
-                    {c.type === 'dm' ? 'Cá nhân' : `${c.totalMembers} thành viên`}
+                    {c.type === 'dm' ? t('forward_modal.dm_label') : t('forward_modal.members_count', { count: c.totalMembers })}
                   </div>
                 </div>
                 <div style={{
@@ -146,7 +148,7 @@ const ForwardModal = ({ isOpen, onClose, msg, onForward }) => {
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
-            {sending ? 'Đang gửi...' : `Chuyển tiếp${selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}`}
+            {sending ? t('forward_modal.sending') : (selectedIds.length > 0 ? t('forward_modal.forward_btn_count', { count: selectedIds.length }) : t('forward_modal.forward_btn'))}
           </button>
         </div>
       </div>

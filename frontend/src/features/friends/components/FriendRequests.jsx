@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const FriendRequests = ({
   friends,
@@ -16,6 +17,7 @@ const FriendRequests = ({
   onSendRequest,
 }) => {
   const [subTab, setSubTab] = useState('received');
+  const { t } = useLanguage();
 
   const resolveSearchBtn = (u) => {
     const friendData  = friends.find((f) => f.friendId === u._id);
@@ -23,11 +25,11 @@ const FriendRequests = ({
     const incomingReq = incomingReqs.find((req) => req.fromUserId?._id === u._id);
     const outgoingReq = outgoingReqs.find((req) => req.toUserId?._id === u._id);
 
-    if (friendData?.theyBlockedMe) return { text: 'Không thể kết bạn', action: null, style: { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', cursor: 'not-allowed' } };
-    if (isFriend)     return { text: 'Nhắn tin',     action: () => onMessage(friendData || { friendId: u._id, displayName: u.displayName, originalName: u.displayName, avatar: u.avatar }), style: { backgroundColor: 'var(--accent)', color: '#fff' } };
-    if (incomingReq)  return { text: 'Đồng ý',       action: () => onAccept(incomingReq._id), style: { backgroundColor: 'var(--accent)', color: '#fff' } };
-    if (outgoingReq)  return { text: 'Thu hồi',      action: () => onCancelRequest(outgoingReq._id), style: { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' } };
-    return { text: 'Kết bạn', action: () => onSendRequest(u._id), style: { backgroundColor: 'var(--bg-hover)', color: 'var(--accent)' } };
+    if (friendData?.theyBlockedMe) return { text: t('friends.cannot_add'), action: null, style: { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', cursor: 'not-allowed' } };
+    if (isFriend)     return { text: t('friends.message_btn'),     action: () => onMessage(friendData || { friendId: u._id, displayName: u.displayName, originalName: u.displayName, avatar: u.avatar }), style: { backgroundColor: 'var(--accent)', color: '#fff' } };
+    if (incomingReq)  return { text: t('friends.accept_btn'),       action: () => onAccept(incomingReq._id), style: { backgroundColor: 'var(--accent)', color: '#fff' } };
+    if (outgoingReq)  return { text: t('friends.cancel_req_btn'),      action: () => onCancelRequest(outgoingReq._id), style: { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' } };
+    return { text: t('friends.add_btn'), action: () => onSendRequest(u._id), style: { backgroundColor: 'var(--bg-hover)', color: 'var(--accent)' } };
   };
 
   return (
@@ -37,20 +39,20 @@ const FriendRequests = ({
         <form onSubmit={onSearchSubmit} className="flex gap-2 max-w-lg mb-4">
           <input
             type="text"
-            placeholder="Thêm bạn bằng tên hoặc email..."
+            placeholder={t('friends.add_friend_placeholder')}
             className="flex-1 p-2.5 rounded-lg border text-sm outline-none"
             style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           <button type="submit" disabled={isSearching} className="text-white px-5 py-2.5 rounded-lg text-sm font-medium" style={{ backgroundColor: 'var(--accent)' }}>
-            {isSearching ? 'Đang T...' : 'Tìm kiếm'}
+            {isSearching ? t('friends.searching') : t('friends.search_btn')}
           </button>
         </form>
 
         {searchResults.length > 0 && (
           <div className="space-y-3 max-w-lg mb-4">
-            <p className="text-xs font-bold" style={{ color: 'var(--text-muted)' }}>KẾT QUẢ TÌM KIẾM</p>
+            <p className="text-xs font-bold" style={{ color: 'var(--text-muted)' }}>{t('friends.search_results_title')}</p>
             {searchResults.map((u) => {
               const { text, action, style } = resolveSearchBtn(u);
               return (
@@ -78,8 +80,8 @@ const FriendRequests = ({
       {/* Sub tabs */}
       <div className="flex gap-6 px-6 pt-4 border-b" style={{ borderColor: 'var(--border)' }}>
         {[
-          { key: 'received', label: `Đã nhận (${incomingReqs.length})` },
-          { key: 'sent',     label: `Đã gửi (${outgoingReqs.length})` },
+          { key: 'received', label: t('friends.tab_received', { count: incomingReqs.length }) },
+          { key: 'sent',     label: t('friends.tab_sent', { count: outgoingReqs.length }) },
         ].map(({ key, label }) => (
           <button
             key={key}
@@ -100,7 +102,7 @@ const FriendRequests = ({
         <div className="space-y-4 max-w-3xl">
           {subTab === 'received' ? (
             <>
-              {incomingReqs.length === 0 && <p className="text-center py-10" style={{ color: 'var(--text-muted)' }}>Không có lời mời nào đến bạn.</p>}
+              {incomingReqs.length === 0 && <p className="text-center py-10" style={{ color: 'var(--text-muted)' }}>{t('friends.no_received_reqs')}</p>}
               {incomingReqs.map((req) => (
                 <div key={req._id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-xl shadow-sm gap-4" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
                   <div className="flex items-center gap-4">
@@ -112,20 +114,20 @@ const FriendRequests = ({
                       </div>
                     )}
                     <div>
-                      <p className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{req.fromUserId?.displayName || 'Người lạ'}</p>
-                      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Muốn kết bạn với bạn</p>
+                      <p className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{req.fromUserId?.displayName || t('friends.stranger')}</p>
+                      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{t('friends.want_to_friend')}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 self-end sm:self-auto">
-                    <button onClick={() => onReject(req._id)} className="px-5 py-2 text-sm font-semibold rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}>Từ chối</button>
-                    <button onClick={() => onAccept(req._id)} className="px-5 py-2 text-sm font-semibold rounded-lg" style={{ backgroundColor: 'var(--accent)', color: '#fff' }}>Đồng ý</button>
+                    <button onClick={() => onReject(req._id)} className="px-5 py-2 text-sm font-semibold rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}>{t('friends.reject_btn')}</button>
+                    <button onClick={() => onAccept(req._id)} className="px-5 py-2 text-sm font-semibold rounded-lg" style={{ backgroundColor: 'var(--accent)', color: '#fff' }}>{t('friends.accept_btn')}</button>
                   </div>
                 </div>
               ))}
             </>
           ) : (
             <>
-              {outgoingReqs.length === 0 && <p className="text-center py-10" style={{ color: 'var(--text-muted)' }}>Bạn chưa gửi lời mời kết bạn nào.</p>}
+              {outgoingReqs.length === 0 && <p className="text-center py-10" style={{ color: 'var(--text-muted)' }}>{t('friends.no_sent_reqs')}</p>}
               {outgoingReqs.map((req) => (
                 <div key={req._id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-xl shadow-sm gap-4" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
                   <div className="flex items-center gap-4">
@@ -133,12 +135,12 @@ const FriendRequests = ({
                       {req.toUserId?.displayName?.[0] || 'N'}
                     </div>
                     <div>
-                      <p className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{req.toUserId?.displayName || 'Người lạ'}</p>
-                      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Đang chờ đối phương xác nhận...</p>
+                      <p className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{req.toUserId?.displayName || t('friends.stranger')}</p>
+                      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{t('friends.waiting_accept')}</p>
                     </div>
                   </div>
                   <button onClick={() => onCancelRequest(req._id)} className="px-5 py-2 text-sm font-semibold rounded-lg self-end sm:self-auto" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}>
-                    Thu hồi lời mời
+                    {t('friends.cancel_invite_btn')}
                   </button>
                 </div>
               ))}
@@ -150,4 +152,4 @@ const FriendRequests = ({
   );
 };
 
-export default FriendRequests;
+export default FriendRequests;

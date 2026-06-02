@@ -113,6 +113,18 @@ const messageApi = {
 
   votePoll: (messageId, { optionId, optionIds, newOptions, votedNewOptions } = {}) =>
     apiClient.patch(`/messages/poll/${messageId}/vote`, { optionId, optionIds, newOptions, votedNewOptions }),
+
+  // ── Nhắc hẹn (Reminder) ──────────────────────────────────────────────
+  createReminder: (conversationId, { content, reminderTime }) =>
+    apiClient.post(`/messages/${conversationId}`, { 
+      type: 'reminder', 
+      content, 
+      payload: { reminderTime } 
+    }),
+
+  // ── AI Translate ───────────────────────────────────────────────────
+  translateMessage: (text, targetLanguage = 'English') =>
+    apiClient.post('/messages/ai/translate', { text, targetLanguage }),
 };
 
 

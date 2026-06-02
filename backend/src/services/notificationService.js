@@ -196,7 +196,7 @@ const handleMentionsNotification = async ({ senderId, conversationId, messageId,
                 body: 'Ai đó đã nhắc đến bạn', isRead: false
             });
 
-            await exports.emitUnreadCount(userId);
+            await emitUnreadCount(userId);
         }
     } catch (error) {
         console.error('Lỗi handleMentionsNotification:', error);

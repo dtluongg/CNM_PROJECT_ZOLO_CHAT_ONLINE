@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { PhoneOff, Volume2, X, Maximize2, Minimize2 } from 'lucide-react';
 import { useVoiceRoomContext } from '../VoiceRoomContext';
 
-export default function VoiceRoomPanel({ visible, conversation, currentUserId, onClose }) {
+export default function VoiceRoomPanel({ visible, conversation, onClose }) {
   const {
     connected, inRoom, leaveRoom,
     activeKey, activeConversationId,
@@ -17,7 +17,7 @@ export default function VoiceRoomPanel({ visible, conversation, currentUserId, o
     const el = screenRef.current;
     if (!el || !screenTrack) return;
     screenTrack.attach(el);
-    return () => { try { screenTrack.detach(el); } catch {} };
+    return () => { try { screenTrack.detach(el); } catch (err) { console.debug(err); } };
   }, [screenTrack, expanded]); // re-run when toggling expanded (new video el mounts)
 
   if (!visible || !inRoom || !connected) return null;

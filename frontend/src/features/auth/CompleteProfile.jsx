@@ -3,15 +3,14 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
 import authApi from './api/authApi';
+import { useLanguage } from '../../context/LanguageContext';
 
-// Trang này hiện ra khi Facebook không trả về email.
-// Người dùng phải nhập email + xác thực OTP để hoàn tất đăng ký.
 const CompleteProfile = () => {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
 
-  // Nhận state từ AuthCallback: { supabaseId, provider, displayName, avatar, accessToken }
   const oauthData = location.state;
 
   const [email, setEmail] = useState('');
@@ -24,7 +23,6 @@ const CompleteProfile = () => {
   const [infoMsg, setInfoMsg] = useState('');
 
   useEffect(() => {
-    // Nếu không có oauthData → redirect về signin
     if (!oauthData?.supabaseId) {
       navigate('/signin', { replace: true });
     }
@@ -43,15 +41,15 @@ const CompleteProfile = () => {
   const handleSendOtp = async () => {
     setError('');
     setInfoMsg('');
-    if (!email) { setError('Vui lòng nhập email'); return; }
+    if (!email) { setError(t('auth.enter_email_first')); return; }
     setOtpLoading(true);
     try {
       const res = await authApi.sendEmailOtp({ email });
       setOtpSent(true);
-      setInfoMsg(res.data.message || 'OTP đã gửi về email');
+      setInfoMsg(res.data.message || t('auth.otp_sent_email'));
       startCooldown();
     } catch (err) {
-      setError(err.response?.data?.message || 'Không thể gửi OTP');
+      setError(err.response?.data?.message || t('auth.send_otp_email_failed'));
     } finally {
       setOtpLoading(false);
     }
@@ -60,7 +58,7 @@ const CompleteProfile = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!otp) { setError('Vui lòng nhập mã OTP'); return; }
+    if (!otp) { setError(t('auth.otp_required')); return; }
     setLoading(true);
     try {
       const res = await authApi.completeOAuthProfile({
@@ -72,14 +70,13 @@ const CompleteProfile = () => {
         avatar: oauthData.avatar,
       });
 
-      // Lấy Supabase session để dùng làm accessToken
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token || oauthData.accessToken;
 
       login(accessToken, res.data.user);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || 'Hoàn tất đăng ký thất bại');
+      setError(err.response?.data?.message || t('auth.complete_profile_failed'));
     } finally {
       setLoading(false);
     }
@@ -90,15 +87,13 @@ const CompleteProfile = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-        {/* Header */}
         <div className="text-center mb-6">
           {oauthData.avatar && (
             <img src={oauthData.avatar} alt="avatar" className="w-16 h-16 rounded-full mx-auto mb-3 border-2 border-gray-200" />
           )}
-          <h1 className="text-2xl font-bold text-gray-800">Hoàn tất đăng ký</h1>
+          <h1 className="text-2xl font-bold text-gray-800">{t('auth.complete_profile_title')}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Xin chào <span className="font-semibold">{oauthData.displayName}</span>!
-            Tài khoản Facebook chưa có email. Vui lòng xác thực email để tiếp tục.
+            {t('auth.complete_profile_desc', { name: oauthData.displayName, provider: oauthData.provider })}
           </p>
         </div>
 
@@ -110,16 +105,15 @@ const CompleteProfile = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email + gửi OTP */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">{t('auth.email')}</label>
             <div className="flex gap-2">
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="your@email.com"
+                placeholder={t('auth.email_placeholder')}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
               <button
@@ -128,20 +122,19 @@ const CompleteProfile = () => {
                 disabled={otpLoading || cooldown > 0 || !email}
                 className="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap"
               >
-                {otpLoading ? 'Đang gửi...' : cooldown > 0 ? `Gửi lại (${cooldown}s)` : 'Gửi OTP'}
+                {otpLoading ? t('auth.sending') : cooldown > 0 ? t('auth.resend_otp', { count: cooldown }) : t('auth.send_otp')}
               </button>
             </div>
           </div>
 
-          {/* Nhập OTP */}
           {otpSent && (
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Mã OTP</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">{t('auth.otp_label')}</label>
               <input
                 type="text"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
-                placeholder="Nhập mã 6 chữ số"
+                placeholder={t('auth.otp_code_placeholder')}
                 maxLength={6}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
@@ -153,14 +146,14 @@ const CompleteProfile = () => {
             disabled={loading || !otpSent || !otp}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition disabled:opacity-50"
           >
-            {loading ? 'Đang xử lý...' : 'Hoàn tất đăng ký'}
+            {loading ? t('common.processing') : t('auth.finish_registration_btn')}
           </button>
         </form>
 
         <p className="text-center text-sm text-gray-500 mt-4">
-          Muốn dùng tài khoản khác?{' '}
+          {t('auth.other_account_link')}{' '}
           <button onClick={() => navigate('/signin')} className="text-blue-600 hover:underline font-semibold">
-            Quay lại đăng nhập
+            {t('auth.back_to_signin')}
           </button>
         </p>
       </div>

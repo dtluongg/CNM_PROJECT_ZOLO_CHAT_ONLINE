@@ -17,6 +17,8 @@ const notificationSchema = new mongoose.Schema(
             type: String,
             enum: [
                 'message',
+                'mention',
+                'reminder',
                 'friend_request',
                 'friend_accepted',
                 'call_incoming',

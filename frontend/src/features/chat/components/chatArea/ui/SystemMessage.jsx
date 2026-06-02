@@ -1,15 +1,21 @@
-import { Phone, Video, LogOut, UserX, Edit3, Image, Info, UserPlus, Shield, Crown } from 'lucide-react';
+import React from 'react';
+import { Phone, Video, LogOut, UserX, Edit3, Image, Info, UserPlus, Shield, Crown, Bell } from 'lucide-react';
 import MiniAvatar from './MiniAvatar'
-
-const GROUP_TYPE_LABELS = {
-  study:   '📚 Học tập',
-  gaming:  '🎮 Gaming',
-  general: '💬 Chung',
-  project: '💼 Dự án',
-  other:   '✨ Khác',
-};
+import { useLanguage } from '../../../../../context/LanguageContext';
+import { translateLastMessage } from '../../../../../utils/translationUtils';
 
 const SystemMessage = ({ msg }) => {
+  const { t } = useLanguage();
+
+  const GROUP_TYPE_LABELS_T = {
+    study:   t('auth.group_types.study'),
+    gaming:  t('auth.group_types.gaming'),
+    general: t('auth.group_types.general'),
+    project: t('auth.group_types.project'),
+    other:   t('auth.group_types.other'),
+    sensitive: t('auth.group_types.sensitive'),
+  };
+
   const event = msg.payload?.event;
 
   // ── Tham gia nhóm ────────────────────────────────────────────────────────
@@ -29,12 +35,12 @@ const SystemMessage = ({ msg }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <MiniAvatar name={targetName} avatar={targetAvatar} />
             <span style={{ fontSize: 13, fontWeight: 700, color: '#5865f2' }}>
-              {targetName} đã tham gia nhóm!
+              {t('system.join', { name: targetName })}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}>
             <UserPlus size={10} />
-            <span>Được mời bởi <b>{actorName}</b></span>
+            <span>{t('system.invited_by', { name: actorName })}</span>
           </div>
           <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.7 }}>{msg.time}</span>
         </div>
@@ -55,7 +61,7 @@ const SystemMessage = ({ msg }) => {
         }}>
           <MiniAvatar name={actorName} avatar={actorAvatar} />
           <LogOut size={12} color="var(--text-muted)" />
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{actorName} đã rời khỏi nhóm</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('system.leave', { name: actorName })}</span>
           <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.6 }}>{msg.time}</span>
         </div>
       </div>
@@ -78,10 +84,10 @@ const SystemMessage = ({ msg }) => {
           <UserX size={12} color="#ed4245" />
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: '#ed4245' }}>
-              {targetName} đã bị xóa khỏi nhóm
+              {t('system.kick', { name: targetName })}
             </span>
             {reason && (
-              <span style={{ fontSize: 10, color: '#ed4245', opacity: 0.75 }}>Lý do: {reason}</span>
+              <span style={{ fontSize: 10, color: '#ed4245', opacity: 0.75 }}>{t('system.kick_reason', { reason })}</span>
             )}
           </div>
           <span style={{ fontSize: 10, color: '#ed4245', opacity: 0.6 }}>{msg.time}</span>
@@ -109,10 +115,10 @@ const SystemMessage = ({ msg }) => {
           <MiniAvatar name={targetName} avatar={targetAvatar} />
           <Shield size={12} color={isAdmin ? '#f0b132' : 'var(--text-muted)'} />
           <span style={{ fontSize: 12, color: isAdmin ? '#f0b132' : 'var(--text-muted)', fontWeight: 600 }}>
-            {targetName} được đặt làm {isAdmin ? 'Quản trị viên' : 'Thành viên'}
+            {t('system.role_update', { name: targetName, role: isAdmin ? t('system.role_admin') : t('system.role_member') })}
           </span>
           <span style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.7 }}>
-            bởi {actorName}
+            {t('system.role_by', { name: actorName })}
           </span>
           <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.6 }}>{msg.time}</span>
         </div>
@@ -137,12 +143,12 @@ const SystemMessage = ({ msg }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <MiniAvatar name={targetName} avatar={targetAvatar} />
             <span style={{ fontSize: 13, fontWeight: 700, color: '#f0b132' }}>
-              {targetName} là chủ nhóm mới!
+              {t('system.owner_transfer', { name: targetName })}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}>
             <Crown size={10} />
-            <span>Chuyển từ <b>{actorName}</b></span>
+            <span>{t('system.transfer_from', { name: actorName })}</span>
           </div>
           <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.7 }}>{msg.time}</span>
         </div>
@@ -161,7 +167,7 @@ const SystemMessage = ({ msg }) => {
       changeRows.push(
         <div key="name" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
           <Edit3 size={10} />
-          <span>Tên nhóm: <b>{changes.name.newValue}</b></span>
+          <span>{t('system.updated_name', { name: changes.name.newValue })}</span>
         </div>
       );
     }
@@ -169,7 +175,7 @@ const SystemMessage = ({ msg }) => {
       changeRows.push(
         <div key="avatar" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
           <Image size={10} />
-          <span>Đã cập nhật ảnh nhóm</span>
+          <span>{t('system.updated_avatar')}</span>
           {changes.avatar.newValue && (
             <img src={changes.avatar.newValue} alt="new avatar"
               style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} />
@@ -181,7 +187,7 @@ const SystemMessage = ({ msg }) => {
       changeRows.push(
         <div key="desc" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
           <Info size={10} />
-          <span>Mô tả: <i>{changes.description.newValue || '(trống)'}</i></span>
+          <span>{t('system.updated_desc', { desc: changes.description.newValue || t('system.updated_desc_empty') })}</span>
         </div>
       );
     }
@@ -189,7 +195,7 @@ const SystemMessage = ({ msg }) => {
       changeRows.push(
         <div key="type" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
           <Info size={10} />
-          <span>Loại nhóm: <b>{GROUP_TYPE_LABELS[changes.groupType.newValue] || changes.groupType.newValue}</b></span>
+          <span>{t('system.updated_type', { type: GROUP_TYPE_LABELS_T[changes.groupType.newValue] || changes.groupType.newValue })}</span>
         </div>
       );
     }
@@ -204,7 +210,7 @@ const SystemMessage = ({ msg }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
             <MiniAvatar name={actorName} avatar={actorAvatar} />
             <span style={{ fontSize: 12, fontWeight: 600, color: '#5865f2', flex: 1 }}>
-              {actorName} đã cập nhật nhóm
+              {t('system.group_updated', { name: actorName })}
             </span>
             <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.7 }}>{msg.time}</span>
           </div>
@@ -213,6 +219,44 @@ const SystemMessage = ({ msg }) => {
               {changeRows}
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Nhắc hẹn ─────────────────────────────────────────────────────────────
+  if (event === 'reminder_triggered') {
+    const reminderContent = msg.payload?.reminderContent || msg.content || t('system.reminder_default');
+    const actorName    = msg.senderName || msg.payload?.actorName || t('system.someone');
+    const actorAvatar  = msg.avatar     || msg.payload?.actorAvatar || null;
+
+    const convType      = msg.payload?.convType || 'dm';
+    const targetName    = msg.payload?.targetName || msg.payload?.convName || 'Zolo';
+    const targetAvatar  = msg.payload?.targetAvatar || msg.payload?.convAvatar || null;
+
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 16px' }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: '#fff', border: '1px solid #fbbf24',
+          borderRadius: 40, padding: '6px 14px',
+          boxShadow: '0 2px 8px rgba(251, 191, 36, 0.15)', userSelect: 'none',
+        }}>
+          {/* Avatar Người đặt nhắc hẹn */}
+          <MiniAvatar name={actorName} avatar={actorAvatar} />
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Bell size={13} color="#f97316" fill="#f97316" />
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#f97316' }}>
+                {t('system.reminder_title', { content: reminderContent })}
+              </span>
+            </div>
+            <span style={{ fontSize: 10, color: '#9a3412', opacity: 0.7 }}>{msg.time}</span>
+          </div>
+
+          {/* Avatar Đối phương (DM) hoặc Avatar Nhóm (Group) */}
+          <MiniAvatar name={targetName} avatar={targetAvatar} />
         </div>
       </div>
     );
@@ -279,13 +323,14 @@ const SystemMessage = ({ msg }) => {
   if (status === 'ended') {
     const dur = msg.payload?.duration || 0;
     const m = Math.floor(dur / 60), s = dur % 60;
-    label = `Cuộc gọi ${isVideo ? 'video' : 'thoại'} · ${m > 0 ? `${m} phút ${s} giây` : `${s} giây`}`;
+    const durStr = `${m > 0 ? t('system.minutes', { count: m }) + ' ' : ''}${t('system.seconds', { count: s })}`;
+    label = t('system.call_ended', { type: isVideo ? t('system.video') : t('system.voice'), duration: durStr });
   } else if (isMissed) {
-    label = 'Cuộc gọi nhỡ';
+    label = t('system.call_missed');
   } else if (isRejected) {
-    label = 'Cuộc gọi bị từ chối';
+    label = t('system.call_rejected');
   } else {
-    label = msg.content;
+    label = translateLastMessage(msg.content, t);
   }
 
   const color  = isBad ? '#ed4245' : 'var(--text-muted)';

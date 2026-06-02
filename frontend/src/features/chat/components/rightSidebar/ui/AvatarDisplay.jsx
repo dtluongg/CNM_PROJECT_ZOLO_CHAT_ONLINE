@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { getInitials, STATUS_CONFIG } from '../utils/avatarUtils';
+import { useLanguage } from '../../../../../context/LanguageContext';
 
 const AvatarDisplay = ({
   conversation,
@@ -10,9 +11,19 @@ const AvatarDisplay = ({
   getLastSeen,
   formatLastSeen,
 }) => {
+  const { t } = useLanguage();
   const statusConfig = presStatus ? STATUS_CONFIG[presStatus] || STATUS_CONFIG.online : null;
   const [imgError, setImgError] = useState(false);
   useEffect(() => { setImgError(false); }, [conversation.avatar]);
+
+  // Localize status label if it matches our config
+  const localizedStatusLabel = statusConfig 
+    ? (statusConfig.label === 'Trực tuyến' ? t('presence.online') 
+      : statusConfig.label === 'Vắng mặt' ? t('presence.away') 
+      : statusConfig.label === 'Đừng làm phiền' ? t('presence.dnd')
+      : statusConfig.label === 'Ẩn' ? t('presence.invisible')
+      : statusConfig.label)
+    : t('presence.offline');
 
   return (
     <div style={{ background: 'var(--bg-tertiary)', borderRadius: 10, overflow: 'hidden', margin: 12 }}>
@@ -100,14 +111,14 @@ const AvatarDisplay = ({
                   background: statusConfig ? statusConfig.dot : '#80848e',
                   display: 'inline-block',
                 }} />
-                {statusConfig ? statusConfig.label : 'Offline'}
+                {localizedStatusLabel}
               </div>
 
               {!isOnline && conversation?.otherUserId && (() => {
                 const ls = getLastSeen(conversation.otherUserId);
                 return ls ? (
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    Hoạt động {formatLastSeen(ls)}
+                    {t('user_profile.active_at', { time: formatLastSeen(ls) })}
                   </div>
                 ) : null;
               })()}
@@ -115,7 +126,7 @@ const AvatarDisplay = ({
           ) : (
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
               <MessageCircle size={12} style={{ opacity: 0.7 }} />
-              {conversation.memberCount || conversation.members || 0} thành viên
+              {t('chat.members_count_val', { count: conversation.memberCount || conversation.members || 0 })}
             </div>
           )}
         </div>

@@ -1,0 +1,40 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1028.0",
+    "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.101.1",
+    "axios": "^1.14.0",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.4.1",
+    "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.4",
+    "passport": "^0.7.0",
+    "passport-facebook": "^3.0.0",
+    "passport-google-oauth20": "^2.0.0",
+    "socket.io": "^4.8.3",
+    "twilio": "^5.13.1"
+  },
+  "devDependencies": {
+    "morgan": "^1.10.1",
+    "nodemon": "^3.1.14"
+  }
+}

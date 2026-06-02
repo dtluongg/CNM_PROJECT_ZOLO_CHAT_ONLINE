@@ -4,58 +4,66 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, FlatList,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import callApi from '../api/callApi';
 import { useAuth } from '../../../context/AuthContext';
 import { useCall } from '../CallContext';
 import { THEME } from '../../../theme';
-
-const STATUS_CONFIG = {
-  ended:    { label: 'Đã kết thúc',    color: THEME.textMuted },
-  missed:   { label: 'Nhỡ',            color: THEME.danger },
-  rejected: { label: 'Từ chối',        color: THEME.danger },
-  ongoing:  { label: 'Đang gọi',       color: THEME.statusOnline },
-  calling:  { label: 'Đang đổ chuông', color: THEME.statusIdle },
-  busy:     { label: 'Máy bận',        color: THEME.statusIdle },
-};
+import { useLanguage } from '../../../context/LanguageContext';
 
 const formatDur = (secs) => {
   if (!secs) return '';
   const m = Math.floor(secs / 60);
   const s = secs % 60;
-  return m > 0 ? `${m}p ${s}s` : `${s}s`;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
 };
-
-const formatTime = (iso) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
-  if (sameDay) return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-  const diff = Math.floor((now - d) / 86400000);
-  if (diff === 1) return 'Hôm qua';
-  if (diff < 7)  return `${diff} ngày trước`;
-  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-};
-
-function StatusIcon({ type, status, isOutgoing }) {
-  const color = STATUS_CONFIG[status]?.color || THEME.textMuted;
-  if (status === 'missed' || status === 'rejected') return <Feather name="phone-missed" size={16} color={color} />;
-  if (!isOutgoing) return <Feather name="phone-incoming" size={16} color={color} />;
-  return <Feather name={type === 'video' ? 'video' : 'phone'} size={16} color={color} />;
-}
 
 export default function CallHistoryTab({ otherUserId, otherUserName, otherUserAvatar }) {
   const { user } = useAuth();
   const { initiateCall } = useCall();
+  const { t } = useLanguage();
+  
   const [calls,   setCalls]   = useState([]);
   const [loading, setLoading] = useState(false);
   const [page,    setPage]    = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
   const currentUserId = user?._id?.toString();
+
+  const STATUS_CONFIG = {
+    ended:    { label: t('call_history.status.ended'),    color: THEME.textMuted },
+    missed:   { label: t('call_history.status.missed'),   color: '#ed4245' },
+    rejected: { label: t('call_history.status.rejected'), color: '#ed4245' },
+    ongoing:  { label: t('call_history.status.ongoing'),  color: '#57f287' },
+    calling:  { label: t('call_history.status.calling'),  color: THEME.accent },
+    busy:     { label: t('call_history.status.busy'),     color: '#faa61a' },
+  };
+
+  const formatTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    
+    // Determine locale for date formatting
+    const locale = t('common.edit') === 'Sửa' ? 'vi-VN' : 'en-US';
+
+    if (sameDay) return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+    const diff = Math.floor((now - d) / 86400000);
+    if (diff === 1) return t('call_history.yesterday');
+    if (diff < 7)  return t('call_history.days_ago', { count: diff });
+    return d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+  };
+
+  function StatusIcon({ type, status, isOutgoing }) {
+    const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.ended;
+    const color = cfg.color;
+    if (status === 'missed' || status === 'rejected') return <Feather name="phone-missed" size={16} color={color} />;
+    if (!isOutgoing) return <Feather name="phone-incoming" size={16} color={color} />;
+    return <Feather name={type === 'video' ? 'video' : 'phone'} size={16} color={color} />;
+  }
 
   const fetchCalls = useCallback(async (p = 1) => {
     if (!otherUserId) return;
@@ -90,7 +98,7 @@ export default function CallHistoryTab({ otherUserId, otherUserName, otherUserAv
     return (
       <View style={styles.center}>
         <ActivityIndicator color={THEME.accent} />
-        <Text style={styles.muted}>Đang tải...</Text>
+        <Text style={styles.muted}>{t('info_panel.labels.loading')}</Text>
       </View>
     );
   }
@@ -100,16 +108,16 @@ export default function CallHistoryTab({ otherUserId, otherUserName, otherUserAv
       <View style={styles.center}>
         <Feather name="phone-off" size={32} color={THEME.textMuted} />
         <Text style={[styles.muted, { marginTop: 8, textAlign: 'center' }]}>
-          Chưa có cuộc gọi nào
+          {t('call_history.no_calls')}
         </Text>
         <View style={styles.quickBtns}>
           <TouchableOpacity style={[styles.qBtn, { backgroundColor: '#3ba55c' }]} onPress={() => callBack('audio')}>
             <Feather name="phone" size={15} color="#fff" />
-            <Text style={styles.qBtnText}>Gọi thoại</Text>
+            <Text style={styles.qBtnText}>{t('call_history.audio_call')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.qBtn, { backgroundColor: THEME.accent }]} onPress={() => callBack('video')}>
             <Feather name="video" size={15} color="#fff" />
-            <Text style={styles.qBtnText}>Gọi video</Text>
+            <Text style={styles.qBtnText}>{t('call_history.video_call')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -122,11 +130,11 @@ export default function CallHistoryTab({ otherUserId, otherUserName, otherUserAv
       <View style={styles.quickBtns}>
         <TouchableOpacity style={[styles.qBtn, styles.qBtnOutline, { borderColor: '#3ba55c' }]} onPress={() => callBack('audio')}>
           <Feather name="phone" size={14} color="#3ba55c" />
-          <Text style={[styles.qBtnText, { color: '#3ba55c' }]}>Gọi thoại</Text>
+          <Text style={[styles.qBtnText, { color: '#3ba55c' }]}>{t('call_history.audio_call')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.qBtn, styles.qBtnOutline, { borderColor: THEME.accent }]} onPress={() => callBack('video')}>
           <Feather name="video" size={14} color={THEME.accent} />
-          <Text style={[styles.qBtnText, { color: THEME.accent }]}>Gọi video</Text>
+          <Text style={[styles.qBtnText, { color: THEME.accent }]}>{t('call_history.video_call')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -143,9 +151,9 @@ export default function CallHistoryTab({ otherUserId, otherUserName, otherUserAv
             <StatusIcon type={c.type} status={c.status} isOutgoing={isOut} />
             <View style={{ flex: 1, marginLeft: 10 }}>
               <View style={styles.itemRow}>
-                <Text style={styles.itemTitle}>{isOut ? 'Gọi đi' : 'Gọi đến'}</Text>
+                <Text style={styles.itemTitle}>{isOut ? t('call_history.outgoing') : t('call_history.incoming')}</Text>
                 <Text style={[styles.itemSub, { color: THEME.textMuted, marginLeft: 4 }]}>
-                  · {c.type === 'video' ? 'video' : 'thoại'}
+                  · {c.type === 'video' ? t('call_history.video') : t('call_history.audio')}
                 </Text>
               </View>
               <Text style={[styles.itemSub, { color: cfg.color }]}>
@@ -160,7 +168,7 @@ export default function CallHistoryTab({ otherUserId, otherUserName, otherUserAv
 
       {hasMore && (
         <TouchableOpacity style={styles.loadMore} onPress={() => fetchCalls(page + 1)} disabled={loading}>
-          <Text style={styles.muted}>{loading ? 'Đang tải...' : 'Tải thêm'}</Text>
+          <Text style={styles.muted}>{loading ? t('info_panel.labels.loading') : t('call_history.load_more')}</Text>
         </TouchableOpacity>
       )}
     </View>

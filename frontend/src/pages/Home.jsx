@@ -560,7 +560,7 @@ const Home = () => {
               {
                 icon: '🎎',
                 title: 'Nhóm Gia đình & Bạn bè',
-                desc: 'Lập nhóm chat với gia đình, bạn bè, đồng nghiệp. Chia sẻ khoảnh khắc đáng nhớ mỗi ngày.',
+                desc: 'Lập nhóm chat với gia đình, bạn bè, đồng nghiệp. Chia sẻ những bảng tin đáng nhớ mỗi ngày.',
                 accent: '#8B5CF6',
               },
               {

@@ -9,6 +9,7 @@ const updateProfile = async (req, res) => {
         const {
             avatar, displayName,
             bio, status, statusText, banner, usernameColor, themeName, themeColors,
+            language,
         } = req.body;
         const userId = req.user._id;
 
@@ -30,6 +31,7 @@ const updateProfile = async (req, res) => {
         if (usernameColor !== undefined) updates.usernameColor = usernameColor;
         if (themeName !== undefined) updates.themeName = themeName;
         if (themeColors !== undefined) updates.themeColors = themeColors;
+        if (language !== undefined) updates.language = language;
 
         if (Object.keys(updates).length === 0) {
             return res.status(400).json({ message: 'Không có dữ liệu để cập nhật' });
@@ -80,6 +82,7 @@ const updateProfile = async (req, res) => {
                 authProvider: updatedUser.authProvider,
                 isEmailVerified: updatedUser.isEmailVerified,
                 isPhoneVerified: updatedUser.isPhoneVerified,
+                language: updatedUser.language || 'vi',
                 createdAt: updatedUser.createdAt,
             },
         });

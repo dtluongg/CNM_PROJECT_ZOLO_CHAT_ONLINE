@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import authApi from './api/authApi';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 const ChangePassword = () => {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
@@ -23,17 +25,17 @@ const ChangePassword = () => {
     setSuccessMessage('');
 
     if (!isLocalAccount) {
-      setError('Tài khoản đăng nhập bằng Google/Facebook không thể đổi mật khẩu tại đây.');
+      setError(t('auth.oauth_no_change_pass'));
       return;
     }
 
     if (!oldPassword || !newPassword || !confirmPassword) {
-      setError('Vui lòng điền đầy đủ các trường.');
+      setError(t('auth.fill_all_fields'));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Mật khẩu mới và xác nhận không khớp.');
+      setError(t('auth.passwords_mismatch_change'));
       return;
     }
 
@@ -44,7 +46,7 @@ const ChangePassword = () => {
         newPassword,
       });
 
-      const msg = res?.data?.message || 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.';
+      const msg = res?.data?.message || t('auth.change_pass_success');
       setSuccessMessage(msg);
       setOldPassword('');
       setNewPassword('');
@@ -55,7 +57,7 @@ const ChangePassword = () => {
         navigate('/signin', { state: { message: msg } });
       }, 1200);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Đổi mật khẩu thất bại. Vui lòng thử lại.');
+      setError(err?.response?.data?.message || t('auth.change_pass_failed'));
     } finally {
       setLoading(false);
     }
@@ -66,11 +68,11 @@ const ChangePassword = () => {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         <div className="text-center mb-6">
           <p className="inline-flex items-center justify-center rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 mb-3">
-            Bảo mật tài khoản
+            {t('auth.security_label')}
           </p>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Đổi mật khẩu</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">{t('auth.change_password_title')}</h1>
           <p className="text-sm text-gray-500">
-            Cập nhật mật khẩu mới để bảo vệ tài khoản của bạn.
+            {t('auth.change_password_desc')}
           </p>
         </div>
 
@@ -88,13 +90,13 @@ const ChangePassword = () => {
 
         {!isLocalAccount && (
           <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded-lg mb-4 text-sm">
-            Tài khoản OAuth không hỗ trợ đổi mật khẩu trong ứng dụng.
+            {t('auth.oauth_no_support')}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-gray-700 font-semibold mb-2 text-sm">Mật khẩu hiện tại</label>
+            <label className="block text-gray-700 font-semibold mb-2 text-sm">{t('auth.current_password_label')}</label>
             <input
               type="password"
               value={oldPassword}
@@ -102,12 +104,12 @@ const ChangePassword = () => {
               required
               disabled={!isLocalAccount || loading}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
-              placeholder="Nhập mật khẩu hiện tại"
+              placeholder={t('auth.current_password_placeholder')}
             />
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-2 text-sm">Mật khẩu mới</label>
+            <label className="block text-gray-700 font-semibold mb-2 text-sm">{t('auth.new_password_label')}</label>
             <input
               type="password"
               value={newPassword}
@@ -115,12 +117,12 @@ const ChangePassword = () => {
               required
               disabled={!isLocalAccount || loading}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
-              placeholder="Mật khẩu mới"
+              placeholder={t('auth.new_password_placeholder')}
             />
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-2 text-sm">Xác nhận mật khẩu mới</label>
+            <label className="block text-gray-700 font-semibold mb-2 text-sm">{t('auth.confirm_new_password_label')}</label>
             <input
               type="password"
               value={confirmPassword}
@@ -128,7 +130,7 @@ const ChangePassword = () => {
               required
               disabled={!isLocalAccount || loading}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
-              placeholder="Nhập lại mật khẩu mới"
+              placeholder={t('auth.confirm_new_password_placeholder')}
             />
           </div>
 
@@ -137,18 +139,18 @@ const ChangePassword = () => {
             disabled={loading || !isLocalAccount}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition disabled:opacity-50"
           >
-            {loading ? 'Đang đổi mật khẩu...' : 'Xác nhận đổi mật khẩu'}
+            {loading ? t('auth.changing_pass') : t('auth.confirm_change_pass_btn')}
           </button>
         </form>
 
         <p className="text-center text-gray-600 mt-5 text-sm">
           {myId ? (
             <Link to={`/user/${myId}`} className="text-blue-600 hover:text-blue-700 font-semibold">
-              Quay lại hồ sơ cá nhân
+              {t('auth.back_to_profile')}
             </Link>
           ) : (
             <Link to="/chat" className="text-blue-600 hover:text-blue-700 font-semibold">
-              Quay lại ứng dụng
+              {t('auth.back_to_app')}
             </Link>
           )}
         </p>

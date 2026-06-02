@@ -70,9 +70,9 @@ export default function IncomingGroupCallScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-      {/* Pulse rings */}
+      {/* Pulse rings — pointerEvents none để không chặn touch */}
       {[1.5, 1.9, 2.3].map((scale, i) => (
-        <Animated.View key={i} style={[
+        <Animated.View key={i} pointerEvents="none" style={[
           styles.ring,
           { transform: [{ scale: Animated.multiply(pulseAnim, new Animated.Value(scale * 0.6)) }] },
         ]} />

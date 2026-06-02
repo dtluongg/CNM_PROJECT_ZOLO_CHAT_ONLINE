@@ -2,6 +2,7 @@ import React, { useMemo, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck } from 'lucide-react';
 import { useNotifications } from '../../../context/NotificationContext';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const formatTime = (iso) => {
   if (!iso) return '';
@@ -30,6 +31,7 @@ export default function NotificationCenter({ open, onClose }) {
     setBannerEnabled,
   } = useNotifications();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const modalRef = useRef(null);
   const sorted = useMemo(
     () => [...items].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
@@ -112,7 +114,7 @@ export default function NotificationCenter({ open, onClose }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Bell size={16} />
-          <span style={{ fontSize: 13, fontWeight: 700 }}>Thông báo</span>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>{t('notifications.title')}</span>
           <span style={{
             fontSize: 11,
             color: '#fff',
@@ -142,7 +144,7 @@ export default function NotificationCenter({ open, onClose }) {
             }}
           >
             <CheckCheck size={12} />
-            Đọc hết
+            {t('notifications.mark_all_read')}
           </button>
           <button
             onClick={onClose}
@@ -156,7 +158,7 @@ export default function NotificationCenter({ open, onClose }) {
               cursor: 'pointer',
             }}
           >
-            Đóng
+            {t('notifications.close')}
           </button>
         </div>
       </div>
@@ -169,21 +171,21 @@ export default function NotificationCenter({ open, onClose }) {
       }}>
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
           <input type="checkbox" checked={soundEnabled} onChange={(e) => setSoundEnabled(e.target.checked)} />
-          Âm thanh
+          {t('notifications.sound')}
         </label>
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
           <input type="checkbox" checked={bannerEnabled} onChange={(e) => setBannerEnabled(e.target.checked)} />
-          Thông báo nổi
+          {t('notifications.banner')}
         </label>
       </div>
 
       <div style={{ overflowY: 'auto', padding: 8 }}>
         {loading && sorted.length === 0 ? (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 12 }}>Đang tải thông báo...</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 12 }}>{t('notifications.loading')}</div>
         ) : null}
 
         {!loading && sorted.length === 0 ? (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 12 }}>Chưa có thông báo nào.</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 12 }}>{t('notifications.no_notifications')}</div>
         ) : null}
 
         {sorted.map((item) => (
@@ -202,10 +204,10 @@ export default function NotificationCenter({ open, onClose }) {
               cursor: 'pointer',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 700 }}>{item.title || 'Thông báo mới'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justify_content: 'space-between', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>{item.title || t('notifications.default_title')}</span>
               {!item.isRead ? (
-                <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700 }}>Mới</span>
+                <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700 }}>{t('notifications.new_label')}</span>
               ) : null}
             </div>
             {item.body ? (

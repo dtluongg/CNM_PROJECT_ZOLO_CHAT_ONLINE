@@ -9,17 +9,38 @@ import storiesApi from '../api/storiesApi';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
 import StoryCard from '../components/StoryCard';
+import { useLanguage } from '../../../context/LanguageContext';
 import StoryViewerModal from '../components/StoryViewerModal';
-import { uploadToSupabase } from '../../../services/storageUpload';
+import { uploadMediaToBackend } from '../../../services/storageUpload';
+import useStorySocket from '../hooks/useStorySocket';
 
 export default function StoriesScreen() {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const { theme: THEME } = useTheme();
+    const { t } = useLanguage();
     const [feed, setFeed] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [activeViewer, setActiveViewer] = useState(null);
+
+    // ── Lắng nghe Socket để cập nhật Real-time ──────────────────────
+    useStorySocket(token, {
+        onStoryNew: () => {
+            // Có tin mới -> tải lại cả bản tin để đảm bảo đúng phân quyền bạn bè
+            fetchFeed();
+        },
+        onStoryDeleted: ({ storyId }) => {
+            // Có tin bị xóa -> lọc bỏ ngay lập tức khỏi state để UX mượt mà
+            setFeed(prev => 
+                prev.map(item => ({
+                    ...item,
+                    stories: item.stories.filter(s => (s._id || s.id) !== storyId)
+                }))
+                .filter(item => item.stories.length > 0 || (item.user?._id || item.user?.id) === user?._id)
+            );
+        }
+    });
 
     const fetchFeed = useCallback(async () => {
         try {
@@ -43,41 +64,67 @@ export default function StoriesScreen() {
     };
 
     const handlePickMedia = async () => {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-            Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền truy cập thư viện ảnh để đăng tin.');
-            return;
-        }
+        console.log('[handlePickMedia] Function triggered');
+        // Alert.alert('Debug', 'Nút chọn ảnh đã được nhấn!'); // Bật cái này nếu muốn xác nhận trực quan
+        
+        try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            console.log('[handlePickMedia] Permission status:', status);
+            
+            if (status !== 'granted') {
+                Alert.alert(t('common.permission_denied'), t('stories.library_permission_desc'));
+                return;
+            }
 
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.All,
-            allowsEditing: true,
-            quality: 0.8,
-        });
+            console.log('[handlePickMedia] Launching library...');
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images', 'videos'],
+                allowsEditing: true,
+                quality: 0.8,
+            });
 
-        if (!result.canceled) {
-            const asset = result.assets[0];
-            handleUpload(asset);
+            console.log('[handlePickMedia] Picker result:', result.canceled ? 'Canceled' : 'Success');
+            if (!result.canceled) {
+                const asset = result.assets[0];
+                handleUpload(asset);
+            }
+        } catch (err) {
+            console.error('[handlePickMedia] Unexpected error:', err);
+            Alert.alert(t('common.error'), t('stories.error_open_library'));
         }
     };
 
     const handleUpload = async (asset) => {
         setUploading(true);
+        console.log('[handleUpload] Starting upload for asset:', { uri: asset.uri, type: asset.type });
         try {
+            // Xác định type dựa trên asset.type (image/video) hoặc extension
             const mediaType = asset.type === 'video' ? 'video' : 'image';
-            const fileName = `story_${Date.now()}_${user._id}.${asset.uri.split('.').pop()}`;
+            const fileExt = asset.uri.split('.').pop()?.toLowerCase() || (mediaType === 'video' ? 'mp4' : 'jpg');
+            const fileName = `story_${Date.now()}_${user._id}.${fileExt}`;
             
-            // Re-use existing upload logic
-            const publicUrl = await uploadToSupabase(asset.uri, fileName, 'stories');
+            console.log('[handleUpload] Uploading to Backend...', { mediaType });
+            const publicUrl = await uploadMediaToBackend(asset.uri, mediaType);
             
             if (publicUrl) {
-                await storiesApi.createStory(publicUrl, mediaType);
+                console.log('[handleUpload] Upload success, creating story on backend:', publicUrl);
+                const response = await storiesApi.createStory(publicUrl, mediaType);
+                console.log('[handleUpload] Backend response:', response.data);
+                
                 fetchFeed();
-                Alert.alert('Thành công', 'Tin của bạn đã được đăng!');
+                Alert.alert(t('common.success'), t('stories.upload_success'));
+            } else {
+                throw new Error(t('stories.error_no_url'));
             }
         } catch (err) {
-            console.error('Upload story error:', err);
-            Alert.alert('Lỗi', 'Không thể tải tin lên lúc này.');
+            console.error('[handleUpload] Error:', err);
+            const errorMsg = err.response?.data?.message || err.message || t('stories.upload_error');
+            
+            if (err.response?.data?.code === 'TOKEN_EXPIRED') {
+                Alert.alert(t('common.session_expired'), t('common.session_expired_desc'));
+            } else {
+                Alert.alert(t('common.error'), errorMsg);
+            }
         } finally {
             setUploading(false);
         }
@@ -97,16 +144,25 @@ export default function StoriesScreen() {
     return (
         <View style={[styles.container, { backgroundColor: THEME.bgPrimary }]}>
             <View style={[styles.header, { backgroundColor: THEME.bgSecondary, borderBottomColor: THEME.border }]}>
-                <Text style={[styles.headerTitle, { color: THEME.textPrimary }]}>Tin mới</Text>
+                <Text style={[styles.headerTitle, { color: THEME.textPrimary }]}>{t('stories.title')}</Text>
                 {uploading && <ActivityIndicator size="small" color={THEME.accent} style={{ marginRight: 10 }} />}
-                <TouchableOpacity onPress={handlePickMedia} disabled={uploading}>
-                    <Feather name="camera" size={24} color={THEME.accent} />
-                </TouchableOpacity>
             </View>
 
+            {/* Danh sách Stories */}
             <FlatList
-                data={feed}
-                keyExtractor={(item) => item.user._id}
+                data={(() => {
+                    if (!user?._id) return feed;
+                    const hasMe = feed.some(item => item.user?._id === user?._id);
+                    if (hasMe) {
+                        // Di chuyển "Tin của bạn" lên đầu nếu đã có trong feed
+                        const myItem = feed.find(item => item.user?._id === user?._id);
+                        const others = feed.filter(item => item.user?._id !== user?._id);
+                        return [myItem, ...others];
+                    }
+                    // Nếu chưa có tin, chèn một item ảo để hiện nút "+"
+                    return [{ user, stories: [] }, ...feed];
+                })()}
+                keyExtractor={(item) => item.user?._id || Math.random().toString()}
                 numColumns={2}
                 contentContainerStyle={styles.listContent}
                 refreshControl={
@@ -124,7 +180,7 @@ export default function StoriesScreen() {
                 )}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
-                        <Text style={{ color: THEME.textMuted }}>Hiện chưa có tin nào mới.</Text>
+                        <Text style={{ color: THEME.textMuted }}>{t('stories.no_stories')}</Text>
                     </View>
                 }
             />
