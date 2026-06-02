@@ -13,9 +13,7 @@ import React, {
 } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
-import { getAccessToken } from '../../utils/authStorage';
 import { useCallWebRTC as useWebRTC } from './hooks/useCallWebRTC';
-import { isSecureContext } from '../../utils/mediaUtils';
 import { getIceServers } from '../../utils/turnUtils';
 
 const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL || 'http://localhost:2026';
@@ -192,14 +190,6 @@ export const CallProvider = ({ children }) => {
       return;
     }
 
-    if (!isSecureContext()) {
-      setCallError(
-        'Trình duyệt chặn microphone/camera trên HTTP. ' +
-        'Hãy truy cập qua HTTPS để thực hiện cuộc gọi.',
-      );
-      return;
-    }
-
     setCallError(null);
 
     // Phase 1: Ring ngay lập tức
@@ -360,8 +350,8 @@ export const CallProvider = ({ children }) => {
   //  Socket event listeners
   // ═════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    const accessToken = token || getAccessToken();
-    if (!accessToken) return;
+    if (!token) return;
+    const accessToken = token;
 
     const socket = io(SOCKET_URL, {
       auth:                 { token: accessToken },
