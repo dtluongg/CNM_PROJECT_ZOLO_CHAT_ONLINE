@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '../context/AuthContext';
 import { THEME } from '../theme';
+import BannedScreen from '../features/auth/screens/BannedScreen';
 
 import SigninScreen         from '../features/auth/screens/SigninScreen';
 import SignupScreen         from '../features/auth/screens/SignupScreen';
@@ -44,9 +45,12 @@ const LoadingScreen = () => (
 );
 
 const AppNavigator = () => {
-  const { token, loading } = useAuth();
+  const { token, loading, user } = useAuth();
 
   if (loading) return <LoadingScreen />;
+
+  // Tài khoản bị khóa — hiện màn hình blocked trước mọi route
+  if (token && user?.isBanned) return <BannedScreen />;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#1e1f22' }} edges={['top']}>

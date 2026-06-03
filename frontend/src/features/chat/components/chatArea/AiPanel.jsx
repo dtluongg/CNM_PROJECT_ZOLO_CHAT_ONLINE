@@ -184,11 +184,9 @@ function AnalyzeTab({ conversationId, conversationName, conversationType, cache,
     }
   }, [conversationId, conversationName, conversationType, msgCount, cacheKey, setCache]);
 
-  const handleCreate = async (rem, i) => {
-    try {
-      await onCreateReminder(rem);
-      setCreated(prev => new Set([...prev, i]));
-    } catch { /* ignore */ }
+  const handleCreate = (rem, i) => {
+    setCreated(prev => new Set([...prev, i]));
+    onCreateReminder(rem);
   };
 
   const tone = data?.tone ? (TONE_CFG[data.tone] || TONE_CFG.normal) : null;

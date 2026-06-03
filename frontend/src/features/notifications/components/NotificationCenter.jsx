@@ -2,7 +2,7 @@ import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom';
 import {
   Bell, CheckCheck, X, MessageCircle, Phone,
-  UserPlus, UserCheck, Clock, AtSign, BellOff, Users,
+  UserPlus, UserCheck, Clock, AtSign, BellOff, Users, Flag,
 } from 'lucide-react';
 import { useNotifications } from '../../../context/NotificationContext';
 
@@ -33,6 +33,7 @@ const TYPE_META = {
   call_incoming:   { icon: Phone,         color: '#3ba55c', cat: 'call',    label: 'Cuộc gọi' },
   call_rejected:   { icon: Phone,         color: '#ed4245', cat: 'call',    label: 'Từ chối' },
   call_missed:     { icon: Phone,         color: '#ed4245', cat: 'call',    label: 'Nhỡ máy' },
+  report:          { icon: Flag,          color: '#f59e0b', cat: 'system',  label: 'Báo cáo' },
 };
 
 const CATS = [
@@ -113,7 +114,9 @@ export default function NotificationCenter({ open, onClose }) {
   const handleOpen = useCallback(async (item) => {
     if (!item?._id) return;
     await markRead(item._id);
-    if (item.type === 'friend_request' || item.type === 'friend_accepted') {
+    if (item.type === 'report') {
+      // không điều hướng, chỉ đánh dấu đã đọc
+    } else if (item.type === 'friend_request' || item.type === 'friend_accepted') {
       navigate('/friends', { state: { activeTab: 'friend_requests' } });
     } else if (item.conversationId) {
       navigate('/chat', { state: { openConversationId: item.conversationId } });

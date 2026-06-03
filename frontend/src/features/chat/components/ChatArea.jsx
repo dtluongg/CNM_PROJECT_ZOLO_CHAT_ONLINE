@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock, Volume2 } from 'lucide-react';
 import GroupCallButton from '../../call/components/GroupCallButton';
+import ReportButton from '../../admin/components/ReportButton';
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
 import conversationApi from '../api/conversationApi';
@@ -25,6 +26,7 @@ import SearchPanel from './chatArea/SearchPanel';
 import ForwardModal from './chatArea/modals/ForwardModal';
 import { ReactionListModal, ReadListModal } from './chatArea/modals/ReactionModal';
 import UnpinConfirmModal from './chatArea/modals/UnpinConfirmModal';
+import CreateReminderModal from './chatArea/modals/CreateReminderModal';
 
 // ── Custom Hooks ───────────────────────────────────────
 import useChatSocket from './chatArea/hooks/useChatSocket';
@@ -102,6 +104,7 @@ export default function ChatArea({
   const [groupMembers, setGroupMembers] = useState([]);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [aiReminderModal, setAiReminderModal] = useState({ open: false, content: '', dateTime: null });
   const [smartReplyText, setSmartReplyText] = useState('');
   // Sync pinned messages khi đổi conversation
   useEffect(() => {
@@ -109,7 +112,6 @@ export default function ChatArea({
     setShowAiPanel(false);
     setShowSearch(false);
   }, [conversation?.id]);
-  console.log("Dữ liệu nhóm hiện tại:", conversation);
   // ── Snapshot lastReadMessageId tại thời điểm mở conversation ────────
   // Phải capture inline (không dùng useEffect) để lấy giá trị trước khi markAsRead chạy
   const prevConvIdRef = useRef(null);
@@ -249,7 +251,6 @@ export default function ChatArea({
   };
 
   const handleUnpin = (msgId) => {
-    console.log('Unpin request for msgId:', msgId);
     setMessageIdToUnpin(msgId);
     setShowUnpinModal(true);
   };
@@ -417,11 +418,10 @@ export default function ChatArea({
     : null;
 
   // ── Render ─────────────────────────────────────────────────
-  const handleAiCreateReminder = async (rem) => {
-    await messageApi.createReminder(conversation.id, {
-      content: rem.title + (rem.description ? ' — ' + rem.description : ''),
-      reminderTime: rem.datetimeHint ? new Date(rem.datetimeHint).toISOString() : new Date(Date.now() + 3600000).toISOString(),
-    });
+  const handleAiCreateReminder = (rem) => {
+    const content = rem.title + (rem.description ? ' — ' + rem.description : '');
+    const dateTime = rem.datetimeHint ? new Date(rem.datetimeHint) : new Date(Date.now() + 3600000);
+    setAiReminderModal({ open: true, content, dateTime: isNaN(dateTime) ? new Date(Date.now() + 3600000) : dateTime });
   };
 
   return (
@@ -588,6 +588,12 @@ export default function ChatArea({
               {conversation?.type === 'group' && (
                 <GroupCallButton conversationId={conversation.id || conversation._id} />
               )}
+              {/* Report button */}
+              <ReportButton
+                targetType={conversation?.type === 'dm' ? 'user' : 'conversation'}
+                targetId={conversation?.type === 'dm' ? conversation.otherUserId : conversation.id}
+                targetSnapshot={conversation?.name}
+              />
             </>
           )}
         </div>
@@ -835,6 +841,18 @@ export default function ChatArea({
         onClose={() => setShowForwardModal(false)}
         msg={forwardingMsg}
         onForward={() => console.log('Forwarded successfully')}
+      />
+
+      <CreateReminderModal
+        isOpen={aiReminderModal.open}
+        onClose={() => setAiReminderModal(p => ({ ...p, open: false }))}
+        isGroup={conversation?.type === 'group'}
+        initialContent={aiReminderModal.content}
+        initialDateTime={aiReminderModal.dateTime}
+        onCreate={async ({ content, reminderTime }) => {
+          await messageApi.createReminder(conversation.id, { content, reminderTime });
+          setAiReminderModal(p => ({ ...p, open: false }));
+        }}
       />
 
       {/* Mobile channel bottom sheet (groups only) */}

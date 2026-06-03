@@ -9,6 +9,7 @@ import { usePresence, formatLastSeen } from '../../context/PresenceContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Globe } from 'lucide-react';
+import ReportButton from '../admin/components/ReportButton';
 
 const STATUS_CONFIG = (t) => ({
   online:  { color: '#3ba55c', label: t('user_profile.status.online'),      bg: 'rgba(59,165,92,0.12)' },
@@ -461,6 +462,11 @@ export default function UserProfilePage() {
                 <Phone size={15} />
                 {t('user_profile.call')}
               </button>
+              <ReportButton
+                targetType="user"
+                targetId={userId}
+                targetSnapshot={profile?.displayName}
+              />
             </div>
           )}
 

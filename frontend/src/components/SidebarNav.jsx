@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { MessageCircle, Users, BookOpen, Bell, Settings } from 'lucide-react';
+import { MessageCircle, Users, BookOpen, Bell, Settings, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 import ProfileSettings from '../features/user/components/ProfileSettings';
@@ -82,6 +82,8 @@ const SidebarNav = () => {
     const isChat    = location.pathname.startsWith('/chat');
     const isFriends = location.pathname.startsWith('/friends');
     const isStories = location.pathname.startsWith('/stories');
+    const isAdmin   = location.pathname.startsWith('/admin');
+    const isAdminUser = ['admin', 'moderator'].includes(user?.role);
 
     return (
         <div style={{
@@ -112,6 +114,9 @@ const SidebarNav = () => {
                 <NavBtn icon={Bell}          active={showNotificationCenter} onClick={() => setShowNotificationCenter(v => !v)} title={t('navbar.notifications')} badge={unreadCount} />
                 <NavBtn icon={Users}         active={isFriends} onClick={() => navigate('/friends')} title={t('navbar.friends')} />
                 <NavBtn icon={TinIcon}       active={isStories} onClick={() => navigate('/stories')} title={t('navbar.stories')} />
+                {isAdminUser && (
+                    <NavBtn icon={ShieldCheck} active={isAdmin} onClick={() => navigate('/admin')} title="Admin Dashboard" />
+                )}
             </div>
 
             {/* Bottom — settings + avatar */}

@@ -13,6 +13,7 @@ import { useUserProfile } from '../hooks/useUserProfile';
 import { getLiveStatusInfo } from '../utils/statusHelpers';
 import Avatar from '../components/Avatar';
 import ActionButton from '../components/ActionButton';
+import ReportButton from '../../admin/components/ReportButton';
 import InfoRow from '../components/InfoRow';
 import StatusBubble from '../components/StatusBubble';
 import { makeStyles } from '../styles/userProfileStyles';
@@ -149,6 +150,12 @@ export default function UserProfileScreen({ route, navigation }) {
             )}
 
             <ActionButton icon="📞" label={t('chat.voice_call')} onPress={() => Alert.alert(t('chat.voice_call'), t('common.feature_coming_soon'))} styles={s} />
+            <ReportButton
+              targetType="user"
+              targetId={profile._id}
+              targetSnapshot={profile.displayName}
+              style={{ marginTop: 4 }}
+            />
           </View>
         ) : (
           <View style={s.ownActionRow}>

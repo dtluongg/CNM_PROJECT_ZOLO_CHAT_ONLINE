@@ -32,9 +32,11 @@ import FriendsPage from './features/friends/FriendsPage';
 import SidebarNav from './components/SidebarNav';
 import NotificationToast from './features/notifications/components/NotificationToast';
 import StoriesPage from './features/stories/StoriesPage';
+import AdminPage from './features/admin/AdminPage';
+import BannedScreen from './features/auth/BannedScreen';
 
 // Các route có Sidebar bên trái kiểu AppShell (Zalo)
-const APP_SHELL_ROUTES = ['/chat', '/friends', '/user', '/stories'];
+const APP_SHELL_ROUTES = ['/chat', '/friends', '/user', '/stories', '/admin'];
 
 const ThemeSyncHandler = () => {
   const { user } = useAuth();
@@ -77,13 +79,20 @@ const Layout = ({ children }) => {
   );
 };
 
+const BannedGate = ({ children }) => {
+  const { user } = useAuth();
+  if (user?.isBanned) return <BannedScreen reason={user.bannedReason} />;
+  return children;
+};
+
 const App = () => {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ThemeProvider>
         <AuthProvider>
           <LanguageProvider>
             <ThemeSyncHandler />
+            <BannedGate>
             <PresenceProvider>
               <NotificationProvider>
                 <CallProvider>
@@ -154,6 +163,16 @@ const App = () => {
                   />
 
 
+                  {/* ADMIN */}
+                  <Route
+                    path="/admin"
+                    element={
+                      <ProtectedRoute>
+                        <AdminPage />
+                      </ProtectedRoute>
+                    }
+                  />
+
                           <Route path="/auth/callback" element={<AuthCallback />} />
                           <Route path="/complete-profile" element={<CompleteProfile />} />
                           <Route path="*" element={<Navigate to="/" replace />} />
@@ -164,6 +183,7 @@ const App = () => {
                 </CallProvider>
               </NotificationProvider>
             </PresenceProvider>
+            </BannedGate>
           </LanguageProvider>
         </AuthProvider>
       </ThemeProvider>
