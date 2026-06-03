@@ -284,6 +284,7 @@ const Chat = () => {
       [activeConversation?.id]: updater(prev[activeConversation?.id] || []),
     })),
     currentUserId,
+    currentUser,
     typingUser: activeTypingUser,
     onDeleteForMe: (messageId) => deleteMessageForMe(activeConversation?.id, messageId),
     onSendMessage: handleSendMessage,

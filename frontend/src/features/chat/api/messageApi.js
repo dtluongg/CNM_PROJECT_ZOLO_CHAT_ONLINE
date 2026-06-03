@@ -125,6 +125,22 @@ const messageApi = {
   // ── AI Translate ───────────────────────────────────────────────────
   translateMessage: (text, targetLanguage = 'English') =>
     apiClient.post('/messages/ai/translate', { text, targetLanguage }),
+
+  // ── AI Analyze (summary + tone + keyPoints + tasks + reminders — 1 call) ──────
+  analyzeChat: (conversationId, conversationName = '', conversationType = 'dm', messageCount = 20) =>
+    apiClient.post(`/messages/${conversationId}/ai-analyze`, { conversationName, conversationType, messageCount }),
+
+  // ── Smart Reply ────────────────────────────────────────────────────
+  getSmartReplies: (conversationId, currentUserName = '') =>
+    apiClient.post(`/messages/${conversationId}/smart-reply`, { currentUserName }),
+
+  // ── Compose Suggest (gợi ý hoàn thiện tin nhắn đang gõ) ─────────────
+  composeSuggest: (conversationId, draft, currentUserName = '') =>
+    apiClient.post(`/messages/${conversationId}/compose-suggest`, { draft, currentUserName }),
+
+  // ── Semantic Search ────────────────────────────────────────────────
+  semanticSearch: (conversationId, query) =>
+    apiClient.post(`/messages/${conversationId}/semantic-search`, { query }),
 };
 
 

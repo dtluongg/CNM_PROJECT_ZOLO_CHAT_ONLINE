@@ -36,7 +36,6 @@ const verifyToken = async (req, res, next) => {
 
         // Có error từ Supabase nhưng không throw (ví dụ token hết hạn)
         if (error) {
-            console.log('Supabase token error, falling back to local JWT:', error.message);
         }
     } catch (supabaseError) {
         // Supabase throw error, tiếp tục thử local JWT
