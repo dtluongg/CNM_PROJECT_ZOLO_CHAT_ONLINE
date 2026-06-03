@@ -5,6 +5,7 @@ const ConversationTopic = require('../models/conversationTopicModel');
 const Friendship = require('../models/friendshipModel');
 const User = require('../models/userModel');
 const Message = require('../models/messageModel');
+const Presence = require('../models/presenceModel');
 
 // Tạo system message và emit socket khi thông tin nhóm thay đổi (tên, ảnh, mô tả, loại nhóm)
 async function emitGroupInfoSystemMessage(conversationId, actorId, changes) {
@@ -238,6 +239,14 @@ const getDmDisplayInfo = async (conversationIds, currentUserId) => {
         ],
     }).select('userId1 userId2 nickname1 nickname2').lean();
 
+    // Fetch last-seen (lastActiveAt) for all other users in one query
+    const presences = await Presence.find({ userId: { $in: otherUserIds } })
+        .select('userId lastActiveAt status').lean();
+    const lastSeenMap = new Map();
+    for (const p of presences) {
+        lastSeenMap.set(p.userId.toString(), p.lastActiveAt || null);
+    }
+
     // Build lookup: otherId → nickname that currentUser gave them
     // nickname2 = name userId1 gave to userId2
     // nickname1 = name userId2 gave to userId1
@@ -265,6 +274,7 @@ const getDmDisplayInfo = async (conversationIds, currentUserId) => {
                 nickname: nickname || null,
                 avatar: otherMember.userId.avatar || '',
                 status: otherMember.userId.status || 'online',
+                lastSeen: lastSeenMap.get(otherId) || null,
             },
         });
     }
@@ -938,7 +948,7 @@ const updateConversationInfo = async (req, res, next) => {
         const updated = await Conversation.findByIdAndUpdate(
             conversationId,
             updates,
-            { new: true }
+            { returnDocument: 'after' }
         )
             .populate('createdBy', '_id displayName avatar')
             .populate('lastMessageId', '_id senderId content type createdAt')

@@ -1,19 +1,38 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { MessageCircle, UserMinus, ShieldAlert, ShieldCheck, Users, Edit3 } from 'lucide-react';
 import { usePresence } from '../../../context/PresenceContext';
 import { useLanguage } from '../../../context/LanguageContext';
-import { getFriendStatus, filterFriends, groupFriendsAlphabetically } from '../utils/friendHelpers';
+import { filterFriends, groupFriendsAlphabetically, getFriendStatus } from '../utils/friendHelpers';
+import UserProfileModal from '../../user/components/UserProfileModal';
+
+const STATUS_DOT = { online: '#3ba55c', idle: '#faa61a', dnd: '#ed4245', offline: '#6b7280' };
+const AVATAR_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245','#9b59b6','#e67e22'];
+const avatarBg = (name) => AVATAR_COLORS[(name || '?').charCodeAt(0) % AVATAR_COLORS.length];
+
+const ActionBtn = ({ icon: Icon, label, onClick, danger, accent, disabled }) => (
+  <button
+    title={label}
+    onClick={onClick}
+    disabled={disabled}
+    style={{
+      background: 'none', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+      color: danger ? '#ef4444' : accent ? 'var(--accent)' : 'var(--text-muted)',
+      padding: '7px', borderRadius: 8, display: 'flex', alignItems: 'center',
+      transition: 'background 0.13s, color 0.13s', opacity: disabled ? 0.4 : 1,
+    }}
+    onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = danger ? 'rgba(239,68,68,0.1)' : 'var(--bg-hover)'; }}
+    onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+  >
+    <Icon size={16} strokeWidth={1.8} />
+  </button>
+);
 
 const FriendsList = ({
-  friends,
-  friendFilterText,
-  onOpenCreateGroup,
-  onMessage,
-  onUpdateNickname,
-  onBlock,
-  onUnfriend,
+  friends, friendFilterText,
+  onOpenCreateGroup, onMessage,
+  onUpdateNickname, onBlock, onUnfriend,
 }) => {
-  const navigate = useNavigate();
+  const [profileUserId, setProfileUserId] = useState(null);
   const { isUserOnline, getPresenceStatus } = usePresence();
   const { t } = useLanguage();
 
@@ -21,90 +40,131 @@ const FriendsList = ({
   const { grouped, sortedKeys } = groupFriendsAlphabetically(filtered);
 
   return (
-    <div className="flex-1 flex flex-col h-full" style={{ backgroundColor: 'var(--bg-primary)' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-primary)' }}>
       {/* Header */}
-      <div className="px-6 py-4 border-b flex items-center justify-between gap-4 flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
-        <span className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-          {t('friends.count_title', { count: friends.length })}
-        </span>
+      <div style={{
+        padding: '16px 24px', borderBottom: '1px solid var(--border)', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text-primary)' }}>
+            {t('friends.count_title', { count: friends.length })}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
+            {friends.filter(f => isUserOnline(f.friendId)).length} đang online
+          </div>
+        </div>
         <button
           onClick={onOpenCreateGroup}
-          className="px-4 py-2 text-sm font-semibold rounded-lg"
-          style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: 'linear-gradient(135deg,var(--accent),var(--accent-hover))',
+            color: '#fff', fontWeight: 600, fontSize: 13,
+            boxShadow: '0 4px 12px rgba(var(--accent-rgb),0.3)',
+          }}
         >
+          <Users size={15} strokeWidth={2} />
           {t('friends.create_group_btn')}
         </button>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      {/* List */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px 16px' }}>
         {sortedKeys.length === 0 && (
-          <p className="text-center mt-10" style={{ color: 'var(--text-muted)' }}>
-            {t('friends.no_results')}
-          </p>
+          <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
+            <Users size={40} style={{ opacity: 0.25, display: 'block', margin: '0 auto 12px' }} strokeWidth={1.2} />
+            <div style={{ fontSize: 14 }}>{t('friends.no_results')}</div>
+          </div>
         )}
 
-        {sortedKeys.map((letter) => (
-          <div key={letter} className="mb-6">
-            <h3 className="text-lg font-bold mb-3 ml-2" style={{ color: 'var(--text-primary)' }}>{letter}</h3>
-            <div className="rounded-lg shadow-sm border overflow-hidden" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+        {sortedKeys.map(letter => (
+          <div key={letter} style={{ marginBottom: 20 }}>
+            <div style={{
+              fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.08em',
+              textTransform: 'uppercase', marginBottom: 6, paddingLeft: 4,
+            }}>
+              {letter}
+            </div>
+            <div style={{
+              background: 'var(--bg-secondary)',
+              borderRadius: 12, border: '1px solid var(--border)',
+              overflow: 'hidden',
+            }}>
               {grouped[letter].map((f, idx) => {
-                const status = getFriendStatus(f.friendId, isUserOnline, getPresenceStatus);
-                // Dynamically translate status label using the presStatus key logic
                 const isOnline = isUserOnline(f.friendId);
-                const presStatusKey = isOnline ? (getPresenceStatus(f.friendId) || 'online') : 'offline';
-                const translatedStatusLabel = t(`chat.status.${presStatusKey}`);
+                const presKey = isOnline ? (getPresenceStatus(f.friendId) || 'online') : 'offline';
+                const dotColor = STATUS_DOT[presKey] || STATUS_DOT.offline;
 
                 return (
                   <div
                     key={f.friendshipId}
-                    className={`flex items-center justify-between p-3 px-5 transition ${idx !== grouped[letter].length - 1 ? 'border-b' : ''}`}
-                    style={{ borderColor: 'var(--border)' }}
+                    style={{
+                      display: 'flex', alignItems: 'center',
+                      padding: '10px 14px',
+                      borderBottom: idx !== grouped[letter].length - 1 ? '1px solid var(--border)' : 'none',
+                      transition: 'background 0.12s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    {/* Avatar + info */}
+                    {/* Avatar */}
                     <div
-                      className="flex items-center gap-4 cursor-pointer flex-1 min-w-0"
-                      onClick={() => navigate(`/user/${f.friendId}`)}
+                      style={{ position: 'relative', flexShrink: 0, cursor: 'pointer' }}
+                      onClick={() => setProfileUserId(f.friendId)}
                     >
-                      <div className="relative flex-shrink-0">
-                        {f.avatar ? (
-                          <img src={f.avatar} alt={f.displayName} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
-                        ) : (
-                          <div style={{ width: 44, height: 44, borderRadius: '50%', backgroundColor: 'var(--bg-primary)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700 }}>
-                            {f.displayName?.[0]?.toUpperCase() || '?'}
-                          </div>
-                        )}
-                        <span style={{
-                          position: 'absolute', bottom: 1, right: 1,
-                          width: 11, height: 11, borderRadius: '50%',
-                          backgroundColor: status.color,
-                          border: '2px solid var(--bg-secondary)',
-                        }} />
-                      </div>
+                      {f.avatar ? (
+                        <img src={f.avatar} alt={f.displayName}
+                          style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover', display: 'block' }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: 42, height: 42, borderRadius: '50%',
+                          background: f.usernameColor || avatarBg(f.displayName),
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#fff', fontWeight: 700, fontSize: 16,
+                        }}>
+                          {(f.displayName?.[0] || '?').toUpperCase()}
+                        </div>
+                      )}
+                      <span style={{
+                        position: 'absolute', bottom: 1, right: 1,
+                        width: 10, height: 10, borderRadius: '50%',
+                        background: dotColor, border: '2px solid var(--bg-secondary)',
+                      }} />
+                    </div>
 
-                      <div className="min-w-0">
-                        <p className="font-bold text-base truncate" style={{ color: 'var(--text-primary)' }}>{f.displayName}</p>
-                        {f.originalName && f.originalName !== f.displayName && (
-                          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{f.originalName}</p>
-                        )}
-                        <p className="text-xs" style={{ color: status.color }}>{translatedStatusLabel}</p>
+                    {/* Name + status */}
+                    <div
+                      style={{ flex: 1, minWidth: 0, marginLeft: 12, cursor: 'pointer' }}
+                      onClick={() => setProfileUserId(f.friendId)}
+                    >
+                      <div style={{
+                        fontWeight: 600, fontSize: 14,
+                        color: f.usernameColor || 'var(--text-primary)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {f.displayName}
+                      </div>
+                      {f.originalName && f.originalName !== f.displayName && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {f.originalName}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 11, color: dotColor, marginTop: 1 }}>
+                        {t(`chat.status.${presKey}`)}
                       </div>
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                      <button onClick={(e) => { e.stopPropagation(); onMessage(f); }} className="px-3 py-1.5 text-xs font-semibold rounded" style={{ backgroundColor: 'var(--accent)', color: '#fff' }}>
-                        {t('friends.message_btn')}
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); onUpdateNickname(f.friendId); }} className="px-3 py-1.5 text-xs font-semibold rounded" style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)' }}>
-                        {t('friends.nickname_btn')}
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); onBlock(f.friendId, f.iBlocked); }} className={`px-3 py-1.5 text-xs font-semibold rounded ${f.iBlocked ? 'text-gray-600 bg-gray-200' : 'text-orange-600 bg-orange-50'}`}>
-                        {f.iBlocked ? t('friends.unblock_btn') : t('friends.block_btn')}
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); onUnfriend(f.friendId); }} className="px-3 py-1.5 text-xs font-semibold bg-red-50 rounded text-red-600">
-                        {t('friends.delete_btn')}
-                      </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                      <ActionBtn icon={MessageCircle} label={t('friends.message_btn')} accent onClick={e => { e.stopPropagation(); onMessage(f); }} />
+                      <ActionBtn icon={Edit3}         label={t('friends.nickname_btn')}  onClick={e => { e.stopPropagation(); onUpdateNickname(f.friendId); }} />
+                      <ActionBtn icon={f.iBlocked ? ShieldCheck : ShieldAlert}
+                        label={f.iBlocked ? t('friends.unblock_btn') : t('friends.block_btn')}
+                        onClick={e => { e.stopPropagation(); onBlock(f.friendId, f.iBlocked); }}
+                      />
+                      <ActionBtn icon={UserMinus} label={t('friends.delete_btn')} danger onClick={e => { e.stopPropagation(); onUnfriend(f.friendId); }} />
                     </div>
                   </div>
                 );
@@ -113,8 +173,15 @@ const FriendsList = ({
           </div>
         ))}
       </div>
+
+      {profileUserId && (
+        <UserProfileModal
+          userId={profileUserId}
+          onClose={() => setProfileUserId(null)}
+        />
+      )}
     </div>
   );
 };
 
-export default FriendsList;
+export default FriendsList;

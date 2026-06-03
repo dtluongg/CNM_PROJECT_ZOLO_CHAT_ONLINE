@@ -7,6 +7,7 @@ import { PresenceProvider } from './context/PresenceContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { CallProvider } from './features/call/CallContext';
 import { VoiceRoomProvider } from './features/voice/VoiceRoomContext';
+import VoiceDock from './features/voice/components/VoiceDock';
 import { GroupCallProvider } from './features/call/GroupCallContext';
 
 import IncomingCallModal from './features/call/components/IncomingCallModal';
@@ -95,6 +96,7 @@ const App = () => {
                       <ActiveCallScreen />
                       <IncomingGroupCallModal />
                       <GroupCallScreen />
+                      <VoiceDock />
                       <Layout>
                         <Routes>
                           <Route path="/" element={<Home />} />

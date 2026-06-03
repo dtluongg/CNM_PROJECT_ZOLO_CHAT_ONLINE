@@ -144,7 +144,7 @@ const sendFriendRequest = async (req, res, next) => {
                 friendship = await Friendship.findOneAndUpdate(
                     { userId1: u1, userId2: u2 },
                     { $setOnInsert: { userId1: u1, userId2: u2 } },
-                    { upsert: true, new: true, session }
+                    { upsert: true, returnDocument: 'after', session }
                 );
             });
 
@@ -240,7 +240,7 @@ const acceptFriendRequest = async (req, res, next) => {
             friendship = await Friendship.findOneAndUpdate(
                 { userId1: u1, userId2: u2 },
                 { $setOnInsert: { userId1: u1, userId2: u2 } },
-                { upsert: true, new: true, session }
+                { upsert: true, returnDocument: 'after', session }
             );
 
             // Đồng bộ trạng thái lời mời ngược chiều (nếu có) để tránh pending mâu thuẫn.

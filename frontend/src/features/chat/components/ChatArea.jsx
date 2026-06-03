@@ -406,7 +406,8 @@ export default function ChatArea({
     ? (dmOnline
       ? (t(`chat.status.${dmStatus}`) || t('chat.online'))
       : (() => {
-        const ls = conversation.otherUserId ? getLastSeen(conversation.otherUserId) : null;
+        const ls = (conversation.otherUserId ? getLastSeen(conversation.otherUserId) : null)
+          || conversation.otherUserLastSeen;
         return ls ? formatLastSeen(ls) : t('chat.offline');
       })())
     : t('chat.members_count', { count: conversation.memberCount || conversation.members || 0 });
@@ -433,9 +434,11 @@ export default function ChatArea({
       <div style={{
         height: isMobile ? 56 : 52,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: isMobile ? '0 8px 0 4px' : '0 16px',
-        borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)',
-        flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+        padding: isMobile ? '0 8px 0 4px' : '0 12px 0 16px',
+        borderBottom: '1px solid var(--glass-border, var(--border))',
+        background: 'var(--bg-secondary)',
+        flexShrink: 0,
+        boxShadow: '0 1px 0 var(--glass-border, var(--border)), 0 2px 8px rgba(0,0,0,0.1)',
         paddingTop: isMobile ? 'env(safe-area-inset-top, 0px)' : 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 10 }}>
@@ -534,13 +537,13 @@ export default function ChatArea({
               ].map((btn, i) => (
                 <button key={i} onClick={btn.onClick} title={btn.title}
                   style={{
-                    background: btn.active ? 'var(--bg-hover)' : 'none', border: 'none', cursor: 'pointer',
+                    background: btn.active ? 'var(--bg-hover)' : 'transparent', border: 'none', cursor: 'pointer',
                     color: btn.active ? 'var(--accent)' : 'var(--text-muted)',
-                    padding: '6px 8px', borderRadius: 6,
-                    display: 'flex', alignItems: 'center', transition: 'background 0.12s, color 0.12s',
+                    padding: '6px 8px', borderRadius: 8,
+                    display: 'flex', alignItems: 'center', transition: 'all 0.15s',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = btn.active ? 'var(--bg-hover)' : 'none'; e.currentTarget.style.color = btn.active ? 'var(--accent)' : 'var(--text-muted)'; }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = btn.active ? 'var(--bg-hover)' : 'transparent'; e.currentTarget.style.color = btn.active ? 'var(--accent)' : 'var(--text-muted)'; e.currentTarget.style.transform = 'none'; }}
                 >
                   {btn.icon}
                 </button>
@@ -550,38 +553,36 @@ export default function ChatArea({
                 onClick={() => setShowAiPanel(v => !v)}
                 title="AI Trợ lý"
                 style={{
-                  background: showAiPanel ? 'linear-gradient(135deg,#6c63ff,#a78bfa)' : 'var(--bg-hover)',
+                  background: showAiPanel ? 'linear-gradient(135deg,#6c63ff,#a78bfa)' : 'transparent',
                   border: 'none', cursor: 'pointer',
-                  color: showAiPanel ? '#fff' : 'var(--text-secondary)',
-                  padding: '5px 8px', borderRadius: 6,
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  transition: 'background 0.15s, color 0.15s',
-                  fontSize: 12, fontWeight: 600,
+                  color: showAiPanel ? '#fff' : 'var(--text-muted)',
+                  padding: '6px 8px', borderRadius: 8,
+                  display: 'flex', alignItems: 'center',
+                  transition: 'all 0.15s',
+                  boxShadow: showAiPanel ? '0 4px 12px rgba(108,99,255,0.4)' : 'none',
                 }}
-                onMouseEnter={e => { if (!showAiPanel) { e.currentTarget.style.background = 'rgba(167,139,250,0.15)'; e.currentTarget.style.color = '#a78bfa'; } }}
-                onMouseLeave={e => { if (!showAiPanel) { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-secondary)'; } }}
+                onMouseEnter={e => { if (!showAiPanel) { e.currentTarget.style.background = 'rgba(167,139,250,0.12)'; e.currentTarget.style.color = '#a78bfa'; } }}
+                onMouseLeave={e => { if (!showAiPanel) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
               >
-                <AiLogo size={16} />
-                <span style={{ display: 'inline' }}>AI</span>
+                <AiLogo size={17} />
               </button>
-              {/* Nút toggle info panel – tách riêng để luôn nổi bật */}
+              {/* Nút toggle info panel */}
               <button
                 onClick={onToggleRight}
                 title={showRight ? 'Đóng thông tin' : 'Mở thông tin'}
                 style={{
-                  background: showRight ? 'var(--accent)' : 'var(--bg-hover)',
+                  background: showRight ? 'var(--accent)' : 'transparent',
                   border: 'none', cursor: 'pointer',
-                  color: showRight ? '#fff' : 'var(--text-secondary)',
-                  padding: '5px 8px', borderRadius: 6,
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  transition: 'background 0.15s, color 0.15s',
-                  fontSize: 12, fontWeight: 600,
+                  color: showRight ? '#fff' : 'var(--text-muted)',
+                  padding: '6px 8px', borderRadius: 8,
+                  display: 'flex', alignItems: 'center',
+                  transition: 'all 0.15s',
+                  boxShadow: showRight ? '0 4px 10px rgba(var(--accent-rgb),0.35)' : 'none',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = showRight ? 'var(--accent-hover, #4752c4)' : 'var(--bg-hover)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = showRight ? 'var(--accent)' : 'var(--bg-hover)'; }}
+                onMouseEnter={e => { if (!showRight) { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; } }}
+                onMouseLeave={e => { if (!showRight) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
               >
-                <Users size={15} />
-                <span style={{ display: 'inline' }}>Info</span>
+                <Users size={16} strokeWidth={1.8} />
               </button>
               {/* Group call buttons – chỉ hiện cho group */}
               {conversation?.type === 'group' && (

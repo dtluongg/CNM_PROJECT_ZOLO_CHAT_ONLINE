@@ -20,6 +20,7 @@ export const mapConversationItem = (item, dmOverrides) => {
     online:      false,
     memberCount: item.totalMembers,
     otherUserId: isDm ? (item.otherUserId || other?._id?.toString() || null) : null,
+    otherUserLastSeen: isDm ? (other?.lastSeen || null) : null,
     myMembership: item.myMembership || null,   // lastReadMessageId, unreadCount, aiSummary
     pinnedMessages: item.pinnedMessages || [],
     isLocked: !!item.isLocked,

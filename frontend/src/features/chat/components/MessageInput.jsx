@@ -469,14 +469,16 @@ export default function MessageInput({
   return (
     <div style={{
       paddingBottom: isMobile ? 'calc(8px + env(safe-area-inset-bottom, 0px))' : 0,
-      flexShrink: 0, position: 'relative', background: 'var(--bg-primary)', borderTop: '1px solid var(--border)',
+      flexShrink: 0, position: 'relative',
+      background: 'var(--bg-secondary)',
+      borderTop: '1px solid var(--glass-border, var(--border))',
     }}>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
       {!isMobile && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-primary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderBottom: '1px solid var(--glass-border, var(--border))', backgroundColor: 'transparent' }}>
           <button onClick={() => setShowEmoji(v => !v)} title="Biểu tượng cảm xúc" style={{ background: 'none', border: 'none', cursor: 'pointer', color: showEmoji ? 'var(--accent)' : 'var(--text-muted)', padding: '6px', borderRadius: 6, transition: 'all 0.15s', display: 'flex', alignItems: 'center' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = showEmoji ? 'var(--accent)' : 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Smile size={20} /></button>
           <button title="Gửi ảnh" onClick={() => imageInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '6px', borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Image size={20} /></button>
           <button title="Đính kèm file" onClick={() => fileInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '6px', borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Paperclip size={20} /></button>
@@ -626,7 +628,16 @@ export default function MessageInput({
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, background: isMobile ? 'var(--input-bg)' : 'transparent', borderRadius: isMobile ? 24 : 0, padding: isMobile ? '8px 10px' : '10px 16px', border: isMobile ? `1.5px solid ${focused ? 'var(--accent)' : 'transparent'}` : 'none', transition: 'border-color 0.15s' }}>
+      <div style={{
+        display: 'flex', alignItems: 'flex-end', gap: 6,
+        background: isMobile ? 'var(--input-bg)' : 'var(--bg-primary)',
+        borderRadius: isMobile ? 24 : 10,
+        margin: isMobile ? 0 : '6px 14px 10px',
+        padding: isMobile ? '8px 10px' : '8px 12px',
+        border: `1.5px solid ${focused ? 'rgba(var(--accent-rgb),0.45)' : 'var(--glass-border,var(--border))'}`,
+        boxShadow: focused ? '0 0 0 3px rgba(var(--accent-rgb),0.08)' : 'var(--neumorph-inset, none)',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
+      }}>
         <textarea
           ref={textareaRef}
           value={text}
@@ -637,7 +648,7 @@ export default function MessageInput({
           onBlur={() => setFocused(false)}
           placeholder={placeholder || 'Nhập @, tin nhắn...'}
           rows={1}
-          style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 15, padding: 0, resize: 'none', lineHeight: 1.5, maxHeight: 128, overflow: 'auto' }}
+          style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 14.5, padding: 0, resize: 'none', lineHeight: 1.6, maxHeight: 128, overflow: 'auto' }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
           {!canSend && <button title="Ghi âm" onClick={startRecording} style={{ background: 'none', border: 'none', cursor: 'pointer', color: isRecording ? '#ed4245' : 'var(--text-muted)', padding: '6px', borderRadius: 6, transition: 'all 0.12s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = isRecording ? '#ed4245' : 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Mic size={20} /></button>}
