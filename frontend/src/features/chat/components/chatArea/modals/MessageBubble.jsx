@@ -30,6 +30,7 @@ const FILE_TYPES = {
   ogg:  { icon: Music,          color: '#8e44ad', bg: '#f5eef8', label: 'OGG' },
 };
 const VIDEO_EXTS = /\.(mp4|mov|avi|mkv|webm|m4v)$/i;
+const IMAGE_EXTS = /\.(jpe?g|png|gif|webp|bmp|svg|heic|heif|avif)$/i;
 
 function getFileType(fileName = '') {
   const ext = (fileName.split('.').pop() || '').toLowerCase();
@@ -511,6 +512,22 @@ const MessageBubble = ({
       const fileName = msg.payload?.fileName || msg.content || '';
       const fileUrl  = msg.payload?.url || msg.content;
 
+      // Image file → render preview ảnh (giống type 'image')
+      if (IMAGE_EXTS.test(fileName)) {
+        return (
+          <img
+            src={fileUrl}
+            alt={fileName || 'attachment'}
+            onClick={() => setMediaViewer({ url: fileUrl, type: 'image', name: fileName })}
+            style={{
+              maxWidth: isMobile ? 220 : 260, maxHeight: 260,
+              borderRadius: 10, display: 'block',
+              cursor: 'zoom-in', objectFit: 'cover',
+            }}
+          />
+        );
+      }
+
       // Video file → preview player
       if (VIDEO_EXTS.test(fileName)) {
         return (
@@ -550,8 +567,8 @@ const MessageBubble = ({
         >
           <div style={{
             display: 'flex', alignItems: 'center', gap: 12,
-            background: isMine ? 'rgba(255,255,255,0.12)' : ft.bg,
-            border: `1px solid ${isMine ? 'rgba(255,255,255,0.18)' : ft.color + '33'}`,
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
             borderRadius: 12, padding: '10px 14px',
             minWidth: 200, maxWidth: isMobile ? 220 : 260,
             cursor: 'pointer', transition: 'opacity 0.15s',
@@ -559,29 +576,29 @@ const MessageBubble = ({
           onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
           onMouseLeave={e => e.currentTarget.style.opacity = '1'}
           >
-            {/* Icon box */}
+            {/* Icon box — giữ màu theo loại file làm điểm nhấn, nền tint mờ hợp mọi theme */}
             <div style={{
               width: 44, height: 44, borderRadius: 10, flexShrink: 0,
-              background: isMine ? 'rgba(255,255,255,0.18)' : ft.color + '22',
+              background: ft.color + '22',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <FIcon size={22} color={isMine ? '#fff' : ft.color} strokeWidth={1.7} />
+              <FIcon size={22} color={ft.color} strokeWidth={1.7} />
             </div>
             {/* Info */}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 fontSize: 13, fontWeight: 600,
-                color: isMine ? '#fff' : 'var(--text-primary)',
+                color: 'var(--text-primary)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>{baseName || fileName}</div>
               <div style={{
                 fontSize: 11, marginTop: 2,
-                color: isMine ? 'rgba(255,255,255,0.65)' : ft.color,
+                color: ft.color,
                 fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
               }}>{ext}</div>
             </div>
             {/* Download arrow */}
-            <Download size={16} color={isMine ? 'rgba(255,255,255,0.7)' : ft.color} style={{ flexShrink: 0 }} />
+            <Download size={16} color={'var(--text-muted)'} style={{ flexShrink: 0 }} />
           </div>
         </a>
       );
@@ -730,7 +747,8 @@ const MessageBubble = ({
           {/* Bubble */}
           {(() => {
             const isMedia = msg.type === 'image' || msg.type === 'video'
-              || (msg.type === 'file' && VIDEO_EXTS.test(msg.payload?.fileName || msg.content || ''));
+              || (msg.type === 'file' && (VIDEO_EXTS.test(msg.payload?.fileName || msg.content || '')
+                || IMAGE_EXTS.test(msg.payload?.fileName || msg.content || '')));
             const isTransparent = msg.type === 'poll' || msg.type === 'reminder' || msg.type === 'file' || isMedia;
             return (
           <div style={{
