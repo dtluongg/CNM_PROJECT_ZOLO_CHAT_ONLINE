@@ -14,18 +14,15 @@ export const getMyLiveStatus = ({ profile, user, isUserOnline, getPresenceStatus
     return STATUS_CONFIG.online;
   }
 
-  const online = isUserOnline(myId);
-  const presStatus = getPresenceStatus(myId);
-
-  let statusKey = 'offline';
-
-  if (online && presStatus) {
-    statusKey = presStatus;
-  } else if (profile?.status && profile.status !== 'invisible') {
-    statusKey = profile.status;
-  } else {
-    statusKey = 'offline';
+  // Với CHÍNH mình: hiển thị đúng trạng thái đã lưu (kể cả 'invisible' — chỉ mình thấy),
+  // KHÔNG lấy từ presence vì presence có thể bị reset về 'online' khi reconnect.
+  const saved = profile?.status || user?.status;
+  if (saved) {
+    return STATUS_CONFIG[saved] || STATUS_CONFIG.online;
   }
 
-  return STATUS_CONFIG[statusKey] || STATUS_CONFIG.online;
+  // Chưa có dữ liệu user (đang tải) → suy ra từ presence như cũ.
+  const online = isUserOnline(myId);
+  const presStatus = online ? getPresenceStatus(myId) : null;
+  return STATUS_CONFIG[presStatus || 'offline'] || STATUS_CONFIG.online;
 };
