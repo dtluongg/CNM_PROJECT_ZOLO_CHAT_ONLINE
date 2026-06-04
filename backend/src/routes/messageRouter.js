@@ -3,7 +3,7 @@ const router = express.Router();
 const verifyToken = require('../middlewares/verifytoken');
 const { checkCanSendInTopic, checkCanInvite } = require('../middlewares/checkTopicPermission');
 const { sendMessage, getMessages, getAttachments, revokeMessage, editMessage, markAsRead, deleteMessageForMe } = require('../controllers/messageController');
-const { summarizeUnread, translateText } = require('../controllers/aiController');
+const { summarizeUnread, translateText, analyzeChat, smartReply, composeSuggest, semanticSearchMessages } = require('../controllers/aiController');
 const { createPoll, votePoll } = require('../controllers/pollController');
 
 // ════════════════════════════════════════════════════════════════
@@ -19,8 +19,12 @@ const { createPoll, votePoll } = require('../controllers/pollController');
 //  Tất cả đều yêu cầu Authorization: Bearer <token>
 // ════════════════════════════════════════════════════════════════
 router.get('/:conversationId/attachments', verifyToken, getAttachments);
-router.post('/:conversationId/aiSummary',  verifyToken, summarizeUnread);
-router.post('/ai/translate',               verifyToken, translateText);
+router.post('/:conversationId/aiSummary',         verifyToken, summarizeUnread);
+router.post('/:conversationId/ai-analyze',        verifyToken, analyzeChat);
+router.post('/:conversationId/smart-reply',       verifyToken, smartReply);
+router.post('/:conversationId/compose-suggest',   verifyToken, composeSuggest);
+router.post('/:conversationId/semantic-search',   verifyToken, semanticSearchMessages);
+router.post('/ai/translate',                      verifyToken, translateText);
 router.post('/:conversationId/poll',       verifyToken, checkCanSendInTopic, createPoll);
 router.patch('/poll/:messageId/vote',      verifyToken, votePoll);
 router.get('/:conversationId', verifyToken, getMessages);

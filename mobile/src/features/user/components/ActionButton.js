@@ -1,8 +1,9 @@
 import React from 'react';
 import { TouchableOpacity, Text } from 'react-native';
-import { styles as s } from '../styles/userProfileStyles';
+import { styles as defaultStyles } from '../styles/userProfileStyles';
 
-const ActionButton = ({ icon, label, onPress, primary }) => {
+const ActionButton = ({ icon, label, onPress, primary, styles }) => {
+  const s = styles || defaultStyles;
   return (
     <TouchableOpacity
       style={[s.actionBtn, primary && s.actionBtnPrimary]}

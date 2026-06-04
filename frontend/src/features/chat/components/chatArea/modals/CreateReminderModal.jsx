@@ -92,11 +92,17 @@ const Wheel = ({ items, value, onChange, labelPath = null, width = 'w-24', isOpe
   );
 };
 
-export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup }) {
+export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup, initialContent = '', initialDateTime = null }) {
   const { t } = useLanguage();
   const [content, setContent] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [time, setTime] = useState('09:00');
+  const defaultDate = initialDateTime && !isNaN(new Date(initialDateTime))
+    ? new Date(initialDateTime).toISOString().split('T')[0]
+    : new Date().toISOString().split('T')[0];
+  const defaultTime = initialDateTime && !isNaN(new Date(initialDateTime))
+    ? `${new Date(initialDateTime).getHours().toString().padStart(2,'0')}:${new Date(initialDateTime).getMinutes().toString().padStart(2,'0')}`
+    : '09:00';
+  const [date, setDate] = useState(defaultDate);
+  const [time, setTime] = useState(defaultTime);
   const [showPickerMode, setShowPickerMode] = useState(null); // 'date', 'time', or null
 
   const currentD = new Date(date);
@@ -125,7 +131,7 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
     if (parseInt(selectedYear) === currentYear && parseInt(selectedMonth) === currentMonth && parseInt(selectedDay) < currentDay) {
       setSelectedDay(currentDay.toString().padStart(2, '0'));
     }
-    
+
     // Check Hour/Minute for today
     const selDateStart = new Date(parseInt(selectedYear), parseInt(selectedMonth) - 1, parseInt(selectedDay)).getTime();
     const todayStart = new Date(currentYear, currentMonth - 1, currentDay).getTime();
@@ -142,24 +148,33 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
 
   useEffect(() => {
     if (isOpen) {
-      const d = new Date(date);
+      if (initialContent) setContent(initialContent);
+      const initD = initialDateTime && !isNaN(new Date(initialDateTime))
+        ? new Date(initialDateTime).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+      const initT = initialDateTime && !isNaN(new Date(initialDateTime))
+        ? `${new Date(initialDateTime).getHours().toString().padStart(2,'0')}:${new Date(initialDateTime).getMinutes().toString().padStart(2,'0')}`
+        : '09:00';
+      setDate(initD);
+      setTime(initT);
+      const d = new Date(initD);
       setSelectedDay(d.getDate().toString().padStart(2, '0'));
       setSelectedMonth((d.getMonth() + 1).toString().padStart(2, '0'));
       setSelectedYear(d.getFullYear().toString());
-      const parts = time.split(':');
+      const parts = initT.split(':');
       setSelectedHour(parts[0]);
       setSelectedMinute(parts[1]);
     }
-  }, [isOpen, date, time]);
+  }, [isOpen, initialContent, initialDateTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isOpen) return null;
 
   const handleCreate = () => {
     if (!content.trim()) return;
-    
+
     const reminderTimeStr = `${date}T${time}:00`;
     const selectedTime = new Date(reminderTimeStr);
-    
+
     if (selectedTime <= new Date()) {
       alert(t('reminder.future_error'));
       return;
@@ -222,17 +237,17 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
 
   const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
   const months = [
-    { label: t('months.jan', { defaultValue: 'Jan' }), value: '01' }, 
-    { label: t('months.feb', { defaultValue: 'Feb' }), value: '02' }, 
+    { label: t('months.jan', { defaultValue: 'Jan' }), value: '01' },
+    { label: t('months.feb', { defaultValue: 'Feb' }), value: '02' },
     { label: t('months.mar', { defaultValue: 'Mar' }), value: '03' },
-    { label: t('months.apr', { defaultValue: 'Apr' }), value: '04' }, 
-    { label: t('months.may', { defaultValue: 'May' }), value: '05' }, 
+    { label: t('months.apr', { defaultValue: 'Apr' }), value: '04' },
+    { label: t('months.may', { defaultValue: 'May' }), value: '05' },
     { label: t('months.jun', { defaultValue: 'Jun' }), value: '06' },
-    { label: t('months.jul', { defaultValue: 'Jul' }), value: '07' }, 
-    { label: t('months.aug', { defaultValue: 'Aug' }), value: '08' }, 
+    { label: t('months.jul', { defaultValue: 'Jul' }), value: '07' },
+    { label: t('months.aug', { defaultValue: 'Aug' }), value: '08' },
     { label: t('months.sep', { defaultValue: 'Sep' }), value: '09' },
-    { label: t('months.oct', { defaultValue: 'Oct' }), value: '10' }, 
-    { label: t('months.nov', { defaultValue: 'Nov' }), value: '11' }, 
+    { label: t('months.oct', { defaultValue: 'Oct' }), value: '10' },
+    { label: t('months.nov', { defaultValue: 'Nov' }), value: '11' },
     { label: t('months.dec', { defaultValue: 'Dec' }), value: '12' }
   ];
   const years = Array.from({ length: 15 }, (_, i) => (new Date().getFullYear() + i).toString());
@@ -263,7 +278,7 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
 
       {/* Main Modal Container (Solid var(--bg-secondary)) */}
       <div className="relative w-[440px] rounded-3xl bg-[var(--bg-secondary)] border border-[var(--border)] shadow-[0_32px_64px_rgba(0,0,0,0.6)] animate-in modalIn duration-300 overflow-hidden">
-        
+
         {/* Main Content Area - STATIC PERFORMANCE (No blur, scale or opacity change) */}
         <div className={`transition-all duration-300 p-6 ${showPickerMode ? 'pointer-events-none' : ''}`}>
           <div className="flex items-center justify-between mb-8">
@@ -314,8 +329,8 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
 
             <div className="rounded-2xl bg-[var(--accent)]/[0.04] border border-[var(--accent)]/10 p-4">
               <p className="text-[11px] text-[var(--accent)] font-bold leading-relaxed opacity-80 italic">
-                * {isGroup 
-                    ? t('reminder.group_hint') 
+                * {isGroup
+                    ? t('reminder.group_hint')
                     : t('reminder.dm_hint')}
               </p>
             </div>
@@ -332,8 +347,8 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
               onClick={handleCreate}
               disabled={!content.trim()}
               className={`flex-1 rounded-2xl px-6 py-4 text-sm font-bold text-white transition-all ${
-                content.trim() 
-                  ? 'bg-[var(--accent)] hover:brightness-110 shadow-[0_8px_24px_rgba(var(--accent-rgb),0.3)] active:scale-95' 
+                content.trim()
+                  ? 'bg-[var(--accent)] hover:brightness-110 shadow-[0_8px_24px_rgba(var(--accent-rgb),0.3)] active:scale-95'
                   : 'bg-[var(--accent)]/20 text-white/40 cursor-not-allowed'
               }`}
             >
@@ -348,63 +363,63 @@ export default function CreateReminderModal({ isOpen, onClose, onCreate, isGroup
             <span className="text-[var(--text-primary)] font-black text-[10px] uppercase tracking-[0.25em]">
               {showPickerMode === 'date' ? t('reminder.select_date') : t('reminder.select_time')}
             </span>
-            <button 
+            <button
               onClick={handleTrayDone}
               className="text-[var(--accent)] font-bold text-sm tracking-tight hover:brightness-125 transition-all"
             >
               {t('reminder.done')}
             </button>
           </div>
-          
+
           <div className="flex justify-center items-center h-[260px] relative px-6 overflow-hidden">
             {/* Selection Highlight Pill */}
             <div className="absolute top-1/2 left-4 right-4 h-11 -translate-y-1/2 bg-[var(--bg-hover)] border-[var(--border)] border-y pointer-events-none z-10" />
-            
+
             <div className="flex items-center justify-center gap-1 relative z-20">
               {showPickerMode === 'date' ? (
                 <>
-                  <Wheel 
-                    items={days} 
-                    value={selectedDay} 
-                    onChange={setSelectedDay} 
-                    width="w-20" 
-                    isOpen={isOpen} 
+                  <Wheel
+                    items={days}
+                    value={selectedDay}
+                    onChange={setSelectedDay}
+                    width="w-20"
+                    isOpen={isOpen}
                     isItemDisabled={isDayDisabled}
                   />
-                  <Wheel 
-                    items={months} 
-                    value={selectedMonth} 
-                    onChange={setSelectedMonth} 
-                    labelPath="value" 
-                    width="w-24" 
-                    isOpen={isOpen} 
+                  <Wheel
+                    items={months}
+                    value={selectedMonth}
+                    onChange={setSelectedMonth}
+                    labelPath="value"
+                    width="w-24"
+                    isOpen={isOpen}
                     isItemDisabled={isMonthDisabled}
                   />
-                  <Wheel 
-                    items={years} 
-                    value={selectedYear} 
-                    onChange={setSelectedYear} 
-                    width="w-28" 
-                    isOpen={isOpen} 
+                  <Wheel
+                    items={years}
+                    value={selectedYear}
+                    onChange={setSelectedYear}
+                    width="w-28"
+                    isOpen={isOpen}
                   />
                 </>
               ) : (
                 <>
-                  <Wheel 
-                    items={hours} 
-                    value={selectedHour} 
-                    onChange={setSelectedHour} 
-                    width="w-24" 
-                    isOpen={isOpen} 
+                  <Wheel
+                    items={hours}
+                    value={selectedHour}
+                    onChange={setSelectedHour}
+                    width="w-24"
+                    isOpen={isOpen}
                     isItemDisabled={isHourDisabled}
                   />
                   <span className="text-[var(--text-primary)] text-3xl font-light mb-2 mx-1">:</span>
-                  <Wheel 
-                    items={minutes} 
-                    value={selectedMinute} 
-                    onChange={setSelectedMinute} 
-                    width="w-24" 
-                    isOpen={isOpen} 
+                  <Wheel
+                    items={minutes}
+                    value={selectedMinute}
+                    onChange={setSelectedMinute}
+                    width="w-24"
+                    isOpen={isOpen}
                     isItemDisabled={isMinuteDisabled}
                   />
                 </>

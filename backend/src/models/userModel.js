@@ -77,6 +77,27 @@ const userSchema = new mongoose.Schema(
             provider: { type: String },   // 'google' | 'facebook'
             supabaseId: { type: String },
         }],
+
+        // ── Phân quyền & trạng thái tài khoản ─────────────────────
+        role: {
+            type: String,
+            enum: ['user', 'moderator', 'admin'],
+            default: 'user',
+            index: true,
+        },
+        isBanned: {
+            type: Boolean,
+            default: false,
+            index: true,
+        },
+        bannedReason: {
+            type: String,
+            default: null,
+        },
+        bannedAt: {
+            type: Date,
+            default: null,
+        },
     },
     {
         timestamps: true, // tự thêm createdAt, updatedAt

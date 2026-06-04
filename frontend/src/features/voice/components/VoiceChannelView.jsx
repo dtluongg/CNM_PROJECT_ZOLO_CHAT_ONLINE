@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
-  PhoneOff, Volume2, Loader,
+  PhoneOff, Volume2, Loader, Minimize2,
 } from 'lucide-react';
 import { useVoiceRoomContext } from '../VoiceRoomContext';
 import MediaPermissionModal from './MediaPermissionModal';
@@ -161,8 +161,8 @@ export default function VoiceChannelView({ topic, conversation, currentUserId, o
     const doJoin = async () => {
       await new Promise(r => setTimeout(r, 300));
       const info = getRoomInfo(topicId);
-      if (info?.active) joinRoom(conversation.id, topicId);
-      else createRoom(conversation.id, topicId);
+      if (info?.active) joinRoom(conversation.id, topicId, topic);
+      else createRoom(conversation.id, topicId, topic);
     };
     doJoin();
   }, [permGranted, conversation?.id, topicId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -224,9 +224,9 @@ export default function VoiceChannelView({ topic, conversation, currentUserId, o
           </span>
         )}
         {loading && <Loader size={13} color="#aaa" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />}
-        <button onClick={onExitChannel} title="Thoát kênh"
-          style={{ background: 'rgba(255,255,255,0.08)', border: 'none', cursor: 'pointer', color: '#aaa', padding: '4px 9px', borderRadius: 6, fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
-          ✕
+        <button onClick={onExitChannel} title={inThisRoom ? 'Thu nhỏ (giữ kết nối)' : 'Thoát kênh'}
+          style={{ background: 'rgba(255,255,255,0.08)', border: 'none', cursor: 'pointer', color: '#aaa', padding: '5px 9px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          <Minimize2 size={13} />
         </button>
       </div>
 

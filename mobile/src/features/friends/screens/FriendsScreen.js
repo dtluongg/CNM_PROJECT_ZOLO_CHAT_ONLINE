@@ -38,6 +38,7 @@ export default function FriendsScreen({ navigation }) {
   const [loadingContacts, setLoadingContacts] = useState(true);
   const [openingChat, setOpeningChat] = useState(false);
   const hasFetchedRef = useRef(false);
+  const lastFetchRef = useRef(0);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -51,6 +52,7 @@ export default function FriendsScreen({ navigation }) {
 
   const fetchContacts = async (silent = false) => {
     try {
+      lastFetchRef.current = Date.now();
       if (!silent) setLoadingContacts(true);
       const [friendRes, inReqRes, outReqRes, blockedRes] = await Promise.all([
          friendApi.getFriendList().catch(() => ({ data: { success: false } })),
@@ -73,11 +75,15 @@ export default function FriendsScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      // Lần đầu: show loading. Các lần sau: fetch ngầm, không block UI
+      // Lần đầu: show loading. Các lần sau: chỉ fetch ngầm nếu dữ liệu đã cũ
+      // (>20s) để tránh bắn 4 request mỗi lần quay lại màn hình gây lag.
+      const now = Date.now();
       if (!hasFetchedRef.current) {
         hasFetchedRef.current = true;
+        lastFetchRef.current = now;
         fetchContacts(false);
-      } else {
+      } else if (now - lastFetchRef.current > 20000) {
+        lastFetchRef.current = now;
         fetchContacts(true);
       }
     }, [])

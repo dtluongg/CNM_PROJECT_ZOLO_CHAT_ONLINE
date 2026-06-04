@@ -328,6 +328,8 @@
     "no_access_topic": "Bạn không có quyền xem kênh này",
     "view_only_topic": "Bạn chỉ có thể xem, không thể nhắn tin tại kênh này",
     "voice_call": "Gọi thoại",
+    "online": "Đang hoạt động",
+    "offline": "Ngoại tuyến",
     "status": {
       "online": "Đang hoạt động",
       "idle": "Đang bận",

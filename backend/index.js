@@ -60,6 +60,8 @@ const groupRoleRouter = require('./src/routes/groupRoleRouter');
 const voiceRoomRouter    = require('./src/routes/voiceRoomRouter');
 const groupCallRouter    = require('./src/routes/groupCallRouter');
 const storyRouter        = require('./src/routes/storyRoutes');
+const adminRouter        = require('./src/routes/adminRouter');
+const reportRouter       = require('./src/routes/reportRouter');
 const { initReminderCron } = require('./src/services/reminderService');
 
 
@@ -78,6 +80,8 @@ app.use('/backend/api/stories',       storyRouter);
 
 app.use('/backend/api/voice-rooms',   voiceRoomRouter);
 app.use('/backend/api/group-calls',   groupCallRouter);
+app.use('/backend/api/admin',         adminRouter);
+app.use('/backend/api/reports',       reportRouter);
 
 // ── SOCKET ──
 const { initSocket } = require('./src/socket/socketManager');

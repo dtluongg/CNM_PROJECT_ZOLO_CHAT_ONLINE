@@ -1,6 +1,6 @@
 const ConversationMember = require('../models/conversationMemberModel');
 const Message            = require('../models/messageModel');
-const { summarize, translate }      = require('../services/aiService');
+const { summarize, translate, analyzeConversation, getSmartReplies, composeSuggestions, semanticSearch } = require('../services/aiService');
 
 // ── Rate limit ───────────────────────────────────────────────────────────────
 // key: `${userId}:${conversationId}` → lastCalledAt (timestamp)
@@ -120,6 +120,218 @@ exports.summarizeUnread = async (req, res) => {
   } catch (err) {
     console.error('[aiController] summarizeUnread error:', err.message);
     return res.status(500).json({ message: 'Không thể tóm tắt lúc này, vui lòng thử lại sau' });
+  }
+};
+
+// ─── Rate limit maps cho từng feature ────────────────────────────────────────
+const analyzeRateMap   = new Map(); // key: userId:convId
+const smartReplyRateMap = new Map();
+const ANALYZE_RATE_MS   = 60 * 1000; // 60 giây
+const SMART_REPLY_RATE_MS = 15 * 1000; // 15 giây
+
+function checkRate(map, key, ms) {
+  const last = map.get(key);
+  if (last && Date.now() - last < ms) {
+    return Math.ceil((ms - (Date.now() - last)) / 1000);
+  }
+  return 0;
+}
+
+/**
+ * POST /api/messages/:conversationId/ai-analyze
+ * Phân tích toàn diện: summary + tone + keyPoints + tasks + reminders (1 AI call).
+ * Body: { conversationName, conversationType, messageCount (10-30) }
+ */
+exports.analyzeChat = async (req, res) => {
+  try {
+    const userId             = req.user?.id || req.user?._id;
+    const { conversationId } = req.params;
+    const { conversationName = '', conversationType = 'dm', messageCount = 20 } = req.body;
+
+    // Clamp messageCount giữa 10-30 để kiểm soát token
+    const limit = Math.min(30, Math.max(10, parseInt(messageCount) || 20));
+
+    const membership = await ConversationMember.findOne({ conversationId, userId, leftAt: null });
+    if (!membership) return res.status(403).json({ message: 'Bạn không thuộc cuộc trò chuyện này' });
+
+    const rateKey = `${userId}:${conversationId}:${limit}`;
+    const wait = checkRate(analyzeRateMap, rateKey, ANALYZE_RATE_MS);
+    if (wait > 0) return res.status(429).json({ message: `Vui lòng chờ ${wait} giây`, waitSeconds: wait });
+
+    const rawMessages = await Message
+      .find({ conversationId, deleted: { $ne: true }, revoked: false })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate('senderId', 'displayName')
+      .lean();
+
+    if (rawMessages.length === 0) {
+      return res.json({
+        summary: 'Chưa có tin nhắn nào trong cuộc trò chuyện.',
+        tone: 'normal', toneReason: '', keyPoints: [], tasks: [], reminders: [],
+        messageCount: 0,
+      });
+    }
+
+    const messages = rawMessages.reverse().map((m) => ({
+      senderName: m.senderId?.displayName || 'Người dùng',
+      type: m.type, content: m.content, isRevoked: m.revoked,
+      fileName: m.payload?.fileName || '',
+    }));
+
+    analyzeRateMap.set(rateKey, Date.now());
+    const result = await analyzeConversation(messages, conversationName, conversationType);
+
+    return res.json({ ...result, messageCount: messages.length });
+  } catch (err) {
+    console.error('[aiController] analyzeChat error:', err.message);
+    return res.status(500).json({ message: 'Không thể phân tích lúc này, vui lòng thử lại' });
+  }
+};
+
+/**
+ * POST /api/messages/:conversationId/smart-reply
+ * Gợi ý 3 câu trả lời cá nhân hóa theo văn phong người dùng.
+ * Body: { currentUserName, currentUserId }
+ */
+exports.smartReply = async (req, res) => {
+  try {
+    const userId             = req.user?.id || req.user?._id;
+    const { conversationId } = req.params;
+    const { currentUserName = '' } = req.body;
+
+    const membership = await ConversationMember.findOne({ conversationId, userId, leftAt: null });
+    if (!membership) return res.status(403).json({ message: 'Bạn không thuộc cuộc trò chuyện này' });
+
+    const rateKey = `${userId}:${conversationId}`;
+    const wait = checkRate(smartReplyRateMap, rateKey, SMART_REPLY_RATE_MS);
+    if (wait > 0) return res.status(429).json({ message: `Vui lòng chờ ${wait} giây`, waitSeconds: wait });
+
+    // Lấy 15 tin nhắn cuối của cuộc trò chuyện (context)
+    const [recentRaw, userOwnRaw] = await Promise.all([
+      Message.find({ conversationId, deleted: { $ne: true }, revoked: false, type: { $in: ['text', 'emoji'] } })
+        .sort({ createdAt: -1 }).limit(15).populate('senderId', 'displayName').lean(),
+      // Lấy 20 tin nhắn gần nhất của chính user trong conversation này để phân tích văn phong
+      Message.find({ conversationId, senderId: userId, deleted: { $ne: true }, revoked: false, type: { $in: ['text', 'emoji'] } })
+        .sort({ createdAt: -1 }).limit(20).lean(),
+    ]);
+
+    if (recentRaw.length === 0) return res.json({ styleProfile: {}, replies: [], lastFromMe: false });
+
+    const myIdStr = userId.toString();
+    const recentMsgs = recentRaw.reverse().map((m) => ({
+      senderName: m.senderId?.displayName || 'Người dùng',
+      content: m.content || '',
+      type: m.type,
+      // Đánh dấu tin nhắn của chính người dùng hiện tại để AI phân biệt đúng vai
+      isMe: (m.senderId?._id || m.senderId)?.toString() === myIdStr,
+    }));
+
+    const userOwnMsgs = userOwnRaw.map((m) => ({ content: m.content || '' }));
+
+    smartReplyRateMap.set(rateKey, Date.now());
+    const result = await getSmartReplies(recentMsgs, userOwnMsgs, currentUserName);
+
+    return res.json(result);
+  } catch (err) {
+    console.error('[aiController] smartReply error:', err.message);
+    return res.status(500).json({ message: 'Không thể gợi ý lúc này, vui lòng thử lại' });
+  }
+};
+
+// Rate limit riêng cho compose (gõ tới đâu gợi ý tới đó nên nới lỏng hơn)
+const composeRateMap = new Map();
+const COMPOSE_RATE_MS = 4 * 1000; // 4 giây
+
+/**
+ * POST /api/messages/:conversationId/compose-suggest
+ * Gợi ý hoàn thiện tin nhắn dựa trên nội dung người dùng đang gõ.
+ * Body: { draft, currentUserName }
+ */
+exports.composeSuggest = async (req, res) => {
+  try {
+    const userId             = req.user?.id || req.user?._id;
+    const { conversationId } = req.params;
+    const { draft = '', currentUserName = '' } = req.body;
+
+    if (!draft || draft.trim().length < 2) {
+      return res.status(400).json({ message: 'Cần nhập ít nhất 2 ký tự để gợi ý' });
+    }
+
+    const membership = await ConversationMember.findOne({ conversationId, userId, leftAt: null });
+    if (!membership) return res.status(403).json({ message: 'Bạn không thuộc cuộc trò chuyện này' });
+
+    const rateKey = `${userId}:${conversationId}`;
+    const wait = checkRate(composeRateMap, rateKey, COMPOSE_RATE_MS);
+    if (wait > 0) return res.status(429).json({ message: `Vui lòng chờ ${wait} giây`, waitSeconds: wait });
+
+    const myIdStr = userId.toString();
+    const [recentRaw, userOwnRaw] = await Promise.all([
+      Message.find({ conversationId, deleted: { $ne: true }, revoked: false, type: { $in: ['text', 'emoji'] } })
+        .sort({ createdAt: -1 }).limit(6).populate('senderId', 'displayName').lean(),
+      Message.find({ conversationId, senderId: userId, deleted: { $ne: true }, revoked: false, type: { $in: ['text', 'emoji'] } })
+        .sort({ createdAt: -1 }).limit(20).lean(),
+    ]);
+
+    const recentMsgs = recentRaw.reverse().map((m) => ({
+      senderName: m.senderId?.displayName || 'Người dùng',
+      content: m.content || '',
+      type: m.type,
+      isMe: (m.senderId?._id || m.senderId)?.toString() === myIdStr,
+    }));
+    const userOwnMsgs = userOwnRaw.map((m) => ({ content: m.content || '' }));
+
+    composeRateMap.set(rateKey, Date.now());
+    const result = await composeSuggestions(draft.trim(), recentMsgs, userOwnMsgs, currentUserName);
+
+    return res.json(result);
+  } catch (err) {
+    console.error('[aiController] composeSuggest error:', err.message);
+    return res.status(500).json({ message: 'Không thể gợi ý lúc này, vui lòng thử lại' });
+  }
+};
+
+/**
+ * POST /api/messages/:conversationId/semantic-search
+ * Tìm kiếm ngữ nghĩa trong 100 tin nhắn gần nhất.
+ */
+exports.semanticSearchMessages = async (req, res) => {
+  try {
+    const userId             = req.user?.id || req.user?._id;
+    const { conversationId } = req.params;
+    const { query } = req.body;
+
+    if (!query || query.trim().length < 2) {
+      return res.status(400).json({ message: 'Query tìm kiếm quá ngắn' });
+    }
+
+    const membership = await ConversationMember.findOne({ conversationId, userId, leftAt: null });
+    if (!membership) return res.status(403).json({ message: 'Bạn không thuộc cuộc trò chuyện này' });
+
+    const rawMessages = await Message
+      .find({ conversationId, deleted: { $ne: true }, revoked: false, type: { $in: ['text', 'emoji'] } })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .populate('senderId', 'displayName')
+      .lean();
+
+    const messages = rawMessages.reverse().map((m) => ({
+      _id: m._id.toString(),
+      senderName: m.senderId?.displayName || 'Người dùng',
+      content: m.content || '',
+      createdAt: m.createdAt,
+    }));
+
+    const matchedIds = await semanticSearch(query, messages);
+
+    const matched = messages
+      .filter((m) => matchedIds.includes(m._id))
+      .map((m) => ({ _id: m._id, senderName: m.senderName, content: m.content, createdAt: m.createdAt }));
+
+    return res.json({ matched, query });
+  } catch (err) {
+    console.error('[aiController] semanticSearch error:', err.message);
+    return res.status(500).json({ message: 'Không thể tìm kiếm lúc này, vui lòng thử lại' });
   }
 };
 

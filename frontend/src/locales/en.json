@@ -328,6 +328,8 @@
     "no_access_topic": "You don't have permission to view this channel",
     "view_only_topic": "You can only view, not send messages in this channel",
     "voice_call": "Voice Call",
+    "online": "Active now",
+    "offline": "Offline",
     "status": {
       "online": "Active now",
       "idle": "Idle",

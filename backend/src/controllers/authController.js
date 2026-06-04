@@ -193,6 +193,8 @@ const signin = async (req, res) => {
                 isEmailVerified: userFind.isEmailVerified,
                 isPhoneVerified: userFind.isPhoneVerified,
                 language: userFind.language || 'vi',
+                role: userFind.role || 'user',
+                isBanned: userFind.isBanned || false,
                 createdAt: userFind.createdAt,
             },
         });
@@ -450,9 +452,23 @@ const syncOAuthUser = async (req, res) => {
             return res.status(400).json({ message: 'Thiếu access_token' });
         }
 
-        const { data: { user: supabaseUser }, error } = await supabaseAdmin.auth.getUser(access_token);
-        if (error || !supabaseUser) {
-            return res.status(401).json({ message: 'Token Supabase không hợp lệ' });
+        // Retry tối đa 3 lần vì Supabase Admin đôi khi bị socket drop
+        let supabaseUser = null;
+        let lastErr = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const { data: { user }, error } = await supabaseAdmin.auth.getUser(access_token);
+                if (error) throw new Error(error.message);
+                supabaseUser = user;
+                break;
+            } catch (e) {
+                lastErr = e;
+                if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 500));
+            }
+        }
+        if (!supabaseUser) {
+            console.error('syncOAuth: Supabase getUser failed after 3 attempts:', lastErr?.message);
+            return res.status(401).json({ message: 'Token Supabase không hợp lệ hoặc Supabase tạm thời không phản hồi. Vui lòng thử lại.' });
         }
 
         const rawProvider = supabaseUser.app_metadata?.provider
@@ -524,6 +540,8 @@ const syncOAuthUser = async (req, res) => {
                 isEmailVerified: dbUser.isEmailVerified,
                 isPhoneVerified: dbUser.isPhoneVerified,
                 language: dbUser.language || 'vi',
+                role: dbUser.role || 'user',
+                isBanned: dbUser.isBanned || false,
                 createdAt: dbUser.createdAt,
             },
         });
@@ -599,6 +617,8 @@ const completeOAuthProfile = async (req, res) => {
                 isEmailVerified: dbUser.isEmailVerified,
                 isPhoneVerified: dbUser.isPhoneVerified,
                 language: dbUser.language || 'vi',
+                role: dbUser.role || 'user',
+                isBanned: dbUser.isBanned || false,
                 createdAt: dbUser.createdAt,
             },
         });
@@ -641,6 +661,8 @@ const authMe = async (req, res) => {
                 isEmailVerified: user.isEmailVerified,
                 isPhoneVerified: user.isPhoneVerified,
                 language: user.language || 'vi',
+                role: user.role || 'user',
+                isBanned: user.isBanned || false,
                 createdAt: user.createdAt,
             },
         });

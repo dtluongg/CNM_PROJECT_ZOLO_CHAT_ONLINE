@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Paperclip, Smile, Mic, Send, Image, X, BarChart2, AlarmClock } from 'lucide-react';
+import { Paperclip, Smile, Mic, Send, Image, X, BarChart2, AlarmClock, Loader2 } from 'lucide-react';
 import CreatePollModal from './chatArea/modals/CreatePollModal';
 import CreateReminderModal from './chatArea/modals/CreateReminderModal';
 import { getAudioStream, getMediaErrorMessage } from '../../../utils/mediaUtils';
+import messageApi from '../api/messageApi';
+import AiLogo from './chatArea/ui/AiLogo';
 
 const EMOJIS = [
   '😀', '😂', '😍', '🥺', '😭', '😊', '😎', '🤔',
@@ -37,7 +39,7 @@ function fmtDuration(secs) {
 export default function MessageInput({
   onSend, placeholder, isMobile, isGroup, conversationId, socket,
   editingMessage, onCancelEdit, replyingMessage, onCancelReply,
-  groupMembers = []
+  groupMembers = [], externalText, onExternalTextConsumed, currentUser,
 }) {
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
@@ -48,11 +50,26 @@ export default function MessageInput({
   const [showPollModal, setShowPollModal] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
 
+  // ── STATE CHO GỢI Ý NHANH (compose-suggest) ──
+  const [composeOpen, setComposeOpen]       = useState(false);
+  const [composeLoading, setComposeLoading] = useState(false);
+  const [composeError, setComposeError]     = useState('');
+  const [composeList, setComposeList]       = useState([]);
+
   // ── STATE CHO TÍNH NĂNG MENTION (@) ──
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [mentionsList, setMentionsList] = useState([]); // Lưu [{ id, displayName }] để kiểm tra lúc gửi
+
+  // Nhận text từ Smart Reply
+  useEffect(() => {
+    if (externalText) {
+      setText(externalText);
+      onExternalTextConsumed?.();
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    }
+  }, [externalText]);
 
   // Sync text when editingMessage changes
   useEffect(() => {
@@ -109,6 +126,46 @@ export default function MessageInput({
     };
   }, [attachments]);
 
+  // ── Gợi ý nhanh dựa trên nội dung đang gõ ─────────────────────────────────────
+  const handleComposeSuggest = useCallback(async () => {
+    const draft = text.trim();
+    if (draft.length < 2 || !conversationId) return;
+
+    setComposeOpen(true);
+    setComposeLoading(true);
+    setComposeError('');
+    setComposeList([]);
+    try {
+      const res = await messageApi.composeSuggest(conversationId, draft, currentUser?.displayName || '');
+      setComposeList(res.data?.suggestions || []);
+    } catch (err) {
+      setComposeError(err.response?.data?.message || 'Không thể gợi ý lúc này');
+    } finally {
+      setComposeLoading(false);
+    }
+  }, [text, conversationId, currentUser]);
+
+  // Đóng popup gợi ý khi xóa hết / còn quá ít chữ
+  useEffect(() => {
+    if (composeOpen && text.trim().length < 2) {
+      setComposeOpen(false);
+      setComposeList([]);
+    }
+  }, [text, composeOpen]);
+
+  const applyComposeSuggestion = (s) => {
+    setText(s);
+    setComposeOpen(false);
+    setComposeList([]);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, isMobile ? 100 : 128) + 'px';
+      }
+    }, 0);
+  };
+
   // ── Send Logic ──────────────────────────────────────────────────────────────
   const handleSend = () => {
     const trimmed = text.trim();
@@ -130,6 +187,8 @@ export default function MessageInput({
     setShowEmoji(false);
     setShowMentions(false);
     setMentionsList([]); // Reset mảng tag
+    setComposeOpen(false); // Đóng popup gợi ý
+    setComposeList([]);
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -372,6 +431,7 @@ export default function MessageInput({
   };
 
   const canSend = text.trim().length > 0 || attachments.length > 0;
+  const canSuggest = text.trim().length >= 2;
 
   if (isRecording) {
     return (
@@ -409,10 +469,16 @@ export default function MessageInput({
   return (
     <div style={{
       paddingBottom: isMobile ? 'calc(8px + env(safe-area-inset-bottom, 0px))' : 0,
-      flexShrink: 0, position: 'relative', background: 'var(--bg-primary)', borderTop: '1px solid var(--border)',
+      flexShrink: 0, position: 'relative',
+      background: 'var(--bg-secondary)',
+      borderTop: '1px solid var(--glass-border, var(--border))',
     }}>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
       {!isMobile && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-primary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderBottom: '1px solid var(--glass-border, var(--border))', backgroundColor: 'transparent' }}>
           <button onClick={() => setShowEmoji(v => !v)} title="Biểu tượng cảm xúc" style={{ background: 'none', border: 'none', cursor: 'pointer', color: showEmoji ? 'var(--accent)' : 'var(--text-muted)', padding: '6px', borderRadius: 6, transition: 'all 0.15s', display: 'flex', alignItems: 'center' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = showEmoji ? 'var(--accent)' : 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Smile size={20} /></button>
           <button title="Gửi ảnh" onClick={() => imageInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '6px', borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Image size={20} /></button>
           <button title="Đính kèm file" onClick={() => fileInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '6px', borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Paperclip size={20} /></button>
@@ -506,7 +572,72 @@ export default function MessageInput({
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, background: isMobile ? 'var(--input-bg)' : 'transparent', borderRadius: isMobile ? 24 : 0, padding: isMobile ? '8px 10px' : '10px 16px', border: isMobile ? `1.5px solid ${focused ? 'var(--accent)' : 'transparent'}` : 'none', transition: 'border-color 0.15s' }}>
+      {/* Popup gợi ý hoàn thiện tin nhắn */}
+      {composeOpen && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 4px)',
+          left: isMobile ? 8 : 16, right: isMobile ? 8 : 16,
+          background: 'var(--bg-secondary)', border: '1px solid rgba(167,139,250,0.3)',
+          borderRadius: 12, padding: 10, zIndex: 1000,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)', animation: 'fadeInUp 0.15s ease',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#a78bfa' }}>
+              <AiLogo size={14} /> Gợi ý hoàn thiện
+            </div>
+            <button onClick={() => setComposeOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex' }}>
+              <X size={15} />
+            </button>
+          </div>
+
+          {composeLoading && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 4px', color: 'var(--text-muted)', fontSize: 13 }}>
+              <Loader2 size={15} style={{ animation: 'spin 0.8s linear infinite', color: '#a78bfa' }} />
+              AI đang hoàn thiện theo văn phong của bạn…
+            </div>
+          )}
+
+          {!composeLoading && composeError && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 4px' }}>
+              <span style={{ fontSize: 12, color: '#ed4245' }}>{composeError}</span>
+              <button onClick={handleComposeSuggest} style={{ background: 'none', border: '1px solid rgba(237,66,69,0.4)', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', color: '#ed4245', fontSize: 11, fontWeight: 700 }}>Thử lại</button>
+            </div>
+          )}
+
+          {!composeLoading && !composeError && composeList.length === 0 && (
+            <div style={{ padding: '8px 4px', fontSize: 13, color: 'var(--text-muted)' }}>Không có gợi ý phù hợp.</div>
+          )}
+
+          {!composeLoading && composeList.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => applyComposeSuggestion(s)}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+                borderRadius: 8, padding: '8px 11px', marginBottom: 6,
+                color: 'var(--text-primary)', fontSize: 13, lineHeight: 1.5, cursor: 'pointer',
+                transition: 'background 0.12s, border-color 0.12s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(167,139,250,0.08)'; e.currentTarget.style.borderColor = 'rgba(167,139,250,0.4)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-tertiary)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{
+        display: 'flex', alignItems: 'flex-end', gap: 6,
+        background: isMobile ? 'var(--input-bg)' : 'var(--bg-primary)',
+        borderRadius: isMobile ? 24 : 10,
+        margin: isMobile ? 0 : '6px 14px 10px',
+        padding: isMobile ? '8px 10px' : '8px 12px',
+        border: `1.5px solid ${focused ? 'rgba(var(--accent-rgb),0.45)' : 'var(--glass-border,var(--border))'}`,
+        boxShadow: focused ? '0 0 0 3px rgba(var(--accent-rgb),0.08)' : 'var(--neumorph-inset, none)',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
+      }}>
         <textarea
           ref={textareaRef}
           value={text}
@@ -517,11 +648,31 @@ export default function MessageInput({
           onBlur={() => setFocused(false)}
           placeholder={placeholder || 'Nhập @, tin nhắn...'}
           rows={1}
-          style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 15, padding: 0, resize: 'none', lineHeight: 1.5, maxHeight: 128, overflow: 'auto' }}
+          style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 14.5, padding: 0, resize: 'none', lineHeight: 1.6, maxHeight: 128, overflow: 'auto' }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
           {!canSend && <button title="Ghi âm" onClick={startRecording} style={{ background: 'none', border: 'none', cursor: 'pointer', color: isRecording ? '#ed4245' : 'var(--text-muted)', padding: '6px', borderRadius: 6, transition: 'all 0.12s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }} onMouseLeave={e => { e.currentTarget.style.color = isRecording ? '#ed4245' : 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Mic size={20} /></button>}
           {isMobile && <button onClick={() => setShowEmoji(v => !v)} title="Biểu tượng cảm xúc" style={{ background: 'none', border: 'none', cursor: 'pointer', color: showEmoji ? 'var(--accent)' : 'var(--text-muted)', padding: '4px', borderRadius: 6 }}><Smile size={20} /></button>}
+          {canSuggest && (
+            <button
+              onClick={handleComposeSuggest}
+              disabled={composeLoading}
+              title="Gợi ý hoàn thiện tin nhắn (AI)"
+              style={{
+                background: composeOpen ? 'linear-gradient(135deg,#6c63ff,#a78bfa)' : 'none',
+                border: 'none', cursor: composeLoading ? 'wait' : 'pointer',
+                color: composeOpen ? '#fff' : '#a78bfa',
+                padding: '6px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background 0.15s, color 0.15s',
+              }}
+              onMouseEnter={e => { if (!composeOpen) e.currentTarget.style.background = 'rgba(167,139,250,0.12)'; }}
+              onMouseLeave={e => { if (!composeOpen) e.currentTarget.style.background = 'none'; }}
+            >
+              {composeLoading
+                ? <Loader2 size={20} style={{ animation: 'spin 0.8s linear infinite' }} />
+                : <AiLogo size={20} />}
+            </button>
+          )}
           {canSend && <button onClick={handleSend} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '6px', borderRadius: 8, marginLeft: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Send size={22} style={{ transform: 'rotate(-45deg)', marginTop: -2 }} /></button>}
         </div>
       </div>

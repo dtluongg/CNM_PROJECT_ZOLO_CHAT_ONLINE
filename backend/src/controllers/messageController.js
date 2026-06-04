@@ -640,7 +640,7 @@ const markAsRead = async (req, res) => {
         await MessageRead.findOneAndUpdate(
             { messageId, userId },
             { conversationId, messageId, userId },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
 
         // 2. Kiểm tra nếu tin nhắn này là cuối cùng thì reset unreadCount + xóa aiSummary

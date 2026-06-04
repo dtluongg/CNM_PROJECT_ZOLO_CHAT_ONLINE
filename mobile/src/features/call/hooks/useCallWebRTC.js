@@ -129,6 +129,11 @@ export function useCallWebRTC({ onIceCandidate, onRemoteStream }) {
     const pc = pcRef.current;
     if (!pc) throw new Error('No RTCPeerConnection');
     const offer = await pc.createOffer();
+    // PeerConnection có thể đã bị đóng/thay thế trong lúc createOffer chạy
+    // (race do gọi trùng) → không setLocalDescription lên PC đã đóng.
+    if (pcRef.current !== pc || pc.signalingState === 'closed') {
+      throw new Error('PeerConnection đã đóng trong quá trình tạo offer');
+    }
     await pc.setLocalDescription(offer);
     return offer;
   }, []);
