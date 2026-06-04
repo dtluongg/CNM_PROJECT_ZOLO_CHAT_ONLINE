@@ -117,7 +117,7 @@ export default function RightSidebar({
     );
     const isOwner = myMember?.role === "owner";
     const isAdmin = myMember?.role === 'admin';
-    
+
     // ── Helper to translate hardcoded backend strings ────────────────────────
     const translateTopicContent = (val) => translateTopicName(val, t);
     const inviteMode = conversation?.inviteMode || 'open_invite';
@@ -565,12 +565,45 @@ export default function RightSidebar({
                                 </div>
                             </div>
 
+                            {/* Vai trò của bạn — mọi thành viên đều thấy */}
+                            {conversation.type === "group" && myMember && (() => {
+                                const roleCfg = {
+                                    owner:  { label: t('member_management.roles.owner'),  icon: <Crown size={12} />, color: '#faa61a' },
+                                    admin:  { label: t('member_management.roles.admin'),  icon: <Shield size={12} />, color: '#5865f2' },
+                                    member: { label: t('member_management.roles.member'), icon: <UserCog size={12} />, color: 'var(--text-muted)' },
+                                }[myMember.role] || { label: myMember.role, icon: null, color: 'var(--text-muted)' };
+                                const customRole = myMember.customRoleId && typeof myMember.customRoleId === 'object'
+                                    ? myMember.customRoleId : null;
+                                return (
+                                    <div style={{ marginBottom: 16 }}>
+                                        <SectionHeader title={t('right_sidebar.your_role')} />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: 'var(--bg-tertiary)', borderRadius: 8, padding: '10px 12px' }}>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: roleCfg.color, background: 'var(--bg-hover)', borderRadius: 20, padding: '3px 10px' }}>
+                                                {roleCfg.icon}{roleCfg.label}
+                                            </span>
+                                            {customRole && (
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: customRole.color, background: customRole.color + '20', border: `1px solid ${customRole.color}44`, borderRadius: 20, padding: '3px 10px' }}>
+                                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: customRole.color }} />
+                                                    {customRole.name}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
                             {/* Thành viên nhóm - preview */}
                             {conversation.type === "group" && (
                                 <div style={{ marginBottom: 16 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, marginTop: 4 }}>
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'flex', alignItems: 'center', gap: 6 }}>
                                             {t('right_sidebar.group_members')}
+                                            {members.length > 0 && (
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#3ba55c', textTransform: 'none', letterSpacing: 0 }}>
+                                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#3ba55c' }} />
+                                                    {members.filter(mm => isUserOnline((mm.user?._id || '').toString())).length}
+                                                </span>
+                                            )}
                                         </div>
                                         <button onClick={() => setShowMemberModal(true)} style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}>
                                             {t('right_sidebar.view_all', { count: members.length || 0 })}
@@ -584,17 +617,30 @@ export default function RightSidebar({
                                                 const uid = (m.user?._id || '').toString();
                                                 const rc = { owner: { label: '👑' }, admin: { label: '🛡️' }, member: { label: '' } };
                                                 const role = rc[m.role] || rc.member;
+                                                const customRole = m.customRoleId && typeof m.customRoleId === 'object' ? m.customRoleId : null;
+                                                const memberOnline = isUserOnline(uid);
                                                 return (
                                                     <div key={uid} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
+                                                        <div style={{ position: 'relative', width: 28, height: 28, flexShrink: 0 }}>
                                                         {m.user?.avatar
                                                             ? <img src={m.user.avatar} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
                                                             : <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11, fontWeight: 700 }}>{(m.user?.displayName || '?')[0].toUpperCase()}</div>
                                                         }
-                                                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>
-                                                            {m.user?.displayName || 'Unknown'}
-                                                            {uid === myUserId && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>{t('right_sidebar.you')}</span>}
-                                                        </span>
-                                                        <span style={{ fontSize: 12 }}>{role.label}</span>
+                                                        <span style={{ position: 'absolute', bottom: -1, right: -1, width: 9, height: 9, borderRadius: '50%', background: memberOnline ? '#3ba55c' : '#80848e', border: '2px solid var(--bg-tertiary)' }} />
+                                                        </div>
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {m.user?.displayName || 'Unknown'}
+                                                                {uid === myUserId && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>{t('right_sidebar.you')}</span>}
+                                                            </span>
+                                                            {customRole && (
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 10, fontWeight: 700, color: customRole.color, background: customRole.color + '20', border: `1px solid ${customRole.color}44`, borderRadius: 10, padding: '1px 7px' }}>
+                                                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: customRole.color }} />
+                                                                    {customRole.name}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <span style={{ fontSize: 12, flexShrink: 0 }}>{role.label}</span>
                                                     </div>
                                                 );
                                             })}

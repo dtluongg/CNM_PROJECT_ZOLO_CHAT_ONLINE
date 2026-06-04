@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     X, Crown, Shield, User, ChevronDown, ChevronUp,
-    UserX, Plus, Trash2, Hash, Volume2, Save,
+    UserX, Plus, Trash2, Hash, Volume2, Save, Send, UserPlus,
 } from 'lucide-react';
 import conversationApi from '../api/conversationApi';
+import friendApi from '../../friends/api/friendApi';
 import apiClient from '../../../services/apiClient';
 import { useLanguage } from '../../../context/LanguageContext';
+import { usePresence } from '../../../context/PresenceContext';
+import { roleChipStyle } from '../utils/roleColor';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const COLORS = ['#5865f2','#eb459e','#ed4245','#faa61a','#57f287','#00b4d8','#9b59b6','#e67e22'];
@@ -39,20 +42,32 @@ const PERMISSIONS_META = (t) => [
 const PRESET_COLORS = ['#5865f2','#eb459e','#ed4245','#faa61a','#57f287','#00b4d8','#9b59b6','#e67e22','#ffffff','#99aab5'];
 
 // ─── Sub components ───────────────────────────────────────────────────────────
-function MemberAvatar({ name, avatar, size = 38 }) {
+function MemberAvatar({ name, avatar, size = 38, online = null }) {
     const [err, setErr] = useState(false);
     useEffect(() => setErr(false), [avatar]);
-    if (avatar && !err) return (
-        <img src={avatar} alt={name} onError={() => setErr(true)}
-            style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+    const dot = online === null ? null : (
+        <span style={{
+            position: 'absolute', bottom: 0, right: 0,
+            width: Math.max(8, size * 0.28), height: Math.max(8, size * 0.28),
+            borderRadius: '50%', background: online ? '#3ba55c' : '#80848e',
+            border: '2px solid var(--bg-secondary)', boxSizing: 'border-box',
+        }} />
     );
     return (
-        <div style={{
-            width: size, height: size, borderRadius: '50%', flexShrink: 0,
-            background: avatarBg(name), display: 'flex', alignItems: 'center',
-            justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: size * 0.38,
-        }}>
-            {getInit(name)}
+        <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+            {avatar && !err ? (
+                <img src={avatar} alt={name} onError={() => setErr(true)}
+                    style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />
+            ) : (
+                <div style={{
+                    width: size, height: size, borderRadius: '50%',
+                    background: avatarBg(name), display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: size * 0.38,
+                }}>
+                    {getInit(name)}
+                </div>
+            )}
+            {dot}
         </div>
     );
 }
@@ -243,8 +258,10 @@ const roleApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 function MembersTab({ conversation, currentUserId, customRoles, members, onMembersReload, topics }) {
     const { t } = useLanguage();
+    const { isUserOnline } = usePresence();
     const [loading, setLoading]         = useState(false);
     const [search, setSearch]           = useState('');
+    const [roleFilter, setRoleFilter]   = useState('all');
     const [expandedId, setExpandedId]   = useState(null);
     const [busy, setBusy]               = useState('');
     const [kickReason, setKickReason]   = useState('');
@@ -257,8 +274,55 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
     const amOwner  = myMember?.role === 'owner';
     const amAdmin  = myMember?.role === 'admin' || myMember?.canManageMembers;
 
+    const isMemberOnline = (m) => isUserOnline((m.user?._id || '').toString());
+    const onlineCount = members.filter(isMemberOnline).length;
+
+    // ── Thêm thành viên ngay trong tab danh sách ──
+    const [showAdd, setShowAdd]         = useState(false);
+    const [friendPool, setFriendPool]   = useState([]);
+    const [loadingPool, setLoadingPool] = useState(false);
+    const [selectedAdd, setSelectedAdd] = useState([]);
+    const [addSearch, setAddSearch]     = useState('');
+
+    useEffect(() => {
+        if (!showAdd) return;
+        let cancelled = false;
+        setLoadingPool(true);
+        friendApi.getFriendList()
+            .then(res => {
+                if (cancelled) return;
+                const list = res?.data?.success ? res.data.data || [] : [];
+                const memberIds = new Set(members.map(m => (m.user?._id || '').toString()));
+                setFriendPool(list.filter(f => !memberIds.has((f.friendId || '').toString())));
+            })
+            .catch(() => !cancelled && setFriendPool([]))
+            .finally(() => !cancelled && setLoadingPool(false));
+        return () => { cancelled = true; };
+    }, [showAdd, members]);
+
+    const toggleAdd = (fid) => setSelectedAdd(prev =>
+        prev.includes(fid) ? prev.filter(x => x !== fid) : [...prev, fid]);
+
+    const handleAddMembers = async () => {
+        if (selectedAdd.length === 0) return;
+        setBusy('add-members');
+        try {
+            await conversationApi.addConversationMembers(conversation.id, selectedAdd);
+            setSelectedAdd([]);
+            setShowAdd(false);
+            setAddSearch('');
+            await onMembersReload();
+        } catch (err) {
+            window.alert(err.response?.data?.message || t('common.error'));
+        } finally { setBusy(''); }
+    };
+
+    const addPool = friendPool.filter(f =>
+        (f.displayName || f.friendName || '').toLowerCase().includes(addSearch.toLowerCase()));
+
     const filtered = members.filter(m =>
-        (m.user?.displayName || '').toLowerCase().includes(search.toLowerCase())
+        (m.user?.displayName || '').toLowerCase().includes(search.toLowerCase()) &&
+        (roleFilter === 'all' || (roleFilter === 'online' ? isMemberOnline(m) : m.role === roleFilter))
     );
     const byRole = (r) => filtered.filter(m => m.role === r);
 
@@ -379,7 +443,7 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                         background: isExpanded ? 'var(--bg-hover)' : 'transparent',
                     }}
                 >
-                    <MemberAvatar name={m.user?.displayName} avatar={m.user?.avatar} />
+                    <MemberAvatar name={m.user?.displayName} avatar={m.user?.avatar} online={isMemberOnline(m)} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{
                             fontWeight: 600, fontSize: 13, color: 'var(--text-primary)',
@@ -402,20 +466,14 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
 
                             {/* Custom role badge — hiển thị role được gán */}
                             {assignedRole && (
-                                <div style={{
-                                    display: 'flex', alignItems: 'center', gap: 3,
-                                    borderRadius: 10, padding: '2px 7px',
-                                    background: assignedRole.color + '28',
-                                    border: `1px solid ${assignedRole.color}44`,
+                                <span style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                                    borderRadius: 10, padding: '2px 8px',
+                                    fontSize: 10, fontWeight: 700,
+                                    ...roleChipStyle(assignedRole.color),
                                 }}>
-                                    <span style={{
-                                        width: 6, height: 6, borderRadius: '50%',
-                                        background: assignedRole.color, display: 'inline-block',
-                                    }} />
-                                    <span style={{ fontSize: 10, fontWeight: 700, color: assignedRole.color }}>
-                                        {assignedRole.name}
-                                    </span>
-                                </div>
+                                    {assignedRole.name}
+                                </span>
                             )}
 
                             {!m.canSendMessages && (
@@ -498,50 +556,57 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                             )}
                         </div>
 
-                        {/* Actions */}
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            {isDirty(m) && (
-                                <button onClick={() => handleSave(m)} disabled={isBusy} style={{
-                                    display: 'flex', alignItems: 'center', gap: 4,
-                                    padding: '7px 18px', background: '#57f287', color: '#000',
-                                    border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700,
-                                    cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
-                                }}>
-                                    <Save size={12} />
-                                    {busy === `save-${id}` ? t('member_management.roles.saving') : t('member_management.roles.save_changes')}
-                                </button>
-                            )}
+                        {/* Lưu thay đổi — nút chính, chỉ hiện khi có chỉnh sửa */}
+                        {isDirty(m) && (
+                            <button onClick={() => handleSave(m)} disabled={isBusy} style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                                width: '100%', padding: '9px 0', background: '#57f287', color: '#000',
+                                border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 700,
+                                cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
+                                marginBottom: 14,
+                            }}>
+                                <Save size={13} />
+                                {busy === `save-${id}` ? t('member_management.roles.saving') : t('member_management.roles.save_changes')}
+                            </button>
+                        )}
+
+                        {/* Khu vực quản lý — tách riêng cho gọn */}
+                        <div style={{
+                            borderTop: '1px solid var(--border)', paddingTop: 12,
+                            display: 'flex', flexDirection: 'column', gap: 8,
+                        }}>
                             {amOwner && !isSelf && m.role !== 'owner' && (
                                 <button onClick={() => handleTransferOwner(m)} disabled={isBusy} style={{
-                                    display: 'flex', alignItems: 'center', gap: 4,
-                                    padding: '7px 14px', background: '#faa61a20', color: '#faa61a',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                                    width: '100%', padding: '8px 0', background: '#faa61a18', color: '#faa61a',
                                     border: '1px solid #faa61a40', borderRadius: 8, fontSize: 12,
                                     fontWeight: 600, cursor: isBusy ? 'not-allowed' : 'pointer',
                                     opacity: isBusy ? 0.6 : 1,
                                 }}>
-                                    <Crown size={12} />
+                                    <Crown size={13} />
                                     {busy === `transfer-${id}` ? t('member_management.members.transferring') : t('member_management.members.transfer_owner_btn')}
                                 </button>
                             )}
-                            <button onClick={() => handleKick(m)} disabled={isBusy} style={{
-                                display: 'flex', alignItems: 'center', gap: 4,
-                                padding: '7px 14px', background: '#ed424520', color: '#ed4245',
-                                border: '1px solid #ed424540', borderRadius: 8, fontSize: 12,
-                                fontWeight: 600, cursor: isBusy ? 'not-allowed' : 'pointer',
-                            }}>
-                                <UserX size={12} /> {t('member_management.members.remove_btn')}
-                            </button>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <input
+                                    value={kickReason} onChange={e => setKickReason(e.target.value)}
+                                    placeholder={t('member_management.members.kick_reason_placeholder')}
+                                    style={{
+                                        flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12,
+                                        border: '1px solid var(--border)', background: 'var(--bg-secondary)',
+                                        color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
+                                    }}
+                                />
+                                <button onClick={() => handleKick(m)} disabled={isBusy} style={{
+                                    display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                                    padding: '8px 14px', background: '#ed424520', color: '#ed4245',
+                                    border: '1px solid #ed424540', borderRadius: 8, fontSize: 12,
+                                    fontWeight: 600, cursor: isBusy ? 'not-allowed' : 'pointer',
+                                }}>
+                                    <UserX size={13} /> {t('member_management.members.remove_btn')}
+                                </button>
+                            </div>
                         </div>
-                        <input
-                            value={kickReason} onChange={e => setKickReason(e.target.value)}
-                            placeholder={t('member_management.members.kick_reason_placeholder')}
-                            style={{
-                                width: '100%', padding: '6px 10px', borderRadius: 8, fontSize: 12,
-                                border: '1px solid var(--border)', background: 'var(--bg-secondary)',
-                                color: 'var(--text-primary)', outline: 'none',
-                                boxSizing: 'border-box', marginTop: 8,
-                            }}
-                        />
                     </div>
                 )}
                 {ed.customRoleId && (() => {
@@ -655,15 +720,114 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
     return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-                <input
-                    value={search} onChange={e => setSearch(e.target.value)}
-                    placeholder={t('member_management.members.search_placeholder')}
-                    style={{
-                        width: '100%', padding: '8px 12px', borderRadius: 8,
-                        border: '1px solid var(--border)', background: 'var(--bg-primary)',
-                        color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box',
-                    }}
-                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                        value={search} onChange={e => setSearch(e.target.value)}
+                        placeholder={t('member_management.members.search_placeholder')}
+                        style={{
+                            flex: 1, padding: '8px 12px', borderRadius: 8,
+                            border: '1px solid var(--border)', background: 'var(--bg-primary)',
+                            color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                        }}
+                    />
+                    {canManage && (
+                        <button onClick={() => setShowAdd(v => !v)} style={{
+                            display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                            padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                            cursor: 'pointer', border: 'none',
+                            background: showAdd ? 'var(--bg-hover)' : 'var(--accent)',
+                            color: showAdd ? 'var(--text-primary)' : '#fff',
+                        }}>
+                            {showAdd ? <X size={14} /> : <UserPlus size={14} />}
+                            {showAdd ? t('common.cancel') : t('right_sidebar.add_member')}
+                        </button>
+                    )}
+                </div>
+
+                {/* Inline thêm thành viên */}
+                {showAdd && canManage && (
+                    <div style={{
+                        marginTop: 10, background: 'var(--bg-tertiary)', borderRadius: 10,
+                        border: '1px solid var(--border)', padding: 10,
+                    }}>
+                        <input
+                            value={addSearch} onChange={e => setAddSearch(e.target.value)}
+                            placeholder={t('member_management.members.search_placeholder')}
+                            style={{
+                                width: '100%', padding: '7px 10px', borderRadius: 8, fontSize: 12,
+                                border: '1px solid var(--border)', background: 'var(--bg-secondary)',
+                                color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginBottom: 8,
+                            }}
+                        />
+                        {loadingPool ? (
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>{t('right_sidebar.loading')}</div>
+                        ) : addPool.length === 0 ? (
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 0' }}>{t('right_sidebar.no_friends_add')}</div>
+                        ) : (
+                            <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                                {addPool.map(f => {
+                                    const fid = (f.friendId || '').toString();
+                                    const checked = selectedAdd.includes(fid);
+                                    return (
+                                        <div key={fid} onClick={() => toggleAdd(fid)} style={{
+                                            display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
+                                            borderRadius: 8, cursor: 'pointer', marginBottom: 2,
+                                            background: checked ? 'rgba(88,101,242,0.12)' : 'transparent',
+                                        }}>
+                                            <div style={{
+                                                width: 16, height: 16, borderRadius: 5, flexShrink: 0,
+                                                border: `2px solid ${checked ? 'var(--accent)' : 'var(--border)'}`,
+                                                background: checked ? 'var(--accent)' : 'transparent',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            }}>
+                                                {checked && <span style={{ color: '#fff', fontSize: 10, fontWeight: 900 }}>✓</span>}
+                                            </div>
+                                            <MemberAvatar name={f.displayName || f.friendName} avatar={f.avatar} size={26} />
+                                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {f.displayName || f.friendName}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        <button onClick={handleAddMembers} disabled={selectedAdd.length === 0 || busy === 'add-members'} style={{
+                            width: '100%', marginTop: 8, padding: '8px 0', borderRadius: 8, border: 'none',
+                            background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700,
+                            cursor: 'pointer', opacity: (selectedAdd.length === 0 || busy === 'add-members') ? 0.5 : 1,
+                        }}>
+                            {busy === 'add-members'
+                                ? t('right_sidebar.processing')
+                                : selectedAdd.length > 0
+                                    ? t('right_sidebar.add_count', { count: selectedAdd.length })
+                                    : t('right_sidebar.add_member')}
+                        </button>
+                    </div>
+                )}
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                    {[
+                        { key: 'all', label: t('member_management.members.filter_all'), count: members.length },
+                        { key: 'online', label: t('member_management.members.filter_online'), count: onlineCount, dot: '#3ba55c' },
+                        { key: 'owner', label: ROLE_CFG(t).owner.label, count: members.filter(m => m.role === 'owner').length },
+                        { key: 'admin', label: ROLE_CFG(t).admin.label, count: members.filter(m => m.role === 'admin').length },
+                        { key: 'member', label: ROLE_CFG(t).member.label, count: members.filter(m => m.role === 'member').length },
+                    ].map(f => {
+                        const sel = roleFilter === f.key;
+                        return (
+                            <button key={f.key} onClick={() => setRoleFilter(f.key)} style={{
+                                display: 'flex', alignItems: 'center', gap: 4,
+                                padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                                cursor: 'pointer',
+                                border: `1px solid ${sel ? 'var(--accent)' : 'var(--border)'}`,
+                                background: sel ? 'var(--accent)' : 'var(--bg-primary)',
+                                color: sel ? '#fff' : 'var(--text-muted)',
+                            }}>
+                                {f.dot && <span style={{ width: 7, height: 7, borderRadius: '50%', background: sel ? '#fff' : f.dot }} />}
+                                {f.label} <span style={{ opacity: 0.7 }}>{f.count}</span>
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
                 {members.length === 0 ? (
@@ -807,8 +971,8 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                     {t('member_management.roles.allowed_channels_hint', { defaultValue: '💡 Xem: tick = được vào kênh, bỏ tick = bị chặn\n💡 Gửi: tick = được gửi tin, bỏ tick = chỉ đọc\n💡 Để trống tất cả Xem = được xem mọi kênh, nhưng phải tick Gửi mới gửi được' })}
                 </div>
                 <div style={{ display: 'grid', gap: 4, marginBottom: 12 }}>
-                    {[...textTopics, ...voiceTopics].map(t => {
-                        const tid         = t._id.toString();
+                    {[...textTopics, ...voiceTopics].map(tp => {
+                        const tid         = tp._id.toString();
                         const allowedIds  = (ed.allowedTopicIds  || []).map(id => id.toString());
                         const sendableIds = (ed.sendableTopicIds || []).map(id => id.toString());
                         const hasAccess   = allowedIds.includes(tid);
@@ -825,11 +989,11 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                         ? '3px solid #5865f2'
                                         : '3px solid var(--border)',
                             }}>
-                                {t.channelType === 'voice'
+                                {tp.channelType === 'voice'
                                     ? <Volume2 size={12} color="var(--text-muted)" />
                                     : <Hash size={12} color="var(--text-muted)" />}
                                 <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)' }}>
-                                    {t.emoji} {t.name}
+                                    {tp.emoji} {tp.name}
                                 </span>
 
                                 {/* Badge trạng thái */}
@@ -893,6 +1057,42 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                         );
                     })}
                 </div>
+            </div>
+        );
+    };
+
+    // Tổng quan quyền của role — badge icon nhỏ giúp phân biệt nhanh
+    const renderPermBadges = (role) => {
+        const perms = role.permissions || {};
+        const channelCount = (role.allowedTopicIds || []).length;
+        const badges = [
+            perms.canSendMessages && { icon: Send, color: '#57f287', title: t('member_management.permissions.canSendMessages') },
+            perms.canInviteMembers && { icon: UserPlus, color: '#00b4d8', title: t('member_management.permissions.canInviteMembers') },
+            perms.canManageMembers && { icon: Shield, color: '#5865f2', title: t('member_management.permissions.canManageMembers') },
+        ].filter(Boolean);
+        return (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                {badges.map((b, i) => {
+                    const Icon = b.icon;
+                    return (
+                        <span key={i} title={b.title} style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 20, height: 20, borderRadius: 6,
+                            background: b.color + '20',
+                        }}>
+                            <Icon size={11} color={b.color} />
+                        </span>
+                    );
+                })}
+                {channelCount > 0 && (
+                    <span title={t('member_management.roles.allowed_channels')} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 2,
+                        fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                        background: 'var(--bg-hover)', borderRadius: 6, padding: '2px 6px',
+                    }}>
+                        <Hash size={10} /> {channelCount}
+                    </span>
+                )}
             </div>
         );
     };
@@ -1003,10 +1203,10 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                 fontSize: 11, fontWeight: 600, color: 'var(--text-muted)',
                                 marginBottom: 6, textTransform: 'uppercase',
                             }}>{t('member_management.roles.permissions')}</div>
-                            {PERMISSIONS_META.map(p => (
+                            {PERMISSIONS_META(t).map(p => (
                                 <label key={p.key} style={{
-                                    display: 'flex', alignItems: 'center',
-                                    gap: 8, marginBottom: 6, cursor: 'pointer',
+                                    display: 'flex', alignItems: 'flex-start',
+                                    gap: 8, marginBottom: 8, cursor: 'pointer',
                                 }}>
                                     <Toggle
                                         checked={!!newRole.permissions[p.key]}
@@ -1014,7 +1214,10 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                             ...prev, permissions: { ...prev.permissions, [p.key]: v },
                                         }))}
                                     />
-                                    <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{p(t).find(x => x.key === p.key)?.label || p.key}</span>
+                                    <div>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{p.label}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.desc}</div>
+                                    </div>
                                 </label>
                             ))}
                         </div>
@@ -1051,17 +1254,23 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                     display: 'flex', alignItems: 'center', gap: 10,
                                     padding: '10px 16px', cursor: 'pointer',
                                     background: isExp ? 'var(--bg-hover)' : 'transparent',
+                                    borderLeft: `3px solid ${role.color}`,
                                 }}
                             >
-                                <div style={{
-                                    width: 14, height: 14, borderRadius: '50%',
-                                    background: role.color, flexShrink: 0,
-                                }} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                                        {role.name}
-                                    </span>
-                                    {/* FIX KEY: avatar stack + tên thành viên thật */}
+                                    {/* Colored role name chip for quick distinction */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        <span style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                                            fontSize: 12.5, fontWeight: 700,
+                                            borderRadius: 20, padding: '2px 11px', maxWidth: '100%',
+                                            ...roleChipStyle(role.color),
+                                        }}>
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{role.name}</span>
+                                        </span>
+                                        {renderPermBadges(role)}
+                                    </div>
+                                    {/* avatar stack + tên thành viên thật */}
                                     {renderMemberAvatars(roleMembers)}
                                 </div>
                                 {isExp
@@ -1115,7 +1324,7 @@ function RolesTab({ conversation, currentUserId, roles, onRefresh, topics, membe
                                             fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
                                             textTransform: 'uppercase', marginBottom: 8,
                                         }}>{t('member_management.roles.permissions')}</div>
-                                        {PERMISSIONS_META.map(p => (
+                                        {PERMISSIONS_META(t).map(p => (
                                             <label key={p.key} style={{
                                                 display: 'flex', alignItems: 'center',
                                                 gap: 8, marginBottom: 8, cursor: 'pointer',
@@ -1307,7 +1516,10 @@ export default function MemberManagementModal({ visible, onClose, conversation, 
                         <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>
                             {t('member_management.title')}
                         </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{conversation?.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            {conversation?.name}
+                            {members.length > 0 && <span style={{ marginLeft: 6 }}>· {members.length} {t('member_management.members.members_word')}</span>}
+                        </div>
                     </div>
                     <button onClick={onClose} style={{
                         width: 30, height: 30, borderRadius: 8, border: '1px solid var(--border)',

@@ -15,6 +15,8 @@ const getChannelIcon = (channelType) => {
     return Hash;
 };
 import conversationApi from '../../api/conversationApi';
+import apiClient from '../../../../services/apiClient';
+import { roleChipStyle } from '../../utils/roleColor';
 
 const CATEGORY_EMOJIS = ['💬', '📢', '📚', '🎮', '🔧', '🎵', '📌', '🎉'];
 
@@ -25,8 +27,9 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
     const [loading, setLoading]             = useState(false);
     const [showForm, setShowForm]           = useState(false);
     const [editingTopic, setEditingTopic]   = useState(null);
-    const [form, setForm]                   = useState({ name: '', emoji: '💬', categoryName: '', channelType: 'text', description: '' });
+    const [form, setForm]                   = useState({ name: '', emoji: '💬', categoryName: '', channelType: 'text', description: '', isPrivate: false, allowedRoleIds: [] });
     const [saving, setSaving]               = useState(false);
+    const [roles, setRoles]                 = useState([]);
     const [collapsedCats, setCollapsedCats] = useState({});
     const [hoveredId, setHoveredId]         = useState(null);
 
@@ -48,9 +51,16 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
 
     useEffect(() => { loadTopics(); }, [loadTopics]);
 
+    useEffect(() => {
+        if (!conversation?.id || !canManage) return;
+        apiClient.get(`/conversations/${conversation.id}/roles`)
+            .then(res => setRoles(Array.isArray(res?.data?.data) ? res.data.data : []))
+            .catch(() => setRoles([]));
+    }, [conversation?.id, canManage]);
+
     const openCreate = () => {
         setEditingTopic(null);
-        setForm({ name: '', emoji: '💬', categoryName: '', channelType: 'text', description: '' });
+        setForm({ name: '', emoji: '💬', categoryName: '', channelType: 'text', description: '', isPrivate: false, allowedRoleIds: [] });
         setShowForm(true);
     };
 
@@ -62,9 +72,18 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
             categoryName: topic.categoryName || '',
             channelType: topic.channelType || 'text',
             description: topic.description || '',
+            isPrivate: !!topic.isPrivate,
+            allowedRoleIds: (topic.allowedRoleIds || []).map(r => (r._id || r).toString()),
         });
         setShowForm(true);
     };
+
+    const toggleFormRole = (roleId) => setForm((p) => ({
+        ...p,
+        allowedRoleIds: p.allowedRoleIds.includes(roleId)
+            ? p.allowedRoleIds.filter(id => id !== roleId)
+            : [...p.allowedRoleIds, roleId],
+    }));
 
     const handleSave = async () => {
         if (!form.name.trim()) return;
@@ -323,6 +342,43 @@ export default function TopicManager({ conversation, canManage, onTopicSelect, a
                         onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                         style={s.input}
                     />
+
+                    {/* Kênh riêng tư — chỉ role được chọn mới truy cập */}
+                    {form.channelType !== 'system' && (
+                        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                                <input type="checkbox" checked={form.isPrivate}
+                                    onChange={(e) => setForm((p) => ({ ...p, isPrivate: e.target.checked }))} />
+                                <div>
+                                    <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{t('topic_manager.private_channel')}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('topic_manager.private_hint')}</div>
+                                </div>
+                            </label>
+                            {form.isPrivate && (
+                                <div style={{ marginTop: 8 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>{t('topic_manager.select_roles')}</div>
+                                    {roles.length === 0 ? (
+                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>{t('topic_manager.no_roles')}</div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                            {roles.map(r => {
+                                                const rid = r._id.toString();
+                                                const sel = form.allowedRoleIds.includes(rid);
+                                                return (
+                                                    <button key={rid} type="button" onClick={() => toggleFormRole(rid)} style={{
+                                                        fontSize: 11.5, fontWeight: 700, borderRadius: 20, padding: '3px 11px', cursor: 'pointer',
+                                                        ...(sel ? roleChipStyle(r.color) : { background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }),
+                                                    }}>
+                                                        {r.name}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                         <button

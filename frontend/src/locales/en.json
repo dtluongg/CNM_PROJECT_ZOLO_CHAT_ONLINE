@@ -489,7 +489,11 @@
       "text": "# Text",
       "voice": "🔊 Voice",
       "system": "📋 System"
-    }
+    },
+    "private_channel": "Private channel",
+    "private_hint": "Only owner/admin and selected roles can access",
+    "select_roles": "Roles allowed to access",
+    "no_roles": "No roles yet. Create a role first."
   },
   "bubble": {
     "revoked": "Message revoked",
@@ -784,7 +788,6 @@
     "media_count": "{{count}} images shared",
     "shared_files": "Shared Files",
     "no_files": "No files yet",
-    "call_history": "Call History",
     "group_settings": "Group Settings",
     "change_avatar": "Change Group Avatar",
     "change_avatar_hint": "Click to change group avatar",
@@ -808,7 +811,8 @@
       "open_invite": "Open Invite",
       "approval_required": "Approval Required",
       "admin_only": "Admin Only"
-    }
+    },
+    "your_role": "Your role"
   },
   "user_search": {
     "title": "Search Users",
@@ -877,7 +881,15 @@
       "placeholder_name": "Role name...",
       "members_using_this": "Members using this role",
       "no_custom_roles": "No custom roles yet.",
-      "create_first_role": "Create first role"
+      "create_first_role": "Create first role",
+      "members_count_summary": "{{name}} +{{count}} others",
+      "no_members_hint": "No members yet",
+      "allowed_channels_hint": "💡 View: checked = can enter channel, unchecked = blocked · Send: checked = can post, unchecked = read only",
+      "enter_name_error": "Please enter a role name",
+      "create_error": "Could not create role",
+      "update_error": "Could not update role",
+      "delete_error": "Could not delete role",
+      "save_error": "Could not save changes"
     },
     "members": {
       "search_placeholder": "Search members...",
@@ -895,7 +907,10 @@
       "transfer_owner_error": "Could not transfer group ownership",
       "you": "you",
       "banned_send": "Banned from sending",
-      "no_results": "No results found"
+      "no_results": "No results found",
+      "filter_all": "All",
+      "filter_online": "Online",
+      "members_word": "members"
     },
     "requests": {
       "pending_count": "{{count}} pending requests",
@@ -904,6 +919,14 @@
       "reject": "Reject",
       "only_admin_can_review": "Only owner/admin can review requests",
       "refresh": "Refresh"
+    },
+    "permissions": {
+      "canSendMessages": "Send messages",
+      "canSendMessages_desc": "Allow sending messages in the group",
+      "canInviteMembers": "Invite members",
+      "canInviteMembers_desc": "Allow inviting others to the group",
+      "canManageMembers": "Manage members",
+      "canManageMembers_desc": "Allow editing members' permissions"
     }
   },
   "forward_modal": {
@@ -1005,8 +1028,28 @@
     "offline": "Offline"
   },
   "months": {
-    "jan": "Jan", "feb": "Feb", "mar": "Mar", "apr": "Apr",
-    "may": "May", "jun": "Jun", "jul": "Jul", "aug": "Aug",
-    "sep": "Sep", "oct": "Oct", "nov": "Nov", "dec": "Dec"
+    "jan": "Jan",
+    "feb": "Feb",
+    "mar": "Mar",
+    "apr": "Apr",
+    "may": "May",
+    "jun": "Jun",
+    "jul": "Jul",
+    "aug": "Aug",
+    "sep": "Sep",
+    "oct": "Oct",
+    "nov": "Nov",
+    "dec": "Dec"
+  },
+  "archived": {
+    "title": "Archived chats",
+    "subtitle": "Groups you left, were removed from, or disbanded",
+    "read_only": "Read only — you are no longer in this group",
+    "empty": "No archived groups yet",
+    "no_messages": "No messages",
+    "left": "Left",
+    "kicked": "Removed",
+    "disbanded": "Disbanded",
+    "file": "Attachment"
   }
 }
