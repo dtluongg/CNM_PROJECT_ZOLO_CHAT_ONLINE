@@ -4,6 +4,55 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import messageApi from '../api/messageApi';
 
+// ── Normalize ảnh: chuyển HEIC/HEIF → JPEG, đảm bảo type hợp lệ ──
+const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+const normalizeImage = (uri, mimeType, fileName) => {
+  // Lấy extension từ URI (bỏ query string nếu có)
+  const cleanUri = uri.split('?')[0];
+  const extFromUri = cleanUri.split('.').pop()?.toLowerCase();
+
+  // Map extension → mime
+  const extToMime = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    gif: 'image/gif',
+    webp: 'image/webp',
+  };
+
+  // Xác định mime cuối cùng
+  let resolvedMime = mimeType?.toLowerCase();
+
+  // Nếu mime không hợp lệ hoặc là HEIC/HEIF → thử đoán từ extension
+  if (!SUPPORTED_IMAGE_TYPES.includes(resolvedMime)) {
+    resolvedMime = extToMime[extFromUri] || null;
+  }
+
+  // Vẫn không xác định được → fallback jpeg
+  if (!SUPPORTED_IMAGE_TYPES.includes(resolvedMime)) {
+    resolvedMime = 'image/jpeg';
+  }
+
+  // Xác định extension hợp lệ từ mime
+  const mimeToExt = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+  };
+  const resolvedExt = mimeToExt[resolvedMime];
+
+  // Tạo tên file hợp lệ
+  const baseName = (fileName || `image_${Date.now()}`)
+    .replace(/\.[^.]+$/, ''); // bỏ extension cũ
+  const resolvedName = `${baseName}.${resolvedExt}`;
+
+  return { mime: resolvedMime, name: resolvedName };
+};
+
+// ─────────────────────────────────────────────────────────────────
+
 const useFileHandler = (conversationId, onMessageSent, topicId = null) => {
   const isSharingRef = useRef(false);
 
@@ -29,12 +78,17 @@ const useFileHandler = (conversationId, onMessageSent, topicId = null) => {
       if (Platform.OS === 'web') {
         const response = await fetch(asset.uri);
         const blob = await response.blob();
-        fd.append('file', blob, asset.fileName || 'image.jpg');
+        // Normalize ngay cả trên web
+        const { name } = normalizeImage(asset.uri, asset.mimeType, asset.fileName);
+        fd.append('file', blob, name);
       } else {
+        // ✅ Normalize MIME và tên file trước khi gửi
+        const { mime, name } = normalizeImage(asset.uri, asset.mimeType, asset.fileName);
+        console.log(`[pickAndSendImage] uri=${asset.uri} | originalMime=${asset.mimeType} → resolvedMime=${mime} | name=${name}`);
         fd.append('file', {
           uri: asset.uri,
-          name: asset.fileName || 'image.jpg',
-          type: asset.mimeType || 'image/jpeg',
+          name,
+          type: mime,
         });
       }
 
@@ -84,7 +138,6 @@ const useFileHandler = (conversationId, onMessageSent, topicId = null) => {
 
     try {
       if (Platform.OS === 'web') {
-        // Web: tạo thẻ <a> ẩn để trigger download
         const a = document.createElement('a');
         a.href = url;
         a.download = fileName || 'file';
@@ -95,7 +148,6 @@ const useFileHandler = (conversationId, onMessageSent, topicId = null) => {
         return;
       }
 
-      // Android/iOS: mở thẳng trên trình duyệt hệ thống
       const supported = await Linking.canOpenURL(url);
       if (supported) {
         await Linking.openURL(url);
