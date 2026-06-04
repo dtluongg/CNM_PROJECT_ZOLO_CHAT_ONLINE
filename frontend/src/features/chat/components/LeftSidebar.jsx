@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { usePresence } from '../../../context/PresenceContext';
 import {
@@ -15,8 +16,6 @@ import voiceRoomApi from '../../voice/api/voiceRoomApi';
 import { VoiceRoomProvider } from '../../voice/VoiceRoomContext';
 import { useVoiceRoomContext } from '../../voice/VoiceRoomContext';
 import { useLanguage } from '../../../context/LanguageContext';
-import UserProfileModal from '../../user/components/UserProfileModal';
-
 
 export default function LeftSidebar({
   conversations,
@@ -32,10 +31,10 @@ export default function LeftSidebar({
 }) {
   const { user, logout } = useAuth();
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed]           = useState(false);
   const [search, setSearch]                 = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [showSelfProfile, setShowSelfProfile] = useState(false);
 
   const GROUP_TYPE_LABEL_T = {
     study:   t('auth.group_types.study'),
@@ -509,7 +508,7 @@ export default function LeftSidebar({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 10 }}>
           <div
             style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 8, minWidth: 0, flex: 1, cursor: 'pointer', borderRadius: 8, padding: '3px 4px', transition: 'background 0.13s' }}
-            onClick={() => setShowSelfProfile(true)}
+            onClick={() => user?._id && navigate(`/user/${user._id}`)}
             title={user?.displayName}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -546,14 +545,6 @@ export default function LeftSidebar({
           </div>
         )}
       </div>
-
-      {/* Self profile modal */}
-      {showSelfProfile && user?._id && (
-        <UserProfileModal
-          userId={user._id}
-          onClose={() => setShowSelfProfile(false)}
-        />
-      )}
     </div>
   );
 }
