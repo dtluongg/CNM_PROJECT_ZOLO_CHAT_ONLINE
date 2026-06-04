@@ -390,19 +390,20 @@ export default function ChatArea({
       : -1;
 
     const dividerItem = { type: 'unread-divider', key: `unread-divider-${conversation.id}` };
-    // Dòng "Tóm tắt bằng AI" đặt ngay sau divider tin chưa đọc.
-    const aiSummaryItem = {
+
+    if (insertIdx !== -1) {
+      displayItems.splice(insertIdx + 1, 0, dividerItem);
+    } else {
+      displayItems.unshift(dividerItem);
+    }
+
+    // Dòng "Tóm tắt bằng AI" đặt ở CUỐI danh sách tin nhắn.
+    displayItems.push({
       type: 'ai-summary',
       key: `ai-summary-${conversation.id}`,
       snapshotLastReadId: lastReadId,
       initialSummary: conversation?.myMembership?.aiSummary || null,
-    };
-
-    if (insertIdx !== -1) {
-      displayItems.splice(insertIdx + 1, 0, dividerItem, aiSummaryItem);
-    } else {
-      displayItems.unshift(dividerItem, aiSummaryItem);
-    }
+    });
   }
 
   // ── Presence ───────────────────────────────────────────────
