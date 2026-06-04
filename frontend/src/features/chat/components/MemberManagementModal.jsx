@@ -248,6 +248,7 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
     const [expandedId, setExpandedId]   = useState(null);
     const [busy, setBusy]               = useState('');
     const [kickReason, setKickReason]   = useState('');
+    const [transferTarget, setTransferTarget] = useState(null);
     const [pendingEdit, setPendingEdit] = useState({});
 
     const myMember = members.find(m => (m.user?._id || '').toString() === currentUserId);
@@ -331,6 +332,26 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
             await onMembersReload();
         } catch (err) {
             window.alert(err.response?.data?.message || t('member_management.members.kick_error', { defaultValue: 'Không thể xóa thành viên' }));
+        } finally { setBusy(''); }
+    };
+
+    const handleTransferOwner = (m) => {
+        setTransferTarget(m);
+    };
+
+    const confirmTransferOwner = async () => {
+        if (!transferTarget) return;
+
+        const id = (transferTarget.user?._id || '').toString();
+
+        setBusy(`transfer-${id}`);
+        try {
+            await conversationApi.transferConversationOwner(conversation.id, id);
+            setTransferTarget(null);
+            setExpandedId(null);
+            await onMembersReload();
+        } catch (err) {
+            window.alert(err.response?.data?.message || t('member_management.members.transfer_owner_error', { defaultValue: 'Không thể chuyển quyền chủ nhóm' }));
         } finally { setBusy(''); }
     };
 
@@ -490,6 +511,18 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                                     {busy === `save-${id}` ? t('member_management.roles.saving') : t('member_management.roles.save_changes')}
                                 </button>
                             )}
+                            {amOwner && !isSelf && m.role !== 'owner' && (
+                                <button onClick={() => handleTransferOwner(m)} disabled={isBusy} style={{
+                                    display: 'flex', alignItems: 'center', gap: 4,
+                                    padding: '7px 14px', background: '#faa61a20', color: '#faa61a',
+                                    border: '1px solid #faa61a40', borderRadius: 8, fontSize: 12,
+                                    fontWeight: 600, cursor: isBusy ? 'not-allowed' : 'pointer',
+                                    opacity: isBusy ? 0.6 : 1,
+                                }}>
+                                    <Crown size={12} />
+                                    {busy === `transfer-${id}` ? t('member_management.members.transferring') : t('member_management.members.transfer_owner_btn')}
+                                </button>
+                            )}
                             <button onClick={() => handleKick(m)} disabled={isBusy} style={{
                                 display: 'flex', alignItems: 'center', gap: 4,
                                 padding: '7px 14px', background: '#ed424520', color: '#ed4245',
@@ -521,6 +554,99 @@ function MembersTab({ conversation, currentUserId, customRoles, members, onMembe
                     // Lấy danh sách topics từ MemberManagementModal (cần truyền xuống)
                     return null; // placeholder — xem bên dưới
                 })()}
+
+                {transferTarget && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            zIndex: 600,
+                            background: 'rgba(0,0,0,0.7)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 16,
+                        }}
+                        onClick={e => e.target === e.currentTarget && !busy && setTransferTarget(null)}
+                    >
+                        <div style={{
+                            width: '100%', maxWidth: 460,
+                            background: 'var(--bg-secondary)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 16,
+                            boxShadow: '0 24px 80px rgba(0,0,0,0.45)',
+                            overflow: 'hidden',
+                        }}>
+                            <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border)' }}>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>
+                                    {t('member_management.members.transfer_owner_title', { defaultValue: 'Chuyển trưởng nhóm' })}
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                                    {t('member_management.members.transfer_owner_desc', {
+                                        name: transferTarget.user?.displayName || 'thành viên',
+                                        defaultValue: 'Bạn sắp chuyển quyền trưởng nhóm cho một thành viên khác.',
+                                    })}
+                                </div>
+                            </div>
+
+                            <div style={{ padding: 20, display: 'flex', gap: 14, alignItems: 'center' }}>
+                                <MemberAvatar name={transferTarget.user?.displayName} avatar={transferTarget.user?.avatar} size={52} />
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                        {transferTarget.user?.displayName || '?'}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                                        {t('member_management.members.transfer_owner_warning', {
+                                            defaultValue: 'Sau khi chuyển quyền, bạn sẽ không còn là chủ nhóm.'
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{
+                                padding: '0 20px 20px',
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                                gap: 10,
+                            }}>
+                                <button
+                                    onClick={() => setTransferTarget(null)}
+                                    disabled={!!busy}
+                                    style={{
+                                        padding: '9px 16px',
+                                        borderRadius: 10,
+                                        border: '1px solid var(--border)',
+                                        background: 'var(--bg-primary)',
+                                        color: 'var(--text-primary)',
+                                        cursor: busy ? 'not-allowed' : 'pointer',
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    {t('member_management.members.cancel', { defaultValue: 'Hủy' })}
+                                </button>
+                                <button
+                                    onClick={confirmTransferOwner}
+                                    disabled={!!busy}
+                                    style={{
+                                        padding: '9px 16px',
+                                        borderRadius: 10,
+                                        border: '1px solid #faa61a40',
+                                        background: busy ? '#faa61a12' : '#faa61a',
+                                        color: busy ? 'var(--text-muted)' : '#111',
+                                        cursor: busy ? 'not-allowed' : 'pointer',
+                                        fontSize: 13,
+                                        fontWeight: 800,
+                                    }}
+                                >
+                                    {busy === `transfer-${(transferTarget.user?._id || '').toString()}`
+                                        ? t('member_management.members.transferring')
+                                        : t('member_management.members.confirm_transfer', { defaultValue: 'Chuyển quyền' })}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
             </div>
         );
