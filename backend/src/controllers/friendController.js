@@ -3,6 +3,17 @@ const Friendship = require('../models/friendshipModel');
 const User = require('../models/userModel');
 const mongoose = require('mongoose');
 const { createAndEmitNotification } = require('../services/notificationService');
+const { getIO } = require('../socket/socketManager');
+
+// Phát sự kiện friend realtime tới phòng của 1 user.
+const emitFriendEvent = (userId, event, payload = {}) => {
+    try {
+        const io = getIO();
+        if (io && userId) io.to(`user:${userId.toString()}`).emit(event, payload);
+    } catch (err) {
+        console.error('[emitFriendEvent] error:', err.message);
+    }
+};
 
 const getCurrentUserId = (req) => (req.user?._id || req.user?.id || '').toString();
 
@@ -187,6 +198,12 @@ const sendFriendRequest = async (req, res, next) => {
             console.error('friend request notification error:', notifyErr.message);
         }
 
+        // Realtime: cập nhật danh sách lời mời đến của người nhận
+        emitFriendEvent(toUserId, 'friend:request-received', {
+            requestId: newRequest._id.toString(),
+            fromUserId: fromUserId.toString(),
+        });
+
         res.status(201).json({
             success: true,
             message: "Gửi lời mời kết bạn thành công",
@@ -273,6 +290,10 @@ const acceptFriendRequest = async (req, res, next) => {
                 title: 'Lời mời kết bạn đã được chấp nhận',
                 body: `${req.user?.displayName || 'Ai đó'} đã chấp nhận lời mời kết bạn của bạn`,
             });
+
+            // Realtime: cả hai phía cập nhật lại danh sách bạn bè
+            emitFriendEvent(requesterId, 'friend:request-accepted', { byUserId: currentUserId.toString() });
+            emitFriendEvent(currentUserId, 'friend:list-changed', {});
         } catch (notifyErr) {
             console.error('friend accepted notification error:', notifyErr.message);
         }
@@ -396,6 +417,8 @@ const rejectFriendRequest = async (req, res, next) => {
         request.status = 'rejected';
         await request.save();
 
+        emitFriendEvent(request.fromUserId, 'friend:request-rejected', { byUserId: currentUserId });
+
         res.status(200).json({
             success: true,
             message: "Đã từ chối lời mời kết bạn."
@@ -430,6 +453,8 @@ const cancelFriendRequest = async (req, res, next) => {
         request.status = 'canceled';
         await request.save();
 
+        emitFriendEvent(request.toUserId, 'friend:request-canceled', { byUserId: currentUserId });
+
         res.status(200).json({
             success: true,
             message: "Đã thu hồi lời mời kết bạn."
@@ -453,6 +478,8 @@ const unfriend = async (req, res, next) => {
         if (!friendship) {
             return res.status(404).json({ success: false, message: "Hai người chưa từng kết bạn." });
         }
+
+        emitFriendEvent(targetUserId, 'friend:removed', { byUserId: currentUserId });
 
         res.status(200).json({
             success: true,

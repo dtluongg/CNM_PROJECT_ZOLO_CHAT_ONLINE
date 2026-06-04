@@ -18,6 +18,7 @@ import MessageBubble from './chatArea/modals/MessageBubble';
 import PinLimitModal from './chatArea/modals/PinLimitModal';
 // ── AI components ──────────────────────────────────────────────────────
 import UnreadDivider from './chatArea/ui/UnreadDivider';
+import AiSummaryCard from './chatArea/ui/AiSummaryCard';
 import AiPanel from './chatArea/AiPanel';
 import AiLogo from './chatArea/ui/AiLogo';
 import SearchPanel from './chatArea/SearchPanel';
@@ -389,11 +390,18 @@ export default function ChatArea({
       : -1;
 
     const dividerItem = { type: 'unread-divider', key: `unread-divider-${conversation.id}` };
+    // Dòng "Tóm tắt bằng AI" đặt ngay sau divider tin chưa đọc.
+    const aiSummaryItem = {
+      type: 'ai-summary',
+      key: `ai-summary-${conversation.id}`,
+      snapshotLastReadId: lastReadId,
+      initialSummary: conversation?.myMembership?.aiSummary || null,
+    };
 
     if (insertIdx !== -1) {
-      displayItems.splice(insertIdx + 1, 0, dividerItem);
+      displayItems.splice(insertIdx + 1, 0, dividerItem, aiSummaryItem);
     } else {
-      displayItems.unshift(dividerItem);
+      displayItems.unshift(dividerItem, aiSummaryItem);
     }
   }
 
@@ -695,6 +703,14 @@ export default function ChatArea({
           if (item.type === 'date') return <DateDivider key={item.key} label={item.label} />;
           if (item.type === 'system') return <SystemMessage key={item.key} msg={item.msg} />;
           if (item.type === 'unread-divider') return <UnreadDivider key={item.key} />;
+          if (item.type === 'ai-summary') return (
+            <AiSummaryCard
+              key={item.key}
+              conversationId={conversation.id}
+              initialSummary={item.initialSummary}
+              snapshotLastReadId={item.snapshotLastReadId}
+            />
+          );
           return (
             <div
               key={item.key}
