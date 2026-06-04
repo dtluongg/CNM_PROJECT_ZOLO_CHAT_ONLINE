@@ -228,6 +228,8 @@ export default function MessageScreen({ route, navigation }) {
     onReaction: (data) => msgHook.updateReaction({ ...data, currentUserId }),
     onRevoked: (messageId) => msgHook.revokeMessage(messageId),
     onEdited: (message) => msgHook.editMessage(message),
+    // Cập nhật realtime khi có người bình chọn (giống frontend web).
+    onUpdatePoll: (message) => msgHook.editMessage(message),
     onRead: (data) => msgHook.markRead(data),
     onDeletedForMe: (messageId) => msgHook.deleteMessage(messageId),
     onPinnedMessagesChange: (newPins) => setPinnedMessages(newPins),
@@ -662,7 +664,7 @@ export default function MessageScreen({ route, navigation }) {
     try {
       setTranslatingIds(prev => new Set(prev).add(mId));
       const res = await messageApi.translateMessage(msg.content, targetLang);
-      
+
       // Determine display label for language
       let displayLang = targetLang;
       if (targetLang === 'Auto') {
@@ -679,8 +681,9 @@ export default function MessageScreen({ route, navigation }) {
         }
       }));
     } catch (err) {
-      console.error('Translation error:', err);
-      Alert.alert(t('common.error'), t('chat.translate_error'));
+      console.error('Translation error:', err?.response?.data || err.message);
+      // Hiện thông báo cụ thể từ server (vd: thiếu cấu hình dịch vụ dịch).
+      Alert.alert(t('common.error'), err?.response?.data?.message || t('chat.translate_error'));
     } finally {
       setTranslatingIds(prev => {
         const next = new Set(prev);

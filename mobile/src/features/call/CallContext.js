@@ -190,7 +190,14 @@ export const CallProvider = ({ children }) => {
       return;
     }
 
+    // Đặt trạng thái CALLING ĐỒNG BỘ ngay lập tức (setCallState cập nhật
+    // callStateRef.current ngay) để chặn việc gọi initiateCall lần 2 (double-
+    // tap / re-render) khi đang chờ 'call:ring' round-trip — nếu không sẽ tạo
+    // 2 PeerConnection và PC đầu bị đóng giữa chừng gây lỗi "closed".
     setCallError(null);
+    setCallState(CALL_STATE.CALLING);
+    setCallType(type);
+    setRemoteUser(targetUser);
 
     // Phase 1: Ring ngay lập tức
     socketRef.current.emit('call:ring', { calleeId: targetUser._id, type }, async (res) => {
@@ -201,14 +208,12 @@ export const CallProvider = ({ children }) => {
             : res.error,
           'warning',
         );
+        resetAll();
         return;
       }
 
       const cid = res.callId;
       setCallId(cid);
-      setCallState(CALL_STATE.CALLING);
-      setCallType(type);
-      setRemoteUser(targetUser);
 
       // Phase 2: lấy ICE servers và media song song
       try {

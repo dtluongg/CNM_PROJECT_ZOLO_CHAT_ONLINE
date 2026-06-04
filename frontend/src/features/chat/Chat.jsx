@@ -18,8 +18,8 @@ import { useMessages } from './hooks/useMessages';
 import { useBlockStatus } from './hooks/useBlockStatus';
 import { useGroupActions } from './hooks/useGroupActions';
 import { useNotifications } from '../../context/NotificationContext';
-import { VoiceRoomProvider } from '../voice/VoiceRoomContext';
 import VoiceRoomPanel        from '../voice/components/VoiceRoomPanel';
+import { useVoiceRoomContext } from '../voice/VoiceRoomContext';
 import { useLanguage }       from '../../context/LanguageContext';
 
 const Chat = () => {
@@ -68,8 +68,40 @@ const Chat = () => {
   const activeConvRef = useRef(null);
   useEffect(() => { activeConvRef.current = activeConversation; }, [activeConversation]);
 
-  // Reset active topic when switching conversations
-  useEffect(() => { setActiveTopic(null); }, [activeConversation?.id]);
+  // ── Voice room expand (VoiceDock → mở lại màn hình gọi) ───────────────────
+  const {
+    activeConversationId: voiceConvId,
+    activeTopic: voiceTopic,
+    expandSignal,
+  } = useVoiceRoomContext();
+  // Khi đổi conversation lúc expand, không reset topic mà set đúng topic thoại
+  const pendingVoiceTopicRef = useRef(null);
+
+  // Reset active topic when switching conversations (trừ khi đang expand voice)
+  useEffect(() => {
+    if (pendingVoiceTopicRef.current) {
+      setActiveTopic(pendingVoiceTopicRef.current);
+      pendingVoiceTopicRef.current = null;
+    } else {
+      setActiveTopic(null);
+    }
+  }, [activeConversation?.id]);
+
+  // Phản hồi yêu cầu mở lại màn hình gọi từ VoiceDock
+  useEffect(() => {
+    if (!expandSignal || !voiceTopic || !voiceConvId) return;
+    const conv = conversations.find((c) => c.id === voiceConvId);
+    if (!conv) return;
+    if (activeConversation?.id === conv.id) {
+      // Đã ở đúng conversation → chỉ cần mở lại topic thoại
+      setActiveTopic(voiceTopic);
+    } else {
+      // Chọn conversation; effect reset ở trên sẽ set topic thoại nhờ ref
+      pendingVoiceTopicRef.current = voiceTopic;
+      setActiveConversation(conv);
+      if (isMobile) setMobileView('chat');
+    }
+  }, [expandSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Messages ─────────────────────────────────────────────────────────────
   const {
@@ -284,6 +316,7 @@ const Chat = () => {
       [activeConversation?.id]: updater(prev[activeConversation?.id] || []),
     })),
     currentUserId,
+    currentUser,
     typingUser: activeTypingUser,
     onDeleteForMe: (messageId) => deleteMessageForMe(activeConversation?.id, messageId),
     onSendMessage: handleSendMessage,
@@ -337,7 +370,7 @@ const Chat = () => {
   // ── MOBILE LAYOUT ────────────────────────────────────────────────────────
   if (isMobile) {
     return (
-      <VoiceRoomProvider>
+      <>
         <div style={{
           width: '100vw', height: '100%', background: 'var(--bg-primary)',
           position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -396,13 +429,13 @@ const Chat = () => {
             onClose={() => setShowVoicePanel(false)}
           />
         </div>
-      </VoiceRoomProvider>
+      </>
     );
   }
 
   // ── DESKTOP LAYOUT ───────────────────────────────────────────────────────
   return (
-    <VoiceRoomProvider>
+    <>
       <div style={{
         width: '100%', height: '100%', background: 'var(--bg-primary)',
         position: 'relative', display: 'flex', overflow: 'hidden',
@@ -474,7 +507,7 @@ const Chat = () => {
           onClose={() => setShowVoicePanel(false)}
         />
       </div>
-    </VoiceRoomProvider>
+    </>
   );
 };
 

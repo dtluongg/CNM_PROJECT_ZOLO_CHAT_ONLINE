@@ -15,6 +15,7 @@ import voiceRoomApi from '../../voice/api/voiceRoomApi';
 import { VoiceRoomProvider } from '../../voice/VoiceRoomContext';
 import { useVoiceRoomContext } from '../../voice/VoiceRoomContext';
 import { useLanguage } from '../../../context/LanguageContext';
+import UserProfileModal from '../../user/components/UserProfileModal';
 
 
 export default function LeftSidebar({
@@ -34,6 +35,7 @@ export default function LeftSidebar({
   const [collapsed, setCollapsed]           = useState(false);
   const [search, setSearch]                 = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showSelfProfile, setShowSelfProfile] = useState(false);
 
   const GROUP_TYPE_LABEL_T = {
     study:   t('auth.group_types.study'),
@@ -111,7 +113,7 @@ export default function LeftSidebar({
     invisible: { color: '#80848e', label: t('chat.status.invisible') },
   };
   const myStatusConfig = STATUS_CONFIG[myStatus] || STATUS_CONFIG.online;
-  
+
   // ── Helper to translate hardcoded backend strings ────────────────────────
   const translateTopicContent = (val) => {
     if (!val) return val;
@@ -222,20 +224,36 @@ export default function LeftSidebar({
       transition: isMobile ? 'none' : 'width 0.2s, min-width 0.2s',
       overflow: 'hidden', position: 'relative',
     }}>
-      {/* Logout confirm overlay */}
+      {/* Logout confirm — fixed overlay, centered on whole screen */}
       {showLogoutConfirm && (
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 100,
-          background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', gap: 14, padding: 28,
-        }}>
-          <div style={{ fontSize: 40 }}>👋</div>
-          <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text-primary)', textAlign: 'center' }}>{t('auth.logout')}?</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>{t('auth.logout_confirm_desc')}</div>
-          <div style={{ display: 'flex', gap: 10, width: '100%', maxWidth: 260 }}>
-            <button onClick={() => setShowLogoutConfirm(false)} style={{ flex: 1, background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: 'none', borderRadius: 10, padding: '10px', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{t('common.cancel')}</button>
-            <button onClick={handleLogout} style={{ flex: 1, background: '#ed4245', color: '#fff', border: 'none', borderRadius: 10, padding: '10px', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>{t('auth.logout')}</button>
+        <div
+          onClick={() => setShowLogoutConfirm(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 2000,
+            background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border)',
+              borderRadius: 16,
+              padding: '32px 28px 24px',
+              width: 320, maxWidth: '90vw',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+              boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+              animation: 'modalIn 0.2s ease',
+            }}
+          >
+            <div style={{ fontSize: 44, lineHeight: 1 }}>👋</div>
+            <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)', textAlign: 'center' }}>{t('auth.logout')}?</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5 }}>{t('auth.logout_confirm_desc')}</div>
+            <div style={{ display: 'flex', gap: 10, width: '100%', marginTop: 4 }}>
+              <button onClick={() => setShowLogoutConfirm(false)} style={{ flex: 1, background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: 'none', borderRadius: 10, padding: '11px', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{t('common.cancel')}</button>
+              <button onClick={handleLogout} style={{ flex: 1, background: '#ed4245', color: '#fff', border: 'none', borderRadius: 10, padding: '11px', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>{t('auth.logout')}</button>
+            </div>
           </div>
         </div>
       )}
@@ -382,9 +400,12 @@ export default function LeftSidebar({
             background: 'var(--bg-secondary)',
           }}>
             {!collapsed && (
-              <span style={{ fontWeight: 800, fontSize: isMobile ? 18 : 16, color: 'var(--text-primary)', letterSpacing: -0.5, userSelect: 'none' }}>
-                💬 ZoloChat
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <img src="/logo.svg" alt="Logo" width={22} height={22} draggable={false} style={{ objectFit: 'contain', filter: 'drop-shadow(0 1px 4px rgba(var(--accent-rgb,88,166,255),0.5))' }} />
+                <span style={{ fontWeight: 800, fontSize: isMobile ? 17 : 15, color: 'var(--text-primary)', letterSpacing: -0.4, userSelect: 'none' }}>
+                  ZoloChat
+                </span>
+              </div>
             )}
             {!isMobile && (
               <IconBtn
@@ -397,23 +418,40 @@ export default function LeftSidebar({
 
           {/* Search bar */}
           {!collapsed && (
-            <div style={{ padding: isMobile ? '10px 12px 6px' : '8px 10px 4px', display: 'flex', gap: 8, flexShrink: 0 }}>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-primary)', borderRadius: 10, padding: isMobile ? '9px 12px' : '6px 10px' }}>
-                <Search size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <div style={{ padding: isMobile ? '10px 12px 6px' : '8px 10px 5px', display: 'flex', gap: 6, flexShrink: 0 }}>
+              <div style={{
+                flex: 1, display: 'flex', alignItems: 'center', gap: 7,
+                background: 'var(--bg-primary)',
+                borderRadius: 10, padding: isMobile ? '9px 12px' : '7px 10px',
+                border: '1px solid transparent',
+                transition: 'border-color 0.15s',
+              }}
+                onFocusCapture={e => e.currentTarget.style.borderColor = 'rgba(var(--accent-rgb),0.4)'}
+                onBlurCapture={e => e.currentTarget.style.borderColor = 'transparent'}
+              >
+                <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder={t('chat.search_chat')}
-                  style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: isMobile ? 15 : 13 }}
+                  style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: isMobile ? 14 : 12.5 }}
                 />
                 {search && (
-                  <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}>
-                    <X size={13} />
+                  <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'flex' }}>
+                    <X size={12} />
                   </button>
                 )}
               </div>
-              <button onClick={onOpenSearch} title={t('auth.search_users')} style={{ background: 'var(--bg-primary)', border: 'none', borderRadius: 10, padding: isMobile ? '9px 12px' : '6px 9px', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
-                <UserSearch size={isMobile ? 18 : 15} />
+              <button onClick={onOpenSearch} title={t('auth.search_users')} style={{
+                background: 'var(--bg-primary)', border: '1px solid transparent', borderRadius: 10,
+                padding: isMobile ? '9px 11px' : '7px 9px', cursor: 'pointer',
+                color: 'var(--text-muted)', display: 'flex', alignItems: 'center',
+                transition: 'color 0.15s, background 0.15s',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'var(--bg-primary)'; }}
+              >
+                <UserSearch size={isMobile ? 17 : 14} />
               </button>
             </div>
           )}
@@ -469,11 +507,17 @@ export default function LeftSidebar({
       {/* Bottom — user info (always shown) */}
       <div style={{ padding: collapsed ? '8px' : isMobile ? '10px 16px' : '6px 10px', background: 'var(--bg-primary)', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 8, minWidth: 0, flex: 1 }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 8, minWidth: 0, flex: 1, cursor: 'pointer', borderRadius: 8, padding: '3px 4px', transition: 'background 0.13s' }}
+            onClick={() => setShowSelfProfile(true)}
+            title={user?.displayName}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
             <div style={{ position: 'relative', flexShrink: 0 }}>
               {user?.avatar
                 ? <img src={user.avatar} alt={user.displayName} style={{ width: isMobile ? 40 : 34, height: isMobile ? 40 : 34, borderRadius: '50%', objectFit: 'cover' }} />
-                : <div style={{ width: isMobile ? 40 : 34, height: isMobile ? 40 : 34, borderRadius: '50%', background: getAvatarColor(user?.displayName || user?.email), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: isMobile ? 15 : 13 }}>{getInitials(user?.displayName || user?.email || '?')}</div>
+                : <div style={{ width: isMobile ? 40 : 34, height: isMobile ? 40 : 34, borderRadius: '50%', background: user?.usernameColor || getAvatarColor(user?.displayName || user?.email), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: isMobile ? 15 : 13 }}>{getInitials(user?.displayName || user?.email || '?')}</div>
               }
               <span style={{ position: 'absolute', bottom: 1, right: 1, width: isMobile ? 12 : 10, height: isMobile ? 12 : 10, borderRadius: '50%', background: myStatusConfig.color, border: '2px solid var(--bg-primary)' }} />
             </div>
@@ -487,11 +531,11 @@ export default function LeftSidebar({
                 </div>
               </div>
             )}
-          </div>
+          </div>{/* end clickable avatar+name */}
           {!collapsed && (
             <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-              <IconBtn icon={Settings} onClick={onOpenSettings} title={t('auth.profile_settings')} size={isMobile ? 18 : 15} />
-              <IconBtn icon={LogOut} onClick={() => setShowLogoutConfirm(true)} title={t('auth.logout')} size={isMobile ? 18 : 15} danger />
+              <IconBtn icon={Settings} onClick={e => { e.stopPropagation(); onOpenSettings(); }} title={t('auth.profile_settings')} size={isMobile ? 18 : 15} />
+              <IconBtn icon={LogOut} onClick={e => { e.stopPropagation(); setShowLogoutConfirm(true); }} title={t('auth.logout')} size={isMobile ? 18 : 15} danger />
             </div>
           )}
         </div>
@@ -502,6 +546,14 @@ export default function LeftSidebar({
           </div>
         )}
       </div>
+
+      {/* Self profile modal */}
+      {showSelfProfile && user?._id && (
+        <UserProfileModal
+          userId={user._id}
+          onClose={() => setShowSelfProfile(false)}
+        />
+      )}
     </div>
   );
 }

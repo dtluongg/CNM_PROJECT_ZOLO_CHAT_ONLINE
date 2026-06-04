@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
   TextInput, ScrollView, StatusBar, Modal, Pressable,
-  ActivityIndicator, Alert, FlatList,
+  ActivityIndicator, Alert, FlatList, RefreshControl,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { io } from 'socket.io-client';
@@ -255,7 +255,7 @@ function CreateGroupModal({ visible, onClose, onCreated, THEME, styles }) {
 // ─────────────────────────────────────────────
 // CHATS TAB
 // ─────────────────────────────────────────────
-function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh, THEME, styles }) {
+function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh, onPullRefresh, refreshing, THEME, styles }) {
   const [search, setSearch] = useState('');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const { t } = useLanguage();
@@ -334,7 +334,7 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh,
       );
     };
     return (
-      <Swipeable renderRightActions={renderRightActions} friction={2}>
+      <Swipeable renderRightActions={renderRightActions} friction={2} containerStyle={styles.convCard}>
         <TouchableOpacity
           onPress={() => openConversation(item)}
           onPressIn={() => setPressed(true)}
@@ -456,7 +456,18 @@ function ChatsTab({ navigation, conversations, onUpdateConversations, onRefresh,
         </View>
       </View>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={!!refreshing}
+            onRefresh={onPullRefresh || onRefresh}
+            tintColor={THEME.accent}
+            colors={[THEME.accent]}
+          />
+        }
+      >
         {/* DMs */}
         {dms.length > 0 && <SectionHeader title={t('chat.direct_messages')} count={dms.length} />}
         {dms.map(item => <ConvItem key={item.id} item={item} />)}
@@ -530,28 +541,60 @@ function BottomTabBar({ activeTab, onTabChange, unreadTotal, THEME, styles }) {
 // ─────────────────────────────────────────────
 export default function MainTabScreen({ navigation, route }) {
   const { theme: THEME } = useTheme();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { t, language } = useLanguage();
-  const styles = useStyles(THEME);
+  // Memo hóa để không tạo lại StyleSheet mỗi lần re-render (danh sách hội
+  // thoại cập nhật rất thường xuyên qua socket).
+  const styles = useMemo(() => useStyles(THEME), [THEME]);
 
   const [activeTab, setActiveTab] = useState('chats');
   const [conversations, setConversations] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
   const socketRef = useRef(null);
+  const inFlightRef = useRef(false);
+  const lastFetchRef = useRef(0);
 
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async (force = false) => {
+    // Luôn tránh request đồng thời. Với lần gọi không ép buộc, bỏ qua nếu vừa
+    // fetch < 15s trước — socket đã cập nhật realtime nên không cần refetch
+    // mỗi lần quay lại màn hình (tránh bão request gây lag). force bỏ qua
+    // ngưỡng thời gian (kéo-để-làm-mới, hoặc có hội thoại mới).
+    if (inFlightRef.current) return;
+    if (!force && Date.now() - lastFetchRef.current < 15000) return;
+    inFlightRef.current = true;
     try {
       const res = await conversationApi.listMyConversations('exclude');
       const list = Array.isArray(res?.data?.data) ? res.data.data : [];
       setConversations(list.map(c => mapConv(c, t, language)));
+      lastFetchRef.current = Date.now();
     } catch (err) {
       console.error('fetchConversations error:', err);
+    } finally {
+      inFlightRef.current = false;
     }
   }, [t, language]);
 
-  useEffect(() => {
-    fetchConversations();
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await fetchConversations(true); } finally { setRefreshing(false); }
   }, [fetchConversations]);
-  // Socket: live preview + unread count in conversation list
+
+  // Giữ giá trị mới nhất cho socket handler mà không cần reconnect socket.
+  const userRef = useRef(user);
+  const languageRef = useRef(language);
+  const fetchRef = useRef(fetchConversations);
+  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => { languageRef.current = language; }, [language]);
+  useEffect(() => { fetchRef.current = fetchConversations; }, [fetchConversations]);
+
+  // Tải lại danh sách mỗi khi màn hình được focus (vd: quay lại từ màn chat)
+  useFocusEffect(
+    useCallback(() => {
+      fetchConversations();
+    }, [fetchConversations])
+  );
+
+  // Socket: live preview + unread count + đưa hội thoại mới nhất lên đầu
   useEffect(() => {
     if (!token) return;
     const socket = io(SOCKET_URL, {
@@ -564,21 +607,29 @@ export default function MainTabScreen({ navigation, route }) {
     socketRef.current = socket;
 
     socket.on('chat:new-message', ({ conversationId, message }) => {
-      setConversations(prev => prev.map(c => {
-        if (c.id !== conversationId) return c;
-        const fmtTime = (iso) => {
-          const d = new Date(iso);
-          if (Number.isNaN(d.getTime())) return '';
-          const locale = language === 'vi' ? 'vi-VN' : 'en-US';
-          return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      const myId = userRef.current?._id?.toString();
+      const senderId = message?.senderId?.toString?.() || message?.senderId;
+      const isMine = !!myId && senderId === myId;
+
+      setConversations(prev => {
+        const idx = prev.findIndex(c => c.id === conversationId);
+        // Hội thoại chưa có trong danh sách (DM/nhóm mới) → tải lại từ server.
+        if (idx === -1) {
+          fetchRef.current?.(true);
+          return prev;
+        }
+        const current = prev[idx];
+        const updated = {
+          ...current,
+          lastMessage: message?.content || current.lastMessage,
+          time: formatTime(message?.createdAt, languageRef.current),
+          // Không tăng số chưa đọc cho tin nhắn do chính mình gửi.
+          unread: isMine ? current.unread : (current.unread || 0) + 1,
         };
-        return {
-          ...c,
-          lastMessage: message.content || c.lastMessage,
-          time: fmtTime(message.createdAt),
-          unread: (c.unread || 0) + 1,
-        };
-      }));
+        // Đưa hội thoại vừa có tin nhắn lên đầu để hiển thị realtime.
+        const rest = prev.filter((_, i) => i !== idx);
+        return [updated, ...rest];
+      });
     });
 
     return () => {
@@ -589,6 +640,16 @@ export default function MainTabScreen({ navigation, route }) {
 
   const unreadTotal = conversations.reduce((s, c) => s + (c.unread || 0), 0);
 
+  // Lazy-mount: chỉ mount tab khi được mở lần đầu (giữ mount sau đó để không
+  // mất state). Tránh gọi API của Bạn bè/Tin/Hồ sơ ngay lúc khởi động làm
+  // chậm việc tải danh sách chat — thứ người dùng nhìn thấy đầu tiên.
+  const [visitedTabs, setVisitedTabs] = useState({ chats: true });
+  useEffect(() => {
+    if (!visitedTabs[activeTab]) {
+      setVisitedTabs(prev => ({ ...prev, [activeTab]: true }));
+    }
+  }, [activeTab, visitedTabs]);
+
   // Dùng display style để ẩn tab thay vì unmount → giữ nguyên state, không fetch lại
   const tabStyle = (tab) => ({ flex: 1, display: activeTab === tab ? 'flex' : 'none' });
 
@@ -596,16 +657,16 @@ export default function MainTabScreen({ navigation, route }) {
     <View style={{ flex: 1, backgroundColor: THEME.bgPrimary }}>
       <View style={{ flex: 1 }}>
         <View style={tabStyle('chats')}>
-          <ChatsTab navigation={navigation} conversations={conversations} onUpdateConversations={setConversations} onRefresh={fetchConversations} THEME={THEME} styles={styles} />
+          <ChatsTab navigation={navigation} conversations={conversations} onUpdateConversations={setConversations} onRefresh={fetchConversations} onPullRefresh={handleRefresh} refreshing={refreshing} THEME={THEME} styles={styles} />
         </View>
         <View style={tabStyle('friends')}>
-          <FriendsScreen navigation={navigation} />
+          {visitedTabs.friends && <FriendsScreen navigation={navigation} />}
         </View>
         <View style={tabStyle('tin')}>
-          <StoriesScreen />
+          {visitedTabs.tin && <StoriesScreen />}
         </View>
         <View style={tabStyle('profile')}>
-          <ProfileScreen navigation={navigation} />
+          {visitedTabs.profile && <ProfileScreen navigation={navigation} />}
         </View>
       </View>
       <BottomTabBar activeTab={activeTab} onTabChange={setActiveTab} unreadTotal={unreadTotal} THEME={THEME} styles={styles} />
@@ -642,8 +703,8 @@ const useStyles = (THEME) => StyleSheet.create({
   searchContainer: { padding: 10, backgroundColor: THEME.bgSecondary },
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: THEME.bgPrimary, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 9,
+    backgroundColor: THEME.bgPrimary, borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 10,
   },
   searchIcon: { fontSize: 14 },
   searchInput: { flex: 1, color: THEME.textPrimary, fontSize: 15, padding: 0 },
@@ -652,11 +713,18 @@ const useStyles = (THEME) => StyleSheet.create({
   sectionHeader: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
   sectionTitle: { fontSize: 11, fontWeight: '700', color: THEME.textMuted, letterSpacing: 0.8 },
 
-  // Conversation item
+  // Conversation item — dạng thẻ bo tròn hiện đại
+  convCard: {
+    marginHorizontal: 10,
+    marginBottom: 8,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: THEME.bgSecondary,
+  },
   convItem: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 10,
-    backgroundColor: THEME.bgTertiary,
+    paddingHorizontal: 14, paddingVertical: 12,
+    backgroundColor: THEME.bgSecondary,
     minHeight: 68,
   },
   convInfo: { flex: 1, minWidth: 0 },
@@ -737,7 +805,7 @@ const useStyles = (THEME) => StyleSheet.create({
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalBox: {
-    backgroundColor: THEME.bgSecondary, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    backgroundColor: THEME.bgSecondary, borderTopLeftRadius: 28, borderTopRightRadius: 28,
     padding: 24, paddingBottom: 40,
   },
   modalHandle: {
@@ -747,7 +815,7 @@ const useStyles = (THEME) => StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: '800', color: THEME.textPrimary, marginBottom: 20, textAlign: 'center' },
   fieldLabel: { fontSize: 12, fontWeight: '700', color: THEME.textMuted, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 6 },
   fieldInput: {
-    backgroundColor: THEME.bgTertiary, borderRadius: 10,
+    backgroundColor: THEME.bgTertiary, borderRadius: 14,
     paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 15, color: THEME.textPrimary, marginBottom: 16,
     borderWidth: 1.5, borderColor: THEME.bgHover,

@@ -24,6 +24,7 @@ const notificationSchema = new mongoose.Schema(
                 'call_incoming',
                 'call_rejected',
                 'call_missed',
+                'report',
             ],
             required: true,
         },

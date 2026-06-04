@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Search, Users, Pin, MoreHorizontal, ArrowLeft, Phone, Video, MessageCircle, CornerUpLeft, CornerUpRight, Paperclip, ThumbsUp, Reply, Copy, Trash2, Hash, Lock, Volume2 } from 'lucide-react';
 import GroupCallButton from '../../call/components/GroupCallButton';
+import ReportButton from '../../admin/components/ReportButton';
 import MessageInput from './MessageInput';
 import messageApi from '../api/messageApi';
 import conversationApi from '../api/conversationApi';
@@ -15,14 +16,17 @@ import PinnedBar from './chatArea/ui/PinnedBar';
 // ── Message Bubble ─────────────────────────────────────
 import MessageBubble from './chatArea/modals/MessageBubble';
 import PinLimitModal from './chatArea/modals/PinLimitModal';
-// ── AI Summary components ──────────────────────────────────────────────
+// ── AI components ──────────────────────────────────────────────────────
 import UnreadDivider from './chatArea/ui/UnreadDivider';
-import AiSummaryCard from './chatArea/ui/AiSummaryCard';
+import AiPanel from './chatArea/AiPanel';
+import AiLogo from './chatArea/ui/AiLogo';
+import SearchPanel from './chatArea/SearchPanel';
 
 // ── Modals ─────────────────────────────────────────────
 import ForwardModal from './chatArea/modals/ForwardModal';
 import { ReactionListModal, ReadListModal } from './chatArea/modals/ReactionModal';
 import UnpinConfirmModal from './chatArea/modals/UnpinConfirmModal';
+import CreateReminderModal from './chatArea/modals/CreateReminderModal';
 
 // ── Custom Hooks ───────────────────────────────────────
 import useChatSocket from './chatArea/hooks/useChatSocket';
@@ -53,6 +57,7 @@ export default function ChatArea({
   conversation,
   messages,
   currentUserId,
+  currentUser,
   typingUser,
   socket,
   onSendMessage,
@@ -97,11 +102,16 @@ export default function ChatArea({
   const [sheetTopics, setSheetTopics] = useState([]);
   const [sheetLoading, setSheetLoading] = useState(false);
   const [groupMembers, setGroupMembers] = useState([]);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [aiReminderModal, setAiReminderModal] = useState({ open: false, content: '', dateTime: null });
+  const [smartReplyText, setSmartReplyText] = useState('');
   // Sync pinned messages khi đổi conversation
   useEffect(() => {
     setPinnedMessages(conversation?.pinnedMessages || []);
+    setShowAiPanel(false);
+    setShowSearch(false);
   }, [conversation?.id]);
-  console.log("Dữ liệu nhóm hiện tại:", conversation);
   // ── Snapshot lastReadMessageId tại thời điểm mở conversation ────────
   // Phải capture inline (không dùng useEffect) để lấy giá trị trước khi markAsRead chạy
   const prevConvIdRef = useRef(null);
@@ -241,7 +251,6 @@ export default function ChatArea({
   };
 
   const handleUnpin = (msgId) => {
-    console.log('Unpin request for msgId:', msgId);
     setMessageIdToUnpin(msgId);
     setShowUnpinModal(true);
   };
@@ -368,45 +377,22 @@ export default function ChatArea({
     });
   });
 
-  // ── Chèn UnreadDivider + AiSummaryCard nếu có tin chưa đọc ─────────────
-  // Dùng snapshot (không bị timing) thay vì live values
+  // ── Chèn UnreadDivider nếu có tin chưa đọc ─────────────────────────────
   const unreadCount = aiSnapshotRef.current.unreadCount;
-  const lastReadId = aiSnapshotRef.current.lastReadId;
-  const savedAiSummary = conversation?.aiSummary || null;  // từ DB
+  const lastReadId  = aiSnapshotRef.current.lastReadId;
 
   if (unreadCount > 0) {
-    if (lastReadId) {
-      // Tìm vị trí của tin đã đọc cuối cùng trong displayItems
-      const insertIdx = displayItems.findIndex(
-        (item) => item.type === 'msg' && (item.msg?._id || item.msg?.id) === lastReadId
-      );
-      if (insertIdx !== -1) {
-        displayItems.splice(insertIdx + 1, 0, {
-          type: 'unread-divider',
-          key: `unread-divider-${conversation.id}`,
-        });
-      } else {
-        // lastReadId không có trong 30 tin đang load → chèn ở đầu list
-        displayItems.unshift({
-          type: 'unread-divider',
-          key: `unread-divider-${conversation.id}`,
-        });
-      }
+    const insertIdx = lastReadId
+      ? displayItems.findIndex(item => item.type === 'msg' && (item.msg?._id || item.msg?.id) === lastReadId)
+      : -1;
+
+    const dividerItem = { type: 'unread-divider', key: `unread-divider-${conversation.id}` };
+
+    if (insertIdx !== -1) {
+      displayItems.splice(insertIdx + 1, 0, dividerItem);
     } else {
-      // Chưa từng đọc tin nào → tất cả là unread, chèn ở đầu
-      displayItems.unshift({
-        type: 'unread-divider',
-        key: `unread-divider-${conversation.id}`,
-      });
+      displayItems.unshift(dividerItem);
     }
-    // AiSummaryCard luôn nằm ở cuối
-    displayItems.push({
-      type: 'ai-summary',
-      key: `ai-summary-${conversation.id}`,
-      conversationId: conversation.id,
-      initialSummary: savedAiSummary,
-      snapshotLastReadId: lastReadId,    // snapshot trước markAsRead
-    });
   }
 
   // ── Presence ───────────────────────────────────────────────
@@ -421,7 +407,8 @@ export default function ChatArea({
     ? (dmOnline
       ? (t(`chat.status.${dmStatus}`) || t('chat.online'))
       : (() => {
-        const ls = conversation.otherUserId ? getLastSeen(conversation.otherUserId) : null;
+        const ls = (conversation.otherUserId ? getLastSeen(conversation.otherUserId) : null)
+          || conversation.otherUserLastSeen;
         return ls ? formatLastSeen(ls) : t('chat.offline');
       })())
     : t('chat.members_count', { count: conversation.memberCount || conversation.members || 0 });
@@ -431,18 +418,27 @@ export default function ChatArea({
     : null;
 
   // ── Render ─────────────────────────────────────────────────
+  const handleAiCreateReminder = (rem) => {
+    const content = rem.title + (rem.description ? ' — ' + rem.description : '');
+    const dateTime = rem.datetimeHint ? new Date(rem.datetimeHint) : new Date(Date.now() + 3600000);
+    setAiReminderModal({ open: true, content, dateTime: isNaN(dateTime) ? new Date(Date.now() + 3600000) : dateTime });
+  };
+
   return (
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
       background: 'var(--bg-tertiary)', overflow: 'hidden', height: '100%',
+      position: 'relative',
     }}>
       {/* Header */}
       <div style={{
         height: isMobile ? 56 : 52,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: isMobile ? '0 8px 0 4px' : '0 16px',
-        borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)',
-        flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+        padding: isMobile ? '0 8px 0 4px' : '0 12px 0 16px',
+        borderBottom: '1px solid var(--glass-border, var(--border))',
+        background: 'var(--bg-secondary)',
+        flexShrink: 0,
+        boxShadow: '0 1px 0 var(--glass-border, var(--border)), 0 2px 8px rgba(0,0,0,0.1)',
         paddingTop: isMobile ? 'env(safe-area-inset-top, 0px)' : 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 10 }}>
@@ -507,6 +503,7 @@ export default function ChatArea({
                   { icon: <Video size={20} />, title: t('chat.header.call_video'), onClick: onVideoCall },
                 ] : []),
                 { icon: <Users size={20} />, title: t('chat.header.info'), onClick: onToggleRight, active: showRight },
+                { icon: <AiLogo size={20} />, title: 'AI', onClick: () => setShowAiPanel(v => !v), active: showAiPanel, aiBtn: true },
               ].map((btn, i) => (
                 <button key={i} onClick={btn.onClick} title={btn.title}
                   style={{
@@ -534,46 +531,69 @@ export default function ChatArea({
                 ] : []),
                 ...(conversation?.type === 'group' ? [{ icon: <Volume2 size={16} />, title: t('chat.header.voice_room'), onClick: onVoiceRoom, active: voiceRoomActive }] : []),
                 // GroupCallButton sẽ tự render bên dưới cho group
-                { icon: <Search size={16} />, title: t('chat.header.search') },
+                { icon: <Search size={16} />, title: t('chat.header.search'), onClick: () => setShowSearch(v => !v), active: showSearch },
                 { icon: <Pin size={16} />, title: t('chat.header.pinned') },
                 { icon: <MoreHorizontal size={16} />, title: t('chat.header.more') },
               ].map((btn, i) => (
                 <button key={i} onClick={btn.onClick} title={btn.title}
                   style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--text-muted)',
-                    padding: '6px 8px', borderRadius: 6,
-                    display: 'flex', alignItems: 'center', transition: 'background 0.12s, color 0.12s',
+                    background: btn.active ? 'var(--bg-hover)' : 'transparent', border: 'none', cursor: 'pointer',
+                    color: btn.active ? 'var(--accent)' : 'var(--text-muted)',
+                    padding: '6px 8px', borderRadius: 8,
+                    display: 'flex', alignItems: 'center', transition: 'all 0.15s',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = btn.active ? 'var(--bg-hover)' : 'transparent'; e.currentTarget.style.color = btn.active ? 'var(--accent)' : 'var(--text-muted)'; e.currentTarget.style.transform = 'none'; }}
                 >
                   {btn.icon}
                 </button>
               ))}
-              {/* Nút toggle info panel – tách riêng để luôn nổi bật */}
+              {/* Nút AI Panel */}
+              <button
+                onClick={() => setShowAiPanel(v => !v)}
+                title="AI Trợ lý"
+                style={{
+                  background: showAiPanel ? 'linear-gradient(135deg,#6c63ff,#a78bfa)' : 'transparent',
+                  border: 'none', cursor: 'pointer',
+                  color: showAiPanel ? '#fff' : 'var(--text-muted)',
+                  padding: '6px 8px', borderRadius: 8,
+                  display: 'flex', alignItems: 'center',
+                  transition: 'all 0.15s',
+                  boxShadow: showAiPanel ? '0 4px 12px rgba(108,99,255,0.4)' : 'none',
+                }}
+                onMouseEnter={e => { if (!showAiPanel) { e.currentTarget.style.background = 'rgba(167,139,250,0.12)'; e.currentTarget.style.color = '#a78bfa'; } }}
+                onMouseLeave={e => { if (!showAiPanel) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
+              >
+                <AiLogo size={17} />
+              </button>
+              {/* Nút toggle info panel */}
               <button
                 onClick={onToggleRight}
                 title={showRight ? 'Đóng thông tin' : 'Mở thông tin'}
                 style={{
-                  background: showRight ? 'var(--accent)' : 'var(--bg-hover)',
+                  background: showRight ? 'var(--accent)' : 'transparent',
                   border: 'none', cursor: 'pointer',
-                  color: showRight ? '#fff' : 'var(--text-secondary)',
-                  padding: '5px 8px', borderRadius: 6,
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  transition: 'background 0.15s, color 0.15s',
-                  fontSize: 12, fontWeight: 600,
+                  color: showRight ? '#fff' : 'var(--text-muted)',
+                  padding: '6px 8px', borderRadius: 8,
+                  display: 'flex', alignItems: 'center',
+                  transition: 'all 0.15s',
+                  boxShadow: showRight ? '0 4px 10px rgba(var(--accent-rgb),0.35)' : 'none',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = showRight ? 'var(--accent-hover, #4752c4)' : 'var(--bg-hover)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = showRight ? 'var(--accent)' : 'var(--bg-hover)'; }}
+                onMouseEnter={e => { if (!showRight) { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; } }}
+                onMouseLeave={e => { if (!showRight) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
               >
-                <Users size={15} />
-                <span style={{ display: 'inline' }}>Info</span>
+                <Users size={16} strokeWidth={1.8} />
               </button>
               {/* Group call buttons – chỉ hiện cho group */}
               {conversation?.type === 'group' && (
                 <GroupCallButton conversationId={conversation.id || conversation._id} />
               )}
+              {/* Report button */}
+              <ReportButton
+                targetType={conversation?.type === 'dm' ? 'user' : 'conversation'}
+                targetId={conversation?.type === 'dm' ? conversation.otherUserId : conversation.id}
+                targetSnapshot={conversation?.name}
+              />
             </>
           )}
         </div>
@@ -673,14 +693,6 @@ export default function ChatArea({
           if (item.type === 'date') return <DateDivider key={item.key} label={item.label} />;
           if (item.type === 'system') return <SystemMessage key={item.key} msg={item.msg} />;
           if (item.type === 'unread-divider') return <UnreadDivider key={item.key} />;
-          if (item.type === 'ai-summary') return (
-            <AiSummaryCard
-              key={item.key}
-              conversationId={item.conversationId}
-              initialSummary={item.initialSummary}
-              snapshotLastReadId={item.snapshotLastReadId}
-            />
-          );
           return (
             <div
               key={item.key}
@@ -789,6 +801,9 @@ export default function ChatArea({
             replyingMessage={replyingMessage}
             onCancelEdit={() => setEditingMessage(null)}
             onCancelReply={() => setReplyingMessage(null)}
+            externalText={smartReplyText}
+            onExternalTextConsumed={() => setSmartReplyText('')}
+            currentUser={currentUser}
           />
         ) : (
           // Không có quyền gửi tin trong kênh này
@@ -826,6 +841,18 @@ export default function ChatArea({
         onClose={() => setShowForwardModal(false)}
         msg={forwardingMsg}
         onForward={() => console.log('Forwarded successfully')}
+      />
+
+      <CreateReminderModal
+        isOpen={aiReminderModal.open}
+        onClose={() => setAiReminderModal(p => ({ ...p, open: false }))}
+        isGroup={conversation?.type === 'group'}
+        initialContent={aiReminderModal.content}
+        initialDateTime={aiReminderModal.dateTime}
+        onCreate={async ({ content, reminderTime }) => {
+          await messageApi.createReminder(conversation.id, { content, reminderTime });
+          setAiReminderModal(p => ({ ...p, open: false }));
+        }}
       />
 
       {/* Mobile channel bottom sheet (groups only) */}
@@ -919,6 +946,29 @@ export default function ChatArea({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Search Panel */}
+      {showSearch && (
+        <SearchPanel
+          messages={visibleMessages}
+          onJumpToMessage={handleJumpToMessage}
+          onClose={() => setShowSearch(false)}
+        />
+      )}
+
+      {/* AI Panel */}
+      {showAiPanel && (
+        <AiPanel
+          conversationId={conversation.id}
+          conversationName={conversation.name}
+          conversationType={conversation.type}
+          currentUser={currentUser}
+          onClose={() => setShowAiPanel(false)}
+          onSelectReply={(reply) => { setSmartReplyText(reply); setShowAiPanel(false); }}
+          onCreateReminder={handleAiCreateReminder}
+          onJumpToMessage={(msgId) => { handleJumpToMessage(msgId); setShowAiPanel(false); }}
+        />
       )}
 
       <style>{`

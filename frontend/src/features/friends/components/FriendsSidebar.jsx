@@ -1,90 +1,116 @@
 import React from 'react';
+import { Users, UserPlus, ShieldOff, UsersRound, Search } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
 
+const TABS = [
+  { key: 'friends_list',    icon: Users,       labelKey: 'friends.list_title',   badgeKey: null },
+  { key: 'friend_requests', icon: UserPlus,    labelKey: 'friends.requests',     badgeKey: 'incoming' },
+  { key: 'blocked_list',    icon: ShieldOff,   labelKey: 'friends.blocked_list', badgeKey: 'blocked' },
+];
+
 const FriendsSidebar = ({
-  activeTab,
-  onTabChange,
-  friendFilterText,
-  onFilterChange,
-  incomingCount,
-  blockedCount,
+  activeTab, onTabChange,
+  friendFilterText, onFilterChange,
+  incomingCount, blockedCount,
 }) => {
   const { t } = useLanguage();
 
+  const badge = { incoming: incomingCount, blocked: blockedCount };
+
   return (
-    <div className="w-[300px] border-r flex flex-col" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
-      {/* Search filter */}
-      <div className="p-4 flex items-center gap-3">
-        <div className="w-full relative">
-          <span className="absolute left-3 top-2.5" style={{ color: 'var(--text-muted)' }}>🔍</span>
+    <div style={{
+      width: 260, minWidth: 260,
+      borderRight: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column',
+      background: 'var(--bg-secondary)',
+      height: '100%',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '18px 16px 12px',
+        borderBottom: '1px solid var(--border)', flexShrink: 0,
+      }}>
+        <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-primary)', marginBottom: 12 }}>
+          {t('friends.list_title')}
+        </div>
+        {/* Search */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: 'var(--bg-primary)',
+          borderRadius: 10, padding: '7px 11px',
+          border: '1px solid transparent', transition: 'border-color 0.15s',
+        }}
+          onFocusCapture={e => e.currentTarget.style.borderColor = 'rgba(var(--accent-rgb),0.4)'}
+          onBlurCapture={e => e.currentTarget.style.borderColor = 'transparent'}
+        >
+          <Search size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
           <input
             type="text"
-            className="w-full border-none rounded-md py-2 pl-9 pr-3 text-sm outline-none"
-            style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)' }}
+            style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 13 }}
             placeholder={t('friends.search_placeholder')}
             value={friendFilterText}
-            onChange={(e) => onFilterChange(e.target.value)}
+            onChange={e => onFilterChange(e.target.value)}
           />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {/* Danh sách bạn bè */}
-        <button
-          onClick={() => onTabChange('friends_list')}
-          className={`w-full flex items-center gap-3 px-4 py-3 transition-colors ${activeTab === 'friends_list' ? 'font-semibold' : ''}`}
-          style={{
-            backgroundColor: activeTab === 'friends_list' ? 'var(--bg-hover)' : 'transparent',
-            color: activeTab === 'friends_list' ? 'var(--accent)' : 'var(--text-primary)',
-          }}
-        >
-          <span className="w-8 h-8 rounded-full flex items-center justify-center text-lg" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--accent)' }}>👥</span>
-          <span>{t('friends.list_title')}</span>
-        </button>
+      {/* Nav tabs */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px' }}>
+        {TABS.map(({ key, icon: Icon, labelKey, badgeKey }) => {
+          const active = activeTab === key;
+          const count = badgeKey ? badge[badgeKey] : 0;
+          return (
+            <button
+              key={key}
+              onClick={() => onTabChange(key)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 12px', borderRadius: 10, marginBottom: 2,
+                background: active ? 'linear-gradient(135deg,var(--accent),var(--accent-hover))' : 'transparent',
+                color: active ? '#fff' : 'var(--text-secondary)',
+                border: 'none', cursor: 'pointer', textAlign: 'left',
+                fontWeight: active ? 700 : 500, fontSize: 14,
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+              onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <div style={{
+                width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                background: active ? 'rgba(255,255,255,0.18)' : 'var(--bg-primary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon size={16} style={{ color: active ? '#fff' : 'var(--accent)' }} strokeWidth={1.8} />
+              </div>
+              <span style={{ flex: 1 }}>{t(labelKey)}</span>
+              {count > 0 && (
+                <span style={{
+                  background: active ? 'rgba(255,255,255,0.25)' : '#ef4444',
+                  color: '#fff', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                  padding: '1px 7px', minWidth: 20, textAlign: 'center', flexShrink: 0,
+                }}>
+                  {count > 99 ? '99+' : count}
+                </span>
+              )}
+            </button>
+          );
+        })}
 
-        {/* Lời mời kết bạn */}
-        <button
-          onClick={() => onTabChange('friend_requests')}
-          className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${activeTab === 'friend_requests' ? 'font-semibold' : ''}`}
-          style={{
-            backgroundColor: activeTab === 'friend_requests' ? 'var(--bg-hover)' : 'transparent',
-            color: activeTab === 'friend_requests' ? 'var(--accent)' : 'var(--text-primary)',
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <span className="w-8 h-8 rounded-full flex items-center justify-center text-lg" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--accent)' }}>📥</span>
-            <span>{t('friends.requests')}</span>
+        {/* Groups placeholder */}
+        <button style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 12px', borderRadius: 10,
+          background: 'transparent', color: 'var(--text-muted)',
+          border: 'none', cursor: 'not-allowed', textAlign: 'left',
+          fontWeight: 500, fontSize: 14, opacity: 0.5,
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+            background: 'var(--bg-primary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <UsersRound size={16} style={{ color: 'var(--text-muted)' }} strokeWidth={1.8} />
           </div>
-          {incomingCount > 0 && (
-            <span className="text-white text-xs px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: '#ef4444' }}>
-              {incomingCount}
-            </span>
-          )}
-        </button>
-
-        {/* Danh sách chặn */}
-        <button
-          onClick={() => onTabChange('blocked_list')}
-          className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${activeTab === 'blocked_list' ? 'font-semibold' : ''}`}
-          style={{
-            backgroundColor: activeTab === 'blocked_list' ? 'var(--bg-hover)' : 'transparent',
-            color: activeTab === 'blocked_list' ? 'var(--accent)' : 'var(--text-primary)',
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <span className="w-8 h-8 rounded-full flex items-center justify-center text-lg" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--accent)' }}>🚫</span>
-            <span>{t('friends.blocked_list')}</span>
-          </div>
-          {blockedCount > 0 && (
-            <span className="text-white text-xs px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: '#f97316' }}>
-              {blockedCount}
-            </span>
-          )}
-        </button>
-
-        {/* Danh sách nhóm — placeholder */}
-        <button className="w-full flex items-center gap-3 px-4 py-3 opacity-60" style={{ color: 'var(--text-primary)' }}>
-          <span className="w-8 h-8 rounded-full flex items-center justify-center text-lg" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--accent)' }}>👨‍👩‍👧‍👦</span>
           <span>{t('friends.group_list')}</span>
         </button>
       </div>
@@ -92,4 +118,4 @@ const FriendsSidebar = ({
   );
 };
 
-export default FriendsSidebar;
+export default FriendsSidebar;

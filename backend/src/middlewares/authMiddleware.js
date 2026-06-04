@@ -21,6 +21,10 @@ const authMiddleware = async (req, res, next) => {
                 return res.status(401).json({message: 'Unauthorized, user khong ton tai'});
             }
 
+            if(userFind.isBanned){
+                return res.status(403).json({ message: 'Tài khoản của bạn đã bị khóa. Lý do: ' + (userFind.bannedReason || 'Vi phạm điều khoản sử dụng') });
+            }
+
             req.user = userFind;
             next();
         });

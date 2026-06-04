@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,23 +17,30 @@ import { usePresence } from '../../../context/PresenceContext';
 import QRCode from 'react-native-qrcode-svg';
 import { useAuth } from '../../../context/AuthContext';
 import { useLanguage } from '../../../context/LanguageContext';
+import { useTheme } from '../../../context/ThemeContext';
 import { supabase } from '../../../config/supabase';
 import apiClient from '../../../services/apiClient';
-import { THEME, STATUS_CONFIG } from '../../../theme';
+import { STATUS_CONFIG } from '../../../theme';
 
 import { useProfile } from '../hooks/useProfile';
 import { getMyLiveStatus, COLOR_PALETTE, STATUS_OPTIONS } from '../utils/profileHelpers';
 import ProfileAvatar from '../components/ProfileAvatar';
 import SettingRow from '../components/SettingRow';
 import TabButton from '../components/TabButton';
-import { styles as s } from '../styles/profileStyles';
+import AppearanceModal from '../../../components/AppearanceModal';
+import { makeStyles } from '../styles/profileStyles';
 
 export default function ProfileScreen({ navigation }) {
   const { user, logout, updateUser } = useAuth();
   const { isUserOnline, getPresenceStatus } = usePresence();
   const { t, language, changeLanguage } = useLanguage();
+  // Theme động theo cấu hình của người dùng (đồng bộ từ backend).
+  // Đặt tên là THEME để tương thích với toàn bộ tham chiếu THEME.* bên dưới.
+  const { theme: THEME } = useTheme();
+  const s = useMemo(() => makeStyles(THEME), [THEME]);
 
   const [langModal, setLangModal] = useState(false);
+  const [appearanceModal, setAppearanceModal] = useState(false);
 
   const {
     profile,
@@ -72,7 +79,7 @@ export default function ProfileScreen({ navigation }) {
 
   const handleLogout = async () => {
     setLogoutModal(false);
-    try { await apiClient.post('/users/signout'); } catch {}
+    try { await apiClient.post('/auth/signout'); } catch {}
     try { await supabase.auth.signOut(); } catch {}
     await logout();
   };
@@ -116,8 +123,8 @@ export default function ProfileScreen({ navigation }) {
       </View>
 
       <View style={s.tabRow}>
-        <TabButton tabKey="info" label={t('profile.tabs.info')} active={tab === 'info'} onPress={() => setTab('info')} />
-        <TabButton tabKey="qr" label={t('profile.tabs.qr')} active={tab === 'qr'} onPress={() => setTab('qr')} />
+        <TabButton tabKey="info" label={t('profile.tabs.info')} active={tab === 'info'} onPress={() => setTab('info')} styles={s} />
+        <TabButton tabKey="qr" label={t('profile.tabs.qr')} active={tab === 'qr'} onPress={() => setTab('qr')} styles={s} />
       </View>
 
       {tab === 'info' ? (
@@ -305,22 +312,31 @@ export default function ProfileScreen({ navigation }) {
 
           <View style={s.settingsCard}>
             <Text style={s.settingsCardLabel}>{t('profile.personalization')}</Text>
-            <SettingRow icon="✏️" label={t('profile.edit_profile')} sub={t('profile.edit_profile_sub')} onPress={() => setEditModal(true)} />
+            <SettingRow icon="✏️" label={t('profile.edit_profile')} sub={t('profile.edit_profile_sub')} onPress={() => setEditModal(true)} styles={s} />
             <View style={s.sep} />
-            <SettingRow icon="🖼️" label={t('profile.change_avatar')} onPress={handlePickAvatar} />
+            <SettingRow icon="🖼️" label={t('profile.change_avatar')} onPress={handlePickAvatar} styles={s} />
             <View style={s.sep} />
-            <SettingRow icon="🎨" label={t('profile.username_color')} sub={d.usernameColor} accent={d.usernameColor} onPress={() => setColorModal(true)} />
-            <View style={s.sep} />
-            <SettingRow 
-              icon="🌐" 
-              label={t('profile.language')} 
-              sub={language === 'vi' ? t('profile.vietnamese') : t('profile.english')} 
-              onPress={() => setLangModal(true)} 
+            <SettingRow
+              icon="🎨"
+              label={t('profile.appearance')}
+              sub={t('profile.appearance_sub')}
+              onPress={() => setAppearanceModal(true)}
+              styles={s}
             />
             <View style={s.sep} />
-            <SettingRow icon="🔲" label={t('profile.my_qr')} sub={t('profile.my_qr_sub')} onPress={() => setTab('qr')} />
+            <SettingRow icon="🖌️" label={t('profile.username_color')} sub={d.usernameColor} accent={d.usernameColor} onPress={() => setColorModal(true)} styles={s} />
             <View style={s.sep} />
-            <SettingRow icon="🔒" label={t('profile.change_password')} sub={t('profile.change_password_sub')} onPress={() => navigation?.navigate('ChangePassword')} />
+            <SettingRow
+              icon="🌐"
+              label={t('profile.language')}
+              sub={language === 'vi' ? t('profile.vietnamese') : t('profile.english')}
+              onPress={() => setLangModal(true)}
+              styles={s}
+            />
+            <View style={s.sep} />
+            <SettingRow icon="🔲" label={t('profile.my_qr')} sub={t('profile.my_qr_sub')} onPress={() => setTab('qr')} styles={s} />
+            <View style={s.sep} />
+            <SettingRow icon="🔒" label={t('profile.change_password')} sub={t('profile.change_password_sub')} onPress={() => navigation?.navigate('ChangePassword')} styles={s} />
           </View>
 
           <TouchableOpacity style={s.logoutBtn} onPress={() => setLogoutModal(true)} activeOpacity={0.8}>
@@ -587,6 +603,12 @@ export default function ProfileScreen({ navigation }) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <AppearanceModal
+        visible={appearanceModal}
+        onClose={() => setAppearanceModal(false)}
+        updateUserProfile={updateUser}
+      />
     </View>
   );
 }

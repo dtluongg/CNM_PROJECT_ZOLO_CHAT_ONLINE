@@ -40,7 +40,7 @@ const updateProfile = async (req, res) => {
         const updatedUser = await userModel.findByIdAndUpdate(
             userId,
             updates,
-            { new: true, select: '-passwordHash' }
+            { returnDocument: 'after', select: '-passwordHash' }
         );
 
         // ── Broadcast status change via socket ──────────────────────────────

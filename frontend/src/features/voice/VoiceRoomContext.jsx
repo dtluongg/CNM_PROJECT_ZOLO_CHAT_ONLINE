@@ -10,8 +10,13 @@ export function VoiceRoomProvider({ children }) {
   const [inRoom,              setInRoom]              = useState(false);
   const [activeKey,           setActiveKey]           = useState(null);
   const [activeConversationId, setActiveConversationId] = useState(null);
+  const [activeTopic,         setActiveTopic]         = useState(null); // full topic object of current voice room
+  const [expandSignal,        setExpandSignal]        = useState(0);    // bump to request UI re-open the call screen
   const [loading,             setLoading]             = useState(false);
   const [error,               setError]               = useState(null);
+
+  // Yêu cầu mở lại màn hình gọi (được VoiceDock gọi khi user bấm widget)
+  const requestExpand = useCallback(() => setExpandSignal((n) => n + 1), []);
 
   const {
     connect, disconnect, toggleMute, toggleCamera, toggleScreenShare,
@@ -79,7 +84,7 @@ export function VoiceRoomProvider({ children }) {
     } catch { /* ignore */ }
   }, []);
 
-  const createRoom = useCallback(async (conversationId, topicId = null) => {
+  const createRoom = useCallback(async (conversationId, topicId = null, topicObj = null) => {
     setLoading(true); setError(null);
     try {
       const res  = await voiceRoomApi.create(conversationId, topicId);
@@ -87,6 +92,7 @@ export function VoiceRoomProvider({ children }) {
       const key  = topicId || '__general__';
       setActiveKey(key);
       setActiveConversationId(conversationId);
+      setActiveTopic(topicObj);
       setInRoom(true);
       await connect({ livekitUrl, token });
       await fetchStatus(conversationId, topicId);
@@ -99,7 +105,7 @@ export function VoiceRoomProvider({ children }) {
     }
   }, [connect, fetchStatus]);
 
-  const joinRoom = useCallback(async (conversationId, topicId = null) => {
+  const joinRoom = useCallback(async (conversationId, topicId = null, topicObj = null) => {
     setLoading(true); setError(null);
     try {
       const res  = await voiceRoomApi.join(conversationId, topicId);
@@ -107,6 +113,7 @@ export function VoiceRoomProvider({ children }) {
       const key  = topicId || '__general__';
       setActiveKey(key);
       setActiveConversationId(conversationId);
+      setActiveTopic(topicObj);
       setInRoom(true);
       await connect({ livekitUrl, token });
       await fetchStatus(conversationId, topicId);
@@ -127,6 +134,7 @@ export function VoiceRoomProvider({ children }) {
       const key = topicId || '__general__';
       setActiveKey(null);
       setActiveConversationId(null);
+      setActiveTopic(null);
       setInRoom(false);
       await fetchStatus(conversationId, topicId);
     } catch (err) {
@@ -143,7 +151,8 @@ export function VoiceRoomProvider({ children }) {
     <VoiceRoomContext.Provider value={{
       // State accessors
       getRoomInfo, getMergedParticipants, isInRoom,
-      inRoom, activeKey, activeConversationId, loading, error,
+      inRoom, activeKey, activeConversationId, activeTopic, loading, error,
+      expandSignal, requestExpand,
       // LiveKit state
       connected, isMuted, isCameraOff, isScreenSharing,
       liveParts, localVideoTrack, screenTrack,

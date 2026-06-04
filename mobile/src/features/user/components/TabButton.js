@@ -1,8 +1,9 @@
 import React from 'react';
 import { TouchableOpacity, Text } from 'react-native';
-import { styles as s } from '../styles/profileStyles';
+import { styles as defaultStyles } from '../styles/profileStyles';
 
-const TabButton = ({ tabKey, label, active, onPress }) => {
+const TabButton = ({ tabKey, label, active, onPress, styles }) => {
+  const s = styles || defaultStyles;
   return (
     <TouchableOpacity
       style={[s.tabBtn, active && s.tabBtnActive]}

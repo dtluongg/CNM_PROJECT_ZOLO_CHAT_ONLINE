@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { styles as s } from '../styles/userProfileStyles';
+import { styles as defaultStyles } from '../styles/userProfileStyles';
 
-const InfoRow = ({ icon, label, value, sep }) => {
+const InfoRow = ({ icon, label, value, sep, styles }) => {
+  const s = styles || defaultStyles;
   return (
     <>
       {sep && <View style={s.infoSep} />}
