@@ -490,42 +490,29 @@ const disbandConversation = async (req, res, next) => {
                 throw err;
             }
 
-            const members = await ConversationMember.find({ conversationId })
+            const members = await ConversationMember.find({ conversationId, leftAt: null })
                 .select('userId')
                 .session(session)
                 .lean();
             affectedUserIds = [...new Set(members.map((m) => m.userId?.toString()).filter(Boolean))];
 
-            const messages = await Message.find({ conversationId })
-                .select('_id')
-                .session(session)
-                .lean();
-            const messageIds = messages.map((m) => m._id);
+            // Soft-delete: giữ lại tin nhắn & nhóm để thành viên đọc lại trong kho lưu trữ.
+            const now = new Date();
+            conversation.disbandedAt = now;
+            conversation.isLocked = true;
+            await conversation.save({ session });
 
-            if (messageIds.length) {
-                await MessageReaction.deleteMany({ messageId: { $in: messageIds } }, { session });
-                await MessageRead.deleteMany({ messageId: { $in: messageIds } }, { session });
-                await Attachment.deleteMany({ messageId: { $in: messageIds } }, { session });
-                await Notification.deleteMany({
-                    $or: [
-                        { conversationId },
-                        { messageId: { $in: messageIds } },
-                    ],
-                }, { session });
-            } else {
-                await Notification.deleteMany({ conversationId }, { session });
-            }
+            // Đánh dấu mọi thành viên đang hoạt động là đã rời (do giải tán) tại thời điểm này.
+            await ConversationMember.updateMany(
+                { conversationId, leftAt: null },
+                { $set: { leftAt: now, leaveType: 'disbanded', canSendMessages: false } },
+                { session }
+            );
 
-            await MessageRead.deleteMany({ conversationId }, { session });
-            await NotificationSetting.deleteMany({ conversationId }, { session });
+            // Dọn các tài nguyên realtime không cần lưu (phòng voice, lời mời chờ).
             await VoiceRoom.deleteMany({ conversationId }, { session });
-            await Call.deleteMany({ conversationId }, { session });
             await JoinRequest.deleteMany({ conversationId }, { session });
-            await GroupRole.deleteMany({ conversationId }, { session });
-            await ConversationTopic.deleteMany({ conversationId }, { session });
-            await Message.deleteMany({ conversationId }, { session });
-            await ConversationMember.deleteMany({ conversationId }, { session });
-            await Conversation.deleteOne({ _id: conversationId }, { session });
+            await NotificationSetting.deleteMany({ conversationId }, { session });
         });
 
         const io = getIO();
@@ -535,7 +522,7 @@ const disbandConversation = async (req, res, next) => {
             }
         }
 
-        return res.status(200).json({ message: 'Giải tán nhóm thành công. Toàn bộ dữ liệu hội thoại đã được xóa.' });
+        return res.status(200).json({ message: 'Giải tán nhóm thành công. Lịch sử hội thoại được lưu trong kho lưu trữ.' });
     } catch (error) {
         next(error);
     } finally {
@@ -584,6 +571,7 @@ const leaveConversation = async (req, res, next) => {
             }
 
             myMember.leftAt = new Date();
+            myMember.leaveType = 'left';
             myMember.canSendMessages = false;
             await myMember.save({ session });
 
@@ -641,6 +629,7 @@ const kickConversationMember = async (req, res, next) => {
         }
 
         targetMember.leftAt = new Date();
+        targetMember.leaveType = 'kicked';
         targetMember.canSendMessages = false;
         await targetMember.save();
 
@@ -822,6 +811,48 @@ const transferOwner = async (req, res, next) => {
     }
 };
 
+// API liệt kê các nhóm đã lưu trữ (đã rời / bị kích / bị giải tán) của người dùng.
+// Người dùng vẫn đọc lại được lịch sử (chỉ đọc) tới thời điểm họ rời nhóm.
+const listArchivedConversations = async (req, res, next) => {
+    try {
+        const userId = getCurrentUserId(req);
+
+        const memberships = await ConversationMember.find({
+            userId,
+            leftAt: { $ne: null },
+        })
+            .sort({ leftAt: -1 })
+            .lean();
+
+        const convIds = memberships.map((m) => m.conversationId);
+        const conversations = await Conversation.find({ _id: { $in: convIds }, type: 'group' })
+            .select('_id name avatar groupType disbandedAt lastMessagePreview lastMessageTime')
+            .lean();
+        const convMap = new Map(conversations.map((c) => [c._id.toString(), c]));
+
+        const data = memberships
+            .map((m) => {
+                const conv = convMap.get(m.conversationId.toString());
+                if (!conv) return null;
+                return {
+                    id: conv._id,
+                    name: conv.name,
+                    avatar: conv.avatar,
+                    groupType: conv.groupType,
+                    leaveType: m.leaveType || (conv.disbandedAt ? 'disbanded' : 'left'),
+                    leftAt: m.leftAt,
+                    isDisbanded: !!conv.disbandedAt,
+                    lastMessagePreview: conv.lastMessagePreview || '',
+                };
+            })
+            .filter(Boolean);
+
+        return res.status(200).json({ data });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     addConversationMembers,
     listConversationMembers,
@@ -830,4 +861,5 @@ module.exports = {
     kickConversationMember,
     updateMember,
     transferOwner,
+    listArchivedConversations,
 };

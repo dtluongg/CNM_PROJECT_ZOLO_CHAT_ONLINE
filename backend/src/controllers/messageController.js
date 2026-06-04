@@ -38,6 +38,21 @@ const requireMembership = async (conversationId, userId) => {
     return member;
 };
 
+/**
+ * Quyền ĐỌC: cho phép cả thành viên đã rời (kho lưu trữ) đọc lại lịch sử.
+ * Nếu đã rời, chỉ đọc tới thời điểm leftAt (read-only).
+ */
+const requireReadAccess = async (conversationId, userId) => {
+    const member = await ConversationMember.findOne({ conversationId, userId })
+        .sort({ leftAt: 1 }); // ưu tiên membership còn active (leftAt = null)
+    if (!member) {
+        const err = new Error('Bạn không thuộc cuộc trò chuyện này');
+        err.statusCode = 403;
+        throw err;
+    }
+    return member;
+};
+
 /** Chuẩn hóa message document thành object trả về client. */
 const formatMsg = (msg, sender) => ({
     _id: msg._id,
@@ -137,6 +152,7 @@ const sendMessage = async (req, res) => {
                     fileSize: attachment.fileSize || 0,
                     mimeType: attachment.mimeType || '',
                     duration: attachment.duration || null,
+                    textPreview: attachment.textPreview || '',
                 };
             }
 
@@ -145,7 +161,7 @@ const sendMessage = async (req, res) => {
                 // Robustness: check both payload and root level
                 const reminderTimeStr = payload?.reminderTime || req.body.reminderTime;
                 const reminderTime = new Date(reminderTimeStr);
-                
+
                 if (isNaN(reminderTime.getTime())) {
                     return res.status(400).json({ message: 'Thời gian nhắc hẹn không hợp lệ' });
                 }
@@ -264,10 +280,10 @@ const sendMessage = async (req, res) => {
     } catch (err) {
         console.error('sendMessage error:', err);
         if (err.statusCode) return res.status(err.statusCode).json({ message: err.message });
-        
+
         // Return detailed error if in development mode or just for debugging
-        return res.status(500).json({ 
-            message: 'Lỗi server khi gửi tin nhắn', 
+        return res.status(500).json({
+            message: 'Lỗi server khi gửi tin nhắn',
             error: err.message,
             stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
         });
@@ -294,7 +310,7 @@ const getMessages = async (req, res) => {
             return res.status(400).json({ message: 'conversationId không hợp lệ' });
         }
 
-        await requireMembership(conversationId, userId);
+        const readMember = await requireReadAccess(conversationId, userId);
 
         const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 30));
         const before = req.query.before;
@@ -305,6 +321,10 @@ const getMessages = async (req, res) => {
             deleted: false,
             deletedBy: { $ne: new mongoose.Types.ObjectId(userId) }
         };
+        // Thành viên đã rời: chỉ đọc lịch sử tới thời điểm rời nhóm (kho lưu trữ).
+        if (readMember.leftAt) {
+            filter.createdAt = { $lte: readMember.leftAt };
+        }
         if (isValidId(before)) {
             filter._id = { $lt: new mongoose.Types.ObjectId(before) };
         }
@@ -391,6 +411,7 @@ const getMessages = async (req, res) => {
                 senderName: msg.senderId?.displayName || 'Unknown',
                 avatar: msg.senderId?.avatar || null,
                 type: msg.type,
+                topicId: msg.topicId || null,
                 content: msg.content,
                 payload: msg.payload || {},
                 replyToMessageId: msg.replyToMessageId || null,

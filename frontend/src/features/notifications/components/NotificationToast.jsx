@@ -2,10 +2,12 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { useNotifications } from '../../../context/NotificationContext';
+import { useLanguage } from '../../../context/LanguageContext';
 
 export default function NotificationToast() {
   const { toast, dismissToast, markRead } = useNotifications();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const notification = toast?.notification || null;
 
@@ -58,7 +60,7 @@ export default function NotificationToast() {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
         <Bell size={15} style={{ color: 'var(--accent)' }} />
-        <span style={{ fontSize: 13, fontWeight: 700 }}>{notification.title || 'Thông báo mới'}</span>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>{notification.title || t('notification_center.default_title')}</span>
       </div>
       {notification.body ? (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.35 }}>

@@ -25,6 +25,7 @@ const {
     kickConversationMember,
     updateMember,
     transferOwner,
+    listArchivedConversations,
 } = require('../controllers/conversationMemberController');
 
 const {
@@ -45,6 +46,7 @@ router.use(verifyToken);
 router.post('/dm',    createDmConversationEndpoint);
 router.post('/group', createGroupConversationEndpoint);
 router.get('/',       listMyConversations);
+router.get('/archived', listArchivedConversations);
 router.get('/:id',    getConversationById);
 router.patch('/:id',  updateConversationInfo);
 router.patch('/:id/lock',    setConversationLock);

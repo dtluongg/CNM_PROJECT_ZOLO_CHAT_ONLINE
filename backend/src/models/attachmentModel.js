@@ -10,6 +10,8 @@ const attachmentSchema = new mongoose.Schema(
     fileName:   { type: String, default: '' },
     mimeType:   { type: String, required: true }, // VD: image/jpeg, video/mp4
     fileSize:   { type: Number, default: 0 },     // Bytes
+    // Đoạn văn bản trích từ tài liệu (PDF/DOCX/TXT) để hiển thị preview kiểu Zalo
+    textPreview:{ type: String, default: '' },
 
     // Tối ưu UX chống giật màn hình
     width:    { type: Number, default: null },    // Cho ảnh/video

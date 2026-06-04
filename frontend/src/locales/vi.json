@@ -182,7 +182,7 @@
       "change_avatar": "Đổi ảnh đại diện",
       "avatar_hint": "JPG, PNG, WebP — tối đa 5MB",
       "gif_hint": "GIF động — tối đa 8MB",
-      "username_color": "Màu sắc Username",
+      "username_color": "Màu sắc người dùng thích",
       "preview_name": "Tên hiển thị mẫu",
       "bio_placeholder": "Giới thiệu ngắn về bản thân...",
       "save_success": "Đã lưu thay đổi",
@@ -489,7 +489,11 @@
       "text": "# Văn bản",
       "voice": "🔊 Thoại",
       "system": "📋 Hệ thống"
-    }
+    },
+    "private_channel": "Kênh riêng tư",
+    "private_hint": "Chỉ owner/admin và các vai trò được chọn mới truy cập",
+    "select_roles": "Chọn vai trò được truy cập",
+    "no_roles": "Chưa có vai trò nào. Hãy tạo vai trò trước."
   },
   "bubble": {
     "revoked": "Tin nhắn đã thu hồi",
@@ -667,9 +671,36 @@
     "no_notifications": "Chưa có thông báo nào.",
     "new_label": "Mới",
     "default_title": "Thông báo mới",
+    "within": "trong",
     "friend_request_title": "Lời mời kết bạn",
     "friend_accepted_title": "Đã chấp nhận kết bạn",
-    "new_message": "Đã gửi một tin nhắn mới"
+    "new_message": "Đã gửi một tin nhắn mới",
+    "categories": {
+      "all": "Tất cả",
+      "message": "Tin nhắn",
+      "call": "Cuộc gọi",
+      "system": "Hệ thống"
+    },
+    "types": {
+      "message": "Tin nhắn",
+      "mention": "Nhắc tên",
+      "reminder": "Nhắc hẹn",
+      "friend_request": "Kết bạn",
+      "friend_accepted": "Chấp nhận",
+      "call_incoming": "Cuộc gọi",
+      "call_rejected": "Từ chối",
+      "call_missed": "Nhỡ máy",
+      "report": "Báo cáo"
+    },
+    "time": {
+      "just_now": "Vừa xong",
+      "minutes_ago": "{{count}} phút trước",
+      "hours_ago": "{{count}} giờ trước"
+    },
+    "actions": {
+      "open": "Mở",
+      "close": "Đóng"
+    }
   },
   "user": {
     "change_password": "Đổi mật khẩu",
@@ -784,7 +815,6 @@
     "media_count": "{{count}} ảnh đã chia sẻ",
     "shared_files": "Tệp tin đã chia sẻ",
     "no_files": "Chưa có tệp tin nào",
-    "call_history": "Lịch sử cuộc gọi",
     "group_settings": "Cài đặt nhóm",
     "change_avatar": "Đổi ảnh đại diện nhóm",
     "change_avatar_hint": "Nhấn để đổi ảnh nhóm",
@@ -808,7 +838,8 @@
       "open_invite": "Mời tự do",
       "approval_required": "Cần phê duyệt",
       "admin_only": "Chỉ Admin"
-    }
+    },
+    "your_role": "Vai trò của bạn"
   },
   "user_search": {
     "title": "Tìm kiếm người dùng",
@@ -877,25 +908,31 @@
       "placeholder_name": "Tên vai trò...",
       "members_using_this": "Thành viên đang sử dụng",
       "no_custom_roles": "Chưa có vai trò tùy chỉnh nào.",
-      "create_first_role": "Tạo vai trò đầu tiên"
+      "create_first_role": "Tạo vai trò đầu tiên",
+      "members_count_summary": "{{name}} +{{count}} khác",
+      "no_members_hint": "Chưa có thành viên",
+      "allowed_channels_hint": "💡 Xem: tick = vào được kênh, bỏ tick = bị chặn · Gửi: tick = gửi được tin, bỏ tick = chỉ đọc",
+      "enter_name_error": "Vui lòng nhập tên vai trò",
+      "create_error": "Không thể tạo vai trò",
+      "update_error": "Không thể cập nhật vai trò",
+      "delete_error": "Không thể xóa vai trò",
+      "save_error": "Không thể lưu thay đổi"
     },
     "members": {
       "search_placeholder": "Tìm kiếm thành viên...",
       "remove_confirm": "Xóa {{name}} khỏi nhóm?",
       "kick_reason_placeholder": "Lý do xóa (tùy chọn)...",
       "remove_btn": "Xóa khỏi nhóm",
-      "transfer_owner_btn": "Chuyển trưởng nhóm",
-      "transfer_owner_confirm": "Chuyển quyền trưởng nhóm cho {{name}}? Bạn sẽ không còn là chủ nhóm nữa.",
-      "transfer_owner_title": "Xác nhận chuyển trưởng nhóm",
-      "transfer_owner_desc": "Bạn sắp chuyển quyền trưởng nhóm cho {{name}}.",
-      "transfer_owner_warning": "Sau khi chuyển quyền, bạn sẽ không còn là chủ nhóm.",
-      "confirm_transfer": "Chuyển quyền",
-      "cancel": "Hủy",
-      "transferring": "Đang chuyển...",
-      "transfer_owner_error": "Không thể chuyển quyền chủ nhóm",
       "you": "bạn",
       "banned_send": "Bị cấm nhắn tin",
-      "no_results": "Không tìm thấy kết quả"
+      "no_results": "Không tìm thấy kết quả",
+      "filter_all": "Tất cả",
+      "filter_online": "Đang online",
+      "members_word": "thành viên",
+      "transfer_owner_btn": "Chuyển trưởng nhóm",
+      "transferring": "Đang chuyển...",
+      "transfer_owner_error": "Không thể chuyển quyền trưởng nhóm",
+      "kick_error": "Không thể xóa thành viên"
     },
     "requests": {
       "pending_count": "{{count}} yêu cầu đang chờ",
@@ -904,6 +941,14 @@
       "reject": "Từ chối",
       "only_admin_can_review": "Chỉ chủ nhóm/admin mới có quyền duyệt yêu cầu",
       "refresh": "Làm mới"
+    },
+    "permissions": {
+      "canSendMessages": "Gửi tin nhắn",
+      "canSendMessages_desc": "Cho phép gửi tin nhắn trong nhóm",
+      "canInviteMembers": "Mời thành viên",
+      "canInviteMembers_desc": "Cho phép mời người khác vào nhóm",
+      "canManageMembers": "Quản lý thành viên",
+      "canManageMembers_desc": "Cho phép chỉnh sửa quyền của thành viên"
     }
   },
   "forward_modal": {
@@ -1005,8 +1050,62 @@
     "offline": "Ngoại tuyến"
   },
   "months": {
-    "jan": "Th1", "feb": "Th2", "mar": "Th3", "apr": "Th4",
-    "may": "Th5", "jun": "Th6", "jul": "Th7", "aug": "Th8",
-    "sep": "Th9", "oct": "Th10", "nov": "Th11", "dec": "Th12"
+    "jan": "Th1",
+    "feb": "Th2",
+    "mar": "Th3",
+    "apr": "Th4",
+    "may": "Th5",
+    "jun": "Th6",
+    "jul": "Th7",
+    "aug": "Th8",
+    "sep": "Th9",
+    "oct": "Th10",
+    "nov": "Th11",
+    "dec": "Th12"
+  },
+  "notification_center": {
+    "title": "Thông báo",
+    "mark_all_read": "Đọc tất cả",
+    "loading": "Đang tải...",
+    "empty": "Không có thông báo",
+    "default_title": "Thông báo mới",
+    "within": "trong",
+    "categories": {
+      "all": "Tất cả",
+      "message": "Tin nhắn",
+      "call": "Cuộc gọi",
+      "system": "Hệ thống"
+    },
+    "types": {
+      "message": "Tin nhắn",
+      "mention": "Nhắc tên",
+      "reminder": "Nhắc hẹn",
+      "friend_request": "Kết bạn",
+      "friend_accepted": "Chấp nhận",
+      "call_incoming": "Cuộc gọi",
+      "call_rejected": "Từ chối",
+      "call_missed": "Nhỡ máy",
+      "report": "Báo cáo"
+    },
+    "time": {
+      "just_now": "Vừa xong",
+      "minutes_ago": "{{count}} phút trước",
+      "hours_ago": "{{count}} giờ trước"
+    },
+    "actions": {
+      "open": "Mở",
+      "close": "Đóng"
+    }
+  },
+  "archived": {
+    "title": "Kho lưu trữ",
+    "subtitle": "Nhóm đã rời, bị kích hoặc giải tán",
+    "read_only": "Chỉ đọc — bạn không còn trong nhóm này",
+    "empty": "Chưa có nhóm nào trong kho lưu trữ",
+    "no_messages": "Không có tin nhắn",
+    "left": "Đã rời",
+    "kicked": "Bị kích",
+    "disbanded": "Đã giải tán",
+    "file": "Tệp đính kèm"
   }
 }

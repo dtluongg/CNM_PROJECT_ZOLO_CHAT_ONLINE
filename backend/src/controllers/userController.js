@@ -1,5 +1,6 @@
 const userModel = require('../models/userModel');
-const { getIO }  = require('../socket/socketManager');
+const Presence  = require('../models/presenceModel');
+const { getIO, onlineUsers } = require('../socket/socketManager');
 
 // ════════════════════════════════════════════════════════════════
 //  CẬP NHẬT PROFILE (avatar, displayName, and extended settings)
@@ -50,6 +51,18 @@ const updateProfile = async (req, res) => {
                 const uid = userId.toString();
                 const newStatus     = updatedUser.status     || 'online';
                 const newStatusText = updatedUser.statusText || '';
+
+                // Đồng bộ Presence collection cho user đang online để các nguồn
+                // đọc Presence (vd: thống kê admin) khớp với trạng thái tự đặt.
+                const isOnline = onlineUsers?.get?.(uid)?.size > 0;
+                if (isOnline) {
+                    Presence.findOneAndUpdate(
+                        { userId },
+                        { status: newStatus },
+                        { upsert: true }
+                    ).catch(() => {});
+                }
+
                 if (newStatus === 'invisible') {
                     // Appear offline to everyone else (no lastSeen = user is just hidden)
                     io.emit('presence:offline', { userId: uid });

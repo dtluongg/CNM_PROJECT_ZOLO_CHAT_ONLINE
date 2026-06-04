@@ -5,43 +5,45 @@ import {
   UserPlus, UserCheck, Clock, AtSign, BellOff, Users, Flag,
 } from 'lucide-react';
 import { useNotifications } from '../../../context/NotificationContext';
+import { useLanguage } from '../../../context/LanguageContext';
 
 /* ── helpers ─────────────────────────────────────────────── */
-const fmt = (iso) => {
+const getTypeMeta = (t) => ({
+  message: { icon: MessageCircle, color: '#58a6ff', cat: 'message', label: t('notification_center.types.message') },
+  mention: { icon: AtSign, color: '#a78bfa', cat: 'message', label: t('notification_center.types.mention') },
+  reminder: { icon: Clock, color: '#fbbf24', cat: 'system', label: t('notification_center.types.reminder') },
+  friend_request: { icon: UserPlus, color: '#34d399', cat: 'system', label: t('notification_center.types.friend_request') },
+  friend_accepted: { icon: UserCheck, color: '#34d399', cat: 'system', label: t('notification_center.types.friend_accepted') },
+  call_incoming: { icon: Phone, color: '#3ba55c', cat: 'call', label: t('notification_center.types.call_incoming') },
+  call_rejected: { icon: Phone, color: '#ed4245', cat: 'call', label: t('notification_center.types.call_rejected') },
+  call_missed: { icon: Phone, color: '#ed4245', cat: 'call', label: t('notification_center.types.call_missed') },
+  report: { icon: Flag, color: '#f59e0b', cat: 'system', label: t('notification_center.types.report') },
+});
+
+const getCats = (t) => [
+  { key: 'all', label: t('notification_center.categories.all') },
+  { key: 'message', label: t('notification_center.categories.message') },
+  { key: 'call', label: t('notification_center.categories.call') },
+  { key: 'system', label: t('notification_center.categories.system') },
+];
+
+const fmt = (iso, language, t) => {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso);
-  if (diff < 60000)    return 'Vừa xong';
-  if (diff < 3600000)  return `${Math.floor(diff / 60000)} phút trước`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} giờ trước`;
-  return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  if (diff < 60000) return t('notification_center.time.just_now');
+  if (diff < 3600000) return t('notification_center.time.minutes_ago', { count: Math.floor(diff / 60000) });
+  if (diff < 86400000) return t('notification_center.time.hours_ago', { count: Math.floor(diff / 3600000) });
+  const locale = language?.startsWith('vi') ? 'vi-VN' : 'en-US';
+  return new Date(iso).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
 };
 
-const AVATAR_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245','#9b59b6','#e67e22'];
+const AVATAR_COLORS = ['#5865f2', '#eb459e', '#00b4d8', '#57f287', '#faa61a', '#ed4245', '#9b59b6', '#e67e22'];
 const avatarBg = (name) => AVATAR_COLORS[(name || '?').charCodeAt(0) % AVATAR_COLORS.length];
 const initials = (name) => {
   if (!name) return '?';
   const p = name.trim().split(' ');
   return p.length === 1 ? p[0][0].toUpperCase() : (p[0][0] + p[p.length - 1][0]).toUpperCase();
 };
-
-const TYPE_META = {
-  message:         { icon: MessageCircle, color: '#58a6ff', cat: 'message', label: 'Tin nhắn' },
-  mention:         { icon: AtSign,        color: '#a78bfa', cat: 'message', label: 'Nhắc tên' },
-  reminder:        { icon: Clock,         color: '#fbbf24', cat: 'system',  label: 'Nhắc hẹn' },
-  friend_request:  { icon: UserPlus,      color: '#34d399', cat: 'system',  label: 'Kết bạn' },
-  friend_accepted: { icon: UserCheck,     color: '#34d399', cat: 'system',  label: 'Chấp nhận' },
-  call_incoming:   { icon: Phone,         color: '#3ba55c', cat: 'call',    label: 'Cuộc gọi' },
-  call_rejected:   { icon: Phone,         color: '#ed4245', cat: 'call',    label: 'Từ chối' },
-  call_missed:     { icon: Phone,         color: '#ed4245', cat: 'call',    label: 'Nhỡ máy' },
-  report:          { icon: Flag,          color: '#f59e0b', cat: 'system',  label: 'Báo cáo' },
-};
-
-const CATS = [
-  { key: 'all',     label: 'Tất cả' },
-  { key: 'message', label: 'Tin nhắn' },
-  { key: 'call',    label: 'Cuộc gọi' },
-  { key: 'system',  label: 'Hệ thống' },
-];
 
 /* ── Avatar người gửi với badge loại thông báo ───────────── */
 function ActorAvatar({ actor, convName, isGroup, Icon, iconColor, size = 42 }) {
@@ -78,9 +80,14 @@ function ActorAvatar({ actor, convName, isGroup, Icon, iconColor, size = 42 }) {
 /* ── component ───────────────────────────────────────────── */
 export default function NotificationCenter({ open, onClose }) {
   const { items, unreadCount, loading, markRead, markAllRead } = useNotifications();
-  const navigate    = useNavigate();
+  const navigate = useNavigate();
+  const { t, language } = useLanguage();
   const [cat, setCat] = useState('all');
-  const overlayRef  = useRef(null);
+  const overlayRef = useRef(null);
+  const typeMeta = useMemo(() => getTypeMeta(t), [t]);
+  const cats = useMemo(() => getCats(t), [t]);
+
+  const formatTime = useCallback((iso) => fmt(iso, language, t), [language, t]);
 
   useEffect(() => {
     if (!open) return;
@@ -103,13 +110,22 @@ export default function NotificationCenter({ open, onClose }) {
 
   const filtered = useMemo(() => {
     if (cat === 'all') return sorted;
-    return sorted.filter(n => (TYPE_META[n.type]?.cat || 'system') === cat);
-  }, [sorted, cat]);
+
+    return sorted.filter(
+      n => (typeMeta[n.type]?.cat || 'system') === cat
+    );
+  }, [sorted, cat, typeMeta]);
 
   const catCount = useCallback((key) => {
-    const base = key === 'all' ? sorted : sorted.filter(n => (TYPE_META[n.type]?.cat || 'system') === key);
+    const base =
+      key === 'all'
+        ? sorted
+        : sorted.filter(
+          n => (typeMeta[n.type]?.cat || 'system') === key
+        );
+
     return base.filter(n => !n.isRead).length;
-  }, [sorted]);
+  }, [sorted, typeMeta]);
 
   const handleOpen = useCallback(async (item) => {
     if (!item?._id) return;
@@ -147,7 +163,7 @@ export default function NotificationCenter({ open, onClose }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Bell size={18} style={{ color: 'var(--accent)' }} />
-            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>Thông báo</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>{t('notification_center.title')}</span>
             {unreadCount > 0 && (
               <span style={{
                 background: '#ef4444', color: '#fff',
@@ -165,7 +181,7 @@ export default function NotificationCenter({ open, onClose }) {
                 padding: '5px 10px', cursor: 'pointer',
                 color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600,
               }}>
-                <CheckCheck size={13} /> Đọc tất cả
+                <CheckCheck size={13} /> {t('notification_center.mark_all_read')}
               </button>
             )}
             <button onClick={onClose} style={{
@@ -183,8 +199,8 @@ export default function NotificationCenter({ open, onClose }) {
           display: 'flex', gap: 4, padding: '8px 14px',
           borderBottom: '1px solid var(--border)', flexShrink: 0, overflowX: 'auto',
         }}>
-          {CATS.map(({ key, label }) => {
-            const count  = catCount(key);
+          {cats.map(({ key, label }) => {
+            const count = catCount(key);
             const active = cat === key;
             return (
               <button key={key} onClick={() => setCat(key)} style={{
@@ -215,22 +231,22 @@ export default function NotificationCenter({ open, onClose }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px' }}>
           {loading && filtered.length === 0 && (
             <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-              Đang tải...
+              {t('notification_center.loading')}
             </div>
           )}
           {!loading && filtered.length === 0 && (
             <div style={{ padding: '40px 16px', textAlign: 'center' }}>
               <BellOff size={36} style={{ color: 'var(--text-muted)', opacity: 0.3, margin: '0 auto 10px', display: 'block' }} />
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Không có thông báo</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('notification_center.empty')}</div>
             </div>
           )}
 
           {filtered.map((item) => {
-            const meta     = TYPE_META[item.type] || TYPE_META.reminder;
-            const Icon     = meta.icon;
-            const actor    = item.actorId; // { displayName, avatar, username }
+            const meta = typeMeta[item.type] || typeMeta.reminder;
+            const Icon = meta.icon;
+            const actor = item.actorId; // { displayName, avatar, username }
             const convName = item.data?.conversationName || item.data?.groupName || null;
-            const isGroup  = item.data?.conversationType === 'group' || !!item.data?.groupName;
+            const isGroup = item.data?.conversationType === 'group' || !!item.data?.groupName;
 
             return (
               <button
@@ -270,7 +286,7 @@ export default function NotificationCenter({ open, onClose }) {
                     )}
                     {convName && (
                       <>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>trong</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('notification_center.within')}</span>
                         <span style={{
                           fontSize: 12, fontWeight: 600,
                           color: 'var(--text-secondary)',
@@ -317,7 +333,7 @@ export default function NotificationCenter({ open, onClose }) {
                     }}>
                       {meta.label}
                     </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmt(item.createdAt)}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatTime(item.createdAt)}</span>
                   </div>
                 </div>
               </button>

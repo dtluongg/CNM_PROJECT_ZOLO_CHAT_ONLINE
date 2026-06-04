@@ -558,7 +558,7 @@ export default function ProfileSettings({ onClose }) {
 
               {/* Display Name */}
               <div>
-                <FieldLabel>{t('settings.profile.display_name')}</FieldLabel>
+                <FieldLabel>{t('profile.display_name')}</FieldLabel>
                 <TextInput
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
@@ -584,7 +584,7 @@ export default function ProfileSettings({ onClose }) {
 
               {/* Bio */}
               <div>
-                <FieldLabel>{t('settings.profile.bio')}</FieldLabel>
+                <FieldLabel>{t('profile.bio')}</FieldLabel>
                 <textarea
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
