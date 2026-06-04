@@ -29,3 +29,5 @@ build/
 git-command.txt
 .vscode/
 .serena/
+
+package-lock.json
