@@ -30,22 +30,23 @@ const ConvItem = ({ conv, active, collapsed, isMobile, onClick }) => {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: isMobile ? 13 : 10,
-        padding: collapsed ? '8px' : isMobile ? '11px 16px' : '6px 10px',
+        gap: isMobile ? 13 : 11,
+        padding: collapsed ? '8px' : isMobile ? '11px 16px' : '8px 11px',
         minHeight: itemHeight,
-        borderRadius: isMobile ? 0 : 10,
+        borderRadius: isMobile ? 0 : 12,
         cursor: 'pointer',
         position: 'relative',
         background: active
-          ? (isMobile ? 'rgba(var(--accent-rgb),0.1)' : 'linear-gradient(135deg,var(--accent),var(--accent-hover))')
+          ? 'rgba(var(--accent-rgb),0.12)'
           : hovered ? 'var(--bg-hover)' : 'transparent',
-        transition: 'background 0.15s, transform 0.1s',
+        transition: 'background 0.18s ease, transform 0.12s ease',
         transform: hovered && !active && !isMobile ? 'translateX(2px)' : 'none',
         justifyContent: collapsed ? 'center' : 'flex-start',
-        margin: isMobile ? 0 : '1px 6px',
-        borderLeft: isMobile && active
+        margin: isMobile ? 0 : '2px 8px',
+        borderLeft: active
           ? '3px solid var(--accent)'
-          : isMobile ? '3px solid transparent' : 'none',
+          : isMobile ? '3px solid transparent' : '3px solid transparent',
+        paddingLeft: collapsed ? '8px' : isMobile ? '16px' : '9px',
       }}
     >
       <Avatar
@@ -65,9 +66,9 @@ const ConvItem = ({ conv, active, collapsed, isMobile, onClick }) => {
             marginBottom: 2
           }}>
             <span style={{
-              fontWeight: 600,
+              fontWeight: active ? 700 : 600,
               fontSize: isMobile ? 15 : 14,
-              color: active && !isMobile ? '#fff' : (conv.usernameColor || 'var(--text-primary)'),
+              color: active ? 'var(--accent)' : (conv.usernameColor || 'var(--text-primary)'),
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -90,7 +91,7 @@ const ConvItem = ({ conv, active, collapsed, isMobile, onClick }) => {
             </span>
             <span style={{
               fontSize: 11,
-              color: active && !isMobile ? 'rgba(255,255,255,0.75)' : 'var(--text-muted)',
+              color: 'var(--text-muted)',
               flexShrink: 0,
               marginLeft: 6,
             }}>
@@ -101,7 +102,7 @@ const ConvItem = ({ conv, active, collapsed, isMobile, onClick }) => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{
               fontSize: 13,
-              color: active && !isMobile ? 'rgba(255,255,255,0.8)' : 'var(--text-muted)',
+              color: 'var(--text-muted)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -112,7 +113,7 @@ const ConvItem = ({ conv, active, collapsed, isMobile, onClick }) => {
 
             {conv.unread > 0 && (
               <span style={{
-                background: active && !isMobile ? 'rgba(255,255,255,0.25)' : '#ed4245',
+                background: '#ed4245',
                 color: '#fff',
                 borderRadius: 10,
                 fontSize: 11,

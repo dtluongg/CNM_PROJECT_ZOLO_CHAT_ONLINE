@@ -41,6 +41,9 @@ const conversationApi = {
   disbandConversation: (conversationId) =>
     apiClient.post(`/conversations/${conversationId}/disband`),
 
+  getArchivedConversations: () =>
+    apiClient.get(`/conversations/archived`),
+
   updateGroupInfo: (conversationId, payload) =>
     apiClient.patch(`/conversations/${conversationId}`, payload),
 

@@ -1,6 +1,7 @@
 const Conversation = require('../models/conversationModel');
 const ConversationMember = require('../models/conversationMemberModel');
 const GroupRole = require('../models/groupRoleModel');
+const ConversationTopic = require('../models/conversationTopicModel');
 // Tính quyền thực tế theo thứ tự: personalOverride > customRole > systemRole
 const getEffectiveTopicPermission = async (member, topicId) => {
   const tid = topicId?.toString();
@@ -8,6 +9,19 @@ const getEffectiveTopicPermission = async (member, topicId) => {
   // 1. owner/admin luôn full quyền
   if (member.role === 'owner' || member.role === 'admin') {
     return { canAccess: true, canSend: true };
+  }
+
+  // 0. Kênh riêng tư: chỉ role được chỉ định mới vào được (member thường bị chặn).
+  if (tid) {
+    const topic = await ConversationTopic.findById(tid).select('isPrivate allowedRoleIds').lean();
+    if (topic?.isPrivate) {
+      const allowedRoleIds = (topic.allowedRoleIds || []).map(id => id.toString());
+      const myRoleId = member.customRoleId?.toString();
+      if (!myRoleId || !allowedRoleIds.includes(myRoleId)) {
+        return { canAccess: false, canSend: false };
+      }
+      // Có role hợp lệ → tiếp tục tính quyền gửi theo cấu hình role bên dưới.
+    }
   }
 
   // 2. Custom role

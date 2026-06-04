@@ -83,9 +83,17 @@ const listTopics = async (req, res, next) => {
             }
         }
 
+        const myRoleId = member.customRoleId?.toString();
+
         // Lọc topic theo quyền
         const filtered = topics.filter(topic => {
             const tid = topic._id.toString();
+
+            // Kênh riêng tư: chỉ role được chỉ định mới thấy
+            if (topic.isPrivate) {
+                const allowed = (topic.allowedRoleIds || []).map(id => id.toString());
+                if (!myRoleId || !allowed.includes(myRoleId)) return false;
+            }
 
             // Personal override ưu tiên cao nhất
             const override = (member.topicOverrides || []).find(
@@ -113,7 +121,7 @@ const createTopic = async (req, res, next) => {
     try {
         const userId = getCurrentUserId(req);
         const { id: conversationId } = req.params;
-        const { name, emoji, categoryName, position, description, channelType } = req.body;
+        const { name, emoji, categoryName, position, description, channelType, isPrivate, allowedRoleIds } = req.body;
 
         if (!isValidId(conversationId)) {
             return res.status(400).json({ message: 'conversationId không hợp lệ' });
@@ -135,6 +143,15 @@ const createTopic = async (req, res, next) => {
         const nextPosition = position !== undefined ? Number(position) : (maxPositionDoc?.position ?? -1) + 1;
 
         const VALID_CHANNEL_TYPES = ['text', 'voice', 'system'];
+        // Chuẩn hóa danh sách role được phép (chỉ giữ id hợp lệ thuộc nhóm này).
+        let cleanRoleIds = [];
+        if (Array.isArray(allowedRoleIds) && allowedRoleIds.length) {
+            const validIds = allowedRoleIds.filter(isValidId);
+            const roles = await GroupRole.find({ _id: { $in: validIds }, conversationId }).select('_id').lean();
+            cleanRoleIds = roles.map(r => r._id);
+        }
+        const wantPrivate = !!isPrivate && cleanRoleIds.length > 0;
+
         const topic = await ConversationTopic.create({
             conversationId,
             name: name.trim().toLowerCase().replace(/\s+/g, '-'),
@@ -143,8 +160,18 @@ const createTopic = async (req, res, next) => {
             channelType: VALID_CHANNEL_TYPES.includes(channelType) ? channelType : 'text',
             position: nextPosition,
             description: (description || '').toString().slice(0, 200),
+            isPrivate: wantPrivate,
+            allowedRoleIds: cleanRoleIds,
             createdBy: userId,
         });
+
+        // Đồng bộ: thêm kênh vào allowed/sendable của các role được phép để quyền nhất quán.
+        if (cleanRoleIds.length) {
+            await GroupRole.updateMany(
+                { _id: { $in: cleanRoleIds } },
+                { $addToSet: { allowedTopicIds: topic._id, sendableTopicIds: topic._id } }
+            );
+        }
 
         return res.status(201).json({ message: 'Tạo kênh thành công', data: topic });
     } catch (error) {
@@ -157,7 +184,7 @@ const updateTopic = async (req, res, next) => {
     try {
         const userId = getCurrentUserId(req);
         const { id: conversationId, topicId } = req.params;
-        const { name, emoji, categoryName, position, isLocked, description, channelType } = req.body;
+        const { name, emoji, categoryName, position, isLocked, description, channelType, isPrivate, allowedRoleIds } = req.body;
 
         if (!isValidId(conversationId) || !isValidId(topicId)) {
             return res.status(400).json({ message: 'ID không hợp lệ' });
@@ -176,6 +203,25 @@ const updateTopic = async (req, res, next) => {
         if (typeof isLocked === 'boolean') topic.isLocked = isLocked;
         if (description !== undefined) topic.description = (description || '').toString().slice(0, 200);
         if (channelType !== undefined && VALID_CHANNEL_TYPES.includes(channelType)) topic.channelType = channelType;
+
+        if (allowedRoleIds !== undefined) {
+            let cleanRoleIds = [];
+            if (Array.isArray(allowedRoleIds) && allowedRoleIds.length) {
+                const validIds = allowedRoleIds.filter(isValidId);
+                const roles = await GroupRole.find({ _id: { $in: validIds }, conversationId }).select('_id').lean();
+                cleanRoleIds = roles.map(r => r._id);
+            }
+            topic.allowedRoleIds = cleanRoleIds;
+            if (cleanRoleIds.length) {
+                await GroupRole.updateMany(
+                    { _id: { $in: cleanRoleIds } },
+                    { $addToSet: { allowedTopicIds: topic._id, sendableTopicIds: topic._id } }
+                );
+            }
+        }
+        if (typeof isPrivate === 'boolean') {
+            topic.isPrivate = isPrivate && (topic.allowedRoleIds || []).length > 0;
+        }
 
         await topic.save();
 

@@ -78,7 +78,7 @@ export const NotificationProvider = ({ children }) => {
       if (!latest?._id) return;
       setToast({
         id: latest._id,
-        title: translateLastMessage(latest.title, t) || t('notifications.default_title'),
+        title: translateLastMessage(latest.title, t) || t('notifications.new_message'),
         body: translateLastMessage(latest.body, t) || '',
       });
     } catch (_) {

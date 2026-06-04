@@ -1,12 +1,13 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { MessageCircle, Users, BookOpen, Bell, Settings, ShieldCheck } from 'lucide-react';
+import { MessageCircle, Users, BookOpen, Bell, Settings, ShieldCheck, Archive } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 import ProfileSettings from '../features/user/components/ProfileSettings';
 import { useNotifications } from '../context/NotificationContext';
 import NotificationCenter from '../features/notifications/components/NotificationCenter';
 import { useLanguage } from '../context/LanguageContext';
+import ArchivedChatsModal from '../features/chat/components/ArchivedChatsModal';
 
 const getInitials = (name) => {
     if (!name) return '?';
@@ -77,6 +78,7 @@ const SidebarNav = () => {
     const { t } = useLanguage();
     const [showSettings, setShowSettings] = useState(false);
     const [showNotificationCenter, setShowNotificationCenter] = useState(false);
+    const [showArchived, setShowArchived] = useState(false);
     const { unreadCount } = useNotifications();
 
     const isChat    = location.pathname.startsWith('/chat');
@@ -114,6 +116,7 @@ const SidebarNav = () => {
                 <NavBtn icon={Bell}          active={showNotificationCenter} onClick={() => setShowNotificationCenter(v => !v)} title={t('navbar.notifications')} badge={unreadCount} />
                 <NavBtn icon={Users}         active={isFriends} onClick={() => navigate('/friends')} title={t('navbar.friends')} />
                 <NavBtn icon={TinIcon}       active={isStories} onClick={() => navigate('/stories')} title={t('navbar.stories')} />
+                <NavBtn icon={Archive}       active={showArchived} onClick={() => setShowArchived(true)} title={t('archived.title')} />
                 {isAdminUser && (
                     <NavBtn icon={ShieldCheck} active={isAdmin} onClick={() => navigate('/admin')} title="Admin Dashboard" />
                 )}
@@ -149,6 +152,11 @@ const SidebarNav = () => {
 
             {showSettings && <ProfileSettings onClose={() => setShowSettings(false)} />}
             <NotificationCenter open={showNotificationCenter} onClose={() => setShowNotificationCenter(false)} />
+            <ArchivedChatsModal
+                visible={showArchived}
+                onClose={() => setShowArchived(false)}
+                currentUserId={(user?._id || user?.id || '').toString()}
+            />
         </div>
     );
 };

@@ -25,6 +25,7 @@ const conversationSchema = new mongoose.Schema(
     lastMessagePreview: { type: String, default: '' }, // Trích xuât text hiển thị nhanh
     lastMessageTime: { type: Date },
     isLocked: { type: Boolean, default: false }, // Đóng băng trò chuyện / Nhóm giải tán
+    disbandedAt: { type: Date, default: null }, // Nhóm đã giải tán (giữ lại để đọc trong kho lưu trữ)
     pinnedMessages: [
       {
         messageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' },
