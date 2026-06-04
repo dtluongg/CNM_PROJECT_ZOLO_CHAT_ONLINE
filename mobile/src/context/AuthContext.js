@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setLogoutCallback } from '../services/apiClient';
 import { supabase } from '../config/supabase';
@@ -10,6 +10,9 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser]       = useState(null);
   const [token, setToken]     = useState(null);
   const [loading, setLoading] = useState(true);
+  // Giữ user mới nhất để updateUser ổn định (không phụ thuộc state user).
+  const userRef = useRef(null);
+  useEffect(() => { userRef.current = user; }, [user]);
 
   useEffect(() => {
     console.log('[AuthContext] INITIALIZING WITH API_BASE_URL:', API_BASE_URL);
@@ -53,9 +56,10 @@ export const AuthProvider = ({ children }) => {
     setLogoutCallback(logout);
   }, [logout]);
 
-  const login = async (accessToken, userData, refreshToken) => {
+  const login = useCallback(async (accessToken, userData, refreshToken) => {
     setToken(accessToken);
     setUser(userData);
+    userRef.current = userData;
     try {
       const items = [
         ['accessToken', accessToken],
@@ -66,21 +70,29 @@ export const AuthProvider = ({ children }) => {
     } catch (e) {
       console.error('[AuthContext] login error:', e);
     }
-  };
+  }, []);
 
-  const updateToken = async (newToken) => {
+  const updateToken = useCallback(async (newToken) => {
     setToken(newToken);
     try { await AsyncStorage.setItem('accessToken', newToken); } catch {}
-  };
+  }, []);
 
-  const updateUser = async (newUserData) => {
-    const merged = { ...user, ...newUserData };
+  const updateUser = useCallback(async (newUserData) => {
+    const merged = { ...(userRef.current || {}), ...newUserData };
     setUser(merged);
+    userRef.current = merged;
     try { await AsyncStorage.setItem('currentUser', JSON.stringify(merged)); } catch {}
-  };
+  }, []);
+
+  // Memo hóa value để context chỉ đổi tham chiếu khi user/token/loading đổi
+  // (các hàm đã ổn định) → tránh re-render dây chuyền toàn bộ provider con.
+  const value = useMemo(
+    () => ({ user, token, loading, login, logout, updateToken, updateUser }),
+    [user, token, loading, login, logout, updateToken, updateUser]
+  );
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, updateToken, updateUser }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

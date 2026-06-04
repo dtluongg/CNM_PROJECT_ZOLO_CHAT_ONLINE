@@ -1,7 +1,9 @@
 import { StyleSheet } from 'react-native';
-import { THEME } from '../../../theme';
+import { THEME as STATIC_THEME } from '../../../theme';
 
-export const styles = StyleSheet.create({
+// Tạo bảng style theo chủ đề (theme) đang hoạt động để giao diện
+// luôn khớp với màu sắc mà người dùng đã cấu hình.
+export const makeStyles = (THEME = STATIC_THEME) => StyleSheet.create({
   loadingScreen: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: THEME.bgPrimary, gap: 12 },
   loadingText: { color: THEME.textMuted, fontSize: 14 },
   retryBtn: { marginTop: 8, backgroundColor: THEME.accent, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
@@ -97,7 +99,7 @@ export const styles = StyleSheet.create({
     marginHorizontal: 12,
     marginBottom: 10,
     backgroundColor: THEME.bgSecondary,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 14,
   },
   bioCardLabel: {
@@ -126,7 +128,7 @@ export const styles = StyleSheet.create({
     marginHorizontal: 12,
     marginBottom: 10,
     backgroundColor: THEME.bgSecondary,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 14,
   },
   infoCardLabel: {
@@ -149,7 +151,7 @@ export const styles = StyleSheet.create({
     marginHorizontal: 12,
     marginBottom: 10,
     backgroundColor: THEME.bgSecondary,
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
   },
   settingsCardLabel: {
@@ -172,7 +174,7 @@ export const styles = StyleSheet.create({
   settingIconWrap: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: THEME.bgInput,
     justifyContent: 'center',
     alignItems: 'center',
@@ -331,3 +333,7 @@ export const styles = StyleSheet.create({
   },
   colorSwatchActive: { borderWidth: 3.5, borderColor: '#fff' },
 });
+
+// Bảng style mặc định (chủ đề tĩnh) — giữ để tương thích ngược với
+// các component dùng `styles` trực tiếp.
+export const styles = makeStyles(STATIC_THEME);

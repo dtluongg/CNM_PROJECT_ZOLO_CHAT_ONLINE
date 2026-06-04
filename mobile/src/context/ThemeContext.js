@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { THEME as STATIC_THEME } from '../theme';
+import { useAuth } from './AuthContext';
 
 export const THEME_PRESETS = {
   dark: {
@@ -70,9 +71,11 @@ const STORAGE_KEY = 'zolo_theme';
 const ThemeContext = createContext(null);
 
 export const ThemeProvider = ({ children }) => {
+  const { user } = useAuth();
   const [themeName, setThemeName] = useState('dark');
   const [colors, setColors] = useState(THEME_PRESETS['dark']);
   const [loading, setLoading] = useState(true);
+  const lastSyncedRef = useRef(null);
 
   useEffect(() => {
     const loadTheme = async () => {
@@ -147,7 +150,7 @@ export const ThemeProvider = ({ children }) => {
     };
 
     if (dbThemeName) setThemeName(dbThemeName);
-    
+
     if (dbThemeColors && Object.keys(dbThemeColors).length > 0) {
       const mobileColors = mapWebToMobileKeys(dbThemeColors);
       setColors(mobileColors);
@@ -159,21 +162,46 @@ export const ThemeProvider = ({ children }) => {
     }
   }, []);
 
-  const fullTheme = { ...STATIC_THEME, ...colors };
+  // ── Tự động áp dụng chủ đề màu mà user đã cấu hình (lưu ở backend) ──
+  // Khi đăng nhập / khôi phục phiên / refresh profile, AuthContext cập nhật `user`.
+  // Ta đồng bộ themeName + themeColors từ DB xuống giao diện mobile để
+  // giao diện luôn khớp với cấu hình của người dùng trên mọi thiết bị.
+  useEffect(() => {
+    if (!user) {
+      lastSyncedRef.current = null;
+      return;
+    }
+    const dbThemeName = user.themeName || null;
+    const dbThemeColors = user.themeColors || null;
+    if (!dbThemeName && !dbThemeColors) return;
+
+    // Chỉ đồng bộ khi dữ liệu theme từ DB thực sự thay đổi để tránh
+    // ghi đè các thay đổi cục bộ đang xem trước một cách không cần thiết.
+    const signature = JSON.stringify({ name: dbThemeName, colors: dbThemeColors });
+    if (lastSyncedRef.current === signature) return;
+    lastSyncedRef.current = signature;
+
+    syncTheme(dbThemeName, dbThemeColors);
+  }, [user, syncTheme]);
+
+  // Memo hóa để `theme` chỉ đổi tham chiếu khi màu thực sự đổi — tránh việc
+  // toàn bộ subtree dùng useTheme() render lại mỗi khi ThemeProvider re-render
+  // (vd: do AuthContext thay đổi), gây tạo lại StyleSheet liên tục và lag.
+  const fullTheme = useMemo(() => ({ ...STATIC_THEME, ...colors }), [colors]);
+
+  const value = useMemo(() => ({
+    themeName,
+    theme: fullTheme,
+    colors, // Export colors to fix undefined in AppearanceModal
+    presets: THEME_PRESETS,
+    setTheme,
+    setCustomColor,
+    resetTheme,
+    syncTheme,
+  }), [themeName, fullTheme, colors, setTheme, setCustomColor, resetTheme, syncTheme]);
 
   return (
-    <ThemeContext.Provider
-      value={{
-        themeName,
-        theme: fullTheme,
-        colors, // Export colors to fix undefined in AppearanceModal
-        presets: THEME_PRESETS,
-        setTheme,
-        setCustomColor,
-        resetTheme,
-        syncTheme,
-      }}
-    >
+    <ThemeContext.Provider value={value}>
       {loading ? null : children}
     </ThemeContext.Provider>
   );

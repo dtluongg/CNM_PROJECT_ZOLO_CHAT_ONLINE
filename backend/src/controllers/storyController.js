@@ -127,7 +127,7 @@ const replyToStory = async (req, res) => {
             const updatedStory = await storyModel.findOneAndUpdate(
                 { _id: storyId, 'viewers.userId': senderId },
                 { $set: { 'viewers.$.hasHeart': true } },
-                { new: true }
+                { returnDocument: 'after' }
             );
 
             // Nếu user chưa có trong viewers (do race condition), thêm mới vào luôn
@@ -161,7 +161,7 @@ const replyToStory = async (req, res) => {
         // 2. Tìm hoặc tạo cuộc hội thoại DM chuẩn (theo logic của conversationController)
         const myMemberships = await conversationMemberModel.find({ userId: senderId }).select('conversationId').lean();
         const myConvIds = myMemberships.map(m => m.conversationId);
-        
+
         const sharedMember = await conversationMemberModel.findOne({
             conversationId: { $in: myConvIds },
             userId: receiverId,
@@ -209,7 +209,7 @@ const replyToStory = async (req, res) => {
         // 4. Cập nhật trạng thái cuộc hội thoại
         const previewText = `[Phản hồi tin] ${content}`;
         const shortPreview = previewText.length > 60 ? previewText.slice(0, 60) + '…' : previewText;
-        
+
         await conversationModel.findByIdAndUpdate(conversationId, {
             lastMessageId: newMessage._id,
             lastMessagePreview: shortPreview,
@@ -225,7 +225,7 @@ const replyToStory = async (req, res) => {
         try {
             const io = getIO();
             const sender = await userModel.findById(senderId).select('displayName avatar');
-            
+
             const formattedMessage = {
                 _id: newMessage._id,
                 conversationId,
@@ -243,7 +243,7 @@ const replyToStory = async (req, res) => {
                     message: formattedMessage
                 });
             });
-        } catch (err) { 
+        } catch (err) {
             console.error('Socket broadcast error in replyToStory:', err.message);
         }
 
@@ -272,18 +272,18 @@ const markStoryAsViewed = async (req, res) => {
 
         // Cập nhật nguyên tử: Chỉ push người xem nếu userId chưa tồn tại trong mảng viewers
         const updatedStory = await storyModel.findOneAndUpdate(
-            { 
-                _id: id, 
-                "viewers.userId": { $ne: userId } 
+            {
+                _id: id,
+                "viewers.userId": { $ne: userId }
             },
-            { 
-                $push: { viewers: { userId, viewedAt: new Date() } } 
+            {
+                $push: { viewers: { userId, viewedAt: new Date() } }
             },
-            { new: true }
+            { returnDocument: 'after' }
         );
 
-        return res.status(200).json({ 
-            message: updatedStory ? 'Đã ghi nhận lượt xem' : 'Đã xem trước đó' 
+        return res.status(200).json({
+            message: updatedStory ? 'Đã ghi nhận lượt xem' : 'Đã xem trước đó'
         });
     } catch (error) {
         console.error('markStoryAsViewed error:', error.message);
@@ -315,7 +315,7 @@ const getStoryViewers = async (req, res) => {
         const seenUserIds = new Set();
 
         story.viewers.forEach(v => {
-            if (v.userId && 
+            if (v.userId &&
                 v.userId._id.toString() !== userId.toString() && // Loại bỏ chính mình
                 !seenUserIds.has(v.userId._id.toString())
             ) {
@@ -359,9 +359,9 @@ const deleteStory = async (req, res) => {
         // Phát tín hiệu Real-time qua Socket.io
         const io = getIO();
         if (io) {
-            io.emit('story:deleted', { 
+            io.emit('story:deleted', {
                 storyId: id,
-                authorId: userId 
+                authorId: userId
             });
         }
 

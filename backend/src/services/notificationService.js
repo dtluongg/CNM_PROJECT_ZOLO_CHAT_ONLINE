@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Notification = require('../models/notificationModel');
 const NotificationSetting = require('../models/notificationSettingModel');
 const User = require('../models/userModel');
+const Conversation = require('../models/conversationModel');
 const { getIO } = require('../socket/socketManager');
 
 const toStr = (v) => (v === undefined || v === null ? '' : v.toString());
@@ -110,6 +111,10 @@ const notifyNewMessage = async ({
     messageContent,
     recipientIds,
 }) => {
+    // Fetch conversation name + type for notification display
+    const conv = await Conversation.findById(conversationId).select('name type').lean();
+    const conversationName = conv?.name || null;
+    const conversationType = conv?.type || 'dm';
     const uniqueRecipientIds = [...new Set((recipientIds || []).map((id) => toStr(id)).filter(Boolean))]
         .filter((id) => id !== toStr(senderId));
 
@@ -159,6 +164,8 @@ const notifyNewMessage = async ({
             messageId,
             data: {
                 messageType,
+                conversationName,
+                conversationType,
             },
         });
     }
@@ -167,12 +174,15 @@ const notifyNewMessage = async ({
 
     const created = await Notification.insertMany(docs, { ordered: false });
 
-    for (const item of created) {
+    // Populate actorId so socket payload includes displayName + avatar
+    const populated = await Notification.populate(created, { path: 'actorId', select: 'displayName avatar username' });
+
+    for (const item of populated) {
         emitNotification(item);
         await emitUnreadCount(item.userId);
     }
 
-    return created;
+    return populated;
 };
 const handleMentionsNotification = async ({ senderId, conversationId, messageId, mentions }) => {
     try {

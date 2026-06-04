@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native';
-import { THEME } from '../../../theme';
+import { THEME as STATIC_THEME } from '../../../theme';
 
-export const styles = StyleSheet.create({
+// Factory tạo style theo theme động của người dùng.
+export const makeStyles = (THEME = STATIC_THEME) => StyleSheet.create({
   center: {
     flex: 1,
     justifyContent: 'center',
@@ -117,8 +118,8 @@ export const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
     backgroundColor: THEME.bgSecondary,
-    borderRadius: 12,
-    paddingVertical: 13,
+    borderRadius: 16,
+    paddingVertical: 14,
     alignItems: 'center',
     gap: 4,
     borderWidth: 1,
@@ -174,8 +175,8 @@ export const styles = StyleSheet.create({
   },
   bioCard: {
     backgroundColor: THEME.bgSecondary,
-    borderRadius: 12,
-    padding: 14
+    borderRadius: 18,
+    padding: 16
   },
   bioText: {
     color: THEME.textSecondary,
@@ -185,9 +186,9 @@ export const styles = StyleSheet.create({
 
   infoCard: {
     backgroundColor: THEME.bgSecondary,
-    borderRadius: 12,
+    borderRadius: 18,
     overflow: 'hidden',
-    padding: 14
+    padding: 16
   },
   infoSep: {
     height: 1,
@@ -224,3 +225,6 @@ export const styles = StyleSheet.create({
     fontWeight: '600'
   },
 });
+
+// Style mặc định (theme tĩnh) — giữ để tương thích ngược.
+export const styles = makeStyles(STATIC_THEME);

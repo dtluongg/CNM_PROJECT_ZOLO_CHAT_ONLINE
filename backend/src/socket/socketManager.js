@@ -105,7 +105,7 @@ const initSocket = (httpServer) => {
             Presence.findOneAndUpdate(
                 { userId: new mongoose.Types.ObjectId(userId) },
                 { status: chosenStatus, lastActiveAt: new Date() },
-                { upsert: true, new: true }
+                { upsert: true, returnDocument: 'after' }
             ).catch(e => console.error('[Presence] update online error:', e));
         }
 

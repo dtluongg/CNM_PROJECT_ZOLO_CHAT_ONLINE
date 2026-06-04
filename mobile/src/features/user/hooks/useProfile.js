@@ -16,6 +16,7 @@ export function useProfile({ user, updateUser, navigation }) {
   const [statusModal, setStatusModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const hasFetchedRef = useRef(false);
+  const lastFetchRef = useRef(0);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -26,10 +27,15 @@ export function useProfile({ user, updateUser, navigation }) {
 
   useFocusEffect(
     useCallback(() => {
+      // Chỉ làm mới ngầm nếu hồ sơ đã cũ (>20s) để tránh gọi authme mỗi lần
+      // quay lại màn hình gây thêm tải/lag.
+      const now = Date.now();
       if (!hasFetchedRef.current) {
         hasFetchedRef.current = true;
+        lastFetchRef.current = now;
         fetchProfile(false);
-      } else {
+      } else if (now - lastFetchRef.current > 20000) {
+        lastFetchRef.current = now;
         fetchProfile('silent');
       }
     }, [])

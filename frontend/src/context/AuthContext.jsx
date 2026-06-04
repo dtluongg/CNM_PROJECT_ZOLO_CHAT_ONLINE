@@ -57,12 +57,21 @@ export const AuthProvider = ({ children }) => {
         // Không phải OAuth user, dùng local JWT
       }
 
-      // Gọi authme để lấy dữ liệu mới nhất từ MongoDB
+      // Gọi authme để lấy dữ liệu mới nhất từ MongoDB (retry 1 lần nếu lỗi mạng)
       const apiUrl = import.meta.env.VITE_API_URL || '/backend/api';
-      try {
+      const fetchAuthMe = async (token) => {
         const res = await fetch(`${apiUrl}/auth/authme`, {
-          headers: { Authorization: `Bearer ${activeToken}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
+        return res;
+      };
+      try {
+        let res = await fetchAuthMe(activeToken);
+        // Retry 1 lần nếu lỗi mạng thoáng qua (503/500)
+        if (!res.ok && (res.status === 503 || res.status === 500)) {
+          await new Promise(r => setTimeout(r, 800));
+          res = await fetchAuthMe(activeToken);
+        }
         if (res.ok) {
           const data = await res.json();
           if (data?.user) {
@@ -80,10 +89,25 @@ export const AuthProvider = ({ children }) => {
     init();
 
     // Lắng nghe Supabase tự refresh token (OAuth)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'TOKEN_REFRESHED' && session?.access_token) {
-        setToken(session.access_token);
-        setAccessToken(session.access_token);
+        const newToken = session.access_token;
+        setToken(newToken);
+        setAccessToken(newToken);
+        // Refresh user data với token mới để đảm bảo role/isBanned cập nhật
+        const apiUrl = import.meta.env.VITE_API_URL || '/backend/api';
+        try {
+          const res = await fetch(`${apiUrl}/auth/authme`, {
+            headers: { Authorization: `Bearer ${newToken}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.user) {
+              setUser(data.user);
+              setCurrentUserRaw(JSON.stringify(data.user));
+            }
+          }
+        } catch {}
       }
     });
 

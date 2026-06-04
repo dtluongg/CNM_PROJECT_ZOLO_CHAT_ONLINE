@@ -9,7 +9,6 @@ const ConvItem = ({ conv, active, collapsed, isMobile, onClick }) => {
   const { t } = useLanguage();
   const { isUserOnline, getPresenceStatus } = usePresence();
   const [hovered, setHovered] = useState(false);
-  console.log("Check Mute:", conv.name, conv.isMuted);
   const isOnline = conv.otherUserId
     ? isUserOnline(conv.otherUserId)
     : (conv.online ?? false);
@@ -31,16 +30,17 @@ const ConvItem = ({ conv, active, collapsed, isMobile, onClick }) => {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: isMobile ? 14 : 10,
-        padding: collapsed ? '8px' : isMobile ? '12px 16px' : '7px 10px',
+        gap: isMobile ? 13 : 10,
+        padding: collapsed ? '8px' : isMobile ? '11px 16px' : '6px 10px',
         minHeight: itemHeight,
-        borderRadius: isMobile ? 0 : 8,
+        borderRadius: isMobile ? 0 : 10,
         cursor: 'pointer',
         position: 'relative',
         background: active
-          ? (isMobile ? 'var(--bg-hover)' : 'var(--accent)')
+          ? (isMobile ? 'rgba(var(--accent-rgb),0.1)' : 'linear-gradient(135deg,var(--accent),var(--accent-hover))')
           : hovered ? 'var(--bg-hover)' : 'transparent',
-        transition: 'background 0.12s',
+        transition: 'background 0.15s, transform 0.1s',
+        transform: hovered && !active && !isMobile ? 'translateX(2px)' : 'none',
         justifyContent: collapsed ? 'center' : 'flex-start',
         margin: isMobile ? 0 : '1px 6px',
         borderLeft: isMobile && active

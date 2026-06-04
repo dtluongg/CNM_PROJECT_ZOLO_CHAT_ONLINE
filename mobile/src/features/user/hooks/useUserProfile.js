@@ -17,7 +17,10 @@ export function useUserProfile({ route, navigation, authUser, isUserOnline, getP
                  route.params?.user?.friendId;
 
   useEffect(() => {
-    if (!profile && userId) loadProfile();
+    // Luôn tải hồ sơ đầy đủ từ backend (kể cả khi đã có dữ liệu rút gọn
+    // truyền qua route) để hiển thị đúng mọi trường: username, bio, banner,
+    // ngày tham gia, màu tên... Dữ liệu truyền sẵn chỉ dùng để hiện tức thì.
+    if (userId) loadProfile();
   }, [userId]);
 
   useEffect(() => {
@@ -27,13 +30,17 @@ export function useUserProfile({ route, navigation, authUser, isUserOnline, getP
   }, [profile?._id]);
 
   const loadProfile = async () => {
-    setLoading(true);
+    if (!profile) setLoading(true);
     try {
       const res = await apiClient.get(`/users/${userId}/profile`);
-      setProfile(res.data.user || res.data);
+      const full = res.data?.user || res.data;
+      // Hợp nhất với dữ liệu hiện có để không mất các trường đã truyền sẵn.
+      setProfile((prev) => ({ ...(prev || {}), ...full }));
     } catch {
-      Alert.alert('Lỗi', 'Không thể tải hồ sơ người dùng.');
-      navigation.goBack();
+      if (!profile) {
+        Alert.alert('Lỗi', 'Không thể tải hồ sơ người dùng.');
+        navigation.goBack();
+      }
     } finally {
       setLoading(false);
     }
@@ -42,7 +49,8 @@ export function useUserProfile({ route, navigation, authUser, isUserOnline, getP
   const loadFriendStatus = async (targetId) => {
     try {
       const res = await friendApi.getFriendStatus(targetId);
-      const d = res.data;
+      // Backend bọc dữ liệu trong { success, data: { status, requestId } }.
+      const d = res.data?.data || res.data || {};
       // Backend trả về: { status: 'friends'|'sent'|'received'|'none', requestId?, isBlocked? }
       if (d.status === 'friends') {
         setFriendStatus('friends');
@@ -67,6 +75,9 @@ export function useUserProfile({ route, navigation, authUser, isUserOnline, getP
       const res = await friendApi.sendRequest(profile._id);
       setFriendRequestId(res.data?.data?._id || null);
       setFriendStatus('sent');
+      // Đối chiếu lại với backend: nếu đối phương đã gửi lời mời trước đó
+      // thì hệ thống tự động kết bạn, trạng thái thật phải là 'friends'.
+      loadFriendStatus(profile._id);
     } catch (err) {
       Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể gửi lời mời kết bạn.');
     } finally {

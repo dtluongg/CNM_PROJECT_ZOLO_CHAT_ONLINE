@@ -32,7 +32,7 @@ function UserCard({ user, onClick, isOnline, presStatus, friendStatus, requestId
         disabled={actionBusy}
         style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-hover)', color: 'var(--text-secondary)', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
       >
-        <UserCheck size={13} /> {t('user_search.friend_status.friends')}
+        <UserCheck size={13} /> {t('friends.friend_status.friends')}
       </button>
     );
     if (friendStatus === 'sent') return (
@@ -41,7 +41,7 @@ function UserCard({ user, onClick, isOnline, presStatus, friendStatus, requestId
         disabled={actionBusy}
         style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(250,166,26,0.4)', background: 'rgba(250,166,26,0.12)', color: '#faa61a', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
       >
-        <Clock size={13} /> {t('user_search.friend_status.sent')}
+        <Clock size={13} /> {t('friends.friend_status.sent')}
       </button>
     );
     if (friendStatus === 'received') return (
@@ -51,19 +51,19 @@ function UserCard({ user, onClick, isOnline, presStatus, friendStatus, requestId
           disabled={actionBusy}
           style={{ fontSize: 12, fontWeight: 700, padding: '5px 8px', borderRadius: 7, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
         >
-          {t('user_search.friend_status.accept')}
+          {t('friends.friend_status.accept')}
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onFriendAction('reject', requestId); }}
           disabled={actionBusy}
           style={{ fontSize: 12, fontWeight: 600, padding: '5px 8px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-hover)', color: 'var(--text-muted)', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
         >
-          {t('user_search.friend_status.reject')}
+          {t('friends.friend_status.reject')}
         </button>
       </div>
     );
     if (friendStatus === 'blocked') return (
-      <span style={{ fontSize: 11, color: '#ed4245', fontWeight: 600 }}>{t('user_search.friend_status.blocked')}</span>
+      <span style={{ fontSize: 11, color: '#ed4245', fontWeight: 600 }}>{t('friends.friend_status.blocked')}</span>
     );
     // Not friends yet
     return (
@@ -72,7 +72,7 @@ function UserCard({ user, onClick, isOnline, presStatus, friendStatus, requestId
         disabled={actionBusy}
         style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, padding: '5px 10px', borderRadius: 7, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', opacity: actionBusy ? 0.6 : 1 }}
       >
-        <UserPlus size={13} /> {t('user_search.friend_status.add_friend')}
+        <UserPlus size={13} /> {t('friends.friend_status.add_friend')}
       </button>
     );
   };
