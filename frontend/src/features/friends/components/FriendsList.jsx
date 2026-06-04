@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MessageCircle, UserMinus, ShieldAlert, ShieldCheck, Users, Edit3 } from 'lucide-react';
 import { usePresence } from '../../../context/PresenceContext';
 import { useLanguage } from '../../../context/LanguageContext';
 import { filterFriends, groupFriendsAlphabetically, getFriendStatus } from '../utils/friendHelpers';
-import UserProfileModal from '../../user/components/UserProfileModal';
 
 const STATUS_DOT = { online: '#3ba55c', idle: '#faa61a', dnd: '#ed4245', offline: '#6b7280' };
 const AVATAR_COLORS = ['#5865f2','#eb459e','#00b4d8','#57f287','#faa61a','#ed4245','#9b59b6','#e67e22'];
@@ -32,7 +32,7 @@ const FriendsList = ({
   onOpenCreateGroup, onMessage,
   onUpdateNickname, onBlock, onUnfriend,
 }) => {
-  const [profileUserId, setProfileUserId] = useState(null);
+  const navigate = useNavigate();
   const { isUserOnline, getPresenceStatus } = usePresence();
   const { t } = useLanguage();
 
@@ -111,7 +111,7 @@ const FriendsList = ({
                     {/* Avatar */}
                     <div
                       style={{ position: 'relative', flexShrink: 0, cursor: 'pointer' }}
-                      onClick={() => setProfileUserId(f.friendId)}
+                      onClick={() => navigate(`/user/${f.friendId}`)}
                     >
                       {f.avatar ? (
                         <img src={f.avatar} alt={f.displayName}
@@ -137,7 +137,7 @@ const FriendsList = ({
                     {/* Name + status */}
                     <div
                       style={{ flex: 1, minWidth: 0, marginLeft: 12, cursor: 'pointer' }}
-                      onClick={() => setProfileUserId(f.friendId)}
+                      onClick={() => navigate(`/user/${f.friendId}`)}
                     >
                       <div style={{
                         fontWeight: 600, fontSize: 14,
@@ -173,13 +173,6 @@ const FriendsList = ({
           </div>
         ))}
       </div>
-
-      {profileUserId && (
-        <UserProfileModal
-          userId={profileUserId}
-          onClose={() => setProfileUserId(null)}
-        />
-      )}
     </div>
   );
 };

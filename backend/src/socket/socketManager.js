@@ -111,42 +111,37 @@ const initSocket = (httpServer) => {
 
         // Client yêu cầu danh sách online hiện tại (gọi 1 lần khi kết nối)
         socket.on('presence:subscribe', async () => {
-            // Lấy snapshot online từ Presence collection để tránh lệch giữa các tab/cửa sổ
             const onlineIds = [...onlineUsers.keys()];
-            let statusMap = {};
+            const statusMap = {};
+            const statusTextMap = {};
             try {
-                const presences = await Presence.find(
-                    { userId: { $in: onlineIds } },
-                    { userId: 1, status: 1 }
+                // Nguồn sự thật là user.status (trạng thái người dùng tự đặt) — KHÔNG đọc
+                // từ Presence collection vì bản ghi đó có thể còn 'offline' do race lúc
+                // disconnect/reconnect, dẫn tới hiển thị nhầm thành 'online'.
+                const users2 = await userModel.find(
+                    { _id: { $in: onlineIds } },
+                    { _id: 1, status: 1, statusText: 1 }
                 ).lean();
 
-                presences.forEach((presence) => {
-                    const st = presence.status || 'online';
-                    // invisible users không xuất hiện trong danh sách online của người khác
-                    if (st !== 'invisible' && st !== 'offline') {
-                        statusMap[presence.userId.toString()] = st;
-                    }
+                const found = new Set();
+                users2.forEach((u) => {
+                    const id = u._id.toString();
+                    found.add(id);
+                    const st = u.status || 'online';
+                    // invisible/offline → không xuất hiện online với người khác
+                    if (st === 'invisible' || st === 'offline') return;
+                    statusMap[id]     = st;
+                    statusTextMap[id] = u.statusText || '';
                 });
 
-                // Fallback an toàn: nếu Presence chưa kịp ghi, vẫn coi là online khi socket đang nối
+                // User đang nối socket nhưng chưa có doc user (hiếm) → coi như online
                 onlineIds.forEach((id) => {
-                    if (!statusMap[id]) {
-                        statusMap[id] = 'online';
-                    }
+                    if (!found.has(id)) statusMap[id] = 'online';
                 });
             } catch (_) {
                 // fallback: tất cả là online
                 onlineIds.forEach(id => { statusMap[id] = 'online'; });
             }
-            // Lấy statusText riêng (cho những user visible)
-            const statusTextMap = {};
-            try {
-                const users2 = await userModel.find(
-                    { _id: { $in: Object.keys(statusMap) } },
-                    { _id: 1, statusText: 1 }
-                ).lean();
-                users2.forEach(u => { statusTextMap[u._id.toString()] = u.statusText || ''; });
-            } catch (_) {}
             socket.emit('presence:online-list', {
                 userIds: Object.keys(statusMap),
                 statusMap,

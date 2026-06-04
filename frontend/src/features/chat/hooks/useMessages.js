@@ -33,9 +33,16 @@ export const useMessages = ({
     const topicId = msg.topicId?.toString?.() || msg.topicId || null;
     const stateKey = topicId ? `${convId}__${topicId}` : convId;
     setMessages((prev) => {
-      const list = prev[stateKey] || [];
-      if (list.some((m) => m._id?.toString() === msg._id?.toString())) return prev;
-      return { ...prev, [stateKey]: [...list, msg] };
+      const next = { ...prev };
+      const append = (key) => {
+        const list = next[key] || [];
+        if (list.some((m) => m._id?.toString() === msg._id?.toString())) return;
+        next[key] = [...list, msg];
+      };
+      append(stateKey);
+      // Thông báo hệ thống (vào/ra nhóm, phân quyền…) cũng hiển thị ở kênh chung
+      if (msg.type === 'system' && stateKey !== convId) append(convId);
+      return next;
     });
   }, []);
 

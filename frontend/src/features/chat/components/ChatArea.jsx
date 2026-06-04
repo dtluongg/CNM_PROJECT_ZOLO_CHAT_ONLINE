@@ -344,8 +344,10 @@ export default function ChatArea({
   // ── Filter messages by active topic (groups only) ─────────
   const visibleMessages = (() => {
     if (conversation?.type === 'group' && !activeTopic) {
-      // Kênh chat chung: chỉ hiện tin không thuộc topic nào (mọi loại)
+      // Kênh chat chung: hiện tin nhắn không thuộc topic nào + mọi thông báo hệ
+      // thống (vào/ra nhóm, phân quyền…). KHÔNG hiện tin nhắn của các topic riêng.
       return messages.filter(m => {
+        if (m.type === 'system') return true;
         const mTopicId = m.topicId?.toString?.() || m.topicId || null;
         return !mTopicId;
       });

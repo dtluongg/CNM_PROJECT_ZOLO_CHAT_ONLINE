@@ -5,6 +5,7 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { ToastProvider } from './context/ToastContext';
 import { CallProvider } from './features/call/CallContext';
 import { VoiceRoomProvider } from './features/voice/VoiceRoomContext';
 import VoiceDock from './features/voice/components/VoiceDock';
@@ -95,6 +96,7 @@ const App = () => {
             <BannedGate>
             <PresenceProvider>
               <NotificationProvider>
+                <ToastProvider>
                 <CallProvider>
                   <VoiceRoomProvider>
                     <GroupCallProvider>
@@ -181,6 +183,7 @@ const App = () => {
                     </GroupCallProvider>
                   </VoiceRoomProvider>
                 </CallProvider>
+                </ToastProvider>
               </NotificationProvider>
             </PresenceProvider>
             </BannedGate>

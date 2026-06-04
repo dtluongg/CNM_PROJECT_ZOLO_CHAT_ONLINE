@@ -7,6 +7,8 @@ const conversationMemberSchema = new mongoose.Schema(
     role: { type: String, enum: ['owner', 'admin', 'member'], default: 'member' },
     joinedAt: { type: Date, default: Date.now },
     leftAt:   { type: Date, default: null },
+    // Lý do rời nhóm — phục vụ kho lưu trữ (đọc lại lịch sử khi đã rời).
+    leaveType: { type: String, enum: ['left', 'kicked', 'disbanded', null], default: null },
 
     // ── Custom role (ref tới GroupRole) ──────────────────────────────────────
     // Chỉ áp dụng cho role = 'member'. owner/admin dùng role hệ thống.
