@@ -122,12 +122,70 @@ const validateFile = (file) => {
     return null;
 };
 
+// ═══════════════════════════════════════════════════════════════════
+//  Khôi phục tên file UTF-8 (tiếng Việt) — multer/busboy giải mã header
+//  tên file dạng latin1 nên ký tự có dấu bị hỏng. Đọc lại bytes theo
+//  latin1 rồi decode utf8 để lấy lại tên gốc.
+// ═══════════════════════════════════════════════════════════════════
+const decodeFileName = (name = '') => {
+    if (!name) return '';
+    try {
+        const decoded = Buffer.from(name, 'latin1').toString('utf8');
+        // Nếu decode ra ký tự thay thế (�) tức là không phải mojibake latin1 → giữ nguyên
+        return decoded.includes('�') ? name : decoded;
+    } catch {
+        return name;
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  Trích đoạn văn bản preview cho tài liệu (PDF / DOCX / TXT) — kiểu Zalo.
+//  Trả về '' nếu không hỗ trợ hoặc lỗi (không chặn luồng upload).
+// ═══════════════════════════════════════════════════════════════════
+const MAX_PREVIEW_LEN = 240;
+const extractTextPreview = async (buffer, fileName = '', mimeType = '') => {
+    try {
+        const ext = path.extname(fileName).toLowerCase().replace('.', '');
+        let text = '';
+
+        if (ext === 'pdf' || mimeType === 'application/pdf') {
+            const { PDFParse } = require('pdf-parse');
+            const parser = new PDFParse({ data: buffer });
+            const res = await parser.getText();
+            text = res?.text || '';
+            await parser.destroy?.();
+        } else if (ext === 'docx' || mimeType.includes('wordprocessingml')) {
+            const mammoth = require('mammoth');
+            const res = await mammoth.extractRawText({ buffer });
+            text = res?.value || '';
+        } else if (ext === 'txt' || (mimeType || '').startsWith('text/')) {
+            text = buffer.toString('utf8');
+        } else {
+            return '';
+        }
+
+        text = (text || '')
+            .replace(/--\s*\d+\s*of\s*\d+\s*--/gi, ' ') // bỏ marker trang của pdf-parse
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (text.length > MAX_PREVIEW_LEN) {
+            text = text.slice(0, MAX_PREVIEW_LEN).trim() + '…';
+        }
+        return text;
+    } catch (e) {
+        console.error('[extractTextPreview] error:', e.message);
+        return '';
+    }
+};
+
 module.exports = {
     generateS3Key,
     uploadToS3,
     validateImage,
     validateVideo,
     validateFile,
+    decodeFileName,
+    extractTextPreview,
     MAX_IMAGE_SIZE,
     MAX_VIDEO_SIZE,
     MAX_FILE_SIZE,

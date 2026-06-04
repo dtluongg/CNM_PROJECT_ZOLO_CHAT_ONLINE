@@ -308,34 +308,51 @@ const MessageBubble = ({
       }
 
       // File thông thường
+      const textPreview = payload.textPreview || '';
       return (
         <TouchableOpacity
           onPress={() => onFilePress && onFilePress(fileUrl, fileName)}
           style={[
             styles.fileRow,
             {
-              flexDirection: 'row',
-              alignItems: 'center',
+              flexDirection: 'column',
               minWidth: 200,
-              maxWidth: 260,
+              maxWidth: 280,
               gap: 8,
             },
           ]}
           activeOpacity={0.75}
         >
-          <Feather name="file-text" size={22} color={isMine ? 'rgba(255,255,255,0.85)' : THEME.textMuted} />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text
-              style={[styles.bubbleText, { color: bubbleText, fontWeight: '600' }]}
-              numberOfLines={2}
-            >
-              {fileName}
-            </Text>
-            <Text style={{ fontSize: 11, color: isMine ? 'rgba(255,255,255,0.65)' : THEME.textMuted, marginTop: 2 }}>
-              {t('chat.tap_to_open')}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Feather name="file-text" size={22} color={isMine ? 'rgba(255,255,255,0.85)' : THEME.textMuted} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={[styles.bubbleText, { color: bubbleText, fontWeight: '600' }]}
+                numberOfLines={2}
+              >
+                {fileName}
+              </Text>
+              <Text style={{ fontSize: 11, color: isMine ? 'rgba(255,255,255,0.65)' : THEME.textMuted, marginTop: 2 }}>
+                {t('chat.tap_to_open')}
+              </Text>
+            </View>
+            <Feather name="download" size={18} color={isMine ? 'rgba(255,255,255,0.7)' : THEME.accent} />
           </View>
-          <Feather name="download" size={18} color={isMine ? 'rgba(255,255,255,0.7)' : THEME.accent} />
+
+          {/* Đoạn văn bản preview (PDF/DOCX/TXT) kiểu Zalo */}
+          {textPreview ? (
+            <Text
+              numberOfLines={3}
+              style={{
+                fontSize: 12, lineHeight: 18,
+                color: isMine ? 'rgba(255,255,255,0.9)' : THEME.textSecondary,
+                backgroundColor: isMine ? 'rgba(255,255,255,0.14)' : THEME.bgTertiary,
+                borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8,
+              }}
+            >
+              {textPreview}
+            </Text>
+          ) : null}
         </TouchableOpacity>
       );
     }

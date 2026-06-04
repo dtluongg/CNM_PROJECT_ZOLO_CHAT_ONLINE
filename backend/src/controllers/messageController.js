@@ -137,6 +137,7 @@ const sendMessage = async (req, res) => {
                     fileSize: attachment.fileSize || 0,
                     mimeType: attachment.mimeType || '',
                     duration: attachment.duration || null,
+                    textPreview: attachment.textPreview || '',
                 };
             }
 

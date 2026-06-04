@@ -556,6 +556,7 @@ const MessageBubble = ({
       const FIcon = ft.icon;
       const ext = (fileName.split('.').pop() || '').toUpperCase();
       const baseName = fileName.replace(/\.[^/.]+$/, '');
+      const textPreview = msg.payload?.textPreview || '';
       return (
         <a
           href={fileUrl}
@@ -566,39 +567,52 @@ const MessageBubble = ({
           onClick={e => e.stopPropagation()}
         >
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 12,
+            display: 'flex', flexDirection: 'column', gap: 10,
             background: 'var(--bg-secondary)',
             border: '1px solid var(--border)',
             borderRadius: 12, padding: '10px 14px',
-            minWidth: 200, maxWidth: isMobile ? 220 : 260,
+            minWidth: 200, maxWidth: isMobile ? 240 : 280,
             cursor: 'pointer', transition: 'opacity 0.15s',
           }}
           onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
           onMouseLeave={e => e.currentTarget.style.opacity = '1'}
           >
-            {/* Icon box — giữ màu theo loại file làm điểm nhấn, nền tint mờ hợp mọi theme */}
-            <div style={{
-              width: 44, height: 44, borderRadius: 10, flexShrink: 0,
-              background: ft.color + '22',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <FIcon size={22} color={ft.color} strokeWidth={1.7} />
-            </div>
-            {/* Info */}
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {/* Icon box — giữ màu theo loại file làm điểm nhấn, nền tint mờ hợp mọi theme */}
               <div style={{
-                fontSize: 13, fontWeight: 600,
-                color: 'var(--text-primary)',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{baseName || fileName}</div>
-              <div style={{
-                fontSize: 11, marginTop: 2,
-                color: ft.color,
-                fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
-              }}>{ext}</div>
+                width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+                background: ft.color + '22',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <FIcon size={22} color={ft.color} strokeWidth={1.7} />
+              </div>
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 13, fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{baseName || fileName}</div>
+                <div style={{
+                  fontSize: 11, marginTop: 2,
+                  color: ft.color,
+                  fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
+                }}>{ext}</div>
+              </div>
+              {/* Download arrow */}
+              <Download size={16} color={'var(--text-muted)'} style={{ flexShrink: 0 }} />
             </div>
-            {/* Download arrow */}
-            <Download size={16} color={'var(--text-muted)'} style={{ flexShrink: 0 }} />
+
+            {/* Đoạn văn bản preview (PDF/DOCX/TXT) kiểu Zalo */}
+            {textPreview && (
+              <div style={{
+                fontSize: 12, lineHeight: 1.5, color: 'var(--text-secondary)',
+                background: 'var(--bg-tertiary)', borderRadius: 8,
+                padding: '8px 10px',
+                display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                overflow: 'hidden', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              }}>{textPreview}</div>
+            )}
           </div>
         </a>
       );

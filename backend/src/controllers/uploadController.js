@@ -5,6 +5,8 @@ const {
     validateImage,
     validateVideo,
     validateFile,
+    decodeFileName,
+    extractTextPreview,
 } = require('../services/uploadService');
 
 // ════════════════════════════════════════════════════════════════
@@ -22,15 +24,20 @@ const uploadFile = async (req, res) => {
             return res.status(400).json({ message: validationError });
         }
 
-        const s3Key = generateS3Key('files', req.file.originalname);
+        const fileName = decodeFileName(req.file.originalname);
+        const s3Key = generateS3Key('files', fileName);
         const url   = await uploadToS3(req.file.buffer, s3Key, req.file.mimetype);
+
+        // Trích đoạn văn bản preview (PDF/DOCX/TXT) — không chặn nếu lỗi
+        const textPreview = await extractTextPreview(req.file.buffer, fileName, req.file.mimetype);
 
         const attachment = await Attachment.create({
             uploadedBy: req.user._id,
             url,
-            fileName:  req.file.originalname,
+            fileName,
             mimeType:  req.file.mimetype,
             fileSize:  req.file.size,
+            textPreview,
         });
 
         return res.status(201).json({
@@ -41,6 +48,7 @@ const uploadFile = async (req, res) => {
                 fileName: attachment.fileName,
                 mimeType: attachment.mimeType,
                 fileSize: attachment.fileSize,
+                textPreview: attachment.textPreview,
             },
         });
     } catch (error) {
@@ -70,7 +78,7 @@ const uploadImage = async (req, res) => {
         const attachment = await Attachment.create({
             uploadedBy: req.user._id,
             url,
-            fileName:  req.file.originalname,
+            fileName:  decodeFileName(req.file.originalname),
             mimeType:  req.file.mimetype,
             fileSize:  req.file.size,
         });
@@ -112,7 +120,7 @@ const uploadVideo = async (req, res) => {
         const attachment = await Attachment.create({
             uploadedBy: req.user._id,
             url,
-            fileName:  req.file.originalname,
+            fileName:  decodeFileName(req.file.originalname),
             mimeType:  req.file.mimetype,
             fileSize:  req.file.size,
         });
