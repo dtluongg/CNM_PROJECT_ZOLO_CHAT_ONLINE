@@ -667,9 +667,36 @@
     "no_notifications": "No notifications yet.",
     "new_label": "New",
     "default_title": "New notification",
+    "within": "in",
     "friend_request_title": "Friend Request",
     "friend_accepted_title": "Friend Request Accepted",
-    "new_message": "Sent a new message"
+    "new_message": "Sent a new message",
+    "categories": {
+      "all": "All",
+      "message": "Message",
+      "call": "Call",
+      "system": "System"
+    },
+    "types": {
+      "message": "Message",
+      "mention": "Mention",
+      "reminder": "Reminder",
+      "friend_request": "Friend request",
+      "friend_accepted": "Friend accepted",
+      "call_incoming": "Call",
+      "call_rejected": "Declined",
+      "call_missed": "Missed call",
+      "report": "Report"
+    },
+    "time": {
+      "just_now": "Just now",
+      "minutes_ago": "{{count}} minutes ago",
+      "hours_ago": "{{count}} hours ago"
+    },
+    "actions": {
+      "open": "Open",
+      "close": "Close"
+    }
   },
   "user": {
     "change_password": "Change Password",
@@ -784,7 +811,6 @@
     "media_count": "{{count}} images shared",
     "shared_files": "Shared Files",
     "no_files": "No files yet",
-    "call_history": "Call History",
     "group_settings": "Group Settings",
     "change_avatar": "Change Group Avatar",
     "change_avatar_hint": "Click to change group avatar",
@@ -1008,5 +1034,39 @@
     "jan": "Jan", "feb": "Feb", "mar": "Mar", "apr": "Apr",
     "may": "May", "jun": "Jun", "jul": "Jul", "aug": "Aug",
     "sep": "Sep", "oct": "Oct", "nov": "Nov", "dec": "Dec"
+  },
+  "notification_center": {
+    "title": "Notifications",
+    "mark_all_read": "Read all",
+    "loading": "Loading...",
+    "empty": "No notifications",
+    "default_title": "New notification",
+    "within": "in",
+    "categories": {
+      "all": "All",
+      "message": "Message",
+      "call": "Call",
+      "system": "System"
+    },
+    "types": {
+      "message": "Message",
+      "mention": "Mention",
+      "reminder": "Reminder",
+      "friend_request": "Friend request",
+      "friend_accepted": "Friend accepted",
+      "call_incoming": "Call",
+      "call_rejected": "Declined",
+      "call_missed": "Missed call",
+      "report": "Report"
+    },
+    "time": {
+      "just_now": "Just now",
+      "minutes_ago": "{{count}} minutes ago",
+      "hours_ago": "{{count}} hours ago"
+    },
+    "actions": {
+      "open": "Open",
+      "close": "Close"
+    }
   }
 }

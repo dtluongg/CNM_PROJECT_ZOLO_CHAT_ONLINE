@@ -667,9 +667,36 @@
     "no_notifications": "Chưa có thông báo nào.",
     "new_label": "Mới",
     "default_title": "Thông báo mới",
+    "within": "trong",
     "friend_request_title": "Lời mời kết bạn",
     "friend_accepted_title": "Đã chấp nhận kết bạn",
-    "new_message": "Đã gửi một tin nhắn mới"
+    "new_message": "Đã gửi một tin nhắn mới",
+    "categories": {
+      "all": "Tất cả",
+      "message": "Tin nhắn",
+      "call": "Cuộc gọi",
+      "system": "Hệ thống"
+    },
+    "types": {
+      "message": "Tin nhắn",
+      "mention": "Nhắc tên",
+      "reminder": "Nhắc hẹn",
+      "friend_request": "Kết bạn",
+      "friend_accepted": "Chấp nhận",
+      "call_incoming": "Cuộc gọi",
+      "call_rejected": "Từ chối",
+      "call_missed": "Nhỡ máy",
+      "report": "Báo cáo"
+    },
+    "time": {
+      "just_now": "Vừa xong",
+      "minutes_ago": "{{count}} phút trước",
+      "hours_ago": "{{count}} giờ trước"
+    },
+    "actions": {
+      "open": "Mở",
+      "close": "Đóng"
+    }
   },
   "user": {
     "change_password": "Đổi mật khẩu",
@@ -784,7 +811,6 @@
     "media_count": "{{count}} ảnh đã chia sẻ",
     "shared_files": "Tệp tin đã chia sẻ",
     "no_files": "Chưa có tệp tin nào",
-    "call_history": "Lịch sử cuộc gọi",
     "group_settings": "Cài đặt nhóm",
     "change_avatar": "Đổi ảnh đại diện nhóm",
     "change_avatar_hint": "Nhấn để đổi ảnh nhóm",
@@ -996,8 +1022,51 @@
     "offline": "Ngoại tuyến"
   },
   "months": {
-    "jan": "Th1", "feb": "Th2", "mar": "Th3", "apr": "Th4",
-    "may": "Th5", "jun": "Th6", "jul": "Th7", "aug": "Th8",
-    "sep": "Th9", "oct": "Th10", "nov": "Th11", "dec": "Th12"
+    "jan": "Th1",
+    "feb": "Th2",
+    "mar": "Th3",
+    "apr": "Th4",
+    "may": "Th5",
+    "jun": "Th6",
+    "jul": "Th7",
+    "aug": "Th8",
+    "sep": "Th9",
+    "oct": "Th10",
+    "nov": "Th11",
+    "dec": "Th12"
+  },
+  "notification_center": {
+    "title": "Thông báo",
+    "mark_all_read": "Đọc tất cả",
+    "loading": "Đang tải...",
+    "empty": "Không có thông báo",
+    "default_title": "Thông báo mới",
+    "within": "trong",
+    "categories": {
+      "all": "Tất cả",
+      "message": "Tin nhắn",
+      "call": "Cuộc gọi",
+      "system": "Hệ thống"
+    },
+    "types": {
+      "message": "Tin nhắn",
+      "mention": "Nhắc tên",
+      "reminder": "Nhắc hẹn",
+      "friend_request": "Kết bạn",
+      "friend_accepted": "Chấp nhận",
+      "call_incoming": "Cuộc gọi",
+      "call_rejected": "Từ chối",
+      "call_missed": "Nhỡ máy",
+      "report": "Báo cáo"
+    },
+    "time": {
+      "just_now": "Vừa xong",
+      "minutes_ago": "{{count}} phút trước",
+      "hours_ago": "{{count}} giờ trước"
+    },
+    "actions": {
+      "open": "Mở",
+      "close": "Đóng"
+    }
   }
 }
