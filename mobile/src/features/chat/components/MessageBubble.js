@@ -270,6 +270,24 @@ const MessageBubble = ({
       const fileUrl = payload.url;
       const fileName = payload.fileName || msg.content || '';
       const isVideo = /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(fileName);
+      const isImage = /\.(jpe?g|png|gif|webp|bmp|svg|heic|heif|avif)$/i.test(fileName);
+
+      // Ảnh → render preview giống type 'image'
+      if (isImage) {
+        return (
+          <TouchableOpacity activeOpacity={0.85} onPress={() => onImagePress && onImagePress(fileUrl)}>
+            <Image source={{ uri: fileUrl }} style={styles.imgAttachment} resizeMode="cover" />
+            <View
+              style={{
+                position: 'absolute', bottom: 6, right: 6,
+                backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 10, padding: 3,
+              }}
+            >
+              <Text style={{ fontSize: 11, color: '#fff' }}>🔍</Text>
+            </View>
+          </TouchableOpacity>
+        );
+      }
 
       // Video trên web dùng thẻ <video> native
       if (isVideo && Platform.OS === 'web') {
@@ -338,10 +356,10 @@ const MessageBubble = ({
     // Nhắc hẹn
     if (msg.type === 'reminder') {
       return (
-        <ReminderMessage 
-          message={msg} 
-          isMine={isMine} 
-          THEME={THEME} 
+        <ReminderMessage
+          message={msg}
+          isMine={isMine}
+          THEME={THEME}
           isPinned={isPinned}
         />
       );
@@ -355,7 +373,7 @@ const MessageBubble = ({
           <View>
             {renderStoryReply(payload)}
             <View style={[
-              styles.storyReplyBubble, 
+              styles.storyReplyBubble,
               { backgroundColor: isMine ? THEME.accent : THEME.bubbleOther },
               { alignSelf: isMine ? 'flex-end' : 'flex-start' },
               !isMine && { marginLeft: 12 },
@@ -371,14 +389,14 @@ const MessageBubble = ({
           <View>
             {/* GỌI HÀM VẼ TAG TÊN Ở ĐÂY */}
             {renderContentWithMentions(msg.content)}
-            
+
             {msg.edited && (
               <Text style={{ fontSize: 11, fontStyle: 'italic', opacity: 0.6, color: bubbleText, marginTop: 4 }}>
                 {' '}
                 {t('chat.edited')}
               </Text>
             )}
-            
+
             {isTranslating && (
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, opacity: 0.7 }}>
                 <Text style={{ fontSize: 11, color: bubbleText }}>⏳ {t('chat.translating')}</Text>
@@ -516,7 +534,8 @@ const MessageBubble = ({
                 msg.type === 'poll' ||
                 msg.type === 'reminder' ||
                 parsePayload(msg.payload).type === 'story_reply' ||
-                /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(parsePayload(msg.payload).fileName || '')) && {
+                /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(parsePayload(msg.payload).fileName || '') ||
+                /\.(jpe?g|png|gif|webp|bmp|svg|heic|heif|avif)$/i.test(parsePayload(msg.payload).fileName || '')) && {
                 padding: 0,
                 overflow: 'hidden',
                 backgroundColor: 'transparent',
