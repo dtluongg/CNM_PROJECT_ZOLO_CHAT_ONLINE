@@ -520,8 +520,8 @@
     "more": "More",
     "voice": "Voice message",
     "video": "Video message",
-    "file": "File",
-    "story_expired": "Story expired"
+    "story_expired": "Story expired",
+    "file": "File"
   },
   "poll": {
     "create_title": "Create Poll",
