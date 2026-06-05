@@ -1,7 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import friendApi from '../api/friendApi';
 import conversationApi from '../../chat/api/conversationApi';
+import { getAccessToken } from '../../../utils/authStorage';
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : undefined);
 
 export const useFriendsData = () => {
   const navigate = useNavigate();
@@ -49,6 +53,35 @@ export const useFriendsData = () => {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // ── Realtime: lắng nghe sự kiện kết bạn để tự refresh ────────────────────
+  const refreshTimerRef = useRef(null);
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket'] });
+
+    const scheduleRefresh = () => {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(() => fetchData(), 300);
+    };
+
+    const events = [
+      'friend:request-received',
+      'friend:request-accepted',
+      'friend:request-rejected',
+      'friend:request-canceled',
+      'friend:removed',
+      'friend:list-changed',
+    ];
+    events.forEach((ev) => socket.on(ev, scheduleRefresh));
+
+    return () => {
+      clearTimeout(refreshTimerRef.current);
+      events.forEach((ev) => socket.off(ev, scheduleRefresh));
+      socket.disconnect();
+    };
+  }, [fetchData]);
 
   // ── Friend request handlers ───────────────────────────────────────────────
   const handleAccept = useCallback(async (id) => {

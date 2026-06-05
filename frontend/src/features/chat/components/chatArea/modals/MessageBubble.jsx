@@ -3,7 +3,7 @@ import {
   ThumbsUp, CornerUpRight, MoreHorizontal,
   Paperclip, Reply, Copy, Pin, Trash2, Quote, Globe, Languages, XCircle, Loader2,
   X, ZoomIn, ZoomOut, Download,
-  FileText, FileSpreadsheet, FileArchive, Music, File
+  FileText, FileSpreadsheet, FileArchive, Music, File, Clock
 } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 import PollMessage from '../ui/PollMessage';
@@ -206,6 +206,7 @@ const MessageBubble = ({
   const [showLangModal, setShowLangModal] = useState(false);
   const [targetLang, setTargetLang] = useState('English');
   const [mediaViewer, setMediaViewer] = useState(null); // { url, type, name }
+  const [storyMediaError, setStoryMediaError] = useState(false);
   const longPressRef = useRef(null);
 
   const handleTranslate = async (lang = 'Auto') => {
@@ -323,6 +324,9 @@ const MessageBubble = ({
     if (msg.payload?.type !== 'story_reply' || msg.revoked || msg.recalled) return null;
     const isVideo = msg.payload.mediaType === 'video';
     const storyHeader = isMine ? t('bubble.you_replied') : t('bubble.replied_to', { name: msg.senderName });
+    // Story đã hết hạn (quá 24h) hoặc media đã bị xóa → hiện "Tin đã hết hạn".
+    const expiresAt = msg.payload.storyExpiresAt ? new Date(msg.payload.storyExpiresAt).getTime() : null;
+    const isExpired = storyMediaError || (expiresAt !== null && Date.now() > expiresAt);
 
     return (
       <div style={{
@@ -354,12 +358,25 @@ const MessageBubble = ({
           position: 'relative',
           background: '#1a1a1a',
         }}>
-          {isVideo ? (
-            <video src={msg.payload.mediaUrl} className="w-full h-full object-cover" muted loop />
+          {isExpired ? (
+            <div style={{
+              width: '100%', height: '100%',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: 10, textAlign: 'center',
+              background: 'var(--bg-tertiary)',
+            }}>
+              <Clock size={26} style={{ color: 'var(--text-muted)' }} />
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
+                {t('bubble.story_expired', { defaultValue: 'Tin đã hết hạn' })}
+              </span>
+            </div>
+          ) : isVideo ? (
+            <video src={msg.payload.mediaUrl} className="w-full h-full object-cover" muted loop onError={() => setStoryMediaError(true)} />
           ) : (
-            <img src={msg.payload.mediaUrl} className="w-full h-full object-cover" alt="Story preview" />
+            <img src={msg.payload.mediaUrl} className="w-full h-full object-cover" alt="Story preview" onError={() => setStoryMediaError(true)} />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+          {!isExpired && <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />}
         </div>
       </div>
     );

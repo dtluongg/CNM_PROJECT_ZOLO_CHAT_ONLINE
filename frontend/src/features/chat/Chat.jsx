@@ -131,11 +131,20 @@ const Chat = () => {
     activeConvRef,
     onNewMessage: (conversationId, msg, convRef) => {
       addMessage(conversationId, msg);
-      setConversations((prev) => prev.map((c) => {
-        if (c.id !== conversationId) return c;
+      setConversations((prev) => {
         const isActive = convRef.current?.id === conversationId;
-        return { ...c, lastMessage: msg.content, time: msg.time, unread: isActive ? 0 : (c.unread || 0) + 1 };
-      }));
+        const updated = prev.map((c) => {
+          if (c.id !== conversationId) return c;
+          return { ...c, lastMessage: msg.content, time: msg.time, unread: isActive ? 0 : (c.unread || 0) + 1 };
+        });
+        // Đẩy conversation có tin nhắn mới lên đầu danh sách
+        const idx = updated.findIndex((c) => c.id === conversationId);
+        if (idx > 0) {
+          const [moved] = updated.splice(idx, 1);
+          updated.unshift(moved);
+        }
+        return updated;
+      });
     },
     onTyping: (conversationId, userId, displayName) => {
       setTypingUsers((prev) => ({ ...prev, [conversationId]: { userId, displayName } }));

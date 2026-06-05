@@ -89,23 +89,26 @@ async function translate(text, targetLanguage = "Auto") {
         if (!apiKey)
             throw new Error("NVIDIA_API_KEY chưa được cấu hình trong .env");
 
-        const systemPrompt = `You are a professional, accurate translation system.
+        // Gemma trên NVIDIA NIM không hỗ trợ role "system" → gộp hết vào 1 message user.
+        const prompt = `You are a professional, accurate translation system.
 RULES:
 1. Preserve all emojis and formatting.
 2. DO NOT add any greetings, explanations, or extra words (e.g., no "Xin chào" or "Here is the translation"). Only return the translated text.
 3. Target Language Logic:
    - If target is "Auto": Detect source language. If source is NOT Vietnamese, translate to Vietnamese. If source IS Vietnamese, translate to English.
-   - If target is a specific language (e.g. "Japanese", "Korean", "French"): Translate the text to that specific language regardless of its original language.`;
+   - If target is a specific language (e.g. "Japanese", "Korean", "French"): Translate the text to that specific language regardless of its original language.
 
-        const userPrompt = `Text: "${text}"\nTarget: "${targetLanguage}"`;
+Text: "${text}"
+Target: "${targetLanguage}"
+
+Translated text (only the translation, nothing else):`;
 
         const response = await axios.post(
             `${NVIDIA_BASE_URL}/chat/completions`,
             {
                 model: NVIDIA_MODEL,
                 messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userPrompt }
+                    { role: "user", content: prompt }
                 ],
                 max_tokens: 1024,
                 temperature: 0.1, // Set to 0.1 for maximum accuracy and consistency

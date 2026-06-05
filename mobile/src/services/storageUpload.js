@@ -1,21 +1,54 @@
 import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../config/supabase';
 import apiClient from './apiClient';
 
 const BUCKET = 'avatars';
 
+// Bảng tra cứu base64 → byte.
+const B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const B64_LOOKUP = (() => {
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < B64_CHARS.length; i++) lookup[B64_CHARS.charCodeAt(i)] = i;
+  return lookup;
+})();
+
+// Giải mã base64 → Uint8Array (không phụ thuộc atob/Buffer của môi trường).
+const base64ToUint8Array = (base64) => {
+  // Bỏ mọi ký tự không thuộc bảng base64 (bao gồm cả '=' và xuống dòng).
+  const clean = (base64 || '').replace(/[^A-Za-z0-9+/]/g, '');
+  const len = clean.length;
+  // clean đã bỏ padding nên số byte = floor(len * 3 / 4).
+  const byteLength = Math.floor((len * 3) / 4);
+  const bytes = new Uint8Array(byteLength > 0 ? byteLength : 0);
+
+  let p = 0;
+  for (let i = 0; i < len; i += 4) {
+    const e1 = B64_LOOKUP[clean.charCodeAt(i)];
+    const e2 = B64_LOOKUP[clean.charCodeAt(i + 1)];
+    const e3 = B64_LOOKUP[clean.charCodeAt(i + 2)];
+    const e4 = B64_LOOKUP[clean.charCodeAt(i + 3)];
+
+    if (p < byteLength) bytes[p++] = (e1 << 2) | (e2 >> 4);
+    if (p < byteLength) bytes[p++] = ((e2 & 15) << 4) | (e3 >> 2);
+    if (p < byteLength) bytes[p++] = ((e3 & 3) << 6) | (e4 & 63);
+  }
+  return bytes;
+};
+
 /**
- * Đọc file từ URI và trả về Blob
- * Phương pháp fetch(uri).blob() là cách ổn định nhất trong React Native 
- * để chuyển đổi file:// URI thành dữ liệu có thể upload.
+ * Đọc file từ URI và trả về Uint8Array.
+ * Trong React Native (Hermes), fetch(uri).blob() rồi upload thẳng lên Supabase
+ * hay bị "Network request failed". Đọc base64 rồi gửi bytes là cách ổn định nhất.
  */
-const getFileBlob = async (uri) => {
+const getFileBytes = async (uri) => {
   try {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    return blob;
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return base64ToUint8Array(base64);
   } catch (error) {
-    console.error('[getFileBlob] Error reading file:', error);
+    console.error('[getFileBytes] Error reading file:', error);
     throw new Error('Could not read file data');
   }
 };
@@ -38,11 +71,11 @@ export async function uploadImageToSupabase(uri, folder, userId) {
       'image/jpeg';
 
     const path = `${folder}/${userId}_${Date.now()}.${ext}`;
-    const blob = await getFileBlob(uri);
+    const bytes = await getFileBytes(uri);
 
     const { error } = await supabase.storage
       .from(BUCKET)
-      .upload(path, blob, {
+      .upload(path, bytes, {
         upsert: true,
         contentType: mime
       });
@@ -63,16 +96,16 @@ export async function uploadImageToSupabase(uri, folder, userId) {
  */
 export async function uploadToSupabase(uri, fileName, bucketName = 'stories') {
   try {
-    const blob = await getFileBlob(uri);
+    const bytes = await getFileBytes(uri);
     const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpg';
-    
+
     // Xác định mime type cơ bản
     const isVideo = ['mp4', 'mov', 'avi'].includes(fileExt);
     const contentType = isVideo ? `video/${fileExt}` : `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
 
     const { error } = await supabase.storage
       .from(bucketName)
-      .upload(fileName, blob, {
+      .upload(fileName, bytes, {
         upsert: true,
         contentType
       });
