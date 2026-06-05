@@ -202,7 +202,8 @@ const replyToStory = async (req, res) => {
                 type: 'story_reply',
                 storyId: story._id,
                 mediaUrl: story.mediaUrl,
-                mediaType: story.mediaType
+                mediaType: story.mediaType,
+                storyExpiresAt: story.expiresAt
             }
         });
 

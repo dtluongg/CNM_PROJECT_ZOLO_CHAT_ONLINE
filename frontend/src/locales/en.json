@@ -520,7 +520,8 @@
     "more": "More",
     "voice": "Voice message",
     "video": "Video message",
-    "file": "File"
+    "file": "File",
+    "story_expired": "Story expired"
   },
   "poll": {
     "create_title": "Create Poll",
@@ -671,36 +672,9 @@
     "no_notifications": "No notifications yet.",
     "new_label": "New",
     "default_title": "New notification",
-    "within": "in",
     "friend_request_title": "Friend Request",
     "friend_accepted_title": "Friend Request Accepted",
-    "new_message": "Sent a new message",
-    "categories": {
-      "all": "All",
-      "message": "Message",
-      "call": "Call",
-      "system": "System"
-    },
-    "types": {
-      "message": "Message",
-      "mention": "Mention",
-      "reminder": "Reminder",
-      "friend_request": "Friend request",
-      "friend_accepted": "Friend accepted",
-      "call_incoming": "Call",
-      "call_rejected": "Declined",
-      "call_missed": "Missed call",
-      "report": "Report"
-    },
-    "time": {
-      "just_now": "Just now",
-      "minutes_ago": "{{count}} minutes ago",
-      "hours_ago": "{{count}} hours ago"
-    },
-    "actions": {
-      "open": "Open",
-      "close": "Close"
-    }
+    "new_message": "Sent a new message"
   },
   "user": {
     "change_password": "Change Password",
@@ -1055,43 +1029,18 @@
     "offline": "Offline"
   },
   "months": {
-    "jan": "Jan", "feb": "Feb", "mar": "Mar", "apr": "Apr",
-    "may": "May", "jun": "Jun", "jul": "Jul", "aug": "Aug",
-    "sep": "Sep", "oct": "Oct", "nov": "Nov", "dec": "Dec"
-  },
-  "notification_center": {
-    "title": "Notifications",
-    "mark_all_read": "Read all",
-    "loading": "Loading...",
-    "empty": "No notifications",
-    "default_title": "New notification",
-    "within": "in",
-    "categories": {
-      "all": "All",
-      "message": "Message",
-      "call": "Call",
-      "system": "System"
-    },
-    "types": {
-      "message": "Message",
-      "mention": "Mention",
-      "reminder": "Reminder",
-      "friend_request": "Friend request",
-      "friend_accepted": "Friend accepted",
-      "call_incoming": "Call",
-      "call_rejected": "Declined",
-      "call_missed": "Missed call",
-      "report": "Report"
-    },
-    "time": {
-      "just_now": "Just now",
-      "minutes_ago": "{{count}} minutes ago",
-      "hours_ago": "{{count}} hours ago"
-    },
-    "actions": {
-      "open": "Open",
-      "close": "Close"
-    }
+    "jan": "Jan",
+    "feb": "Feb",
+    "mar": "Mar",
+    "apr": "Apr",
+    "may": "May",
+    "jun": "Jun",
+    "jul": "Jul",
+    "aug": "Aug",
+    "sep": "Sep",
+    "oct": "Oct",
+    "nov": "Nov",
+    "dec": "Dec"
   },
   "archived": {
     "title": "Archived chats",
